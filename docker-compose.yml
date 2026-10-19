@@ -1,0 +1,362 @@
+# =============================================================================
+#  VOZNI PARK (VFM) — docker-compose.yml  (Coolify / production stack)
+# =============================================================================
+#  Ovaj fajl je namijenjen Coolify "Docker Compose" build pack-u.
+#
+#  Servisi:
+#    - migrate : one-shot `prisma migrate deploy` (+ opciono seed) pa izlazi (exit 0)
+#    - api     : NestJS REST API  (/api/v1, /health)         ← Traefik + db_net + redis_net
+#    - worker  : BullMQ procesor (outbox, FCM, podsjetnici, izvještaji) ← db_net + redis_net
+#    - web     : nginx koji servira React SPA i proxy-uje /api ← SAMO Coolify mreža
+#
+#  MREŽE (ključno!):
+#    - PostgreSQL i Redis su Coolify resursi IZVAN ovog stacka.
+#    - api/worker/migrate se kače na eksterne mreže `db_net` i `redis_net`.
+#    - `web` se NAMJERNO ne kači na njih: kontejner koji je istovremeno na
+#      Coolify mreži i na custom mreži može dobiti 504/hang jer Traefik
+#      nedeterministički bira IP. Vidi docs/08-DOCKER_COOLIFY_DEPLOYMENT.md.
+#
+#  HOSTNAME-OVI:
+#    - Na dijeljenoj mreži koristiti PUNI Coolify naziv kontejnera
+#      (npr. `postgres-a1b2c3d4e5f6`, `redis-a1b2c3d4e5f6`), NE `postgres`/`redis`.
+#      Kratka imena mogu rezolvirati na tuđi kontejner (Coolify internal DB!).
+#
+#  LOKALNI RAZVOJ:
+#    docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+#  ⚠️ SYNC: svaka nova varijabla mora postojati u .env.example (CI: env-sync-check)
+# =============================================================================
+
+# YAML sidra — smanjuju duplikaciju između api/worker/migrate
+x-api-build: &api-build
+  context: .
+  dockerfile: apps/api/Dockerfile
+  target: runtime
+  args:
+    TURBO_TEAM: ${TURBO_TEAM:-}
+    TURBO_TOKEN: ${TURBO_TOKEN:-}
+
+x-api-base-env: &api-base-env
+  # --- Aplikacija -----------------------------------------------------------
+  NODE_ENV: ${NODE_ENV:-production}
+  APP_ENV: ${APP_ENV:-production}
+  APP_NAME: ${APP_NAME:-Vozni park}
+  APP_VERSION: ${APP_VERSION:-1.0.0}
+  APP_PREFIX: ${APP_PREFIX:-vfm}
+  APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Sarajevo}
+  APP_LOCALE: ${APP_LOCALE:-bs}
+  APP_DEFAULT_CURRENCY: ${APP_DEFAULT_CURRENCY:-BAM}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  LOG_FORMAT: ${LOG_FORMAT:-json}
+  SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-15000}
+  # --- PostgreSQL (db_net) ---------------------------------------------------
+  DATABASE_URL: ${DATABASE_URL:?DATABASE_URL je obavezan — puni Coolify naziv kontejnera}
+  DATABASE_CONNECTION_LIMIT: ${DATABASE_CONNECTION_LIMIT:-10}
+  DATABASE_POOL_TIMEOUT: ${DATABASE_POOL_TIMEOUT:-20}
+  # --- Redis (redis_net, ACL user iz REDIS_ACL.md) ---------------------------
+  REDIS_HOST: ${REDIS_HOST:?REDIS_HOST je obavezan — puni Coolify naziv kontejnera}
+  REDIS_PORT: ${REDIS_PORT:-6379}
+  REDIS_TLS: ${REDIS_TLS:-false}
+  REDIS_DB: ${REDIS_DB:-0}
+  VFM_REDIS_KEY_PREFIX: ${VFM_REDIS_KEY_PREFIX:-vfm:}
+  # --- Throttling ------------------------------------------------------------
+  THROTTLE_ENABLED: ${THROTTLE_ENABLED:-true}
+  THROTTLE_GLOBAL_TTL_SECONDS: ${THROTTLE_GLOBAL_TTL_SECONDS:-60}
+  THROTTLE_GLOBAL_LIMIT: ${THROTTLE_GLOBAL_LIMIT:-300}
+  THROTTLE_LOGIN_TTL_SECONDS: ${THROTTLE_LOGIN_TTL_SECONDS:-900}
+  THROTTLE_LOGIN_LIMIT: ${THROTTLE_LOGIN_LIMIT:-5}
+  THROTTLE_UPLOAD_TTL_SECONDS: ${THROTTLE_UPLOAD_TTL_SECONDS:-60}
+  THROTTLE_UPLOAD_LIMIT: ${THROTTLE_UPLOAD_LIMIT:-30}
+  # --- Audit / monitoring ----------------------------------------------------
+  AUDIT_ENABLED: ${AUDIT_ENABLED:-true}
+  AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-0}
+  AUDIT_REDACT_FIELDS: ${AUDIT_REDACT_FIELDS:-password,passwordHash,token,refreshToken,authorization,cookie,jti}
+  AUDIT_CAPTURE_IP: ${AUDIT_CAPTURE_IP:-true}
+  METRICS_ENABLED: ${METRICS_ENABLED:-false}
+  METRICS_PATH: ${METRICS_PATH:-/metrics}
+  ALERT_DISK_USAGE_PERCENT: ${ALERT_DISK_USAGE_PERCENT:-85}
+  ALERT_QUEUE_DEPTH: ${ALERT_QUEUE_DEPTH:-100}
+  # --- Podsjetnici -----------------------------------------------------------
+  REMINDERS_ENABLED: ${REMINDERS_ENABLED:-true}
+  REMINDERS_SCHEDULE_CRON: ${REMINDERS_SCHEDULE_CRON:-0 6 * * *}
+  REMINDER_REGISTRATION_DAYS_BEFORE: ${REMINDER_REGISTRATION_DAYS_BEFORE:-5}
+  REMINDER_INSURANCE_DAYS_BEFORE: ${REMINDER_INSURANCE_DAYS_BEFORE:-5}
+  REMINDER_SERVICE_DAYS_BEFORE: ${REMINDER_SERVICE_DAYS_BEFORE:-7}
+  REMINDER_SERVICE_KM_BEFORE: ${REMINDER_SERVICE_KM_BEFORE:-500}
+  REMINDER_DRIVER_LICENSE_DAYS_BEFORE: ${REMINDER_DRIVER_LICENSE_DAYS_BEFORE:-30}
+  REMINDER_TECHNICAL_INSPECTION_DAYS_BEFORE: ${REMINDER_TECHNICAL_INSPECTION_DAYS_BEFORE:-10}
+  REMINDER_REPEAT_DAYS: ${REMINDER_REPEAT_DAYS:-0}
+  REMINDER_RECIPIENTS_PERMISSION: ${REMINDER_RECIPIENTS_PERMISSION:-vehicle:view}
+  # --- Izvještaji ------------------------------------------------------------
+  REPORTS_ENABLED: ${REPORTS_ENABLED:-true}
+  REPORT_EXPORT_SYNC_MAX_ROWS: ${REPORT_EXPORT_SYNC_MAX_ROWS:-5000}
+  REPORT_EXPORT_FORMATS: ${REPORT_EXPORT_FORMATS:-pdf,xlsx}
+  REPORT_EXPORT_RETENTION_DAYS: ${REPORT_EXPORT_RETENTION_DAYS:-7}
+  REPORT_EXPORT_PATH: ${REPORT_EXPORT_PATH:-/data/vfm/attachments/exports}
+
+services:
+  # ---------------------------------------------------------------------------
+  # Jednokratne migracije (prisma migrate deploy). Izlazi s 0 → api/worker čekaju.
+  # U Coolify-u NE dodavati domenu/healthcheck za ovaj servis.
+  # ---------------------------------------------------------------------------
+  migrate:
+    <<: *api-build
+    container_name: vfm-migrate
+    image: ${VFM_API_IMAGE:-vfm-api:local}
+    command: ["node", "dist/tools/migrate.js"]
+    restart: "no"
+    environment:
+      <<: *api-base-env
+      # ENV_PROFILE=tool → env validator preskače API-only varijable (JWT, CORS, COOKIE…)
+      ENV_PROFILE: tool
+      # Redis lock za migracije (vfm:lock:migrate) — koristi isti ACL user kao api
+      REDIS_USER: ${REDIS_USER_API:?REDIS_USER_API je obavezan (vidi REDIS_ACL.md)}
+      REDIS_PASSWORD: ${REDIS_PASSWORD_API:?REDIS_PASSWORD_API je obavezan}
+      RUN_DB_SEED: ${RUN_DB_SEED:-false}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      BOOTSTRAP_SUPER_ADMIN_ENABLED: ${BOOTSTRAP_SUPER_ADMIN_ENABLED:-false}
+      BOOTSTRAP_SUPER_ADMIN_EMAIL: ${BOOTSTRAP_SUPER_ADMIN_EMAIL:-}
+      BOOTSTRAP_SUPER_ADMIN_FIRST_NAME: ${BOOTSTRAP_SUPER_ADMIN_FIRST_NAME:-}
+      BOOTSTRAP_SUPER_ADMIN_LAST_NAME: ${BOOTSTRAP_SUPER_ADMIN_LAST_NAME:-}
+    volumes:
+      - ${VFM_STORAGE_PATH:?VFM_STORAGE_PATH je obavezan (host putanja za priloge)}:/data/vfm/attachments
+    networks:
+      - default
+      - db_net
+      - redis_net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # NestJS REST API
+  # ---------------------------------------------------------------------------
+  api:
+    <<: *api-build
+    container_name: vfm-api
+    image: ${VFM_API_IMAGE:-vfm-api:local}
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "3000"
+    environment:
+      <<: *api-base-env
+      API_HOST: ${API_HOST:-0.0.0.0}
+      API_PORT: ${API_PORT:-3000}
+      API_PREFIX: ${API_PREFIX:-/api/v1}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      SWAGGER_PATH: ${SWAGGER_PATH:-/api/v1/docs}
+      HEALTH_PATH: ${HEALTH_PATH:-/health}
+      BODY_LIMIT_JSON: ${BODY_LIMIT_JSON:-1mb}
+      BODY_LIMIT_MULTIPART: ${BODY_LIMIT_MULTIPART:-25mb}
+      TRUST_PROXY: ${TRUST_PROXY:-loopback}
+      API_CSP_ENABLED: ${API_CSP_ENABLED:-true}
+      # --- Redis ACL (api korisnik) ---
+      REDIS_USER: ${REDIS_USER_API:?REDIS_USER_API je obavezan (vidi REDIS_ACL.md)}
+      REDIS_PASSWORD: ${REDIS_PASSWORD_API:?REDIS_PASSWORD_API je obavezan}
+      PERMISSIONS_CACHE_TTL_SECONDS: ${PERMISSIONS_CACHE_TTL_SECONDS:-60}
+      # --- Auth / JWT ---
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET je obavezan}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET je obavezan}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-10m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-30d}
+      JWT_ISSUER: ${JWT_ISSUER:-vfm-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-vfm-clients}
+      COOKIE_NAME: ${COOKIE_NAME:-vfm_refresh}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+      COOKIE_PATH: ${COOKIE_PATH:-/api/v1/auth}
+      AUTH_MAX_FAILED_ATTEMPTS: ${AUTH_MAX_FAILED_ATTEMPTS:-5}
+      AUTH_LOCKOUT_MINUTES: ${AUTH_LOCKOUT_MINUTES:-15}
+      AUTH_MAX_SESSIONS_PER_USER: ${AUTH_MAX_SESSIONS_PER_USER:-5}
+      # --- CORS ---
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS je obavezan (allowlista web domene)}
+      CORS_METHODS: ${CORS_METHODS:-GET,POST,PUT,PATCH,DELETE,OPTIONS}
+      CORS_CREDENTIALS: ${CORS_CREDENTIALS:-true}
+      # --- Prilozi (host bind-mount) ---
+      FILE_SIGNING_SECRET: ${FILE_SIGNING_SECRET:?FILE_SIGNING_SECRET je obavezan}
+      FILE_SIGNED_URL_TTL_SECONDS: ${FILE_SIGNED_URL_TTL_SECONDS:-300}
+      VFM_STORAGE_CONTAINER_PATH: /data/vfm/attachments
+      ATTACHMENT_MAX_SIZE_MB: ${ATTACHMENT_MAX_SIZE_MB:-10}
+      ATTACHMENT_ALLOWED_MIME: ${ATTACHMENT_ALLOWED_MIME:-image/jpeg,image/png,image/webp,image/heic,application/pdf}
+      ATTACHMENT_VALIDATE_MAGIC_BYTES: ${ATTACHMENT_VALIDATE_MAGIC_BYTES:-true}
+      ATTACHMENT_IMAGE_MAX_WIDTH: ${ATTACHMENT_IMAGE_MAX_WIDTH:-1920}
+      ATTACHMENT_IMAGE_JPEG_QUALITY: ${ATTACHMENT_IMAGE_JPEG_QUALITY:-82}
+      ATTACHMENT_TEMP_PATH: /data/vfm/tmp
+      # --- FCM (service account JE TAJNA, samo za api/worker) ---
+      FIREBASE_ENABLED: ${FIREBASE_ENABLED:-false}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_SERVICE_ACCOUNT_PATH: /run/secrets/vfm/firebase-service-account.json
+      FCM_ANDROID_PACKAGE: ${FCM_ANDROID_PACKAGE:-ba.example.voznipark}
+      FCM_MESSAGE_TTL_SECONDS: ${FCM_MESSAGE_TTL_SECONDS:-86400}
+      FCM_INVALID_TOKEN_THRESHOLD: ${FCM_INVALID_TOKEN_THRESHOLD:-1}
+    volumes:
+      - ${VFM_STORAGE_PATH:?VFM_STORAGE_PATH je obavezan (host putanja za priloge)}:/data/vfm/attachments
+      - ${FIREBASE_SERVICE_ACCOUNT_HOST_PATH:-/etc/vfm/secrets/firebase-service-account.json}:/run/secrets/vfm/firebase-service-account.json:ro
+    networks:
+      - default
+      - db_net
+      - redis_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: ${API_MEMORY_LIMIT:-1024M}
+        reservations:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ---------------------------------------------------------------------------
+  # BullMQ worker: outbox → notifikacije → FCM, podsjetnici, izvještaji
+  # Isti image kao api, drugačiji command. Scale MORA ostati 1 (leader/locking).
+  # ---------------------------------------------------------------------------
+  worker:
+    <<: *api-build
+    container_name: vfm-worker
+    image: ${VFM_API_IMAGE:-vfm-api:local}
+    command: ["node", "dist/tools/worker.js"]
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *api-base-env
+      WORKER_ENABLED: "true"
+      REDIS_USER: ${REDIS_USER_WORKER:?REDIS_USER_WORKER je obavezan (vidi REDIS_ACL.md)}
+      REDIS_PASSWORD: ${REDIS_PASSWORD_WORKER:?REDIS_PASSWORD_WORKER je obavezan}
+      WORKER_CONCURRENCY_OUTBOX: ${WORKER_CONCURRENCY_OUTBOX:-5}
+      WORKER_CONCURRENCY_NOTIFICATIONS: ${WORKER_CONCURRENCY_NOTIFICATIONS:-10}
+      WORKER_CONCURRENCY_REMINDERS: ${WORKER_CONCURRENCY_REMINDERS:-2}
+      WORKER_CONCURRENCY_REPORTS: ${WORKER_CONCURRENCY_REPORTS:-2}
+      QUEUE_OUTBOX: ${QUEUE_OUTBOX:-vfm-queue-outbox}
+      QUEUE_NOTIFICATIONS: ${QUEUE_NOTIFICATIONS:-vfm-queue-notifications}
+      QUEUE_REMINDERS: ${QUEUE_REMINDERS:-vfm-queue-reminders}
+      QUEUE_REPORTS: ${QUEUE_REPORTS:-vfm-queue-reports}
+      QUEUE_MAINTENANCE: ${QUEUE_MAINTENANCE:-vfm-queue-maintenance}
+      QUEUE_MAX_ATTEMPTS: ${QUEUE_MAX_ATTEMPTS:-5}
+      QUEUE_BACKOFF_TYPE: ${QUEUE_BACKOFF_TYPE:-exponential}
+      QUEUE_BACKOFF_DELAY_MS: ${QUEUE_BACKOFF_DELAY_MS:-5000}
+      QUEUE_REMOVE_ON_COMPLETE_MS: ${QUEUE_REMOVE_ON_COMPLETE_MS:-86400000}
+      QUEUE_REMOVE_ON_FAIL_MS: ${QUEUE_REMOVE_ON_FAIL_MS:-604800000}
+      OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-30000}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-50}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-8}
+      OUTBOX_DEAD_ALERT_THRESHOLD: ${OUTBOX_DEAD_ALERT_THRESHOLD:-1}
+      # --- Prilozi (worker piše export fajlove) ---
+      FILE_SIGNING_SECRET: ${FILE_SIGNING_SECRET:?FILE_SIGNING_SECRET je obavezan}
+      VFM_STORAGE_CONTAINER_PATH: /data/vfm/attachments
+      REPORT_EXPORT_PATH: ${REPORT_EXPORT_PATH:-/data/vfm/attachments/exports}
+      # --- FCM ---
+      FIREBASE_ENABLED: ${FIREBASE_ENABLED:-false}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_SERVICE_ACCOUNT_PATH: /run/secrets/vfm/firebase-service-account.json
+      FCM_ANDROID_PACKAGE: ${FCM_ANDROID_PACKAGE:-ba.example.voznipark}
+      FCM_MESSAGE_TTL_SECONDS: ${FCM_MESSAGE_TTL_SECONDS:-86400}
+      FCM_INVALID_TOKEN_THRESHOLD: ${FCM_INVALID_TOKEN_THRESHOLD:-1}
+      # Worker ne servira HTTP, ali dijeli isti env validator
+      API_PORT: ${API_PORT:-3000}
+      SWAGGER_ENABLED: "false"
+    volumes:
+      - ${VFM_STORAGE_PATH:?VFM_STORAGE_PATH je obavezan (host putanja za priloge)}:/data/vfm/attachments
+      - ${FIREBASE_SERVICE_ACCOUNT_HOST_PATH:-/etc/vfm/secrets/firebase-service-account.json}:/run/secrets/vfm/firebase-service-account.json:ro
+    networks:
+      - default
+      - db_net
+      - redis_net
+    healthcheck:
+      # Worker logira heartbeat u `vfm:metrics:worker:heartbeat`; provjera je
+      # interne queue obrade preko /health u worker HTTP-less modu → koristimo
+      # provjeru procesa + DB ping kroz node skriptu.
+      test: ["CMD", "node", "dist/tools/healthcheck-worker.js"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: ${WORKER_MEMORY_LIMIT:-768M}
+        reservations:
+          memory: 192M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ---------------------------------------------------------------------------
+  # Web (React SPA + nginx). NAMJERNO samo na `default` (Coolify) mreži.
+  # /api → proxy na api:3000 (isti compose → DNS radi, bez CORS problema)
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: runtime
+      args:
+        TURBO_TEAM: ${TURBO_TEAM:-}
+        TURBO_TOKEN: ${TURBO_TOKEN:-}
+    container_name: vfm-web
+    image: ${VFM_WEB_IMAGE:-vfm-web:local}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "80"
+    environment:
+      WEB_API_INTERNAL_URL: ${WEB_API_INTERNAL_URL:-http://api:3000}
+      NGINX_ENVSUBST_FILTER: WEB_API_INTERNAL_URL
+      # Build-time varijable (Vite) — u Coolify-u se koriste pri buildu image-a
+      VITE_APP_TITLE: ${VITE_APP_TITLE:-Vozni park}
+      VITE_APP_ENV: ${VITE_APP_ENV:-production}
+      VITE_PUBLIC_API_URL: ${VITE_PUBLIC_API_URL:-}
+      VITE_APP_VERSION: ${VITE_APP_VERSION:-1.0.0}
+      VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: ${WEB_MEMORY_LIMIT:-128M}
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+# =============================================================================
+#  MREŽE — db_net i redis_net su EKSTERNE (Coolify destinations).
+#  Imena i eksternost se mogu overridati (docker-compose.dev.yml za lokalni dev).
+# =============================================================================
+networks:
+  default:
+    name: ${COMPOSE_NETWORK_NAME:-vfm_default}
+  db_net:
+    name: ${DB_NETWORK:-db_net}
+    external: ${DB_NET_EXTERNAL:-true}
+  redis_net:
+    name: ${REDIS_NETWORK:-redis_net}
+    external: ${REDIS_NET_EXTERNAL:-true}

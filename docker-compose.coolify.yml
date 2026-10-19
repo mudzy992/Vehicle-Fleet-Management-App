@@ -1,0 +1,88 @@
+# =============================================================================
+#  VOZNI PARK (VFM) — docker-compose.coolify.yml
+#  PRODUKCIJSKI OVERRIDE za Coolify (hardening). OPCIONALAN.
+#
+#  Upotreba na Coolify-u:
+#    Resource → General → Build pipeline → Build strategy: Compose
+#    Docker Compose Location: docker-compose.yml
+#    Coolify ne podržava više -f fajlova direktno, pa se ovaj override koristi na
+#    jedan od dva načina:
+#      A) spojiti sadržaj u docker-compose.yml prije deploya (preporučeno: drži
+#         produkcijski stack u jednom fajlu), ili
+#      B) lokalno generisati spojeni fajl:
+#           docker compose -f docker-compose.yml -f docker-compose.coolify.yml \
+#             config > docker-compose.prod.yml
+#         i na Coolify postaviti "Docker Compose Location: docker-compose.prod.yml".
+#
+#  Šta dodaje: security opcije, read-only root fs (gdje je moguće), cap_drop,
+#  stroži log rotation, ekplicitne resource limite, `web` bez pristupa db/redis
+#  mreži (potvrda), te `init: true`.
+# =============================================================================
+
+x-hardening: &hardening
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  read_only: true
+  tmpfs:
+    - /tmp:size=128M,mode=1777
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+      compress: "true"
+
+services:
+  api:
+    <<: *hardening
+    tmpfs:
+      - /tmp:size=256M,mode=1777
+    deploy:
+      resources:
+        limits:
+          cpus: "${API_CPU_LIMIT:-1.5}"
+          memory: ${API_MEMORY_LIMIT:-1024M}
+        reservations:
+          memory: 256M
+
+  worker:
+    <<: *hardening
+    tmpfs:
+      - /tmp:size=256M,mode=1777
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "${WORKER_CPU_LIMIT:-1.0}"
+          memory: ${WORKER_MEMORY_LIMIT:-768M}
+        reservations:
+          memory: 192M
+
+  migrate:
+    <<: *hardening
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  web:
+    <<: *hardening
+    # nginx treba pisati u /var/cache/nginx, /var/run i /var/log → read_only
+    # root fs uz tmpfs za te putanje
+    tmpfs:
+      - /tmp:size=32M,mode=1777
+      - /var/cache/nginx:size=64M
+      - /var/run:size=8M
+    # NAMJERNO: `web` nema `db_net` ni `redis_net` — pogledaj komentar u
+    # docker-compose.yml (Coolify Traefik + dvije mreže = rizik od 504/hang).
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "${WEB_CPU_LIMIT:-0.5}"
+          memory: ${WEB_MEMORY_LIMIT:-128M}

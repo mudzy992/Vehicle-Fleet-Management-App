@@ -1,0 +1,231 @@
+# =============================================================================
+#  VFM — CI (GitHub Actions)
+# =============================================================================
+#  Redoslijed: env-sync → install → lint/typecheck → unit → integration → stress
+#              → security → build → docker build
+#
+#  Napomena: dok traje FAZA 0 (dok apps/* još nemaju kod), poslovi `unit`,
+#  `integration`, `stress` i `build` preskaču se ako ne postoji odgovarajući
+#  package.json/turbo target. `env-sync` i `security` se izvršavaju UVIJEK.
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: [main, "arena/**"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: 10
+  NODE_VERSION: 22
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 0) Sinhronizacija .env.example ↔ compose ↔ REDIS_ACL.md  (uvijek)
+  # ---------------------------------------------------------------------------
+  env-sync:
+    name: env-sync-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Provjeri sinhronizaciju varijabli
+        run: node scripts/env-sync-check.mjs
+      - name: Provjeri da .env nije commitovan
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$|\.env\.(local|production|staging)$'; then
+            echo "❌ Tajne (.env) ne smiju biti u repozitoriju"; exit 1;
+          fi
+          echo "✅ Nema commitovanih .env fajlova"
+
+  # ---------------------------------------------------------------------------
+  # 1) Instalacija i keš
+  # ---------------------------------------------------------------------------
+  setup:
+    name: install
+    runs-on: ubuntu-latest
+    needs: env-sync
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Postavi pnpm-workspace.yaml (ako još ne postoji)
+        run: test -f pnpm-workspace.yaml || printf 'packages:\n  - "apps/*"\n  - "packages/*"\n' > pnpm-workspace.yaml
+      - name: Instaliraj dependencije
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            echo "⚠️ pnpm-lock.yaml ne postoji (faza 0 nije implementirana) — preskačem install"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 2) Kvalitet koda
+  # ---------------------------------------------------------------------------
+  quality:
+    name: lint & typecheck
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: test -f pnpm-lock.yaml && pnpm install --frozen-lockfile || echo "skip"
+      - name: Lint
+        run: if [ -f pnpm-lock.yaml ]; then pnpm -w lint; else echo "preskočeno (faza 0)"; fi
+      - name: Typecheck
+        run: if [ -f pnpm-lock.yaml ]; then pnpm -w typecheck; else echo "preskočeno (faza 0)"; fi
+
+  # ---------------------------------------------------------------------------
+  # 3) Unit testovi
+  # ---------------------------------------------------------------------------
+  unit:
+    name: unit tests
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: test -f pnpm-lock.yaml && pnpm install --frozen-lockfile || echo "skip"
+      - name: Testovi + coverage
+        run: if [ -f pnpm-lock.yaml ]; then pnpm -w test -- --coverage; else echo "preskočeno (faza 0)"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+
+  # ---------------------------------------------------------------------------
+  # 4) Integration testovi (pravi PostgreSQL + Redis u servisima)
+  # ---------------------------------------------------------------------------
+  integration:
+    name: integration tests
+    runs-on: ubuntu-latest
+    needs: setup
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: vfm
+          POSTGRES_PASSWORD: vfm_test_only
+          POSTGRES_DB: vfm_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vfm -d vfm_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql://vfm:vfm_test_only@localhost:5432/vfm_test?schema=public
+      TEST_REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: test -f pnpm-lock.yaml && pnpm install --frozen-lockfile || echo "skip"
+      - name: Integration
+        run: if [ -f pnpm-lock.yaml ]; then pnpm --filter @vfm/api test:integration; else echo "preskočeno (faza 0)"; fi
+      - name: Stress (P6 — atomski claim)
+        run: if [ -f pnpm-lock.yaml ]; then pnpm --filter @vfm/api test:stress; else echo "preskočeno (faza 0)"; fi
+
+  # ---------------------------------------------------------------------------
+  # 5) Sigurnost (uvijek)
+  # ---------------------------------------------------------------------------
+  security:
+    name: security scan
+    runs-on: ubuntu-latest
+    needs: env-sync
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Provjera da nema poznatih lozinki u repo-u
+        run: |
+          if grep -rniE "(admin123|password123|changeme|lozinka123|Passw0rd!)" \
+             --include='*.ts' --include='*.tsx' --include='*.json' --include='*.yml' . \
+             | grep -v node_modules | grep -v '\.example'; then
+            echo "❌ Pronađena sumnjiva/fixna lozinka"; exit 1;
+          fi
+          echo "✅ Nema fixnih lozinki"
+      - name: Dependency audit
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            npx --yes pnpm@${{ env.PNPM_VERSION }} audit --audit-level=high || exit 1
+          else
+            echo "preskočeno (faza 0)"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 6) Build + Docker image-i
+  # ---------------------------------------------------------------------------
+  build:
+    name: build & docker
+    runs-on: ubuntu-latest
+    needs: [quality, unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: test -f pnpm-lock.yaml && pnpm install --frozen-lockfile || echo "skip"
+      - name: Turbo build
+        run: if [ -f pnpm-lock.yaml ]; then pnpm turbo run build; else echo "preskočeno (faza 0)"; fi
+      - name: Docker build — api
+        if: ${{ hashFiles('apps/api/Dockerfile') != '' }}
+        run: |
+          if [ -f apps/api/src/main.ts ]; then
+            docker build -f apps/api/Dockerfile -t vfm-api:ci .
+          else
+            echo "apps/api još nema izvorni kod (faza 0) — preskačem docker build"
+          fi
+      - name: Docker build — web
+        run: |
+          if [ -f apps/web/src/main.tsx ]; then
+            docker build -f apps/web/Dockerfile -t vfm-web:ci .
+          else
+            echo "apps/web još nema izvorni kod (faza 0) — preskačem docker build"
+          fi
+      - name: Compose config provjera
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.dev.yml config --quiet \
+            && echo "✅ compose konfiguracija validna" || echo "⚠️ compose provjera nije prošla"

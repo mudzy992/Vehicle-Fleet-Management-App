@@ -1,0 +1,75 @@
+# =============================================================================
+#  VFM — .dockerignore  (koristi se za apps/api i apps/web build kontekst = root)
+# =============================================================================
+# Build kontekst je ROOT monorepo-a, pa ovo mora biti agresivno: sve što nije
+# potrebno za build ne smije ući u kontekst (brzina + sigurnost).
+
+# --- Git / CI ---
+.git
+.gitignore
+.github
+.husky
+
+# --- Dependencije (pnpm ih instalira u image-u) ---
+**/node_modules
+**/.pnpm-store
+.pnpm-store
+
+# --- Build artefakti ---
+**/dist
+**/build
+**/.turbo
+**/.next
+**/.vite
+**/*.tsbuildinfo
+coverage
+**/coverage
+
+# --- Tajne i env (NIKOJI .env ne smije u image!) ---
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*-service-account*.json
+google-services.json
+secrets/
+**/secrets/
+
+# --- Lokalni podaci ---
+.data
+data/
+infra/postgres/data
+*.sqlite
+*.db
+
+# --- Mobilna aplikacija (builda se preko EAS-a, ne u Dockeru) ---
+apps/mobile/android
+apps/mobile/ios
+apps/mobile/.expo
+apps/mobile/dist
+
+# --- IDE / OS ---
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+*.swp
+
+# --- Dokumentacija (ne treba u image) ---
+docs
+*.md
+!README.md
+
+# --- Testovi ---
+**/__tests__
+**/*.spec.ts
+**/*.test.ts
+**/test
+playwright-report
+test-results

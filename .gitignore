@@ -147,3 +147,19 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# --- VFM specifično ---
+# Lokalni podaci (dev compose bind-mount, prilozi, backup-i)
+.data/
+data/
+infra/postgres/data/
+# Firebase / Google service fajlovi (tajne)
+**/google-services.json
+**/*service-account*.json
+!*.example
+# EAS / Expo
+apps/mobile/.expo/
+apps/mobile/dist/
+# Lokalni env fajlovi (već pokriveno gore, ali eksplicitno)
+.env.local
+.env.*.local

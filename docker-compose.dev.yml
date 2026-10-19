@@ -1,0 +1,163 @@
+# =============================================================================
+#  VOZNI PARK (VFM) — docker-compose.dev.yml  (LOKALNI RAZVOJ)
+# =============================================================================
+#  Override za docker-compose.yml koji:
+#    1) podiže LOKALNI PostgreSQL 17 i Redis 7 (Coolify resursi ne postoje lokalno),
+#    2) pretvara `db_net`/`redis_net` iz external u interne mreže istih imena,
+#    3) objavljuje portove na 127.0.0.1 radi alata (DBeaver, redis-cli),
+#    4) montira lokalni ACL fajl i lokalni storage direktorij.
+#
+#  Pokretanje:
+#    docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#    (ili: pnpm dev  → Turborepo watch + ovaj compose za infrastrukturu)
+#
+#  SAMO INFRASTRUKTURA (bez app kontejnera):
+#    docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+#      up -d vfm-postgres vfm-redis
+#
+#  ⚠️ Ovdje NEMA stvarnih tajni — dev kredencijali su samo za lokalnu mašinu i
+#     nikad se ne koriste u produkciji.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Lokalni PostgreSQL (zamjena za Coolify Postgres resurs)
+  # ---------------------------------------------------------------------------
+  vfm-postgres:
+    image: postgres:17-alpine
+    container_name: vfm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-vfm}
+      POSTGRES_USER: ${DATABASE_USER:-vfm}
+      POSTGRES_PASSWORD: ${DEV_DB_PASSWORD:-vfm_dev_only}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      TZ: ${APP_TIMEZONE:-Europe/Sarajevo}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - max_connections=200
+    ports:
+      - "127.0.0.1:${DEV_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - vfm_pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      db_net:
+        aliases:
+          - vfm-postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-vfm} -d ${DATABASE_NAME:-vfm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # Lokalni Redis s ISTIM ACL modelom kao produkcija (vidi REDIS_ACL.md)
+  # ---------------------------------------------------------------------------
+  vfm-redis:
+    image: redis:7.4-alpine
+    container_name: vfm-redis
+    restart: unless-stopped
+    # aclfile se u dev-u montira iz repo-a (bez komentara u fajlu!)
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "127.0.0.1:${DEV_REDIS_PORT:-6380}:6379"
+    volumes:
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./infra/redis/users.acl.example:/etc/redis/users.acl:ro
+      - vfm_redisdata:/data
+    networks:
+      redis_net:
+        aliases:
+          - vfm-redis
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --user vfm-readonly --pass ${DEV_REDIS_PASSWORD_READONLY:-vfm_dev_only} PING | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Override-i aplikacijskih servisa za lokalni dev
+  # ---------------------------------------------------------------------------
+  migrate:
+    environment:
+      DATABASE_URL: postgresql://${DATABASE_USER:-vfm}:${DEV_DB_PASSWORD:-vfm_dev_only}@vfm-postgres:5432/${DATABASE_NAME:-vfm}?schema=public
+      REDIS_HOST: vfm-redis
+      REDIS_USER: ${REDIS_USER_API:-vfm-api}
+      REDIS_PASSWORD: ${DEV_REDIS_PASSWORD_API:-vfm_dev_only}
+      RUN_DB_SEED: ${RUN_DB_SEED:-true}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+      LOG_FORMAT: pretty
+    volumes:
+      - ${DEV_STORAGE_PATH:-./.data/attachments}:/data/vfm/attachments
+
+  api:
+    environment:
+      DATABASE_URL: postgresql://${DATABASE_USER:-vfm}:${DEV_DB_PASSWORD:-vfm_dev_only}@vfm-postgres:5432/${DATABASE_NAME:-vfm}?schema=public&connection_limit=10
+      REDIS_HOST: vfm-redis
+      REDIS_USER: ${REDIS_USER_API:-vfm-api}
+      REDIS_PASSWORD: ${DEV_REDIS_PASSWORD_API:-vfm_dev_only}
+      APP_ENV: development
+      LOG_FORMAT: pretty
+      LOG_LEVEL: debug
+      SWAGGER_ENABLED: "true"
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      COOKIE_SECURE: "false"
+      COOKIE_DOMAIN: ""
+      JWT_ACCESS_SECRET: dev_only_access_secret_change_me_0123456789abcdef
+      JWT_REFRESH_SECRET: dev_only_refresh_secret_change_me_0123456789abcdef
+      FILE_SIGNING_SECRET: dev_only_file_signing_secret_change_me_abcdef012345
+      FIREBASE_ENABLED: "false"
+    volumes:
+      - ${DEV_STORAGE_PATH:-./.data/attachments}:/data/vfm/attachments
+      # Firebase service account lokalno NE postoji → prazan mount
+      - /dev/null:/run/secrets/vfm/firebase-service-account.json:ro
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+
+  worker:
+    environment:
+      DATABASE_URL: postgresql://${DATABASE_USER:-vfm}:${DEV_DB_PASSWORD:-vfm_dev_only}@vfm-postgres:5432/${DATABASE_NAME:-vfm}?schema=public
+      REDIS_HOST: vfm-redis
+      REDIS_USER: ${REDIS_USER_WORKER:-vfm-worker}
+      REDIS_PASSWORD: ${DEV_REDIS_PASSWORD_WORKER:-vfm_dev_only}
+      APP_ENV: development
+      LOG_FORMAT: pretty
+      LOG_LEVEL: debug
+      FILE_SIGNING_SECRET: dev_only_file_signing_secret_change_me_abcdef012345
+      FIREBASE_ENABLED: "false"
+    volumes:
+      - ${DEV_STORAGE_PATH:-./.data/attachments}:/data/vfm/attachments
+      - /dev/null:/run/secrets/vfm/firebase-service-account.json:ro
+
+  web:
+    environment:
+      WEB_API_INTERNAL_URL: http://api:3000
+      VITE_APP_ENV: development
+    ports:
+      - "127.0.0.1:8080:80"
+
+# -----------------------------------------------------------------------------
+#  Mreže: u dev-u NISU eksterne — kreiraju se lokalno pod istim imenima,
+#  tako da kod/konfiguracija ostaje identična produkciji.
+# -----------------------------------------------------------------------------
+networks:
+  default:
+    name: vfm_default_dev
+  db_net:
+    name: ${DB_NETWORK:-db_net}
+    external: false
+  redis_net:
+    name: ${REDIS_NETWORK:-redis_net}
+    external: false
+
+volumes:
+  vfm_pgdata:
+    name: vfm_pgdata
+  vfm_redisdata:
+    name: vfm_redisdata
