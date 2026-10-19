@@ -117,7 +117,8 @@ services:
   # U Coolify-u NE dodavati domenu/healthcheck za ovaj servis.
   # ---------------------------------------------------------------------------
   migrate:
-    <<: *api-build
+    build:
+      <<: *api-build
     container_name: vfm-migrate
     image: ${VFM_API_IMAGE:-vfm-api:local}
     command: ["node", "dist/tools/migrate.js"]
@@ -155,7 +156,8 @@ services:
   # NestJS REST API
   # ---------------------------------------------------------------------------
   api:
-    <<: *api-build
+    build:
+       <<: *api-build
     container_name: vfm-api
     image: ${VFM_API_IMAGE:-vfm-api:local}
     restart: unless-stopped
@@ -250,7 +252,8 @@ services:
   # Isti image kao api, drugačiji command. Scale MORA ostati 1 (leader/locking).
   # ---------------------------------------------------------------------------
   worker:
-    <<: *api-build
+    build:
+      <<: *api-build
     container_name: vfm-worker
     image: ${VFM_API_IMAGE:-vfm-api:local}
     command: ["node", "dist/tools/worker.js"]
