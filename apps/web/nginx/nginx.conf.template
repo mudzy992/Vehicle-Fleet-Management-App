@@ -4,22 +4,18 @@
 #  kontrolisano preko NGINX_ENVSUBST_FILTER=WEB_API_INTERNAL_URL tako da se
 #  nginx varijable ($host, $uri) NE diraju.
 # =============================================================================
-
 server {
     listen       80;
     listen  [::]:80;
     server_name  _;
-
     root   /usr/share/nginx/html;
     index  index.html;
-
     # -------------------------------------------------------------------------
     # Osnovna higijena
     # -------------------------------------------------------------------------
     client_max_body_size 25m;          # usklađeno s BODY_LIMIT_MULTIPART
     server_tokens off;
     charset utf-8;
-
     gzip on;
     gzip_vary on;
     gzip_comp_level 6;
@@ -28,7 +24,6 @@ server {
     gzip_types
         text/plain text/css text/xml application/json application/javascript
         application/xml+rss application/rss+xml image/svg+xml font/woff2;
-
     # -------------------------------------------------------------------------
     # Healthcheck (Coolify + docker healthcheck) — bez logova
     # -------------------------------------------------------------------------
@@ -37,21 +32,18 @@ server {
         add_header Content-Type text/plain;
         return 200 "ok";
     }
-
     # -------------------------------------------------------------------------
     # API proxy → NestJS (isti origin ⇒ bez CORS-a, cookie radi)
     # -------------------------------------------------------------------------
     location /api/ {
         proxy_pass         ${WEB_API_INTERNAL_URL};
         proxy_http_version 1.1;
-
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;
         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_set_header   X-Forwarded-Host  $host;
         proxy_set_header   X-Request-ID      $request_id;
-
         # SSE (stream obavijesti) — bez bufferinga i bez timeouta
         proxy_buffering           off;
         proxy_cache               off;
@@ -59,17 +51,25 @@ server {
         chunked_transfer_encoding off;
         proxy_read_timeout        3600s;
         proxy_send_timeout        3600s;
-
         # Upload priloga
         proxy_request_buffering   off;
     }
-
-    # Zdravlje API-ja kroz proxy (radi debug-a)
+    # Zdravlje API-ja kroz proxy (ekran /zdravlje i debug).
+    # Ekran zove /health/live, /health/ready i /health/startup — sva tri MORAJU
+    # ići na API, inače SPA fallback vraća index.html i `response.json()` puca.
     location = /health {
         proxy_pass ${WEB_API_INTERNAL_URL}/health/live;
         access_log off;
     }
-
+    location /health/ {
+        proxy_pass ${WEB_API_INTERNAL_URL}/health/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        access_log off;
+    }
     # -------------------------------------------------------------------------
     # Sigurnosni headeri
     # -------------------------------------------------------------------------
@@ -79,7 +79,6 @@ server {
     add_header Permissions-Policy        "geolocation=(), microphone=(), camera=(self)" always;
     add_header Cross-Origin-Opener-Policy "same-origin"      always;
     add_header Content-Security-Policy   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
-
     # -------------------------------------------------------------------------
     # Statički asseti s hashom u imenu → dugi cache
     # -------------------------------------------------------------------------
@@ -89,7 +88,6 @@ server {
         access_log off;
         try_files $uri =404;
     }
-
     # Ostali statički fajlovi (favicon, ikone, fontovi)
     location ~* \.(?:ico|png|jpg|jpeg|gif|webp|svg|woff2?|ttf|eot|webmanifest)$ {
         expires 7d;
@@ -97,7 +95,6 @@ server {
         access_log off;
         try_files $uri =404;
     }
-
     # -------------------------------------------------------------------------
     # SPA fallback — index.html se NE kešira (deploym odmah vidljivi)
     # -------------------------------------------------------------------------
@@ -106,7 +103,6 @@ server {
         expires -1;
         try_files $uri $uri/ /index.html;
     }
-
     # -------------------------------------------------------------------------
     # Skrivanje dot-fajlova i source map-a u produkciji
     # -------------------------------------------------------------------------
