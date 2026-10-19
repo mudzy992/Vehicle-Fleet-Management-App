@@ -16,17 +16,24 @@ import { DatabaseModule } from './infra/database/database.module.js';
 import { RedisModule } from './infra/redis/redis.module.js';
 import { QueueModule } from './infra/queue/queue.module.js';
 import { HealthModule } from './health/health.module.js';
+import { AuditModule } from './common/audit/audit.module.js';
+import { AuditInterceptor } from './common/interceptors/audit.interceptor.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { ClientTypeGuard } from './common/guards/client-type.guard.js';
 import { PermissionsGuard } from './common/guards/permissions.guard.js';
 
 @Module({
-  imports: [DatabaseModule, RedisModule, QueueModule, HealthModule, AuthModule],
+  imports: [DatabaseModule, RedisModule, QueueModule, HealthModule, AuditModule, AuthModule],
   controllers: [],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: ApiEnvelopeInterceptor },
+    /**
+     * Audit je **unutar** envelope-a (registrovan drugi) → vidi sirove podatke
+     * handler-a za `after`/diff, ne omotanu `{ data, meta }` strukturu.
+     */
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     /**
      * Globalni guard-ovi (docs/05 §5.3) — redoslijed registracije je redoslijed
      * izvršavanja i **nije** proizvoljan:
