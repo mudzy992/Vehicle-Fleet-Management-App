@@ -10,16 +10,24 @@
 #    - web     : nginx koji servira React SPA i proxy-uje /api ← SAMO Coolify mreža
 #
 #  MREŽE (ključno!):
-#    - PostgreSQL i Redis su Coolify resursi IZVAN ovog stacka.
-#    - api/worker/migrate se kače na eksterne mreže `db_net` i `redis_net`.
+#    - PostgreSQL i Redis su GLOBALNI resursi koji VEĆ RADE na ovom Docker hostu
+#      (potvrđeno od vlasnika, R-02) i NISU dio ovog stacka — compose ih ne pokreće.
+#    - api/worker/migrate se kače na eksterne mreže `db_net` (Postgres) i `redis_net` (Redis).
+#    - DATABASE_HOST / REDIS_HOST moraju biti TAČNI nazivi tih globalnih kontejnera
+#      (provjera: `docker network inspect db_net` / `redis_net`). Nikad `localhost`.
+#    - Redis je DIJELJEN s drugim aplikacijama → ACL varijanta B (REDIS_ACL.md):
+#      `default` user se NE dira; naši useri su izolovani sa `~vfm:*`.
 #    - `web` se NAMJERNO ne kači na njih: kontejner koji je istovremeno na
 #      Coolify mreži i na custom mreži može dobiti 504/hang jer Traefik
 #      nedeterministički bira IP. Vidi docs/08-DOCKER_COOLIFY_DEPLOYMENT.md.
 #
 #  HOSTNAME-OVI:
-#    - Na dijeljenoj mreži koristiti PUNI Coolify naziv kontejnera
-#      (npr. `postgres-a1b2c3d4e5f6`, `redis-a1b2c3d4e5f6`), NE `postgres`/`redis`.
-#      Kratka imena mogu rezolvirati na tuđi kontejner (Coolify internal DB!).
+#    - Ako su globalni Postgres/Redis Coolify resursi, naziv ima oblik
+#      `postgres-<uuid>` / `redis-<uuid>` i TO je hostname koji ide u ENV.
+#    - Ako su podignuti "ručno" (docker run / drugi compose), hostname je naziv
+#      kontejnera ili mrežni alias definisan na `db_net` / `redis_net`.
+#    - Kratka/imena koja se ponavljaju na dijeljenoj mreži mogu rezolvirati na tuđi
+#      kontejner (npr. Coolify internal DB) → uvijek provjeriti `docker network inspect`.
 #
 #  LOKALNI RAZVOJ:
 #    docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build

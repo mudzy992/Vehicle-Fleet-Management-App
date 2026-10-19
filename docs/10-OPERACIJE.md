@@ -230,7 +230,7 @@ dok se ne uvede eksplicitna koordinacija (Faza 8+ / v2).
 
 | Faza | Operativni koraci vlasnika |
 |---|---|
-| 0 | Kreirati `db_net`/`redis_net`, direktorije na hostu, popuniti `.env` iz `.env.example` |
+| 0 | Mreže `db_net`/`redis_net` i globalni Postgres/Redis **već postoje** → samo očitati nazive kontejnera (`docker network inspect …`), dogovoriti ACL (varijanta B) i ekstenzije, kreirati direktorije na hostu (`/data/vfm/…`), popuniti `.env` iz `.env.example` |
 | 1 | Generisati tajne (`gen-secrets.mjs`), bootstrap Super Admin lozinku preuzeti i promijeniti |
 | 2 | — |
 | 3 | Odlučiti o pragovima podsjetnika (Postavke), potvrditi R-07/R-08 |

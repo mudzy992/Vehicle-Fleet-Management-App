@@ -75,7 +75,7 @@ Autentifikacija i RBAC, upravljanje korisnicima/rolama/permisijama, profili voza
 
 ### 3.3 Pretpostavke
 1. Početni obim 10 vozila, ≤ 20 korisnika, ≤ 5 administratora, 1–2 Super Admina.
-2. PostgreSQL i Redis su **Coolify resursi van ovog compose stacka**, dostupni preko `db_net` odnosno `redis_net`.
+2. PostgreSQL i Redis su **globalni resursi koji već rade na istom Docker hostu** (potvrđeno, R-02) i dostupni su preko eksternih mreža `db_net` odnosno `redis_net`. Naš compose ih **ne** pokreće; baza (host/user/dbname/password) je već kreirana, a Redis se dijeli s drugim aplikacijama (ACL varijanta B).
 3. Jedan server, jedan region, jezik `bs` (bosanski), valuta `BAM/KM`, vremenska zona `Europe/Sarajevo`.
 4. Mobilna aplikacija se distribuira interno (APK) + Google Play (AAB) preko EAS Build-a; ne builda se u Dockeru.
 5. Firebase projekat i `service_account.json` obezbjeđuje vlasnik; tajna je dostupna **samo** backend kontejneru.
@@ -476,8 +476,10 @@ Legenda: **DoD** = Definition of Done. Svaka faza završava s: (1) prolazećim b
 | Rizik | Uticaj | Vjerovatnoća | Mitigacija |
 |---|---|---|---|
 | Coolify: kontejner na 2 mreže → Traefik bira pogrešnu → 504/hang | Visok | Srednja | `web` **nije** na `db_net`/`redis_net`; samo `api`/`worker`/`migrate`. Alternativa: `web` kao zaseban Coolify resurs (Dockerfile build pack). Dokumentovano u `08-DOCKER_COOLIFY_DEPLOYMENT.md` |
-| DNS kolizija: hostname `postgres`/`redis` na dijeljenoj mreži riješi na tuđi kontejner | **Kritičan** | Srednja | Koristiti **puni Coolify naziv** (`postgres-<uuid>`, `redis-<uuid>`) u `DATABASE_URL`/`REDIS_*`; uključiti "Consistent Container Names"; `db_net`/`redis_net` kao zasebne Coolify destinacije |
-| Redis ACL user nema komandu koju BullMQ treba → worker padne | Visok | Srednja | `+@all` uz restrikciju **ključeva** (`~vfm:*`) i `&*` kanala; `default off`; dokumentovano i testirano u Fazi 0 |
+| DNS kolizija: hostname `postgres`/`redis` na dijeljenoj mreži riješi na tuđi kontejner | **Kritičan** | Srednja | `DATABASE_HOST`/`REDIS_HOST` = **tačan naziv globalnog kontejnera** očitano iz `docker network inspect db_net/redis_net`; nikad `localhost`; provjera konekcije prije prvog deploya |
+| Redis ACL user nema komandu koju BullMQ treba → worker padne | Visok | Srednja | `+@all` uz restrikciju **ključeva** (`~vfm:*`) i `&*` kanala; dokumentovano i testirano u Fazi 0 |
+| **Globalni Redis je dijeljen**: `user default off` ili `noeviction` promjena sruši druge aplikacije | **Kritičan** | Srednja | `REDIS_ACL.md` **varijanta B** (ne diramo `default`), backup `ACL LIST` prije izmjene, promjene `maxmemory-policy`/`appendonly` samo uz dogovor s adminom Redisa, izolacija kroz `~vfm:*` |
+| **Globalni Postgres je dijeljen**: pool/migracije drugih aplikacija | Visok | Srednja | `DATABASE_CONNECTION_LIMIT=10`, migracije samo nad `vfm` bazom, backup/restore dogovoren s adminom baze, ekstenzije kreira DB admin ako `vfm` nema pravo |
 | Race pri preuzimanju zadatka | **Kritičan** | Niska (uz dizajn) | Jedan `UPDATE ... WHERE status='OPEN' RETURNING` + unique partial index + idempotency key + stress test u CI |
 | Push greška prekine poslovni tok | Visok | Visoka | Transactional outbox; push je **nuspojava**, nikad dio iste transakcije; retry + DLQ |
 | Dupli podsjetnici | Srednji | Srednja | `ScheduledReminder.dedupeKey` unique; skener je idempotentan; test duplog runa |

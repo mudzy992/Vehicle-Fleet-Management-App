@@ -3,6 +3,14 @@
 **Verzija:** 1.0.0 · **Stack:** Coolify (Docker Compose build pack) + Traefik + PostgreSQL 17 + Redis 7.4
 **Mreže:** `db_net` (PostgreSQL), `redis_net` (Redis) · **Prefix:** `vfm`
 
+> ✅ **Stanje infrastrukture (potvrđeno od vlasnika, R-02 — 19.10.2026.)**
+> Na istom Docker hostu **već rade globalni PostgreSQL i globalni Redis**:
+> - PostgreSQL je priključen na `db_net`; baza za VFM (host, user, dbname, password) je **kreirana**.
+> - Redis je priključen na `redis_net`; dijeli se s drugim aplikacijama → **obavezna** ACL izolacija
+>   (`REDIS_ACL.md`, varijanta B — `default` user se **ne** dira).
+> - Naš `docker-compose.yml` stoga **ne pokreće** ni bazu ni Redis: obje mreže su `external: true`,
+>   a `migrate`/`api`/`worker` se na njih kače i koriste postojeće kredencijale.
+
 > ⚠️ Ovaj dokument i [`.env.example`](../.env.example) i [`REDIS_ACL.md`](../REDIS_ACL.md) čine
 > **jednu cjelinu**. Promjena bilo kojeg od njih zahtijeva provjeru ostala dva.
 
@@ -51,10 +59,14 @@ Redis, pa ga ne kačimo na `db_net`/`redis_net`.
 ## 3. Preduslovi na serveru (jednokratno)
 
 ```bash
-# 1) Docker mreže (ako ih Coolify već nije kreirao kao Destinacije)
-docker network create db_net      2>/dev/null || true
-docker network create redis_net   2>/dev/null || true
+# 1) Mreže VEĆ POSTOJE (globalni Postgres i Redis su na njima) — samo provjera:
 docker network ls | grep -E 'db_net|redis_net'
+docker network inspect db_net     --format '{{range .Containers}}{{.Name}} {{end}}'
+docker network inspect redis_net  --format '{{range .Containers}}{{.Name}} {{end}}'
+#    ↑ Iz ovoga očitati TAČNE nazive kontejnera → DATABASE_HOST i REDIS_HOST
+#    (nikad `localhost`; kratka imena tipa `postgres`/`redis` provjeriti da nisu
+#     dvosmislena — vidi §11 Troubleshooting)
+#    Ako mreža iz nekog razloga NE postoji: docker network create db_net
 
 # 2) Direktoriji na hostu
 sudo mkdir -p /data/vfm/attachments /data/vfm/backups /data/coolify/redis-acl /etc/vfm/secrets
@@ -76,28 +88,51 @@ df -h /data      # preporuka ≥ 20 GB slobodno
 
 ## 4. Coolify resursi — korak po korak
 
-### 4.1 PostgreSQL
+### 4.1 PostgreSQL — **globalna baza (NE kreiramo novi resurs)**
 
-1. **Project:** `Vozni park` → **Environment:** `production` → **+ New Resource → Database → PostgreSQL 17**.
-2. General:
-   - **Name:** `vfm-postgres` (Coolify će generisati `postgres-<uuid>` — to je hostname!)
-   - **Destination:** `db_net`
-   - DB name `vfm`, user `vfm`, password → generisan ili iz `DATABASE_PASSWORD`.
-3. **Ports:** Public access = **Off** (baza nije javna).
-4. **Advanced:** uključi **Consistent Container Names** (lakše pamćenje hostname-a).
-5. **Scheduled Backups:** dnevno u 03:00, retencija 14 dana + kopija na off-site (R-10).
-6. Zapiši **Postgres URL (internal)** → koristi se za `DATABASE_URL`:
-   `postgresql://vfm:<PASSWORD>@postgres-<uuid>:5432/vfm?schema=public&connection_limit=10`
-7. Ekstenzije (jednom, kroz Coolify Terminal na DB kontejneru):
+Vlasnik je potvrdio da globalni PostgreSQL već postoji na `db_net` i da je baza za VFM kreirana.
+Zato se **ne** pravi novi Coolify DB resurs; umjesto toga:
+
+1. **Očitati hostname i kredencijale** (R-02a/R-02c):
+   ```bash
+   docker network inspect db_net --format '{{range .Containers}}{{.Name}}\n{{end}}'
+   docker exec -it <naziv-pg-kontejnera> psql -U <db_admin> -d vfm -c 'select current_database(), current_user;'
+   ```
+2. **Popuniti ENV** (Coolify → VFM Application → Environment Variables):
+   ```
+   DATABASE_HOST=<naziv-pg-kontejnera>      # npr. postgres ili global-postgres
+   DATABASE_PORT=5432
+   DATABASE_NAME=vfm
+   DATABASE_USER=vfm
+   DATABASE_PASSWORD=<kreirana lozinka>
+   DATABASE_URL=postgresql://vfm:<PASSWORD>@<DATABASE_HOST>:5432/vfm?schema=public&connection_limit=10&pool_timeout=20
+   ```
+   Compose koristi **`DATABASE_URL`**; ostale `DATABASE_*` varijable su dokumentacija/backup.
+3. **Ekstenzije** (jednom; potrebne su VFM-u):
    ```sql
    CREATE EXTENSION IF NOT EXISTS pgcrypto;
    CREATE EXTENSION IF NOT EXISTS btree_gist;
    CREATE EXTENSION IF NOT EXISTS citext;
    ```
+   Ako korisnik `vfm` nema pravo `CREATE EXTENSION` → neka ih izvrši DB administrator
+   (`DATABASE_CREATE_EXTENSIONS=false` u ENV-u znači da ih aplikacija neće pokušavati kreirati).
+4. **Pool:** globalna baza se dijeli s drugim aplikacijama → `DATABASE_CONNECTION_LIMIT=10`
+   (konzervativno). Provjeriti `SHOW max_connections;` i zbir pool-ova svih aplikacija.
+5. **Backup:** pošto baza nije naš Coolify resurs, backup je dogovor s administratorom baze
+   (Coolify Scheduled Backups na tom resursu ili `scripts/backup-db.sh` + cron). Obavezno
+   dogovoriti i **vraćanje pojedinačne baze** (`pg_restore -d vfm`) bez diranja drugih baza.
 
-### 4.2 Redis
+> Alternativno (ako se ipak želi zasebna baza): kreirati Coolify PostgreSQL resurs na `db_net`
+> i koristiti njegov **Postgres URL (internal)**; tada hostname ima oblik `postgres-<uuid>`.
 
-1. **+ New Resource → Database → Redis 7.4**, **Destination:** `redis_net`, naziv `vfm-redis`.
+### 4.2 Redis — **globalni Redis (NE kreiramo novi resurs)**
+
+Redis je dijeljen s drugim aplikacijama → **varijanta B** iz `REDIS_ACL.md` §1 (`default` user se
+ne dira). Koraci:
+
+0. `docker network inspect redis_net` → tačan naziv kontejnera = `REDIS_HOST` (R-02b).
+   Provjeriti s administratorom Redisa: ko upravlja `redis.conf`, može li se montirati ACL fajl,
+   i koja je trenutna `maxmemory-policy` (mora biti `noeviction` zbog BullMQ).
 2. **General → Custom Redis configuration** (vidi `REDIS_ACL.md` §2):
    ```
    aclfile /etc/redis/users.acl
@@ -119,7 +154,8 @@ df -h /data      # preporuka ≥ 20 GB slobodno
    ```
 5. **Public access:** Off. Restart resursa.
 6. Provjera (`REDIS_ACL.md` §5): `ACL LIST`, `PING` s `vfm-api`, test ključa s i bez `vfm:` prefixa.
-7. Zapiši **Redis URL (internal)** → `REDIS_HOST=redis-<uuid>`.
+7. `REDIS_HOST=<naziv-globalnog-redis-kontejnera>`; `REDIS_USER_*`/`REDIS_PASSWORD_*` iz
+   `scripts/gen-secrets.mjs --redis` (plaintext u ENV, hash u ACL fajl).
 
 > ⚠️ **Ako se bilo šta u ovom koraku mijenja (novi user, novi prefix, nova komanda), `REDIS_ACL.md`
 > se mora ažurirati u istom trenutku.**

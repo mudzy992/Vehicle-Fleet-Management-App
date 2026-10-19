@@ -7,12 +7,26 @@
 
 | | |
 |---|---|
-| **Redis mreža** | `redis_net` (Coolify destination / eksterni Docker network) |
+| **Redis mreža** | `redis_net` (eksterni Docker network — **globalni Redis već postoji na hostu**) |
 | **Prefix aplikacije** | `vfm` → svi ključevi počinju s `vfm:` |
 | **Redis verzija** | 7.4+ (ACL, `%R~`/`%W~`, `&` kanali) |
-| **ACL fajl u repo-u** | [`infra/redis/users.acl.example`](infra/redis/users.acl.example) |
-| **Verzija ACL-a** | **1.0.0** (19.10.2026.) |
-| **Zadnja provjera** | 19.10.2026. — usklađeno s `.env.example` 1.0.0 i `docker-compose.yml` |
+| **ACL fajl u repo-u** | [`infra/redis/users.acl.example`](infra/redis/users.acl.example) (dev) · produkcija: §1 |
+| **Verzija ACL-a** | **1.0.1** (19.10.2026.) |
+| **Zadnja provjera** | 19.10.2026. — usklađeno s `.env.example` 1.0.2 i `docker-compose.yml` |
+
+> 🔴 **GLOBALNI / DIJELJENI REDIS.** Vlasnik je potvrdio (R-02) da na istom Docker hostu
+> već radi **globalni Redis** priključen na `redis_net`, i da ga koriste i druge aplikacije.
+> Posljedice:
+> 1. **NE dirati `default` usera** ako se druge aplikacije oslanjaju na njega (`requirepass`).
+>    Koristi **varijantu B** iz §1. `user default off` (varijanta A) smije se primijeniti
+>    **samo** ako je VFM jedini korisnik te Redis instance.
+> 2. Naše ACL korisnike **izolujemo** ključevima (`~vfm:*`) i kanalima, tako da druge
+>    aplikacije ne mogu čitati/pisati naše queue-ove, a mi ne možemo dirati njihove.
+> 3. `maxmemory-policy` je **zajednička** postavka: ako je na globalnom Redisu postavljena
+>    evikcija (`allkeys-lru` i sl.), BullMQ će gubiti jobove. Tražiti od administratora
+>    Redisa da postavi `noeviction` + `appendonly yes` (§2) ili nam odobri zaseban DB/instancu.
+> 4. ACL izmjene utiču na **cijelu instancu** → prije `ACL LOAD`/`ACL SAVE` obavezno
+>    `ACL LIST` sačuvati kao backup (`/data/coolify/redis-acl/backup-<datum>.acl`).
 
 ---
 
@@ -32,23 +46,47 @@ Agent je dužan na kraju svake faze reći:
 | Verzija | Datum | Izmjena | Treba akciju na serveru? |
 |---|---|---|---|
 | 1.0.0 | 19.10.2026. | Inicijalni ACL: `default off`, `vfm-api`, `vfm-worker`, `vfm-readonly`. Ključevi `~vfm:*`, kanali `&*`. | **DA** — kreirati ACL fajl + `aclfile` direktivu + restart Redis |
+| 1.0.1 | 19.10.2026. | **Globalni/dijeljeni Redis (R-02):** dodana **varijanta A/B** u §1 (A = `default off` samo ako smo jedini korisnik; **B = default se ne dira**, preporučeno za dijeljeni Redis), backup ACL-a prije izmjena, napomena o zajedničkom `maxmemory-policy noeviction`. Sadržaj `vfm-*` usera **nije** mijenjan. | **DA** — primijeniti varijantu B + `ACL LOAD`/`ACL SAVE` |
 
 ---
 
 ## 1. Sadržaj ACL fajla (kopirati 1:1)
 
+**Tri `vfm-*` usera su identična u obje varijante** — razlika je samo u tome šta se radi s
+`default` userom.
+
+#### VFM useri (obavezno, obje varijante)
+
 ```
-user default off
-
 user vfm-api on #<SHA256_LOZINKE_API> ~vfm:* &* +@all -flushdb -flushall -debug -shutdown -config -acl -keys -swapdb -reset -failover
-
 user vfm-worker on #<SHA256_LOZINKE_WORKER> ~vfm:* &* +@all -flushdb -flushall -debug -shutdown -config -acl -keys -swapdb -reset -failover
-
 user vfm-readonly on #<SHA256_LOZINKE_READONLY> ~vfm:* &* +@read +ping +info +client|getname +client|setname +client|id +client|list +scan +type +ttl +pttl +exists +dbsize +memory|usage +memory|stats +slowlog|get +latency|latest -keys -debug -config -acl
 ```
 
+#### Varijanta A — VFM je **jedini** korisnik ove Redis instance
+
+```
+user default off
+```
+
+#### Varijanta B — Redis je **globalni/dijeljeni** (⬅ preporučeno za naše stanje, R-02)
+
+`default` user **ostaje onakav kakav jeste** (druge aplikacije ga koriste preko `requirepass`).
+U ACL fajlu ga **ne navodimo** ako već postoji u `redis.conf` — ali pazi: `aclfile` i `user`
+direktive u `redis.conf` su **međusobno nekompatibilne**, pa sve `user ...` linije moraju biti
+na jednom mjestu. Ako administrator Redisa vodi korisnike kroz `aclfile`, dodati:
+
+```
+user default on > postojeća requirepass lozinka ~* &* +@all
+```
+
+(ili ostaviti postojeću `default` definiciju netaknutu) i **ispod nje** dodati tri `vfm-*` usera.
+Naša izolacija tada počiva na `~vfm:*` + zasebnim lozinkama, ne na gašenju `default`-a.
+
 **Pravila**
-- `default off` — anonimni pristup je onemogućen; `requirepass` se **ignoriše** kada je `aclfile` aktivan.
+- `default`: varijanta A (`off`) **samo** ako smo jedini korisnik instance; varijanta B (ne diramo ga)
+  za dijeljeni globalni Redis. `requirepass` se **ignoriše** kada je `aclfile` aktivan — zato u
+  varijanti B lozinka `default` usera mora biti definisana u ACL fajlu (`>` ili `#hash`).
 - Lozinke **nikad** u plaintextu u repozitoriju: koristi `#<sha256-hex>` (preporučeno) ili `>lozinka` samo ako se ACL fajl ne commit-uje.
 - `~vfm:*` — pristup **svim** ključevima aplikacije i ničemu drugome (npr. Coolify-jev vlastiti Redis na istoj instanci ostaje nedostupan).
 - `&*` — pub/sub kanali (BullMQ koristi pub/sub za evente i `xreadgroup` koordinaciju).
@@ -93,9 +131,15 @@ save ""
 > (BullMQ). `allkeys-lru` bi **brisao jobove** i outbox stanje. Ako se Redis dijeli
 > s nekim keš-om, keš mora koristiti TTL, a ne evikciju.
 >
-> ⚠️ Kada je `aclfile` postavljen, `requirepass` **ne radi**. Coolify dodaje
-> `requirepass` samo ako konfiguracija ne sadrži tu direktivu — zato je `user default off`
-> dovoljna zaštita.
+> ⚠️ Kada je `aclfile` postavljen, `requirepass` **ne radi**. Zato:
+> - **varijanta A** (sami na instanci): `user default off` u ACL fajlu je dovoljna zaštita;
+> - **varijanta B** (globalni/dijeljeni Redis): lozinka `default` usera mora biti u ACL fajlu,
+>   a `maxmemory-policy noeviction` i `appendonly yes` su **zajedničke** postavke — promjena se
+>   dogovara s administratorom Redisa jer utiče na sve aplikacije na toj instanci.
+>
+> ⚠️ `save ""` isključuje RDB snapshot-e; na dijeljenoj instanci to može biti neprihvatljivo za
+> druge aplikacije. Ako administrator želi zadržati RDB, ostaviti `save` postavke kakve jesu —
+> za VFM je ključno samo `appendonly yes` (queue ne smije izgubiti jobove) i `noeviction`.
 
 ### Montaža ACL fajla na Coolify Redis resursu
 
@@ -235,6 +279,10 @@ Nazivi queue-ova (iz `.env.example`): `vfm-queue-outbox`, `vfm-queue-notificatio
 ## 5. Primjena izmjena (runbook)
 
 ```bash
+# 0) BACKUP postojećeg ACL stanja (obavezno na dijeljenoj instanci!)
+docker exec -it <redis-kontejner> redis-cli --user default --pass '<PASS>' ACL LIST \
+  | sudo tee /data/coolify/redis-acl/backup-$(date +%Y%m%d).acl > /dev/null
+
 # 1) Ažuriraj ACL fajl na hostu (vidi §2)
 sudo nano /data/coolify/redis-acl/vfm-users.acl
 
@@ -276,7 +324,10 @@ docker exec -it <redis-kontejner> redis-cli --user vfm-api --pass '<PASS>' SET b
 | Jobovi nestaju nakon restarta | `appendonly no` / `save ""` bez AOF | Uključi `appendonly yes` (§2) |
 | `ACL LOAD` vraća grešku o sintaksi | Komentari (`#...`) u fajlu na Redisu < 8.8 | Ukloni linije s komentarima iz ACL fajla |
 | `ERR ACL SAVE failed` | `aclfile` nije konfigurisan ili fajl nije upisiv | Dodaj `aclfile /etc/redis/users.acl`; provjeri permisije (640, vlasnik redis) |
-| Aplikacija se spoji na **pogrešan** Redis | Kratki hostname `redis` na dijeljenoj mreži | Koristi puni Coolify naziv `redis-<uuid>` u `REDIS_HOST` |
+| Aplikacija se spoji na **pogrešan** Redis | Kratki hostname `redis` na dijeljenoj mreži | `docker network inspect redis_net` → tačan naziv globalnog kontejnera u `REDIS_HOST` |
+| Druge aplikacije su pale nakon naših ACL izmjena | Primijenjena varijanta A (`user default off`) na dijeljenoj instanci | Vratiti `default` iz backup-a (§5, korak 0) → `ACL LOAD` → koristiti **varijantu B** |
+| BullMQ jobovi nestaju / stalled | Globalni Redis ima `maxmemory-policy allkeys-*` | Tražiti od admina Redisa `noeviction` (§2) ili zaseban DB/instancu za VFM |
+| `NOPERM` samo kod naših ključeva, druge aplikacije rade | Naš user nema traženu komandu/pattern | Provjeri §1; promjenu upiši u changelog i §4 |
 
 ---
 

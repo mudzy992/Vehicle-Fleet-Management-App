@@ -79,10 +79,14 @@ Redis `127.0.0.1:6380`.
 
 ## Deployment (Coolify)
 
-1. Kreiraj mreže/destinacije `db_net` i `redis_net` + host direktorije
-   (`docs/08-DOCKER_COOLIFY_DEPLOYMENT.md` §3).
-2. Podigni **PostgreSQL 17** (destination `db_net`) i **Redis 7.4** (destination `redis_net`,
-   Custom Redis configuration + ACL mount iz `REDIS_ACL.md` §2).
+> ✅ **Infrastruktura već postoji (R-02):** na istom Docker hostu rade **globalni PostgreSQL**
+> (mreža `db_net`, baza/user/lozinka kreirani) i **globalni Redis** (mreža `redis_net`, dijeljen s
+> drugim aplikacijama). Ovaj compose ih **ne pokreće** — samo se povezuje (`external: true`).
+
+1. Provjeri nazive globalnih kontejnera (`docker network inspect db_net` / `redis_net`) i kreiraj
+   host direktorije (`docs/08-DOCKER_COOLIFY_DEPLOYMENT.md` §3).
+2. Redis: primijeni ACL **varijantu B** iz `REDIS_ACL.md` §1 (na dijeljenoj instanci **ne dirati**
+   `default` usera) + dogovoriti `maxmemory-policy noeviction` i `appendonly yes`.
 3. Podigni aplikaciju: Build strategy **Compose**, `docker-compose.yml`, domene za `web` (:80) i
    `api` (:3000), **Connect to predefined network** → `db_net`/`redis_net`, ENV iz `.env.example`.
 4. `migrate` servis pokreće migracije prije `api`/`worker`; **bez domene**.

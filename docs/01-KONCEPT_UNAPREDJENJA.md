@@ -127,7 +127,10 @@ Zadatak ih navodi kvalitativno; ovo su mjerljivi ciljevi po kojima se faze prima
 | ID | Pitanje | Predloženi default | Blokira fazu |
 |---|---|---|---|
 | **R-01** | Da li se Redis instanca dijeli s drugim aplikacijama? | Pretpostavka: dijeljena → ACL `~vfm:*` je obavezan | 0 |
-| **R-02** | Postoji li već Coolify destinacija (mreža) nazvana `db_net`/`redis_net`, ili ih treba kreirati? | Kreirati (`docker network create db_net redis_net` ili kroz Coolify Destinations) | 0 |
+| **R-02** | ✅ **RIJEŠENO (19.10.2026.)** — Postoje li `db_net`/`redis_net`? | **Postoje.** Na Docker hostu već rade **globalni PostgreSQL** (na mreži `db_net`, s unaprijed kreiranim host/user/dbname/password) i **globalni Redis** (na mreži `redis_net`). U našem compose-u obje mreže su `external: true`; mi **ne** kreiramo ni bazu ni Redis, samo se povezujemo. Preostalo: dobiti tačne nazive kontejnera/hostova i kredencijale (Faza 0). | — |
+| **R-02a** | Koji je tačan hostname globalnog Postgresa na `db_net` (npr. `postgres`, `global-postgres`, `postgres-<uuid>`)? | Tražimo puni naziv kontejnera da izbjegnemo DNS koliziju | 0 |
+| **R-02b** | Koji je tačan hostname globalnog Redisa na `redis_net` i ko upravlja njegovom konfiguracijom (može li se dodati `aclfile` + mount)? | Ako se ACL fajl ne može montirati, koristiti `ACL SETUSER` + `ACL SAVE` (privremeni `vfm-admin` user) — `REDIS_ACL.md` §2 | 0 |
+| **R-02c** | Imena DB korisnika/baze za VFM na globalnom Postgresu (`vfm`/`vfm`?) i ima li taj korisnik pravo `CREATE EXTENSION` (pgcrypto, btree_gist, citext)? | Ako nema, ekstenzije kreira DB admin prije prvog deploya | 0 |
 | **R-03** | Domena za web i API (npr. `voznipark.ba` / `api.voznipark.ba`)? | Vlasnik daje prije Faze 8 | 8 |
 | **R-04** | Firebase projekat: ko kreira, ima li već Android aplikaciju registrovanu? | Vlasnik kreira projekat + Android app (package `ba.example.voznipark`) i daje `google-services.json` i `firebase-service-account.json` | 5, 6 |
 | **R-05** | Da li postoji potreba za 2FA (TOTP) za Super Admina? | Predlažemo **da** (opcionalno, `AUTH_2FA_ENABLED`) | 1 (opciono) |
