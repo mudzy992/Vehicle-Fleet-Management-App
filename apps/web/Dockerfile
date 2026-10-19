@@ -22,7 +22,9 @@ ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 WORKDIR /app
 
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
+# .npmrc je OBAVEZAN: bez njega pnpm u image-u koristi drugačije defaulte
+# (peer dependencije / node-linker) → build se može ponašati drugačije nego lokalno.
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json tsconfig.base.json .npmrc ./
 COPY apps ./apps
 COPY packages ./packages
 

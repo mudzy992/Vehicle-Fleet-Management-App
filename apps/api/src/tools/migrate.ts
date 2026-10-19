@@ -104,24 +104,33 @@ async function main(): Promise<number> {
     // 3) Provjeri da li je Prisma CLI dostupan.
     const prismaAvailable = await isPrismaAvailable();
     if (!prismaAvailable) {
-      logger.error(
-        [
-          'Prisma CLI nije instaliran u apps/api, pa migracije nisu pokrenute.',
-          '',
-          'Razlog: `prisma generate`/`migrate` preuzimaju engine binarne fajlove s',
-          'https://binaries.prisma.sh. U okruženju gdje je ovaj kod nastao taj host',
-          'nije dostupan, pa Prisma nije dodata u dependencije (vidi apps/api/prisma/README.md).',
-          '',
-          'Aktivacija (jednom, na mašini/build serveru s internetom):',
-          '  pnpm --filter @vfm/api add prisma@7.10.1 @prisma/client@7.10.1',
-          '  pnpm prisma:generate',
-          '  pnpm --filter @vfm/api exec prisma migrate dev --name init',
-          '',
-          'Schema je kompletna i spremna: apps/api/prisma/schema.prisma',
-          'Ekstenzije se mogu postaviti ručno: apps/api/prisma/sql/0000_bootstrap_extensions.sql',
-        ].join('\n'),
-      );
-      return 2;
+      const message = [
+        'Prisma CLI nije instaliran u apps/api, pa migracije nisu pokrenute.',
+        '',
+        'Razlog: `prisma generate`/`migrate` preuzimaju engine binarne fajlove s',
+        'https://binaries.prisma.sh. U okruženju gdje je ovaj kod nastao taj host',
+        'nije dostupan, pa Prisma nije dodata u dependencije (vidi apps/api/prisma/README.md).',
+        '',
+        'Aktivacija (jednom, na mašini/build serveru s internetom):',
+        '  pnpm --filter @vfm/api add prisma@7.10.1 @prisma/client@7.10.1',
+        '  pnpm prisma:generate',
+        '  pnpm --filter @vfm/api exec prisma migrate dev --name init',
+        '',
+        'Schema je kompletna i spremna: apps/api/prisma/schema.prisma',
+        'Ekstenzije se mogu postaviti ručno: apps/api/prisma/sql/0000_bootstrap_extensions.sql',
+        '',
+        env.MIGRATIONS_STRICT
+          ? 'MIGRATIONS_STRICT=true → deploy se prekida (exit 1).'
+          : 'MIGRATIONS_STRICT=false → preskačem migracije i nastavljam (exit 0).',
+      ].join('\n');
+
+      if (env.MIGRATIONS_STRICT) {
+        logger.error(message);
+        return 1;
+      }
+
+      logger.warn(message);
+      return 0;
     }
 
     // 4) migrate deploy

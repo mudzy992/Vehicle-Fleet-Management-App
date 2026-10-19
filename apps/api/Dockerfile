@@ -22,15 +22,25 @@ ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 WORKDIR /app
 
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
+# .npmrc je OBAVEZAN: bez njega pnpm u image-u koristi drugačije defaulte
+# (peer dependencije / node-linker) → build se može ponašati drugačije nego lokalno.
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json tsconfig.base.json .npmrc ./
 COPY apps ./apps
 COPY packages ./packages
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-# Prisma klijent + TypeScript build cijelog lanca dependencija (@vfm/api...)
-RUN pnpm --filter @vfm/api exec prisma generate \
+# Prisma klijent (ako je CLI u dependencijama) + TypeScript build cijelog lanca.
+# Faza 0: `prisma` još nije dependencija → korak se preskače uz poruku u logu.
+# Faza 1: kada se doda `prisma`/`@prisma/client`, `prisma generate` se izvršava
+# automatski (i build PADA ako je šema neispravna — što je i željeno).
+RUN if pnpm --filter @vfm/api exec prisma --version >/dev/null 2>&1; then \
+      echo "PRISMA: CLI pronađen — generišem klijenta."; \
+      pnpm --filter @vfm/api exec prisma generate; \
+    else \
+      echo "PRISMA: CLI nije instaliran — preskačem generate (Faza 0, vidi apps/api/prisma/README.md)."; \
+    fi \
  && pnpm turbo run build --filter=@vfm/api...
 
 # Samostalni produkcijski paket (node_modules bez dev dependencija)

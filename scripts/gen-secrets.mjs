@@ -82,7 +82,7 @@ if (asJson) {
       '# === Redis ACL (vidi REDIS_ACL.md §1) — hash-ovi idu u ACL fajl iza "#" ===',
       `# user vfm-api on #${h['vfm-api']} ~vfm:* &* +@all -flushdb -flushall -debug -shutdown -config -acl -keys -swapdb -reset -failover`,
       `# user vfm-worker on #${h['vfm-worker']} ~vfm:* &* +@all -flushdb -flushall -debug -shutdown -config -acl -keys -swapdb -reset -failover`,
-      `# user vfm-readonly on #${h['vfm-readonly']} ~vfm:* &* +@read +ping +info +scan +type +ttl +pttl +exists +dbsize -keys -debug -config -acl`,
+      `# user vfm-readonly on #${h['vfm-readonly']} ~vfm:* &* +@read +ping +info +client|getname +client|setname +client|id +client|list +scan +type +ttl +pttl +exists +dbsize +memory|usage +memory|stats +slowlog|get +latency|latest -keys -debug -config -acl`,
       '',
       '# ⚠️ Nakon izmjene ACL fajla na serveru pokrenuti:  redis-cli --user <admin> ACL LOAD',
     );

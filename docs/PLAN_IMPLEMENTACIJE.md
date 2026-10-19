@@ -28,6 +28,7 @@ Ovaj fajl je **hub**. Sve ostalo je u `docs/` i povezano ovdje. Ako se nešto mi
 | [`08-DOCKER_COOLIFY_DEPLOYMENT.md`](08-DOCKER_COOLIFY_DEPLOYMENT.md) | Dockerfile-ovi, compose varijante, `db_net`/`redis_net`, Coolify koraci, HTTPS/DNS/firewall, backup/restore, rollback |
 | [`09-TEST_PLAN.md`](09-TEST_PLAN.md) | Test strategija, 16 obaveznih kriterija prihvatanja mapiranih na testove, e2e scenariji, seed |
 | [`10-OPERACIJE.md`](10-OPERACIJE.md) | Monitoring, logovi, incidenti, runbook, kapaciteti, nadogradnja |
+| [`11-PRODUKCIJA_DEPLOY.md`](11-PRODUKCIJA_DEPLOY.md) | **Operativni runbook za Coolify**: PostgreSQL/REDIS konekcija, `redis-cli` ACL komande, ENV lista, domene, auto-deploy, verifikacija, troubleshooting |
 | [`FAZA0_IZVJESTAJ.md`](FAZA0_IZVJESTAJ.md) | **Izvještaj o Fazi 0**: šta je isporučeno, dokazi (komande/rezultati), odstupanja, blokeri i obaveze vlasnika prije Faze 1 |
 | [`.env.example`](../.env.example) | **Jedini izvor istine** za sve varijable okruženja (Coolify + lokalno) |
 | [`REDIS_ACL.md`](../REDIS_ACL.md) | **Jedini izvor istine** za Redis ACL (useri, ključevi, komande) — setuje se kroz poseban fajl na Coolify Redis resursu |

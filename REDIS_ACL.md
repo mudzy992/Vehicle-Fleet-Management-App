@@ -11,7 +11,7 @@
 | **Prefix aplikacije** | `vfm` → svi ključevi počinju s `vfm:` |
 | **Redis verzija** | 7.4+ (ACL, `%R~`/`%W~`, `&` kanali) |
 | **ACL fajl u repo-u** | [`infra/redis/users.acl.example`](infra/redis/users.acl.example) (dev) · produkcija: §1 |
-| **Verzija ACL-a** | **1.0.1** (19.10.2026.) |
+| **Verzija ACL-a** | **1.0.2** (19.10.2026.) |
 | **Zadnja provjera** | 19.10.2026. — usklađeno s `.env.example` 1.0.2 i `docker-compose.yml` |
 
 > 🔴 **GLOBALNI / DIJELJENI REDIS.** Vlasnik je potvrdio (R-02) da na istom Docker hostu
@@ -46,6 +46,7 @@ Agent je dužan na kraju svake faze reći:
 | Verzija | Datum | Izmjena | Treba akciju na serveru? |
 |---|---|---|---|
 | 1.0.0 | 19.10.2026. | Inicijalni ACL: `default off`, `vfm-api`, `vfm-worker`, `vfm-readonly`. Ključevi `~vfm:*`, kanali `&*`. | **DA** — kreirati ACL fajl + `aclfile` direktivu + restart Redis |
+| 1.0.2 | 19.10.2026. | Ispravljena tabela §3: `migrate` **koristi** Redis (`vfm:lock:migrate` s `vfm-worker` kredencijalima), ranije je pisalo da ne koristi. `scripts/gen-secrets.mjs --redis` usklađen s ovim fajlom (`vfm-readonly` sada ima `&*` i `client\|*`/`memory\|*` dozvole). Sadržaj ACL-a se **ne mijenja**. | **NE** — nema izmjene ACL fajla |
 | 1.0.1 | 19.10.2026. | **Globalni/dijeljeni Redis (R-02):** dodana **varijanta A/B** u §1 (A = `default off` samo ako smo jedini korisnik; **B = default se ne dira**, preporučeno za dijeljeni Redis), backup ACL-a prije izmjena, napomena o zajedničkom `maxmemory-policy noeviction`. Sadržaj `vfm-*` usera **nije** mijenjan. | **DA** — primijeniti varijantu B + `ACL LOAD`/`ACL SAVE` |
 
 ---
@@ -196,7 +197,7 @@ EOF
 |---|---|---|---|
 | `api` (NestJS) | `vfm-api` | `REDIS_USER_API` / `REDIS_PASSWORD_API` | keš permisija, throttle, signed-url nonce, SSE pub/sub, lock |
 | `worker` (BullMQ) | `vfm-worker` | `REDIS_USER_WORKER` / `REDIS_PASSWORD_WORKER` | queue-ovi, retry, lock, outbox |
-| `migrate` / skripte | — (bez Redisa) | — | radi samo s PostgreSQL-om |
+| `migrate` / skripte | `vfm-worker` | `REDIS_USER_WORKER` / `REDIS_PASSWORD_WORKER` | Redis lock `vfm:lock:migrate` (sprječava paralelne migracije) |
 | Ops / monitoring, `redis-cli` inspekcija | `vfm-readonly` | `REDIS_PASSWORD_READONLY` | dijagnostika bez prava na pisanje |
 | CI / testovi (lokalni dev Redis) | `vfm-api` + `vfm-worker` | `TEST_REDIS_URL` | isti model kao produkcija |
 

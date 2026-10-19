@@ -108,16 +108,18 @@ Dev server sluša na `0.0.0.0:5173` i proksira `/api` i `/health` na `VITE_DEV_A
 > drugim aplikacijama). Ovaj compose ih **ne pokreće** — samo se povezuje (`external: true`).
 
 1. Provjeri nazive globalnih kontejnera (`docker network inspect db_net` / `redis_net`) i kreiraj
-   host direktorije (`docs/08-DOCKER_COOLIFY_DEPLOYMENT.md` §3).
+   host direktorije (`docs/11-PRODUKCIJA_DEPLOY.md` §1).
 2. Redis: primijeni ACL **varijantu B** iz `REDIS_ACL.md` §1 (na dijeljenoj instanci **ne dirati**
    `default` usera) + dogovoriti `maxmemory-policy noeviction` i `appendonly yes`.
 3. Podigni aplikaciju: Build strategy **Compose**, `docker-compose.yml`, domene za `web` (:80) i
-   `api` (:3000), **Connect to predefined network** → `db_net`/`redis_net`, ENV iz `.env.example`.
+   `api` (:3000); `db_net`/`redis_net` su `external: true` u compose-u pa dodatno povezivanje
+   nije potrebno. ENV: `.env.example` + [`docs/11-PRODUKCIJA_DEPLOY.md`](docs/11-PRODUKCIJA_DEPLOY.md) §5.
 4. `migrate` servis pokreće migracije prije `api`/`worker`; **bez domene**.
 5. `web` je namjerno **samo** na Coolify mreži (Traefik + dvije mreže = rizik od 504).
 
-Detaljno, uključujući backup/restore, rollback i troubleshooting:
-[`docs/08-DOCKER_COOLIFY_DEPLOYMENT.md`](docs/08-DOCKER_COOLIFY_DEPLOYMENT.md).
+**Korak-po-korak (konekcija na bazu, `redis-cli` ACL komande, ENV, domene):**
+[`docs/11-PRODUKCIJA_DEPLOY.md`](docs/11-PRODUKCIJA_DEPLOY.md).
+Arhitektura i pozadina: [`docs/08-DOCKER_COOLIFY_DEPLOYMENT.md`](docs/08-DOCKER_COOLIFY_DEPLOYMENT.md).
 
 ---
 

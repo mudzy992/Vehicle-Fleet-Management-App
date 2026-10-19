@@ -256,7 +256,7 @@ export const baseEnvSchema = z.object({
   FIREBASE_ENABLED: bool(false),
   FIREBASE_PROJECT_ID: optionalString,
   FIREBASE_SERVICE_ACCOUNT_PATH: optionalString,
-  FIREBASE_SERVICE_ACCOUNT_HOST_PATH: optionalString,
+  FIREBASE_SERVICE_ACCOUNT_HOST_DIR: optionalString,
   FCM_ANDROID_PACKAGE: z.string().min(1).default('ba.example.voznipark'),
   FCM_MESSAGE_TTL_SECONDS: integer(86_400, (schema) => schema.min(0)),
   FCM_INVALID_TOKEN_THRESHOLD: integer(1, (schema) => schema.min(1)),
@@ -346,7 +346,8 @@ export const baseEnvSchema = z.object({
   // 18b) Docker build / compose / resursi -----------------------------------
   VFM_API_IMAGE: z.string().min(1).default('vfm-api:local'),
   VFM_WEB_IMAGE: z.string().min(1).default('vfm-web:local'),
-  COMPOSE_NETWORK_NAME: z.string().min(1).default('vfm_default'),
+  // NAPOMENA: `default` mrežu stacka imenuje Coolify (resource-specific) i na nju
+  // kači Traefik — namjerno NEMA varijable za njeno ime (ručno ime → 404/504).
   API_MEMORY_LIMIT: z.string().min(2).default('1024M'),
   WORKER_MEMORY_LIMIT: z.string().min(2).default('768M'),
   WEB_MEMORY_LIMIT: z.string().min(2).default('128M'),
@@ -356,6 +357,9 @@ export const baseEnvSchema = z.object({
   TURBO_TEAM: optionalString,
   TURBO_TOKEN: optionalString,
   RUN_DB_SEED: bool(false),
+  // false = nedostatak Prisma CLI-ja samo preskače migracije (Faza 0);
+  // true  = deploy se prekida ako migracije nisu mogle biti pokrenute.
+  MIGRATIONS_STRICT: bool(false),
 
   // 19) Razvoj / test -------------------------------------------------------
   DEV_DB_PASSWORD: optionalString,

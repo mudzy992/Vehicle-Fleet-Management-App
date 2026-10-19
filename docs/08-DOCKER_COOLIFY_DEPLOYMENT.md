@@ -20,8 +20,8 @@
 
 ```
 Internet ──▶ :443 Traefik (Coolify proxy)
-               ├── https://voznipark.<domena>      → vfm-web :80   (nginx, SPA + /api proxy)
-               └── https://api.voznipark.<domena>  → vfm-api :3000 (REST, mobilna aplikacija)
+               ├── https://vehicle.ba101.top      → vfm-web :80   (nginx, SPA + /api proxy)
+               └── https://api.vehicle.ba101.top  → vfm-api :3000 (REST, mobilna aplikacija)
 
 Coolify default mreža:  vfm-web · vfm-api · vfm-worker · vfm-migrate · traefik
 db_net    (external):   vfm-api · vfm-worker · vfm-migrate · postgres-<uuid>
@@ -169,14 +169,20 @@ ne dira). Koraci:
    - Docker Compose Location: `docker-compose.yml`
    - Branch: `main` (deploy preko webhooka na push)
    - **Preserve repository during deployment:** ✅ (zbog bind-mount izvora iz repo-a)
-3. **Advanced → Docker compose → Predefined network:** ✅ **Connect to predefined network** →
-   odabrati `db_net` i `redis_net` (ako Coolify podržava jednu destinaciju, odaberi `db_net`, a
-   `redis_net` ostaje `external: true` u compose-u — mreža već postoji na hostu, pa radi).
+3. **Advanced → Docker compose → Predefined network:** ❌ **nije potrebno.** `db_net` i
+   `redis_net` su u compose-u deklarisane kao `external: true` i **već postoje** na hostu, pa
+   ih Docker pri `up`-u koristi direktno. (Opcija „Connect to predefined network“ služi
+   povezivanju s **Coolify destination** mrežom, što nam ne treba.)
+   **`default` mrežu NE imenovati ručno** — Coolify je kreira i na nju kači Traefik;
+   ručno ime (`vfm_default`) odvaja kontejnere od Traefika → 404/504.
 4. **Domains → Add domain:**
    | Service | Domain | Port |
    |---|---|---|
-   | `web` | `https://voznipark.<domena>` | 80 |
-   | `api` | `https://api.voznipark.<domena>` | 3000 |
+   | `web` | `https://vehicle.ba101.top` | 80 |
+   | `api` | `https://api.vehicle.ba101.top` | 3000 |
+
+   DNS `A` zapisi moraju pokazivati na server **prije** prvog deploya (Let's Encrypt).
+   Detaljan korak-po-korak runbook: [`11-PRODUKCIJA_DEPLOY.md`](11-PRODUKCIJA_DEPLOY.md).
    | `migrate` | — (bez domene!) | — |
    | `worker` | — (bez domene!) | — |
 5. **Environment Variables** → kopirati iz `.env.example`, popuniti stvarne vrijednosti:
@@ -184,8 +190,10 @@ ne dira). Koraci:
      `REDIS_USER_WORKER`, `REDIS_PASSWORD_WORKER`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
      `FILE_SIGNING_SECRET`, `CORS_ORIGINS`, `VFM_STORAGE_PATH`
    - generisati sa `node scripts/gen-secrets.mjs`
-   - `CORS_ORIGINS=https://voznipark.<domena>`
+   - `CORS_ORIGINS=https://vehicle.ba101.top`
    - `SWAGGER_ENABLED=false`, `APP_ENV=production`
+   - `MIGRATIONS_STRICT=false` u Fazi 0 (migracije se preskaču dok Prisma nije
+     dependencija), `true` od Faze 1 (nedostatak Prisma CLI-ja tada prekida deploy)
 6. **Persistent Storage:** host bind-mount `/data/vfm/attachments → /data/vfm/attachments`
    (već definisan u compose-u kroz `${VFM_STORAGE_PATH}`; u Coolify-u se prikazuje kao parsed
    storage i read-only — mijenja se isključivo u compose fajlu).
@@ -200,7 +208,8 @@ sudo chown 1001:1001 /etc/vfm/secrets/firebase-service-account.json
 sudo chmod 400      /etc/vfm/secrets/firebase-service-account.json
 ```
 U `.env` / Coolify ENV: `FIREBASE_ENABLED=true`, `FIREBASE_PROJECT_ID=…`,
-`FIREBASE_SERVICE_ACCOUNT_HOST_PATH=/etc/vfm/secrets/firebase-service-account.json`.
+`FIREBASE_SERVICE_ACCOUNT_HOST_DIR=/etc/vfm/secrets` — montira se **direktorij**, a ne fajl
+(da Docker ne bi napravio direktorij na mjestu fajla i srušio container s „not a directory“).
 Compose ga montira kao `:ro` **samo** u `api` i `worker`. Web i mobilna ga nikad ne dobijaju.
 
 ---
@@ -249,11 +258,11 @@ Redis `127.0.0.1:6380`. Mobilna (Expo) u dev-u: `EXPO_PUBLIC_API_URL=http://<LAN
 Ako se na `api` domeni pojave povremeni **504/hang** (Coolify + Traefik + dvije mreže), primijeniti:
 
 1. Novi Coolify **Application** (build pack: **Dockerfile**) → `apps/web/Dockerfile`,
-   Base directory `apps/web`, domena `voznipark.<domena>`, **bez** `db_net`/`redis_net`.
+   Base directory `apps/web`, domena `vehicle.ba101.top`, **bez** `db_net`/`redis_net`.
 2. Iz postojećeg compose stacka izbaciti servis `web` (ili ga ostaviti bez domene kao interni).
 3. `WEB_API_INTERNAL_URL` više ne radi (različiti compose projekti) → web koristi
-   `VITE_PUBLIC_API_URL=https://api.voznipark.<domena>/api/v1` (direktni pozivi iz browsera),
-   a `CORS_ORIGINS` ostaje `https://voznipark.<domena>`.
+   `VITE_PUBLIC_API_URL=https://api.vehicle.ba101.top/api/v1` (direktni pozivi iz browsera),
+   a `CORS_ORIGINS` ostaje `https://vehicle.ba101.top`.
 4. Testirati login (cookie `SameSite=Lax` + `Secure` radi jer su oba origin-a HTTPS; za cross-site
    cookie koristiti `SameSite=None` **samo** uz `Secure` i uz provjeru CSRF zaštite).
 
@@ -356,7 +365,7 @@ Rezultat (trajanje, broj zapisa, checksum) se **zapisuje** u `docs/10-OPERACIJE.
 | Upload pada s 413 | nginx `client_max_body_size` / `BODY_LIMIT_MULTIPART` | Uskladiti (25m) |
 | Prilozi 403 nakon migracije servera | Promijenjen `storageKey` korijen ili permisije direktorija | `chown 1001:1001 /data/vfm`; `VFM_STORAGE_PATH` isti |
 | Firebase greška `permission denied` | ACL fajl nije montiran / `chmod` | `REDIS_ACL.md` §5 (analogno za file mount) |
-| Cookie se ne šalje (web login radi, refresh ne) | `COOKIE_DOMAIN`/`SameSite`/`Secure` | Postaviti `COOKIE_DOMAIN=<domena>`, `SameSite=Lax`, `Secure=true`, `Path=/api/v1/auth` |
+| Cookie se ne šalje (web login radi, refresh ne) | `COOKIE_DOMAIN`/`SameSite`/`Secure` | Uz nginx same-origin proxy ostaviti `COOKIE_DOMAIN` **prazno** (host-only); `SameSite=Lax`, `Secure=true`, `Path=/api/v1/auth` |
 
 ---
 
