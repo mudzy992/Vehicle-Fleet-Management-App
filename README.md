@@ -74,6 +74,27 @@ node scripts/env-sync-check.mjs
 Dev portovi: API `127.0.0.1:3000` · web `127.0.0.1:8080` · PostgreSQL `127.0.0.1:5433` ·
 Redis `127.0.0.1:6380`.
 
+### Web-only razvoj (bez Dockera)
+
+Frontend se razvija bez ijednog kontejnera — dovoljni su Node 22 i pnpm:
+
+```bash
+corepack enable && pnpm install
+pnpm --filter @vfm/shared build      # OBAVEZNO: @vfm/shared se troši iz dist/
+pnpm --filter @vfm/web dev           # → http://localhost:5173
+```
+
+`@vfm/shared` se u `apps/web` i `apps/api` uvozi iz **kompajliranog** `packages/shared/dist`
+(`exports` u `package.json`), pa svaka promjena tog paketa traži ponovni build
+(`pnpm --filter @vfm/shared build` ili watch: `pnpm --filter @vfm/shared dev`).
+`pnpm dev` na rootu to radi automatski (`turbo.json` → `dev.dependsOn: ["^build"]`).
+
+Dev server sluša na `0.0.0.0:5173` i proksira `/api` i `/health` na `VITE_DEV_API_TARGET`
+(default `http://localhost:3000`) — browser nikad ne zove drugi origin.
+
+> `dist/` se ne commita. Ako je `pnpm install` svjež (npr. nakon kloniranja), a UI prijavi
+> `Failed to resolve import "@vfm/shared"`, pokreni `pnpm --filter @vfm/shared build`.
+
 > Do implementacije faze 0 kontejneri `api`/`web` neće imati kod — `docker-compose.dev.yml`
 > pokreće `vfm-postgres` i `vfm-redis` koji su dostupni odmah:
 > `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d vfm-postgres vfm-redis`
