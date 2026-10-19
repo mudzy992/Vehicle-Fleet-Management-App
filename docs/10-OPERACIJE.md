@@ -111,7 +111,7 @@ za vidljivost u web UI-u.
 
 ### 5.5 Disk pun (`/data`)
 ```
-1. du -sh /data/vfm/attachments/* | sort -h | tail
+1. du -sh /mnt/shared-app-files/vozni-park/attachments/* | sort -h | tail
 2. POST /api/v1/system/maintenance/cleanup-exports   (briše exporte starije od retencije)
 3. Provjeri Attachment soft-delete → fizičko brisanje nakon 90 dana (maintenance job)
 4. Privremeno: premjesti backup-e na drugi host

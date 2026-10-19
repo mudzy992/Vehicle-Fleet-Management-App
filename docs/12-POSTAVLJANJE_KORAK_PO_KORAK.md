@@ -289,18 +289,32 @@ Ako je `aclfile` bio **prazan**, `ACL SAVE` će vratiti grešku i korisnici **ne
 
 ## 6. Host direktoriji za priloge
 
-```bash
-sudo mkdir -p /data/vfm/attachments /data/vfm/tmp /etc/vfm/secrets
-sudo chown -R 1001:1001 /data/vfm
-sudo chmod 750 /data/vfm /etc/vfm/secrets
+Sve datoteke ove aplikacije idu u **jedan** folder na hostu, po konvenciji servera:
+
+```
+/mnt/shared-app-files/vozni-park/          ← montira se na /data/vfm u kontejneru
+├── attachments/                            ← prilozi (trajno)
+│   └── exports/                            ← izvezeni PDF/XLSX
+└── tmp/                                    ← privremeni upload (isti filesystem!)
 ```
 
-**Zašto 1001:** kontejner radi kao korisnik `vfm` s uid 1001. Ako direktorij ostane `root:root`, upload priloga i export izvještaja padaju s `EACCES`.
+```bash
+sudo mkdir -p /mnt/shared-app-files/vozni-park/attachments/exports \
+              /mnt/shared-app-files/vozni-park/tmp
+
+sudo chown -R 1001:1001 /mnt/shared-app-files/vozni-park
+sudo chmod 750 /mnt/shared-app-files/vozni-park
+
+sudo mkdir -p /etc/vfm/secrets
+sudo chmod 750 /etc/vfm/secrets
+```
+
+**Zašto 1001:** kontejner radi kao korisnik `vfm` s uid 1001. Ako folder ostane `root:root`, upload priloga i export izvještaja padaju s `EACCES`.
 
 Provjeri:
 ```bash
-ls -ld /data/vfm/attachments
-# drwxr-x--- 2 1001 1001 ...
+ls -ld /mnt/shared-app-files/vozni-park
+# drwxr-x--- 2 1001 1001 ... vozni-park
 ```
 
 ---
@@ -336,7 +350,7 @@ Coolify je iz compose fajla već napravio spisak varijabli. **Ne lijepi sve** �
 | Varijabla | Vrijednost |
 |---|---|
 | `DATABASE_URL` | `postgresql://vehicle:<DB_PASS>@hgpchekxb6dutalsyctu42al:5432/vehicle?schema=public&connection_limit=10&pool_timeout=20` |
-| `VFM_STORAGE_PATH` | `/data/vfm/attachments` |
+| `VFM_STORAGE_PATH` | `/mnt/shared-app-files/vozni-park` |
 | `REDIS_HOST` | `redis-core` |
 | `REDIS_PASSWORD_API` | LOZINKA za `vfm-api` iz 5.2 |
 | `REDIS_PASSWORD_WORKER` | LOZINKA za `vfm-worker` iz 5.2 |
@@ -454,7 +468,7 @@ U browseru otvori `https://vehicle.ba101.top` — trebaš vidjeti sidebar sa gru
 | `database: degraded` + `ENOTFOUND` | ime kontejnera baze nije vidljivo na toj mreži |
 | `redis: down` + `WRONGPASS` | lozinka u ENV ≠ hash u ACL-u |
 | `redis: down` + `NOPERM` | ACL korisnik nema pravo na ključ (provjeri `~vfm:*`) |
-| `storage: unknown` | `VFM_STORAGE_PATH` nije montiran |
+| `storage: unknown` | `VFM_STORAGE_PATH` nije montiran ili folder ne postoji |
 
 > **Poznata sitnica:** ekran `/zdravlje` na web domeni trenutno ne može da pročita `/health/*`
 > jer nginx u verziji na `main` proksira samo tačno `/health`. Popravka je već napravljena lokalno
@@ -492,6 +506,7 @@ Test: napravi bilo kakvu izmjenu na `main` → Coolify → **Deployments** → n
 | `not a directory` pri startu api/worker | `/etc/vfm/secrets` ne postoji kao direktorij → korak 6 |
 | Redis `WRONGPASS` | lozinka u Coolify ≠ hash u ACL-u → ponovi 5.2–5.3 |
 | Nakon restarta Redisa sve pada | `aclfile` nije bio postavljen → 5.5, opcija 2 |
+| Coolify: `Invalid Docker volume definition: Invalid volume source: contains forbidden character` | u volume source-u ima razmak/zagrada — najčešće poruka u `${VAR:?poruka}`. Koristi `${VAR:-/cista/putanja}` bez teksta (popravljeno u `docker-compose.yml`) |
 
 ---
 
@@ -517,7 +532,7 @@ Test: napravi bilo kakvu izmjenu na `main` → Coolify → **Deployments** → n
 [ ] 3. test iz kontejnera → psql radi, redis PING/NOAUTH
 [ ] 4. CREATE EXTENSION pgcrypto, btree_gist, citext
 [ ] 5. Redis ACL: 3 korisnika + ACL SAVE (ili aclfile)
-[ ] 6. /data/vfm + /etc/vfm/secrets, chown 1001
+[ ] 6. /mnt/shared-app-files/vozni-park (+tmp, exports) i /etc/vfm/secrets, chown 1001
 [ ] 7. Coolify: Docker Compose, branch main, docker-compose.yml
 [ ] 8. ENV: DATABASE_URL, VFM_STORAGE_PATH, REDIS_HOST, 3×REDIS_PASSWORD,
          JWT×2, FILE_SIGNING_SECRET, CORS_ORIGINS, DB_NETWORK, REDIS_NETWORK

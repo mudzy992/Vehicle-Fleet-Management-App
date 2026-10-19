@@ -26,7 +26,7 @@ Internet ──▶ :443 Traefik (Coolify proxy)
 Coolify default mreža:  vfm-web · vfm-api · vfm-worker · vfm-migrate · traefik
 db_net    (external):   vfm-api · vfm-worker · vfm-migrate · postgres-<uuid>
 redis_net (external):   vfm-api · vfm-worker · vfm-migrate · redis-<uuid>
-Host bind-mount:        /data/vfm/attachments  →  /data/vfm/attachments (api, worker)
+Host bind-mount:        /mnt/shared-app-files/vozni-park  →  /data/vfm (api, worker)
 Host secret mount:      /etc/vfm/secrets/firebase-service-account.json → /run/secrets/vfm/… :ro (api, worker)
 ```
 
@@ -69,9 +69,9 @@ docker network inspect redis_net  --format '{{range .Containers}}{{.Name}} {{end
 #    Ako mreža iz nekog razloga NE postoji: docker network create db_net
 
 # 2) Direktoriji na hostu
-sudo mkdir -p /data/vfm/attachments /data/vfm/backups /data/coolify/redis-acl /etc/vfm/secrets
+sudo mkdir -p /mnt/shared-app-files/vozni-park/attachments/exports /mnt/shared-app-files/vozni-park/tmp /data/coolify/redis-acl /etc/vfm/secrets
 sudo chown -R 1001:1001 /data/vfm          # uid:gid iz Dockerfile-a (vfm korisnik)
-sudo chmod 750 /data/vfm/attachments
+sudo chown -R 1001:1001 /mnt/shared-app-files/vozni-park && sudo chmod 750 /mnt/shared-app-files/vozni-park
 
 # 3) Firewall: samo 80/443 (+ SSH na custom portu)
 sudo ufw allow 80,443/tcp && sudo ufw enable
@@ -194,7 +194,7 @@ ne dira). Koraci:
    - `SWAGGER_ENABLED=false`, `APP_ENV=production`
    - `MIGRATIONS_STRICT=false` u Fazi 0 (migracije se preskaču dok Prisma nije
      dependencija), `true` od Faze 1 (nedostatak Prisma CLI-ja tada prekida deploy)
-6. **Persistent Storage:** host bind-mount `/data/vfm/attachments → /data/vfm/attachments`
+6. **Persistent Storage:** host bind-mount `/mnt/shared-app-files/vozni-park → /data/vfm`
    (već definisan u compose-u kroz `${VFM_STORAGE_PATH}`; u Coolify-u se prikazuje kao parsed
    storage i read-only — mijenja se isključivo u compose fajlu).
 7. **Deploy** → pratiti Deployment Logs → provjeriti Runtime Logs za `api`, `worker`, `web`.
@@ -302,7 +302,7 @@ unaprijed kompatibilne (8.2).
 | Podatak | Način | Učestalost | Retencija |
 |---|---|---|---|
 | PostgreSQL | `pg_dump -Fc` + Coolify Scheduled Backup | dnevno 03:00 | 14 dana lokalno, 90 off-site |
-| Prilozi (`/data/vfm/attachments`) | `restic`/`tar` + šifrovanje → drugi host/objekat | dnevno 04:00 | isto |
+| Prilozi (`/mnt/shared-app-files/vozni-park`) | `restic`/`tar` + šifrovanje → drugi host/objekat | dnevno 04:00 | isto |
 | Redis | **ne** (sadrži keš/queue; AOF je dovoljan za restart) | — | — |
 | Konfiguracija | `.env` (Coolify ENV export), `REDIS_ACL.md`, compose fajlovi (Git) | pri promjeni | Git historija |
 
@@ -375,7 +375,7 @@ Rezultat (trajanje, broj zapisa, checksum) se **zapisuje** u `docs/10-OPERACIJE.
 - [ ] `DATABASE_URL` i `REDIS_HOST` koriste **pune** Coolify nazive kontejnera.
 - [ ] Redis ACL aktiviran (`ACL LIST` pokazuje `default off` + 3 `vfm-*` usera) i `REDIS_ACL.md` ažuran.
 - [ ] Svi ENV iz `.env.example` popunjeni u Coolify-u; nijedna tajna nije u Git-u (gitleaks clean).
-- [ ] `/data/vfm/attachments` postoji, `chown 1001:1001`, backup skripta radi.
+- [ ] `/mnt/shared-app-files/vozni-park` postoji, `chown 1001:1001`, backup skripta radi.
 - [ ] Firebase service account montiran `:ro` samo u `api`/`worker`; `FIREBASE_ENABLED=true`.
 - [ ] Domene + TLS (Let's Encrypt) rade; `CORS_ORIGINS` tačan; cookie `Secure`.
 - [ ] `SWAGGER_ENABLED=false`, `APP_ENV=production`, `LOG_FORMAT=json`.

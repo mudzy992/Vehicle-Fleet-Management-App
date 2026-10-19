@@ -46,10 +46,13 @@ ako su ručno podignuti, imena su npr. `postgres` / `redis`.
 > kontejner → uvijek provjeri gornjim komandama.
 
 ```bash
-# 1.2 Direktorij za priloge (kontejner radi kao uid/gid 1001 — korisnik `vfm`)
-sudo mkdir -p /data/vfm/attachments /data/vfm/tmp
-sudo chown -R 1001:1001 /data/vfm
-sudo chmod 750 /data/vfm
+# 1.2 Podaci aplikacije — JEDAN folder na hostu (konvencija: shared-app-files)
+#     Montira se na /data/vfm; unutra attachments/, attachments/exports/ i tmp/.
+#     Kontejner radi kao uid/gid 1001 (korisnik `vfm`) — vlasništvo je obavezno.
+sudo mkdir -p /mnt/shared-app-files/vozni-park/attachments/exports \
+              /mnt/shared-app-files/vozni-park/tmp
+sudo chown -R 1001:1001 /mnt/shared-app-files/vozni-park
+sudo chmod 750 /mnt/shared-app-files/vozni-park
 
 # 1.3 Direktorij za tajne (Firebase service account — tek u Fazi 5)
 sudo mkdir -p /etc/vfm/secrets
@@ -279,7 +282,7 @@ Popuniti sljedeće (ostale ostaviti na defaultima iz compose-a):
 | Varijabla | Primjer / uputa |
 |---|---|
 | `DATABASE_URL` | `postgresql://vfm:…@postgres-<uuid>:5432/vfm?schema=public&connection_limit=10&pool_timeout=20` |
-| `VFM_STORAGE_PATH` | `/data/vfm/attachments` (host putanja iz koraka 1.2) |
+| `VFM_STORAGE_PATH` | `/mnt/shared-app-files/vozni-park` (host putanja iz koraka 1.2) |
 | `REDIS_HOST` | `redis-<uuid>` |
 | `REDIS_PASSWORD_API` | plaintext lozinka `vfm-api` |
 | `REDIS_PASSWORD_WORKER` | plaintext lozinka `vfm-worker` |
@@ -404,7 +407,7 @@ U browseru: `https://vehicle.ba101.top` → shell sa sidebarom;
 | `database: degraded` + `ECONNREFUSED` | pogrešan `DATABASE_HOST` ili kontejner nije na `db_net` |
 | `database: degraded` + `ENOTFOUND` | ime kontejnera ne postoji na mreži |
 | `redis: down` + `WRONGPASS`/`NOPERM` | pogrešna lozinka ili ACL nije primijenjen |
-| `storage: unknown` | `VFM_STORAGE_PATH` nije montiran (provjeri host putanju) |
+| `storage: unknown` | `VFM_STORAGE_PATH` nije montiran ili folder ne postoji |
 
 ---
 
