@@ -11,8 +11,8 @@
 | **Prefix aplikacije** | `vfm` → svi ključevi počinju s `vfm:` |
 | **Redis verzija** | 7.4+ (ACL, `%R~`/`%W~`, `&` kanali) |
 | **ACL fajl u repo-u** | [`infra/redis/users.acl.example`](infra/redis/users.acl.example) (dev) · produkcija: §1 |
-| **Verzija ACL-a** | **1.0.2** (19.10.2026.) |
-| **Zadnja provjera** | 19.10.2026. — usklađeno s `.env.example` 1.0.2 i `docker-compose.yml` |
+| **Verzija ACL-a** | **1.0.3** (19.10.2026.) |
+| **Zadnja provjera** | 19.10.2026. — usklađeno s kodom (BullMQ prefiks `vfm:queue`), `.env.example` 1.0.2 i `docker-compose.yml` |
 
 > 🔴 **GLOBALNI / DIJELJENI REDIS.** Vlasnik je potvrdio (R-02) da na istom Docker hostu
 > već radi **globalni Redis** priključen na `redis_net`, i da ga koriste i druge aplikacije.
@@ -46,8 +46,9 @@ Agent je dužan na kraju svake faze reći:
 | Verzija | Datum | Izmjena | Treba akciju na serveru? |
 |---|---|---|---|
 | 1.0.0 | 19.10.2026. | Inicijalni ACL: `default off`, `vfm-api`, `vfm-worker`, `vfm-readonly`. Ključevi `~vfm:*`, kanali `&*`. | **DA** — kreirati ACL fajl + `aclfile` direktivu + restart Redis |
-| 1.0.2 | 19.10.2026. | Ispravljena tabela §3: `migrate` **koristi** Redis (`vfm:lock:migrate` s `vfm-worker` kredencijalima), ranije je pisalo da ne koristi. `scripts/gen-secrets.mjs --redis` usklađen s ovim fajlom (`vfm-readonly` sada ima `&*` i `client\|*`/`memory\|*` dozvole). Sadržaj ACL-a se **ne mijenja**. | **NE** — nema izmjene ACL fajla |
 | 1.0.1 | 19.10.2026. | **Globalni/dijeljeni Redis (R-02):** dodana **varijanta A/B** u §1 (A = `default off` samo ako smo jedini korisnik; **B = default se ne dira**, preporučeno za dijeljeni Redis), backup ACL-a prije izmjena, napomena o zajedničkom `maxmemory-policy noeviction`. Sadržaj `vfm-*` usera **nije** mijenjan. | **DA** — primijeniti varijantu B + `ACL LOAD`/`ACL SAVE` |
+| 1.0.2 | 19.10.2026. | Ispravljena tabela §3: `migrate` **koristi** Redis (`vfm:lock:migrate` s `vfm-worker` kredencijalima), ranije je pisalo da ne koristi. `scripts/gen-secrets.mjs --redis` usklađen s ovim fajlom (`vfm-readonly` sada ima `&*` i `client\|*`/`memory\|*` dozvole). Sadržaj ACL-a se **ne mijenja**. | **NE** — nema izmjene ACL fajla |
+| 1.0.3 | 19.10.2026. | **Ispravka `NOPERM` greške workera (promjena u KODU, ne u ACL-u).** BullMQ je u `apps/api/src/tools/worker.ts` i `apps/api/src/infra/queue/queue.service.ts` bio pokrenut s defaultnim `prefix: 'bull'`, pa su ključevi bili `bull:vfm-queue-outbox:wait` itd. — **izvan** ACL opsega `~vfm:*` → Redis je na svaku komandu vraćao `NOPERM … no permissions to access a key` i worker nije obrađivao nijedan red. Prefiks je sada `vfm:queue` (konstanta `QUEUE_KEY_PREFIX` / `queueKeyPrefix(env)` iz `@vfm/shared/env`) → ključevi `vfm:queue:vfm-queue-outbox:*` (§4). Dodana startup provjera `validateRedisAclScope()` (worker: fail-fast; API: upozorenje u log), ispravljeno pravilo u §4.1 (odlučujući je **BullMQ prefiks**, ne naziv reda) i dopunjen §6. Sadržaj ACL fajla se **ne mijenja**. | **NE** — ACL fajl ostaje isti, `ACL LOAD` nije potreban. Obavezan **Redeploy/Restart** `api` i `worker` kontejnera u Coolify-u |
 
 ---
 
@@ -229,15 +230,36 @@ dodaj ga u ovu tabelu **u istom commit-u**.
 | `vfm:cache:vehicle:{id}` | string (JSON) | Keš profila vozila | 120 s | api |
 | `vfm:cache:stats:dashboard` | string (JSON) | Dashboard KPI keš | 60 s | api |
 | `vfm:cache:settings` | hash | Globalne postavke | 300 s | api |
-| `vfm:queue:<naziv>:*` | BullMQ | Jobovi (`id`, `wait`, `active`, `delayed`, `completed`, `failed`, `meta`, `events`, `marker`, `stalled-check`, `pc`) | po job configu | worker |
-| `{vfm:queue:<naziv>}:*` | BullMQ pub/sub | Kanali s hash-tagom (`x`, `pc`, ...) | — | worker |
+| `vfm:queue:<naziv>:*` | BullMQ | Jobovi (`id`, `wait`, `active`, `delayed`, `completed`, `failed`, `meta`, `marker`, `stalled-check`, `pc`, `repeat`, `de`, …) | po job configu | worker |
+| `vfm:queue:<naziv>:events` | BullMQ pub/sub | Kanal za evente reda (`&*` ga pokriva) | — | worker |
+| `vfm:queue:_acl-probe` | string (SET EX + DEL) | Jednokratna startna provjera ACL opsega u workeru (`tools/worker.ts` → `probeRedisAcl`); razlikuje pogrešan prefiks u kodu od ACL-a bez `~vfm:*` na serveru | 30 s | worker |
 | `vfm:stream:audit` | stream | Opciono: mirror audit događaja za ops | maxlen 100k | api, worker |
+| `vfm:metrics:worker:heartbeat` | string (JSON) | Heartbeat workera za compose healthcheck (`tools/healthcheck-worker.ts`) | 90 s | worker |
 | `vfm:metrics:*` | hash/string | Interni brojači (queue depth, push success) | 3600 s | worker |
 | `vfm:sse:{userId}` | pub/sub kanal | Server-Sent Events fan-out obavijesti | — | api |
 
 Nazivi queue-ova (iz `.env.example`): `vfm-queue-outbox`, `vfm-queue-notifications`,
 `vfm-queue-reminders`, `vfm-queue-reports`, `vfm-queue-maintenance` → Redis ključevi
 `vfm:queue:vfm-queue-outbox:*` itd.
+
+🔴 **BullMQ gradi ključeve kao `<prefix>:<nazivReda>:<suffix>`** (klasa `QueueKeys`), gdje je
+`<prefix>` opcija `prefix` koju **mi** prosljeđujemo u `new Queue(...)` / `new Worker(...)`.
+Jedini izvor istine za tu opciju je `queueKeyPrefix(env)` iz `@vfm/shared/env`
+(konstanta `QUEUE_KEY_PREFIX = 'vfm:queue'`), pa su stvarni ključevi:
+
+```
+vfm:queue:vfm-queue-outbox:wait
+vfm:queue:vfm-queue-outbox:active
+vfm:queue:vfm-queue-outbox:id
+vfm:queue:vfm-queue-outbox:events      (pub/sub kanal, pokriven sa `&*`)
+```
+
+Ako se `prefix` izostavi, BullMQ koristi default **`'bull'`** → ključevi postaju
+`bull:vfm-queue-outbox:wait` i ACL `~vfm:*` ih blokira (`NOPERM … no permissions to access
+a key`). Upravo to je bio uzrok greške workera u Coolify logovima (ACL 1.0.3).
+`prefix` **mora biti isti** u `apps/api/src/infra/queue/queue.service.ts` (API, upis poslova)
+i `apps/api/src/tools/worker.ts` (worker, obrada) — inače API i worker gledaju različite
+ključeve i poslovi se nikad ne obrađuju.
 
 ### 4.1 ENV varijable koje utiču na Redis (sinhronizovano s `.env.example` 1.0.0)
 
@@ -252,7 +274,7 @@ Nazivi queue-ova (iz `.env.example`): `vfm-queue-outbox`, `vfm-queue-notificatio
 | `REDIS_USER_API` / `REDIS_PASSWORD_API` | `vfm-api` / tajna | user iz §1, linija 2 |
 | `REDIS_USER_WORKER` / `REDIS_PASSWORD_WORKER` | `vfm-worker` / tajna | user iz §1, linija 3 |
 | `REDIS_USER_READONLY` / `REDIS_PASSWORD_READONLY` | `vfm-readonly` / tajna | user iz §1, linija 4 (samo ops) |
-| `VFM_REDIS_KEY_PREFIX` | `vfm:` | **mora** odgovarati ACL patternu `~vfm:*` |
+| `VFM_REDIS_KEY_PREFIX` | `vfm:` | **mora** odgovarati ACL patternu `~vfm:*`; iz njega se izvodi BullMQ `prefix` (`queueKeyPrefix(env)` → `vfm:queue`), tj. ključevi `vfm:queue:<red>:*` |
 | `QUEUE_OUTBOX` | `vfm-queue-outbox` | ključevi `vfm:queue:vfm-queue-outbox:*` |
 | `QUEUE_NOTIFICATIONS` | `vfm-queue-notifications` | isto pravilo |
 | `QUEUE_REMINDERS` | `vfm-queue-reminders` | isto pravilo |
@@ -265,9 +287,18 @@ Nazivi queue-ova (iz `.env.example`): `vfm-queue-outbox`, `vfm-queue-notificatio
 | `DEV_REDIS_PASSWORD_API` / `_WORKER` / `_READONLY` | dev | samo `docker-compose.dev.yml`, plaintext u `infra/redis/users.acl.example` |
 | `TEST_REDIS_URL` | dev/CI | koristi `vfm-api` usera |
 
-> 🔒 **Pravilo:** naziv queue-a u ENV-u **mora** počinjati s `vfm` (npr. `vfm-queue-…`),
-> jer BullMQ gradi ključeve kao `<prefix><queueName>:…`. Ako neko promijeni naziv tako da
-> ne počinje s `vfm:`, ACL `~vfm:*` će blokirati pristup → worker pada s `NOPERM`.
+> 🔒 **Pravilo (ispravljeno u ACL 1.0.3):** za ACL opseg je odlučujući **BullMQ `prefix`**,
+> a ne naziv reda. Ključ je `<prefix>:<nazivReda>:<suffix>`, pa `~vfm:*` zadovoljava samo
+> `prefix` koji počinje s `vfm:` (kod nas: `vfm:queue` → `queueKeyPrefix(env)`).
+> Naziv reda iz ENV-a (`QUEUE_*`) i dalje **mora** počinjati s `vfm` (`vfm-queue-…`) radi
+> čitljivosti i izolacije na dijeljenom Redisu, ali sam po sebi ne spriječava `NOPERM`:
+> s `prefix: 'bull'` i nazivom `vfm-queue-outbox` ključ je `bull:vfm-queue-outbox:wait`
+> → izvan `~vfm:*` → worker pada.
+>
+> ✅ Startup provjera `validateRedisAclScope(env)` (`@vfm/shared/env`) to čuva: worker pri
+> pokretanju **fail-fast** izlazi ako ijedan ključ nije unutar `~vfm:*`, a `QueueService`
+> loguje upozorenje. Promjena `VFM_REDIS_KEY_PREFIX` ili `QUEUE_*` → obavezno ažurirati
+> §4, ovaj changelog **i** ACL fajl na serveru (`ACL LOAD`).
 
 > 💡 BullMQ koristi **hash-tagove** (`{vfm:queue:...}`) da bi ključevi bili u istom
 > slotu. Hash-tag je dio ključa, pa `~vfm:*` i dalje odgovara (ključ počinje s `{`?
@@ -296,6 +327,11 @@ docker exec -it <redis-kontejner> redis-cli --user vfm-api --pass '<PASS>' PING
 docker exec -it <redis-kontejner> redis-cli --user vfm-api --pass '<PASS>' SET vfm:test 1 EX 10
 docker exec -it <redis-kontejner> redis-cli --user vfm-api --pass '<PASS>' SET bez-prefiksa 1   # MORA vratiti NOPERM
 
+# 3b) Provjera da BullMQ ključevi stvarno završavaju unutar ~vfm:* (nakon redeploy-a
+#     api + worker; `SCAN` je dozvoljen — oduzet je samo `KEYS`)
+docker exec -it <redis-kontejner> redis-cli --user vfm-worker --pass '<PASS>' SCAN 0 MATCH 'vfm:queue:*' COUNT 200
+docker exec -it <redis-kontejner> redis-cli --user vfm-worker --pass '<PASS>' SCAN 0 MATCH 'bull:*' COUNT 200   # MORA biti prazno
+
 # 4) Restart aplikacije (api + worker) da pokupi nove lozinke iz ENV-a
 #    Coolify → VFM Application → Redeploy / Restart
 
@@ -320,6 +356,7 @@ docker exec -it <redis-kontejner> redis-cli --user vfm-api --pass '<PASS>' SET b
 | `WRONGPASS invalid username-password pair` | Pogrešan hash/lozinka ili `requirepass` + `aclfile` konflikt | Provjeri `ACL LIST`; ukloni `requirepass` iz konfiguracije |
 | `NOPERM ... no permissions to access a key` | Ključ nije unutar `~vfm:*` | Ispravi prefix u kodu **ili** proširi ACL pattern + ažuriraj §4 i changelog |
 | `NOPERM ... no permissions to run the command` | Nedostaje komanda (npr. `+config`) | Provjeri §1; **nemoj** dodavati `+config`/`+acl` aplikacijskom useru |
+| `NOPERM ... no permissions to access a key` **iako** je ACL učitan (`ACL LIST` pokazuje `~vfm:*` za `vfm-worker`) | BullMQ `prefix` nije unutar `~vfm:*` — najčešće je ostavljen default `'bull'`, pa su ključevi `bull:vfm-queue-*` | Koristi `prefix: queueKeyPrefix(env)` (`vfm:queue`) u **oba** mjesta (`queue.service.ts` i `tools/worker.ts`) → vidi §4; zatim Redeploy api + worker. ACL fajl **ne** treba mijenjati |
 | `ERR command 'CONFIG' not allowed` | Namjerno oduzeto | Koristi `vfm-admin` privremeno, pa ga obriši |
 | BullMQ: `Missing lock for job ...` / stalled jobovi | Redis evikcija briše ključeve | Postavi `maxmemory-policy noeviction`, provjeri `maxmemory` |
 | Jobovi nestaju nakon restarta | `appendonly no` / `save ""` bez AOF | Uključi `appendonly yes` (§2) |
@@ -337,6 +374,8 @@ docker exec -it <redis-kontejner> redis-cli --user vfm-api --pass '<PASS>' SET b
 - [ ] Promjena je zabilježena u **Changelog ACL-a** (§0) s verzijom i datumom.
 - [ ] Sadržaj ACL fajla u §1 je ažuran i kopiran na server.
 - [ ] Novi/izbrisani namespace ključeva je upisan u §4.
+- [ ] BullMQ `prefix` je `vfm:queue` (`queueKeyPrefix(env)`) u `queue.service.ts` **i** `tools/worker.ts`;
+      `validateRedisAclScope(env)` vraća praznu listu (testovi: `env-schema.spec.ts`, `env-and-redis.spec.ts`).
 - [ ] Hash-ovi lozinki su generisani, plaintext **nije** u repozitoriju.
 - [ ] `.env.example` sadrži odgovarajuće `REDIS_*` varijable (sinhronizacija!).
 - [ ] `ACL LOAD`/restart izvršen i provjeren (`ACL LIST`, `PING`, test ključa).

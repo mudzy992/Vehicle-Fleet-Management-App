@@ -70,12 +70,50 @@ export const QUEUE_NAMES = [
 ] as const;
 export type QueueName = (typeof QUEUE_NAMES)[number];
 
-/** Prefiks BullMQ redova u Redisu: `vfm:queue:<name>:*`. */
-export const QUEUE_KEY_PREFIX = 'vfm:queue' as const;
+/**
+ * Root prefiks **svih** Redis ključeva aplikacije.
+ *
+ * Odgovara ACL patternu `~vfm:*` iz `REDIS_ACL.md` §1 i defaultu ENV varijable
+ * `VFM_REDIS_KEY_PREFIX`. Ništa izvan ovog prefiksa aplikacija ne smije dirati —
+ * Redis to odbija s `NOPERM ... no permissions to access a key`.
+ */
+export const REDIS_KEY_PREFIX = `${APP_PREFIX}:` as const;
+
+/** ACL pattern ključeva kako je definisan u `REDIS_ACL.md` §1 (`~vfm:*`). */
+export const REDIS_ACL_KEY_PATTERN = `~${REDIS_KEY_PREFIX}*` as const;
+
+/**
+ * Prefiks BullMQ redova u Redisu: ključevi su `vfm:queue:<nazivReda>:*`.
+ *
+ * 🔴 Ovo je BullMQ opcija `prefix` — NE smije biti `'bull'` (default), jer tada
+ * ključevi postaju `bull:vfm-queue-*` i ACL `~vfm:*` ih blokira (`NOPERM`).
+ * Vidi `REDIS_ACL.md` §4 i `env-schema.queueKeyPrefix()`.
+ */
+export const QUEUE_KEY_PREFIX = `${REDIS_KEY_PREFIX}queue` as const;
 
 /** Pun naziv reda (koristi se kao `Queue` ime u BullMQ). */
 export function queueName(name: QueueName): string {
   return `${APP_PREFIX}-queue-${name}`;
+}
+
+/**
+ * Da li je ključ (ili prefiks) unutar ACL opsega `~vfm:*`.
+ *
+ * Provjera je namjerno stroga i po prefixu: ključ koji počinje s `{` (hash-tag)
+ * ili s tuđim namespace-om ne odgovara globu `vfm:*` i Redis ga odbija.
+ */
+export function isInsideRedisAclScope(keyOrPrefix: string): boolean {
+  return typeof keyOrPrefix === 'string' && keyOrPrefix.startsWith(REDIS_KEY_PREFIX);
+}
+
+/**
+ * Redis ključ koji BullMQ gradi za red: `<prefix>:<nazivReda>:<suffix>`.
+ *
+ * Služi za provjeru ACL opsega **prije** pokretanja (worker/api) i za jasne
+ * poruke u logovima. Format je definisan u BullMQ-ovoj klasi `QueueKeys`.
+ */
+export function bullQueueKey(prefix: string, queue: string, suffix = 'wait'): string {
+  return suffix.length > 0 ? `${prefix}:${queue}:${suffix}` : `${prefix}:${queue}`;
 }
 
 /** Redis ACL korisnici (definirani u `REDIS_ACL.md` / `infra/redis/users.acl.example`). */

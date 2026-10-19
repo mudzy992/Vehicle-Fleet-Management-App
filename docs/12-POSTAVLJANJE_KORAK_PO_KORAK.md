@@ -467,7 +467,7 @@ U browseru otvori `https://vehicle.ba101.top` — trebaš vidjeti sidebar sa gru
 | `database: degraded` + `ECONNREFUSED` | `DATABASE_URL` ili `DB_NETWORK` nije tačan |
 | `database: degraded` + `ENOTFOUND` | ime kontejnera baze nije vidljivo na toj mreži |
 | `redis: down` + `WRONGPASS` | lozinka u ENV ≠ hash u ACL-u |
-| `redis: down` + `NOPERM` | ACL korisnik nema pravo na ključ (provjeri `~vfm:*`) |
+| `redis: down` + `NOPERM` | ACL korisnik nema pravo na ključ (provjeri `~vfm:*`, pa BullMQ prefiks `vfm:queue` — `REDIS_ACL.md` §4) |
 | `storage: unknown` | `VFM_STORAGE_PATH` nije montiran ili folder ne postoji |
 
 > **Poznata sitnica:** ekran `/zdravlje` na web domeni trenutno ne može da pročita `/health/*`
@@ -505,6 +505,7 @@ Test: napravi bilo kakvu izmjenu na `main` → Coolify → **Deployments** → n
 | `EACCES` pri uploadu | `sudo chown -R 1001:1001 /data/vfm` |
 | `not a directory` pri startu api/worker | `/etc/vfm/secrets` ne postoji kao direktorij → korak 6 |
 | Redis `WRONGPASS` | lozinka u Coolify ≠ hash u ACL-u → ponovi 5.2–5.3 |
+| Worker log: `Redis ACL greška za korisnika "vfm-worker": NOPERM … access a key` | ACL je učitan, ali ključevi nisu unutar `~vfm:*` — gotovo uvijek BullMQ `prefix` (default `'bull'`). Ispravno je `vfm:queue` (`REDIS_ACL.md` §4, changelog 1.0.3) → deployaj zadnju verziju koda i Redeploy `api` + `worker` |
 | Nakon restarta Redisa sve pada | `aclfile` nije bio postavljen → 5.5, opcija 2 |
 | Coolify: `Invalid Docker volume definition: Invalid volume source: contains forbidden character` | u volume source-u ima razmak/zagrada — najčešće poruka u `${VAR:?poruka}`. Koristi `${VAR:-/cista/putanja}` bez teksta (popravljeno u `docker-compose.yml`) |
 

@@ -23,7 +23,10 @@ import {
   MAX_REQUEST_BODY_BYTES,
   MINOR_UNITS_PER_MAJOR,
   QUEUE_KEY_PREFIX,
+  QUEUE_NAMES,
+  REDIS_ACL_KEY_PATTERN,
   REDIS_ACL_USERS,
+  REDIS_KEY_PREFIX,
   REDIS_NETWORK,
   REDIS_NS,
   REFRESH_COOKIE_NAME,
@@ -32,6 +35,9 @@ import {
   STORAGE_PATH_DEFAULT,
   STORAGE_TMP_PATH_DEFAULT,
   TIMEZONE,
+  bullQueueKey,
+  isInsideRedisAclScope,
+  queueName,
 } from '../dist/index.js';
 
 /**
@@ -157,5 +163,52 @@ describe('pohrana i limiti', () => {
   it('pagination limiti', () => {
     expect(MAX_PAGE_SIZE).toBe(200);
     expect(MAX_PAGE_SIZE).toBeGreaterThan(25);
+  });
+});
+
+/**
+ * ACL opseg ključeva (`REDIS_ACL.md` §1: `user vfm-* … ~vfm:*`).
+ *
+ * Regresija: BullMQ je bio pokrenut s default prefiksom `'bull'`, pa su ključevi
+ * bili `bull:vfm-queue-*` → Redis je vraćao
+ * `NOPERM … no permissions to access a key` i worker nije mogao raditi.
+ */
+describe('Redis ACL opseg (~vfm:*)', () => {
+  it('root prefiks i ACL pattern su usklađeni s REDIS_ACL.md §1', () => {
+    expect(REDIS_KEY_PREFIX).toBe('vfm:');
+    expect(REDIS_ACL_KEY_PATTERN).toBe('~vfm:*');
+    expect(QUEUE_KEY_PREFIX).toBe('vfm:queue');
+  });
+
+  it('isInsideRedisAclScope prihvata samo ključeve unutar vfm:', () => {
+    expect(isInsideRedisAclScope('vfm:queue:vfm-queue-outbox:wait')).toBe(true);
+    expect(isInsideRedisAclScope('vfm:metrics:worker:heartbeat')).toBe(true);
+    expect(isInsideRedisAclScope('vfm:lock:migrate')).toBe(true);
+
+    // BullMQ default prefiks — upravo ovaj slučaj je padao s NOPERM.
+    expect(isInsideRedisAclScope('bull:vfm-queue-outbox:wait')).toBe(false);
+    expect(isInsideRedisAclScope('bull')).toBe(false);
+    // Tuđi namespace na dijeljenom globalnom Redisu.
+    expect(isInsideRedisAclScope('coolify:cache')).toBe(false);
+    // Hash-tag na početku ključa ne odgovara globu `vfm:*`.
+    expect(isInsideRedisAclScope('{vfm:queue:outbox}:wait')).toBe(false);
+    expect(isInsideRedisAclScope('')).toBe(false);
+  });
+
+  it('bullQueueKey gradi ključ onako kako ga gradi BullMQ QueueKeys', () => {
+    expect(bullQueueKey(QUEUE_KEY_PREFIX, queueName('outbox'))).toBe('vfm:queue:vfm-queue-outbox:wait');
+    expect(bullQueueKey(QUEUE_KEY_PREFIX, queueName('reports'), 'id')).toBe('vfm:queue:vfm-queue-reports:id');
+    expect(bullQueueKey(QUEUE_KEY_PREFIX, queueName('maintenance'), '')).toBe(
+      'vfm:queue:vfm-queue-maintenance',
+    );
+    // BullMQ default prefiks → ključ izvan ACL opsega (NOPERM).
+    expect(isInsideRedisAclScope(bullQueueKey('bull', queueName('outbox')))).toBe(false);
+  });
+
+  it('svaki naziv reda iz QUEUE_NAMES daje ključ unutar ACL opsega', () => {
+    for (const name of QUEUE_NAMES) {
+      const key = bullQueueKey(QUEUE_KEY_PREFIX, queueName(name));
+      expect(isInsideRedisAclScope(key), `${name} → ${key}`).toBe(true);
+    }
   });
 });

@@ -27,14 +27,22 @@ import {
   MAX_FILE_SIZE_BYTES,
   MAX_PAGE_SIZE,
   QUEUE_KEY_PREFIX,
+  QUEUE_NAMES,
+  REDIS_ACL_KEY_PATTERN,
   REDIS_ACL_USERS,
+  REDIS_KEY_PREFIX,
   REDIS_NETWORK,
+  REDIS_NS,
   REFRESH_COOKIE_NAME,
   REPORT_EXPORT_PATH_DEFAULT,
   STORAGE_PATH_DEFAULT,
   STORAGE_TMP_PATH_DEFAULT,
   TIMEZONE,
+  bullQueueKey,
+  isInsideRedisAclScope,
+  queueName,
 } from './constants.js';
+import type { QueueName } from './constants.js';
 
 // -----------------------------------------------------------------------------
 //  Pomoćne šeme
@@ -540,12 +548,82 @@ export function queueNames(env: BaseEnv): {
   readonly maintenance: string;
 } {
   return {
-    outbox: env.QUEUE_OUTBOX || `${QUEUE_KEY_PREFIX}-outbox`,
-    notifications: env.QUEUE_NOTIFICATIONS || `${QUEUE_KEY_PREFIX}-notifications`,
-    reminders: env.QUEUE_REMINDERS || `${QUEUE_KEY_PREFIX}-reminders`,
-    reports: env.QUEUE_REPORTS || `${QUEUE_KEY_PREFIX}-reports`,
-    maintenance: env.QUEUE_MAINTENANCE || `${QUEUE_KEY_PREFIX}-maintenance`,
+    outbox: env.QUEUE_OUTBOX || queueName('outbox'),
+    notifications: env.QUEUE_NOTIFICATIONS || queueName('notifications'),
+    reminders: env.QUEUE_REMINDERS || queueName('reminders'),
+    reports: env.QUEUE_REPORTS || queueName('reports'),
+    maintenance: env.QUEUE_MAINTENANCE || queueName('maintenance'),
   };
+}
+
+/**
+ * Normalizuje root prefiks Redis ključeva (`VFM_REDIS_KEY_PREFIX`): prazno →
+ * `vfm:`, bez dvotačke → dodaje dvotačku. Rezultat je uvijek `xxx:`.
+ */
+export function normalizeRedisKeyPrefix(value: string | undefined): string {
+  const trimmed = (value ?? '').trim();
+  if (trimmed.length === 0) return REDIS_KEY_PREFIX;
+  return trimmed.endsWith(':') ? trimmed : `${trimmed}:`;
+}
+
+/**
+ * BullMQ opcija `prefix` — **jedini izvor istine** za prefiks ključeva redova.
+ *
+ * BullMQ gradi ključeve kao `<prefix>:<nazivReda>:<suffix>` (npr.
+ * `vfm:queue:vfm-queue-outbox:wait`), pa prefiks MORA biti unutar ACL opsega
+ * `~vfm:*` (`REDIS_ACL.md` §1 i §4). Ako bi bio BullMQ default `'bull'`, ključevi
+ * bi bili `bull:vfm-queue-outbox:wait` i Redis bi odbio svaku operaciju s
+ * `NOPERM ... no permissions to access a key` → worker ne obrađuje nijedan red.
+ *
+ * ⚠️ Promjena ove vrijednosti = promjena Redis ključeva → obavezno ažurirati
+ * `REDIS_ACL.md` (§4 + changelog) **i** ACL fajl na serveru (`ACL LOAD`).
+ */
+export function queueKeyPrefix(env: BaseEnv): string {
+  const root = normalizeRedisKeyPrefix(env.VFM_REDIS_KEY_PREFIX);
+  return root === REDIS_KEY_PREFIX ? QUEUE_KEY_PREFIX : `${root}queue`;
+}
+
+/**
+ * Provjera da su **svi** Redis ključevi/prefiksi koje aplikacija gradi unutar ACL
+ * opsega `~vfm:*`. Prazna lista = konfiguracija je usklađena s `REDIS_ACL.md`.
+ *
+ * Poziva se pri pokretanju worker-a (fail-fast) i u `QueueService` (upozorenje),
+ * tako da se ACL greška vidi u logu **prije** nego što Redis počne vraćati
+ * `NOPERM` na svaku komandu.
+ */
+export function validateRedisAclScope(env: BaseEnv): readonly string[] {
+  const problems: string[] = [];
+  const prefix = queueKeyPrefix(env);
+
+  if (!isInsideRedisAclScope(`${prefix}:`)) {
+    problems.push(
+      `BullMQ prefiks "${prefix}" je izvan ACL opsega ${REDIS_ACL_KEY_PATTERN} — ` +
+        `VFM_REDIS_KEY_PREFIX mora počinjati s "${REDIS_KEY_PREFIX}" (REDIS_ACL.md §1 i §4.1).`,
+    );
+  }
+
+  const names = queueNames(env);
+  for (const logicalName of QUEUE_NAMES) {
+    const queue = names[logicalName as QueueName];
+    const key = bullQueueKey(prefix, queue);
+    if (!isInsideRedisAclScope(key)) {
+      problems.push(
+        `Ključ reda "${logicalName}" (${key}) je izvan ACL opsega ${REDIS_ACL_KEY_PATTERN} ` +
+          '(REDIS_ACL.md §4).',
+      );
+    }
+  }
+
+  for (const [namespace, value] of Object.entries(REDIS_NS)) {
+    if (!isInsideRedisAclScope(value)) {
+      problems.push(
+        `Redis namespace "${namespace}" (${value}) je izvan ACL opsega ${REDIS_ACL_KEY_PATTERN} ` +
+          '(REDIS_ACL.md §4).',
+      );
+    }
+  }
+
+  return problems;
 }
 
 /** Maksimalna veličina fajla u bajtovima (iz `ATTACHMENT_MAX_SIZE_MB`). */

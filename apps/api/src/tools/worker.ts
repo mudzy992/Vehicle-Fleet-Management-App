@@ -4,6 +4,11 @@
  *
  * Odgovornosti:
  * - pokreće po jedan worker za svaki red (`QUEUE_*` iz ENV-a),
+ * - koristi BullMQ prefiks `vfm:queue` → ključevi `vfm:queue:<red>:*` su unutar
+ *   ACL opsega `~vfm:*` (`REDIS_ACL.md` §4); pri pokretanju **fail-fast** provjerava
+ *   da nijedan ključ nije izvan tog opsega (inače bi Redis vraćao `NOPERM`),
+ * - jednokratno proba ACL na stvarnom Redisu (`vfm:queue:_acl-probe`) da odmah
+ *   razlikuje pogrešan prefiks u kodu od ACL-a bez `~vfm:*` na serveru,
  * - emituje **heartbeat** ključ `vfm:metrics:worker:heartbeat` (TTL 90 s) koji
  *   čita `tools/healthcheck-worker.ts` (compose healthcheck),
  * - obrađuje `SIGTERM`/`SIGINT` → graceful drain,
@@ -14,10 +19,10 @@
  * jer bi compose healthcheck onda stalno restartovao kontejner.
  */
 import { Worker, type Job } from 'bullmq';
-import { QUEUE_NAMES } from '@vfm/shared';
+import { QUEUE_NAMES, REDIS_ACL_KEY_PATTERN } from '@vfm/shared';
 import type { QueueName } from '@vfm/shared';
 import type { BaseEnv } from '@vfm/shared/env';
-import { redisConfig } from '@vfm/shared/env';
+import { queueKeyPrefix, redisConfig, validateRedisAclScope } from '@vfm/shared/env';
 import { inspectEnv } from '../config/env.js';
 import { setupLogger } from '../config/logger.js';
 import type { PinoLoggerService } from '../config/logger.js';
@@ -26,6 +31,10 @@ import { queueConcurrency, queueFullName } from '../infra/queue/queue.service.js
 const HEARTBEAT_KEY = 'vfm:metrics:worker:heartbeat';
 const HEARTBEAT_TTL_SECONDS = 90;
 const HEARTBEAT_INTERVAL_MS = 30_000;
+
+/** Startna ACL proba: `<BullMQ prefiks>:_acl-probe` (REDIS_ACL.md §4). */
+const ACL_PROBE_SUFFIX = '_acl-probe';
+const ACL_PROBE_TTL_SECONDS = 30;
 
 interface WorkerContext {
   readonly workers: Worker[];
@@ -58,9 +67,25 @@ async function main(): Promise<number> {
     return 1;
   }
 
+  // ACL opseg (REDIS_ACL.md §1 i §4): BullMQ gradi ključeve `<prefix>:<red>:<suffix>`,
+  // pa prefiks MORA biti unutar `~vfm:*`. Fail-fast — inače Redis na svaku komandu
+  // vraća `NOPERM ... no permissions to access a key` i log se preplavi greškama.
+  const aclProblems = validateRedisAclScope(env);
+  if (aclProblems.length > 0) {
+    for (const problem of aclProblems) logger.error(problem);
+    logger.error(
+      `Worker se ne može pokrenuti: Redis ključevi nisu unutar ACL opsega ${REDIS_ACL_KEY_PATTERN}. ` +
+        'Ispravite VFM_REDIS_KEY_PREFIX / QUEUE_* u Coolify ENV-u ili ažurirajte ACL fajl ' +
+        'na globalnom Redisu (REDIS_ACL.md §1, pa ACL LOAD).',
+    );
+    return 1;
+  }
+
   const config = redisConfig(env, 'worker');
+  const prefix = queueKeyPrefix(env);
   logger.log(
-    `Pokretanje "${workerName}" (Redis ${config.host}:${config.port}, ACL korisnik ${config.username})`,
+    `Pokretanje "${workerName}" (Redis ${config.host}:${config.port}, ACL korisnik ${config.username}, ` +
+      `prefiks ključeva "${prefix}" → ${prefix}:<red>:* unutar ${REDIS_ACL_KEY_PATTERN})`,
   );
 
   const connection = {
@@ -76,8 +101,14 @@ async function main(): Promise<number> {
 
   const context: WorkerContext = { workers: [], logger };
 
+  // Startna provjera na stvarnom Redisu: razlikuje naš (pogrešan) prefiks od
+  // ACL-a koji na serveru nema `~vfm:*` — oba daju isti `NOPERM` u logu.
+  // Nije fatalna: ako Redis trenutno nije dostupan, worker ostaje živ i pokušava
+  // ponovo (compose healthcheck ne smije upasti u restart petlju).
+  await probeRedisAcl(connection, prefix, config.username, logger);
+
   for (const name of QUEUE_NAMES) {
-    context.workers.push(createWorker(env, name, connection, logger));
+    context.workers.push(createWorker(env, name, connection, prefix, logger));
   }
 
   // Heartbeat (compose healthcheck čita ovaj ključ).
@@ -134,6 +165,7 @@ function createWorker(
   env: BaseEnv,
   name: QueueName,
   connection: RedisConnectionConfig,
+  prefix: string,
   logger: PinoLoggerService,
 ): Worker {
   const full = queueFullName(env, name);
@@ -159,7 +191,11 @@ function createWorker(
       concurrency: queueConcurrency(env, name),
       lockDuration: 30_000,
       stalledInterval: 30_000,
-      prefix: 'bull',
+      // 🔴 ACL (REDIS_ACL.md §1 i §4): BullMQ gradi ključeve `<prefix>:<red>:<suffix>`,
+      //    pa prefiks mora biti `vfm:queue` → ključevi `vfm:queue:vfm-queue-outbox:wait`.
+      //    BullMQ default `'bull'` bi dao `bull:vfm-queue-outbox:wait`, što je IZVAN
+      //    ACL opsega `~vfm:*` → Redis vraća NOPERM i red ne radi.
+      prefix,
     },
   );
 
@@ -177,8 +213,10 @@ function createWorker(
     // ACL/WRONGPASS greške su najčešći uzrok nakon izmjene Redis konfiguracije.
     if (/NOPERM|WRONGPASS|no permission/iu.test(error.message)) {
       logger.error(
-        `Redis ACL greška za korisnika "${String(connection.username)}": ${error.message}. ` +
-          'Provjerite REDIS_ACL.md i učitajte ACL na globalnom Redisu (ACL LOAD).',
+        `Redis ACL greška za korisnika "${String(connection.username)}" (red "${full}", ` +
+          `prefiks ključeva "${prefix}" → npr. ${prefix}:${full}:wait): ${error.message}. ` +
+          `Svi ključevi moraju biti unutar ${REDIS_ACL_KEY_PATTERN} — provjerite REDIS_ACL.md §1/§4 ` +
+          'i učitajte ACL na globalnom Redisu (ACL LOAD).',
       );
       return;
     }
@@ -231,6 +269,61 @@ async function handleJob(
   }
 }
 
+/**
+ * Jednokratna provjera ACL opsega na stvarnom Redisu.
+ *
+ * Upisuje i odmah briše ključ `<prefiks>:_acl-probe` (npr. `vfm:queue:_acl-probe`,
+ * TTL 30 s) koristeći **iste** kredencijale kao BullMQ. Rezultat razlikuje dva
+ * uzroka iste `NOPERM` greške (REDIS_ACL.md §6):
+ * 1. naš ključ je izvan `~vfm:*` (pogrešan BullMQ `prefix`), ili
+ * 2. ACL user `vfm-worker` na serveru uopšte nema pattern `~vfm:*`
+ *    (`ACL SETUSER … ~vfm:* …` + `ACL SAVE`).
+ */
+async function probeRedisAcl(
+  connection: RedisConnectionConfig,
+  prefix: string,
+  username: string,
+  logger: PinoLoggerService,
+): Promise<boolean> {
+  const probeKey = `${prefix}:${ACL_PROBE_SUFFIX}`;
+  try {
+    const { default: Redis } = await import('ioredis');
+    const client = new Redis({
+      ...(connection as object),
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+      connectTimeout: 5000,
+      retryStrategy: () => null,
+    });
+    await client.connect();
+    await client.set(probeKey, 'acl-probe', 'EX', ACL_PROBE_TTL_SECONDS);
+    await client.del(probeKey);
+    await client.quit().catch(() => client.disconnect());
+    logger.log(
+      `ACL provjera prošla: korisnik "${username}" smije pisati na "${probeKey}" ` +
+        `(opseg ${REDIS_ACL_KEY_PATTERN}).`,
+    );
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/NOPERM|WRONGPASS|no permission/iu.test(message)) {
+      logger.error(
+        `ACL provjera NIJE prošla: korisnik "${username}" ne smije pisati na "${probeKey}" — ${message}. ` +
+          `Ključ JE unutar ${REDIS_ACL_KEY_PATTERN}, pa problem nije u kodu: ACL user na globalnom Redisu ` +
+          `nema pattern \`~vfm:*\` (ili je lozinka pogrešna). Provjerite \`ACL LIST\` / \`ACL GETUSER ${username}\` ` +
+          'i popravite ACL fajl (REDIS_ACL.md §1 i §6, pa `ACL LOAD` + `ACL SAVE`).',
+      );
+      return false;
+    }
+    logger.warn(
+      `ACL provjera nije izvršena (Redis nedostupan ili sporo odgovara): ${message}. ` +
+        'Worker nastavlja s radom i pokušava ponovo.',
+    );
+    return false;
+  }
+}
+
 /** Upisuje heartbeat ključ (unutar ACL opsega `~vfm:*`). */
 async function writeHeartbeat(
   connection: RedisConnectionConfig,
@@ -255,8 +348,17 @@ async function writeHeartbeat(
     );
     await client.quit();
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/NOPERM|WRONGPASS|no permission/iu.test(message)) {
+      logger.error(
+        `Heartbeat nije upisan (${HEARTBEAT_KEY}) zbog Redis ACL greške: ${message}. ` +
+          `Ključ je unutar ${REDIS_ACL_KEY_PATTERN} → provjerite ACL usera na globalnom Redisu ` +
+          '(REDIS_ACL.md §1 i §6: `ACL GETUSER vfm-worker`, pa `ACL LOAD` + `ACL SAVE`).',
+      );
+      return;
+    }
     logger.warn(
-      `Heartbeat nije upisan (${error instanceof Error ? error.message : String(error)}) — ` +
+      `Heartbeat nije upisan (${message}) — ` +
         'compose healthcheck će prijaviti worker kao nedostupan.',
     );
   }

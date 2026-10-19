@@ -9,18 +9,24 @@ import {
   loadEnv,
   maxFileSizeBytes,
   paginationQuerySchema,
+  normalizeRedisKeyPrefix,
   parseEnv,
   plateSchema,
+  queueKeyPrefix,
   queueNames,
   redisConfig,
   trustProxyHops,
   validateEnvProfile,
+  validateRedisAclScope,
 } from '../dist/env-schema.js';
 import {
   DEFAULT_COOKIE_DOMAIN,
   DEFAULT_PUBLIC_API_URL,
   DEFAULT_WEB_ORIGIN,
+  QUEUE_KEY_PREFIX,
   REDIS_ACL_USERS,
+  bullQueueKey,
+  isInsideRedisAclScope,
 } from '../dist/index.js';
 
 /**
@@ -345,5 +351,80 @@ describe('zajedničke šeme za API ugovor', () => {
     expect(plateSchema.parse(' A12-B-34 ')).toBe('A12-B-34');
     expect(() => plateSchema.parse('XX')).toThrow();
     expect(() => plateSchema.parse('<script>')).toThrow();
+  });
+});
+
+/**
+ * BullMQ prefiks i ACL opseg (`REDIS_ACL.md` §1 i §4).
+ *
+ * Regresija iz produkcije (Coolify, 19.10.2026.): worker je logovao
+ * `NOPERM No permissions to access a key` za korisnika `vfm-worker` jer je BullMQ
+ * bio pokrenut s default prefiksom `'bull'` → ključevi `bull:vfm-queue-*` su bili
+ * izvan ACL opsega `~vfm:*`. Ovi testovi čuvaju ispravku.
+ */
+describe('queueKeyPrefix / validateRedisAclScope', () => {
+  it('normalizeRedisKeyPrefix vraća root s dvotačkom (default vfm:)', () => {
+    expect(normalizeRedisKeyPrefix(undefined)).toBe('vfm:');
+    expect(normalizeRedisKeyPrefix('')).toBe('vfm:');
+    expect(normalizeRedisKeyPrefix('  ')).toBe('vfm:');
+    expect(normalizeRedisKeyPrefix('vfm:')).toBe('vfm:');
+    expect(normalizeRedisKeyPrefix('vfm')).toBe('vfm:');
+  });
+
+  it('default BullMQ prefiks je "vfm:queue" (nikad "bull")', () => {
+    const env = parseEnv({});
+    expect(queueKeyPrefix(env)).toBe('vfm:queue');
+    expect(queueKeyPrefix(env)).toBe(QUEUE_KEY_PREFIX);
+    expect(queueKeyPrefix(env)).not.toBe('bull');
+  });
+
+  it('prefiks prati VFM_REDIS_KEY_PREFIX iz ENV-a', () => {
+    expect(queueKeyPrefix(parseEnv({ VFM_REDIS_KEY_PREFIX: 'vfm:' }))).toBe('vfm:queue');
+    expect(queueKeyPrefix(parseEnv({ VFM_REDIS_KEY_PREFIX: 'vfm' }))).toBe('vfm:queue');
+    expect(queueKeyPrefix(parseEnv({ VFM_REDIS_KEY_PREFIX: 'tudji:' }))).toBe('tudji:queue');
+  });
+
+  it('ključevi redova su unutar ACL opsega ~vfm:*', () => {
+    const env = parseEnv({});
+    const prefix = queueKeyPrefix(env);
+    for (const name of Object.keys(queueNames(env)) as (keyof ReturnType<typeof queueNames>)[]) {
+      const key = bullQueueKey(prefix, queueNames(env)[name]);
+      expect(isInsideRedisAclScope(key), key).toBe(true);
+      expect(key.startsWith('vfm:queue:vfm-queue-'), key).toBe(true);
+    }
+  });
+
+  it('prazan naziv reda se odbija već u šemi (fail-fast)', () => {
+    expect(() => parseEnv({ QUEUE_OUTBOX: '' })).toThrow(/QUEUE_OUTBOX/u);
+  });
+
+  it('queueNames fallback daje nazive "vfm-queue-*" (defenzivno, bez ENV-a)', () => {
+    // Šema nikad ne vrati prazan naziv, ali helper mora biti otporan i na
+    // djelimičan ENV (npr. pozvan prije validacije) — zato fallback postoji.
+    const partial = { QUEUE_OUTBOX: '' } as unknown as ReturnType<typeof parseEnv>;
+    expect(queueNames(partial)).toMatchObject({ outbox: 'vfm-queue-outbox' });
+    expect(queueNames(parseEnv({}))).toEqual({
+      outbox: 'vfm-queue-outbox',
+      notifications: 'vfm-queue-notifications',
+      reminders: 'vfm-queue-reminders',
+      reports: 'vfm-queue-reports',
+      maintenance: 'vfm-queue-maintenance',
+    });
+  });
+
+  it('validateRedisAclScope je prazan za ispravnu konfiguraciju', () => {
+    expect(validateRedisAclScope(parseEnv({}))).toEqual([]);
+    expect(validateRedisAclScope(parseEnv({ VFM_REDIS_KEY_PREFIX: 'vfm' }))).toEqual([]);
+    expect(
+      validateRedisAclScope(parseEnv({ QUEUE_OUTBOX: 'vfm-queue-outbox-v2' })),
+    ).toEqual([]);
+  });
+
+  it('validateRedisAclScope prijavljuje prefiks izvan ~vfm:* (uzrok NOPERM-a)', () => {
+    const problems = validateRedisAclScope(parseEnv({ VFM_REDIS_KEY_PREFIX: 'tudji:' }));
+    expect(problems.length).toBeGreaterThan(0);
+    expect(problems.join('\n')).toMatch(/tudji:queue/u);
+    expect(problems.join('\n')).toMatch(/~vfm:\*/u);
+    expect(problems.join('\n')).toMatch(/REDIS_ACL\.md/u);
   });
 });

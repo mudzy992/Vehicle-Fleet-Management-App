@@ -85,7 +85,8 @@ za vidljivost u web UI-u.
 ```
 1. GET /api/v1/system/queue → depth, failed, lastError
 2. docker logs vfm-worker --since 30m | grep -iE 'NOPERM|WRONGPASS|ECONN|firebase'
-   - NOPERM/WRONGPASS → REDIS_ACL.md §6 (ACL user/lozinka)
+   - NOPERM/WRONGPASS → REDIS_ACL.md §6 (ACL user/lozinka; ako je ACL učitan a NOPERM
+     ostaje, provjeri BullMQ prefiks — mora biti `vfm:queue`, ne default `'bull'`)
    - Firebase greške → provjeri mount i FIREBASE_ENABLED/FIREBASE_PROJECT_ID
 3. Provjeri scale: mora biti 1 (više replika = dupli leader-i)
 4. Restart workera; jobovi se nastavljaju (BullMQ čuva stanje u Redisu + outbox u DB)

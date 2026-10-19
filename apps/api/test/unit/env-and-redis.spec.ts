@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { getEnv, getRawEnv, inspectEnv, __resetEnvCache } from '../../src/config/env.js';
 import { RedisService } from '../../src/infra/redis/redis.service.js';
-import { REDIS_NS } from '@vfm/shared';
+import { QUEUE_KEY_PREFIX, REDIS_NS, bullQueueKey, isInsideRedisAclScope } from '@vfm/shared';
+import { queueKeyPrefix, validateRedisAclScope } from '@vfm/shared/env';
 
 /**
  * ENV validacija (fail-fast) i Redis key builder.
@@ -110,5 +113,60 @@ describe('RedisService.key — svi ključevi unutar ACL opsega ~vfm:*', () => {
     const result = await redis.ping();
     expect(result.ok).toBe(false);
     expect(result.message).toMatch(/REDIS_HOST nije postavljen/u);
+  });
+});
+
+/**
+ * BullMQ prefiks redova i ACL opseg (`REDIS_ACL.md` §1 i §4).
+ *
+ * Regresija iz produkcije (Coolify, 19.10.2026.): worker je u logovima vraćao
+ * `NOPERM No permissions to access a key` za korisnika `vfm-worker` jer je BullMQ
+ * bio pokrenut s default prefiksom `'bull'` → ključevi `bull:vfm-queue-*` su bili
+ * izvan ACL opsega `~vfm:*`. Ispravka: prefiks `vfm:queue` (QUEUE_KEY_PREFIX).
+ */
+describe('BullMQ prefiks je unutar ACL opsega ~vfm:*', () => {
+  const env = getRawEnv({ ENV_PROFILE: 'test' } as NodeJS.ProcessEnv);
+
+  it('queueKeyPrefix vraća "vfm:queue" (nikad BullMQ default "bull")', () => {
+    expect(queueKeyPrefix(env)).toBe('vfm:queue');
+    expect(queueKeyPrefix(env)).toBe(QUEUE_KEY_PREFIX);
+    expect(queueKeyPrefix(env)).not.toBe('bull');
+  });
+
+  it('validateRedisAclScope ne prijavljuje probleme za defaultnu konfiguraciju', () => {
+    expect(validateRedisAclScope(env)).toEqual([]);
+  });
+
+  it('ključevi koje BullMQ gradi za naše redove počinju s "vfm:queue:vfm-queue-"', () => {
+    const prefix = queueKeyPrefix(env);
+    for (const queue of [
+      env.QUEUE_OUTBOX,
+      env.QUEUE_NOTIFICATIONS,
+      env.QUEUE_REMINDERS,
+      env.QUEUE_REPORTS,
+      env.QUEUE_MAINTENANCE,
+    ]) {
+      const key = bullQueueKey(prefix, queue);
+      expect(isInsideRedisAclScope(key), key).toBe(true);
+      expect(key.startsWith('vfm:queue:vfm-queue-'), key).toBe(true);
+    }
+  });
+
+  it('prefiks izvan ACL opsega se prepoznaje (npr. VFM_REDIS_KEY_PREFIX=tudji:)', () => {
+    const bad = getRawEnv({ ENV_PROFILE: 'test', VFM_REDIS_KEY_PREFIX: 'tudji:' } as NodeJS.ProcessEnv);
+    const problems = validateRedisAclScope(bad);
+    expect(problems.length).toBeGreaterThan(0);
+    expect(problems.join('\n')).toMatch(/tudji:queue/u);
+    expect(problems.join('\n')).toMatch(/REDIS_ACL\.md/u);
+  });
+
+  it('worker.ts i queue.service.ts ne hardkoduju BullMQ prefiks "bull"', () => {
+    // Stražar protiv ponovnog uvođenja default prefiksa: oba procesa moraju
+    // dijeliti isti prefiks iz `@vfm/shared/env` → `queueKeyPrefix(env)`.
+    for (const relative of ['src/tools/worker.ts', 'src/infra/queue/queue.service.ts']) {
+      const source = readFileSync(resolve(__dirname, '../..', relative), 'utf8');
+      expect(source, `${relative}: sadrži hardkodovan BullMQ prefiks`).not.toMatch(/prefix:\s*['"]bull['"]/u);
+      expect(source, `${relative}: ne koristi queueKeyPrefix()`).toMatch(/queueKeyPrefix\(/u);
+    }
   });
 });

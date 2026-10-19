@@ -230,7 +230,7 @@ CONFIG GET appendonly          → yes
 | `REDIS_USER_API` / `REDIS_PASSWORD_API` | `vfm-api` / plaintext lozinka |
 | `REDIS_USER_WORKER` / `REDIS_PASSWORD_WORKER` | `vfm-worker` / plaintext lozinka |
 | `REDIS_USER_READONLY` / `REDIS_PASSWORD_READONLY` | `vfm-readonly` / plaintext lozinka |
-| `VFM_REDIS_KEY_PREFIX` | `vfm:` (mora odgovarati ACL obrascu `~vfm:*`) |
+| `VFM_REDIS_KEY_PREFIX` | `vfm:` (mora odgovarati ACL obrascu `~vfm:*`); iz njega se izvodi BullMQ `prefix` → `vfm:queue`, tj. ključevi `vfm:queue:<red>:*` |
 
 > 🔴 **Ako se promijeni bilo koji Redis ključ, prefix, queue ili korisnik u kodu —
 > `REDIS_ACL.md` i ACL na serveru se moraju ažurirati u istom trenutku**, inače servis
@@ -422,7 +422,7 @@ U browseru: `https://vehicle.ba101.top` → shell sa sidebarom;
 | `migrate` izlazi s 2 ili 1 | Faza 0: vrati `MIGRATIONS_STRICT=false`; inače provjeri `DATABASE_URL` |
 | `not a directory` pri startu `api`/`worker` | Firebase mount: montira se **direktorij** `/etc/vfm/secrets`, ne fajl |
 | `EACCES` pri uploadu/exportu | `sudo chown -R 1001:1001 /data/vfm` |
-| Redis `NOPERM … key` | ključ nema prefix `vfm:` ili ACL nije primijenjen (`ACL LIST`) |
+| Redis `NOPERM … key` | ključ nema prefix `vfm:` ili ACL nije primijenjen (`ACL LIST`). Ako je ACL **ispravan** a worker i dalje javlja `NOPERM`, uzrok je BullMQ `prefix` (default `'bull'` → ključevi `bull:vfm-queue-*` izvan `~vfm:*`); mora biti `vfm:queue` — vidi `REDIS_ACL.md` §4 i changelog 1.0.3 |
 | Redis `WRONGPASS` | plaintext lozinka u ENV ≠ hash u ACL-u (regeneriši par) |
 | `web` prikazuje 404 na refreshu rute | nginx SPA fallback — provjeri da je `nginx.conf.template` u image-u |
 | Promjena `VITE_*` nema efekta | Vite ih ugrađuje **pri buildu** → potreban rebuild, ne restart |

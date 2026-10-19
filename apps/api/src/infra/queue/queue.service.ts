@@ -8,6 +8,11 @@
  *   `QUEUE_REPORTS`        → PDF/Excel izvoz (P-13)
  *   `QUEUE_MAINTENANCE`    → čišćenje, retencija, reindex
  *
+ * 🔴 **BullMQ prefiks**: `queueKeyPrefix(env)` → `vfm:queue`, tako da su ključevi
+ *    `vfm:queue:vfm-queue-outbox:*` i ostaju unutar ACL opsega `~vfm:*`
+ *    (`REDIS_ACL.md` §1/§4). Prefiks mora biti **isti** u `tools/worker.ts`,
+ *    inače worker i API gledaju različite ključeve.
+ *
  * ⚠️ **Graceful degradation**: ako Redis nije dostupan, `enqueue()` vraća
  * `{ ok: false }` i loguje upozorenje — API ne pada. Trajno rješenje je
  * transakcijski outbox u bazi (Faza 5): zapis se upiše u istoj transakciji kao
@@ -15,10 +20,10 @@
  */
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { Queue, type ConnectionOptions, type JobsOptions } from 'bullmq';
-import { QUEUE_NAMES } from '@vfm/shared';
+import { QUEUE_NAMES, REDIS_ACL_KEY_PATTERN } from '@vfm/shared';
 import type { QueueName } from '@vfm/shared';
 import type { BaseEnv } from '@vfm/shared/env';
-import { redisConfig } from '@vfm/shared/env';
+import { queueKeyPrefix, redisConfig, validateRedisAclScope } from '@vfm/shared/env';
 import { RedisService } from '../redis/redis.service.js';
 import { getEnv } from '../../config/env.js';
 
@@ -66,6 +71,8 @@ export class QueueService implements OnModuleDestroy {
   private readonly logger = new Logger(QueueService.name);
   private readonly env: BaseEnv = getEnv();
   private readonly queues = new Map<QueueName, Queue>();
+  /** ACL provjera se loguje samo jednom (pri kreiranju prvog reda). */
+  private aclScopeChecked = false;
 
   constructor(private readonly redis: RedisService) {}
 
@@ -84,9 +91,15 @@ export class QueueService implements OnModuleDestroy {
     const connection = this.buildConnection();
     if (!connection) return undefined;
 
+    this.assertAclScope();
+
     const queue = new Queue(queueFullName(this.env, name), {
       connection,
-      prefix: 'bull',
+      // 🔴 ACL (REDIS_ACL.md §1 i §4): BullMQ gradi ključeve `<prefix>:<red>:<suffix>`,
+      //    pa prefiks mora biti `vfm:queue` → `vfm:queue:vfm-queue-outbox:wait`.
+      //    BullMQ default `'bull'` bi ključeve stavio IZVAN ACL opsega `~vfm:*`
+      //    → Redis vraća `NOPERM ... no permissions to access a key`.
+      prefix: queueKeyPrefix(this.env),
       defaultJobOptions: this.defaultJobOptions(),
     });
 
@@ -190,6 +203,34 @@ export class QueueService implements OnModuleDestroy {
     });
     await Promise.allSettled(closing);
     this.queues.clear();
+  }
+
+  /**
+   * Jednokratna provjera da su BullMQ ključevi unutar ACL opsega `~vfm:*`
+   * (`REDIS_ACL.md` §1 i §4).
+   *
+   * API **ne pada** (graceful degradation, kao i kad Redis nije dostupan) — ali
+   * jasno loguje šta je pogrešno, jer bi inače svaki `enqueue` vraćao
+   * `NOPERM ... no permissions to access a key`.
+   */
+  private assertAclScope(): void {
+    if (this.aclScopeChecked) return;
+    this.aclScopeChecked = true;
+
+    const problems = validateRedisAclScope(this.env);
+    if (problems.length === 0) {
+      this.logger.log(
+        `Redis ključevi redova su unutar ACL opsega ${REDIS_ACL_KEY_PATTERN} ` +
+          `(BullMQ prefiks "${queueKeyPrefix(this.env)}")`,
+      );
+      return;
+    }
+
+    for (const problem of problems) this.logger.error(problem);
+    this.logger.error(
+      'Upis u redove će vjerovatno padati s NOPERM — ispravite VFM_REDIS_KEY_PREFIX / QUEUE_* ' +
+        'u ENV-u ili ažurirajte ACL fajl na globalnom Redisu (REDIS_ACL.md §1, pa ACL LOAD).',
+    );
   }
 
   /** BullMQ upravlja vlastitim konekcijama (traži `maxRetriesPerRequest: null`). */
