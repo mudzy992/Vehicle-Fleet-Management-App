@@ -9,7 +9,7 @@
  * | `/health/live`    | liveness — proces radi                      | 200  |
  * | `/health/ready`   | readiness — Redis (kritičan), DB, disk      | 200/503 |
  * | `/health/startup` | startup — boot završen                      | 200  |
- * | `/health/diagnostics` | dijagnostika (od Faze 1 iza `system:view`) | 200 |
+ * | `/health/diagnostics` | dijagnostika (Faza 1: `system:view_health` ili `system:view_queue`) | 200/401/403 |
  *
  * ⚠️ `/health/live` **ne smije** provjeravati zavisnosti: inače Coolify
  * restartuje kontejner pri svakom mrežnom treptaju (restart petlja).
@@ -23,6 +23,7 @@ import {
   type HealthCheckResult,
   type HealthIndicatorResult,
 } from '@nestjs/terminus';
+import { Public, RequireAnyPermission } from '../common/decorators/auth.decorators.js';
 import { RedisHealthIndicator } from './redis.health-indicator.js';
 import { DatabaseHealthIndicator } from './database.health-indicator.js';
 import { DiskHealthIndicator } from './disk.health-indicator.js';
@@ -51,6 +52,7 @@ export class HealthController {
    * Compose: `wget -q -S --spider http://localhost:3000/health/live`
    */
   @Get('live')
+  @Public()
   liveness(): { status: 'ok'; uptimeSeconds: number; at: string } {
     return {
       status: 'ok',
@@ -69,6 +71,7 @@ export class HealthController {
    * - **Disk (prilozi)** → `degraded` < 1 GB, `down` < 256 MB slobodno.
    */
   @Get('ready')
+  @Public()
   @HealthCheck()
   readiness(): Promise<HealthCheckResult> {
     return this.health.check([
@@ -80,6 +83,7 @@ export class HealthController {
 
   /** Startup: boot je završen (compose `start_period` provjera). */
   @Get('startup')
+  @Public()
   startup(): {
     status: 'ok';
     startedAt: string;
@@ -96,10 +100,13 @@ export class HealthController {
   }
 
   /**
-   * Dijagnostika (od Faze 1 iza `system:view_*` permisije): konekcije, redovi,
-   * outbox buffer i baza.
+   * Dijagnostika: konekcije, redovi, outbox buffer i baza.
+   *
+   * Faza 1: zaštićeno globalnim guard-ovima — traži `system:view_health` **ili**
+   * `system:view_queue` (Super Admin ima sve, R-07). Bez važećeg tokena → 401.
    */
   @Get('diagnostics')
+  @RequireAnyPermission('system:view_health', 'system:view_queue')
   async diagnostics(): Promise<Record<string, unknown>> {
     const env = getEnv();
     return {

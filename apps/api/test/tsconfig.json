@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@vfm/config/tsconfig/nest.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "rootDir": "..",
+    "baseUrl": ".."
+  },
+  "include": ["./**/*.ts", "../src/**/*.ts"]
+}

@@ -15,6 +15,10 @@
 import { Module } from '@nestjs/common';
 import { PASSWORD_BLOCKLIST, PasswordService } from './services/password.service.js';
 import { TokenService } from './services/token.service.js';
+import { PermissionsService } from './permissions/permissions.service.js';
+import { PERMISSIONS_LOADER } from './permissions/permissions.types.js';
+import { UnavailablePermissionsLoader } from './permissions/unavailable-permissions.loader.js';
+import { LoggingSecurityEventSink, SECURITY_EVENT_SINK } from '../../common/audit/security-event.js';
 
 @Module({
   providers: [
@@ -26,7 +30,20 @@ import { TokenService } from './services/token.service.js';
     { provide: PASSWORD_BLOCKLIST, useValue: [] as readonly string[] },
     PasswordService,
     TokenService,
+    PermissionsService,
+    /**
+     * Sigurnosni događaji se za sada logiraju (pino). `AuditModule` (chunk C)
+     * prepisuje ovaj provider sink-om koji piše u `AuditLog` (severity SECURITY).
+     */
+    { provide: SECURITY_EVENT_SINK, useClass: LoggingSecurityEventSink },
+    /**
+     * ⛔ BLOKER 1: `PERMISSIONS_LOADER` je privremeno fail-closed zamjena
+     * (`503 DEPENDENCY_UNAVAILABLE`). Čim `prisma generate` + migracija `init`
+     * budu u repou, zamijeniti s `PrismaPermissionsLoader` — guard-ovi, servisi i
+     * testovi ostaju isti jer rade nad interfejsom.
+     */
+    { provide: PERMISSIONS_LOADER, useClass: UnavailablePermissionsLoader },
   ],
-  exports: [PasswordService, TokenService],
+  exports: [PasswordService, TokenService, PermissionsService, SECURITY_EVENT_SINK],
 })
 export class AuthModule {}
