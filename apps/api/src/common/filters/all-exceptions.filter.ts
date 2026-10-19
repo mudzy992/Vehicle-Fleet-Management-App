@@ -16,51 +16,14 @@
 import { Catch, HttpException, HttpStatus, Logger, type ArgumentsHost } from '@nestjs/common';
 import type { Response } from 'express';
 import { ERROR_CODES, isErrorCode } from '@vfm/shared';
+import { VfmException } from '../errors/vfm-error.js';
 import type { ApiErrorBody, ApiErrorDetail, ErrorCode } from '@vfm/shared';
 import type { RequestWithId } from '../middleware/request-id.middleware.js';
 
-/** Greška koju domenski kod baca s eksplicitnim kodom iz kataloga. */
-export class VfmException extends Error {
-  constructor(
-    readonly code: ErrorCode,
-    message?: string,
-    readonly details?: readonly ApiErrorDetail[],
-    readonly extra?: Readonly<Record<string, unknown>>,
-  ) {
-    super(message ?? ERROR_CODES[code].messageBs);
-    this.name = 'VfmException';
-  }
-
-  get httpStatus(): number {
-    return ERROR_CODES[this.code].httpStatus;
-  }
-
-  get securityRelevant(): boolean {
-    return ERROR_CODES[this.code].securityRelevant;
-  }
-}
-
-/** Convenience konstruktori za najčešće slučajeve. */
-export const VfmErrors = {
-  permissionDenied: (details?: readonly ApiErrorDetail[]) =>
-    new VfmException('PERMISSION_DENIED', undefined, details),
-  mobileAccessForbidden: () => new VfmException('MOBILE_ACCESS_FORBIDDEN'),
-  notFound: (resource?: string) =>
-    new VfmException(
-      'NOT_FOUND',
-      resource ? `Traženi resurs (${resource}) nije pronađen.` : undefined,
-    ),
-  versionConflict: (currentVersion: number) =>
-    new VfmException('VERSION_CONFLICT', undefined, undefined, { currentVersion }),
-  taskAlreadyClaimed: () => new VfmException('TASK_ALREADY_CLAIMED'),
-  rateLimited: (retryAfterSeconds: number) =>
-    new VfmException('RATE_LIMITED', undefined, undefined, { retryAfterSeconds }),
-  dependencyUnavailable: (dependency: string) =>
-    new VfmException('DEPENDENCY_UNAVAILABLE', `Servis "${dependency}" je privremeno nedostupan.`),
-  validationError: (details: readonly ApiErrorDetail[]) =>
-    new VfmException('VALIDATION_ERROR', undefined, details),
-  internal: () => new VfmException('INTERNAL_ERROR'),
-} as const;
+// `VfmException` i `VfmErrors` žive u `common/errors/vfm-error.ts` (koriste ih i
+// guard-ovi, servisi i pipe-ovi). Ovaj re-export čuva postojeće importe
+// (`../filters/all-exceptions.filter.js`) netaknutim.
+export { VfmErrors, VfmException } from '../errors/vfm-error.js';
 
 /** Normalizuje Nest `HttpException` u naš katalog kodova gdje je moguće. */
 function mapHttpStatusToCode(status: number): ErrorCode | string {

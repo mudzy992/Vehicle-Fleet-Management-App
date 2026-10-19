@@ -73,6 +73,14 @@ export const ERROR_CODES = {
   },
 
   // --- Sesije i tokeni ---
+  UNAUTHENTICATED: {
+    code: 'UNAUTHENTICATED',
+    httpStatus: 401,
+    category: 'AUTH',
+    securityRelevant: true,
+    messageBs: 'Prijava je obavezna. Unesite ispravan token ili se prijavite ponovo.',
+    retryable: false,
+  },
   PERMISSIONS_STALE: {
     code: 'PERMISSIONS_STALE',
     httpStatus: 401,

@@ -1,9 +1,10 @@
 /**
  * Korijenski Nest modul (Faza 0).
  *
- * Sadržaj: infrastruktura (Redis, redovi, health) + zajednički middleware.
- * Domenski moduli (auth, vehicles, tasks, forms…) dolaze u Fazama 1–7 i
- * registriraju se ovdje.
+ * Sadržaj: infrastruktura (Redis, redovi, health), zajednički middleware i
+ * domenski moduli. `AuthModule` (Faza 1) nosi servise za lozinke/tokene;
+ * `AuthService`, `AuthController`, guard-ovi i `PermissionsService` dolaze s
+ * Prisma slojem (bloker 1 — vidi `docs/FAZA1_IZVJESTAJ.md`).
  */
 import type { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { Module } from '@nestjs/common';
@@ -15,9 +16,10 @@ import { DatabaseModule } from './infra/database/database.module.js';
 import { RedisModule } from './infra/redis/redis.module.js';
 import { QueueModule } from './infra/queue/queue.module.js';
 import { HealthModule } from './health/health.module.js';
+import { AuthModule } from './modules/auth/auth.module.js';
 
 @Module({
-  imports: [DatabaseModule, RedisModule, QueueModule, HealthModule],
+  imports: [DatabaseModule, RedisModule, QueueModule, HealthModule, AuthModule],
   controllers: [],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

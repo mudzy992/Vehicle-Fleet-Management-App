@@ -39,12 +39,19 @@
     "./env": {
       "types": "./dist/env-schema.d.ts",
       "default": "./dist/env-schema.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas.d.ts",
+      "default": "./dist/schemas.js"
     }
   },
   "typesVersions": {
     "*": {
       "env": [
         "./dist/env-schema.d.ts"
+      ],
+      "schemas": [
+        "./dist/schemas.d.ts"
       ]
     }
   }

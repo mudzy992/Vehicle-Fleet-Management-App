@@ -116,6 +116,42 @@ export function bullQueueKey(prefix: string, queue: string, suffix = 'wait'): st
   return suffix.length > 0 ? `${prefix}:${queue}:${suffix}` : `${prefix}:${queue}`;
 }
 
+/**
+ * Parametri hash-ovanja lozinke — **argon2id** (docs/05 §7, zaključano):
+ * `memoryCost = 64 MB`, `timeCost = 3`, `parallelism = 1`.
+ *
+ * Koriste ih `PasswordService` (API) i `scripts/bootstrap-super-admin.mjs`, pa
+ * hash zapisan u bazi i provjera moraju biti isti. Vrijednost `m` u PHC stringu
+ * je u KiB → 64 MB = 65536.
+ */
+export const ARGON2_MEMORY_COST_KIB = 65536;
+export const ARGON2_TIME_COST = 3;
+export const ARGON2_PARALLELISM = 1;
+export const ARGON2_HASH_LENGTH = 32;
+export const ARGON2_SALT_LENGTH = 16;
+
+/** Dužina generisane slučajne lozinke (bootstrap / reset / demo seed). */
+export const GENERATED_PASSWORD_LENGTH = 20;
+
+/** Jednokratni token za reset lozinke: 30 min, jednokratno korištenje (docs/05 §7). */
+export const PASSWORD_RESET_TOKEN_TTL_MINUTES = 30;
+
+/** Refresh token: 256 bita entropije → base64url bez paddinga (docs/05 §5.2). */
+export const REFRESH_TOKEN_BYTES = 32;
+
+/**
+ * Nazivi claim-ova access tokena (docs/05 §5.1): `roles`, `tv` (tokenVersion),
+ * `pv` (permissionsVersion), `ct` (clientType), `sid` (RefreshSession.id).
+ * Permisije NIKAD nisu u tokenu.
+ */
+export const JWT_CLAIMS = {
+  tokenVersion: 'tv',
+  permissionsVersion: 'pv',
+  clientType: 'ct',
+  sessionId: 'sid',
+  roles: 'roles',
+} as const;
+
 /** Redis ACL korisnici (definirani u `REDIS_ACL.md` / `infra/redis/users.acl.example`). */
 export const REDIS_ACL_USERS = {
   api: 'vfm-api',

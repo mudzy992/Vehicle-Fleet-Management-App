@@ -25,7 +25,6 @@ import {
   DEFAULT_PUBLIC_API_URL,
   DEFAULT_WEB_ORIGIN,
   MAX_FILE_SIZE_BYTES,
-  MAX_PAGE_SIZE,
   QUEUE_KEY_PREFIX,
   QUEUE_NAMES,
   REDIS_ACL_KEY_PATTERN,
@@ -626,6 +625,24 @@ export function validateRedisAclScope(env: BaseEnv): readonly string[] {
   return problems;
 }
 
+/**
+ * Trajanje u obliku `10m` / `30d` / `900s` / `24h` / `2w` → sekunde.
+ *
+ * Koristi se za `expiresIn` u odgovoru `/auth/login` i za `maxAge` refresh
+ * cookie-ja (docs/05 §5). Format je već validiran Zod šemom (`duration()`), pa
+ * neispravan ulaz baca grešku umjesto da tiho vrati 0.
+ */
+export function durationToSeconds(value: string): number {
+  const match = /^\s*(\d+)\s*([smhdw])\s*$/u.exec(value ?? '');
+  if (!match) {
+    throw new Error(`Neispravan format trajanja: "${value}" (očekivano npr. 900s, 10m, 24h, 30d).`);
+  }
+  const amount = Number(match[1] ?? '0');
+  const unit = match[2] ?? 's';
+  const perUnit: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86_400, w: 604_800 };
+  return amount * (perUnit[unit] ?? 1);
+}
+
 /** Maksimalna veličina fajla u bajtovima (iz `ATTACHMENT_MAX_SIZE_MB`). */
 export function maxFileSizeBytes(env: BaseEnv): number {
   return Math.min(env.ATTACHMENT_MAX_SIZE_MB * 1024 * 1024, MAX_FILE_SIZE_BYTES * 5);
@@ -641,55 +658,21 @@ export function trustProxyHops(env: BaseEnv): number | boolean {
 // -----------------------------------------------------------------------------
 //  Zajedničke šeme za API ugovor (koriste ih i klijenti)
 // -----------------------------------------------------------------------------
+// Fizički žive u `./schemas.ts` (ulaz `@vfm/shared/schemas`, bez ENV šeme — da
+// zod šeme API ugovora mogu koristiti i web/mobilna bez server-only konteksta).
+// Ovaj re-export postoji zbog kompatibilnosti s `@vfm/shared/env` potrošačima.
 
-export const SORT_ORDERS = ['asc', 'desc'] as const;
-export type SortOrder = (typeof SORT_ORDERS)[number];
-
-/** Pagination query: `page`, `pageSize`, `sortBy`, `sortOrder`, `q`. */
-export const paginationQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(25),
-  sortBy: z.string().min(1).max(64).optional(),
-  sortOrder: z.enum(SORT_ORDERS).default('asc'),
-  q: z.string().max(200).optional(),
-});
-
-export type PaginationQuery = z.output<typeof paginationQuerySchema>;
-
-/** UUID (baza koristi UUID v7, ali prihvata i v4 iz klijenata). */
-export const uuidSchema = z.uuid();
-
-/** Registracija vozila (BIH format: slova/brojevi/crtica). */
-export const plateSchema = z
-  .string()
-  .trim()
-  .min(5)
-  .max(12)
-  .regex(/^[A-Z0-9][A-Z0-9-]{3,10}[A-Z0-9]$/u, 'Neispravan format registarske oznake');
-
-/** E-mail (baza koristi `citext`, pa se ne oslanjamo na case-sensitivity). */
-export const emailSchema = z.email().toLowerCase();
-
-/** Lozinka: minimalna dužina je 12 znakova (docs/05 §6). */
-export const passwordSchema = z
-  .string()
-  .min(12, 'Lozinka mora imati barem 12 znakova')
-  .max(128, 'Lozinka može imati najviše 128 znakova');
-
-/** Geo koordinate (opciono za lokaciju servisa/vozila). */
-export const locationSchema = z
-  .object({
-    latitude: z.number().min(-90).max(90),
-    longitude: z.number().min(-180).max(180),
-  })
-  .strict();
-
-/** `X-Request-Id` — UUID ili kratki alfanumerički ID (Traefik). */
-export const requestIdSchema = z
-  .string()
-  .min(8)
-  .max(64)
-  .regex(/^[A-Za-z0-9_-]+$/u, 'Neispravan format request ID-a');
+export {
+  SORT_ORDERS,
+  emailSchema,
+  locationSchema,
+  paginationQuerySchema,
+  passwordSchema,
+  plateSchema,
+  requestIdSchema,
+  uuidSchema,
+} from './schemas.js';
+export type { PaginationQuery, SortOrder } from './schemas.js';
 
 /** Pomoćno: gradnja `DATABASE_URL` iz dijelova (alat `scripts/db-url.mjs`). */
 export function buildDatabaseUrl(env: BaseEnv): string | undefined {
