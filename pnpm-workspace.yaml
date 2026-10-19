@@ -1,0 +1,26 @@
+# =============================================================================
+#  VFM — pnpm workspace
+# =============================================================================
+#  ⚠️ `apps/mobile` (Expo) NAMJERNO nije član workspace-a:
+#     - Expo/React Native ima ~1 GB dependencija i zaseban build lanac (EAS),
+#     - ne builda se u Dockeru niti u CI-u ovog repozitorija,
+#     - instalira se zasebno:  cd apps/mobile && pnpm install
+#     Kada dođe Faza 6, može se dodati ovdje ako se procijeni opravdanim.
+# =============================================================================
+packages:
+  - "packages/*"
+  - "apps/api"
+  - "apps/web"
+
+# pnpm 10: eksplicitna kontrola postinstall skripti dependencija (sigurnost)
+onlyBuiltDependencies:
+  - esbuild
+
+# Prisma preuzima engine binarne fajlove s binaries.prisma.sh pri postinstall-u.
+# U okruženjima bez pristupa tom hostu install bi pao → skripta se ignoriše,
+# a `prisma generate` se pokreće tamo gdje je mreža dozvoljena (CI/Coolify build
+# ili mašina vlasnika). Vidi docs/FAZA0_IZVJESTAJ.md → "Blokera".
+ignoredBuiltDependencies:
+  - prisma
+  - "@prisma/client"
+  - "@prisma/engines"

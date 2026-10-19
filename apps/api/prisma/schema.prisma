@@ -1,0 +1,1570 @@
+// =============================================================================
+//  VFM — Prisma šema (izvor istine za model podataka)
+// =============================================================================
+//  Specifikacija: docs/03-MODEL_PODATAKA.md (entiteti, indeksi, CHECK-ovi,
+//                 EXCLUDE ograničenja, triggeri, view-ovi)
+//  Baza:          PostgreSQL 17 (globalni Postgres na mreži `db_net`)
+//  ORM:           Prisma 7.10
+//
+//  🔴 STATUS (Faza 0): `prisma generate` / `migrate` preuzimaju engine binarne
+//     fajlove s https://binaries.prisma.sh. U sandboxu u kojem je ovaj kod
+//     nastao taj host NIJE dostupan, pa:
+//       - `prisma` / `@prisma/client` još nisu u `apps/api/package.json`,
+//       - ovaj fajl se NE kompajlira i NE validira u tom okruženju.
+//     Aktivacija (jednom, na mašini/build serveru s internetom):
+//       pnpm --filter @vfm/api add prisma@7.10.1 @prisma/client@7.10.1
+//       pnpm prisma:generate
+//       pnpm --filter @vfm/api exec prisma migrate dev --name init
+//     Detalji: apps/api/prisma/README.md
+//
+//  ⚠️ Sve što Prisma ne može izraziti (CHECK, EXCLUDE USING gist, partial unique
+//     index, DB trigger, identity kolona, view) dodaje se RUČNO u SQL migraciju
+//     nakon `prisma migrate diff` — idempotentno (`IF NOT EXISTS`,
+//     `CREATE OR REPLACE`). Takva mjesta su ovdje označena komentarom `-- SQL:`.
+// =============================================================================
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+// -----------------------------------------------------------------------------
+//  ENUM-i (docs/03 §2)
+// -----------------------------------------------------------------------------
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+  PENDING_PASSWORD_CHANGE
+}
+
+enum ClientType {
+  WEB
+  MOBILE_ANDROID
+  MOBILE_IOS
+  SERVICE
+}
+
+enum PermissionScope {
+  ALL
+  OWN
+  VEHICLE_IDS
+  DRIVER_IDS
+}
+
+enum FormSchemaStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+}
+
+enum FormSubject {
+  VEHICLE
+  DRIVER
+  REGISTRATION
+  INSURANCE
+  SERVICE
+  TIRE_SET
+  TIRE_INSTALLATION
+  TASK
+  VEHICLE_HANDOVER
+  OTHER
+}
+
+enum MigrationJobStatus {
+  PENDING
+  PREVIEW
+  RUNNING
+  COMPLETED
+  FAILED
+  ROLLED_BACK
+}
+
+enum VehicleStatus {
+  ACTIVE
+  IN_SERVICE
+  INACTIVE
+  DAMAGED
+  ARCHIVED
+}
+
+enum FuelType {
+  DIESEL
+  PETROL
+  LPG
+  CNG
+  HYBRID
+  ELECTRIC
+}
+
+enum RecordStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  ARCHIVED
+}
+
+enum OdometerSource {
+  MANUAL
+  TASK
+  SERVICE
+  REGISTRATION
+  INSURANCE
+  TIRE
+  HANDOVER
+  SYSTEM
+}
+
+enum TireSeason {
+  SUMMER
+  WINTER
+  ALL_SEASON
+}
+
+enum TireStatus {
+  IN_STOCK
+  MOUNTED
+  IN_REPAIR
+  RETIRED
+  SCRAPPED
+}
+
+enum TirePosition {
+  FL
+  FR
+  RL
+  RR
+  SPARE
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TaskAssignMode {
+  OPEN_CLAIM
+  ASSIGN_DIRECT
+  BROADCAST
+}
+
+enum TaskEventAction {
+  CREATED
+  UPDATED
+  ASSIGNED
+  INVITED
+  CLAIMED
+  COMPLETED
+  CANCELLED
+  REOPENED
+  RELEASED
+  COMMENTED
+  ATTACHMENT_ADDED
+  OVERRIDE_COMPLETED
+  FORM_MIGRATED
+  EXPIRED
+}
+
+enum AttachmentOwnerType {
+  TASK
+  VEHICLE
+  SERVICE
+  REGISTRATION
+  INSURANCE
+  TIRE
+  DRIVER
+  REPORT_EXPORT
+  OTHER
+}
+
+enum AttachmentStage {
+  ON_CREATE
+  ON_CLAIM
+  ON_COMPLETE
+  ON_CANCEL
+  GENERAL
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  DEAD
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  READ
+  FAILED
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  TOKEN_INVALID
+}
+
+enum DeviceTokenStatus {
+  ACTIVE
+  INVALID
+  UNREGISTERED
+  DISABLED
+}
+
+enum ReminderKind {
+  REGISTRATION
+  INSURANCE
+  SERVICE_DATE
+  SERVICE_KM
+  DRIVER_LICENSE
+  TECHNICAL_INSPECTION
+  TIRE_ROTATION
+  CUSTOM
+}
+
+enum ReminderStatus {
+  SCHEDULED
+  SENT
+  ACKNOWLEDGED
+  SNOOZED
+  CANCELLED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  ARCHIVE
+  RESTORE
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  PERMISSION_CHANGE
+  ROLE_CHANGE
+  FORM_PUBLISH
+  FORM_RETIRE
+  FORM_MIGRATE
+  EXPORT
+  FILE_ACCESS
+  SECURITY
+  SETTINGS_CHANGE
+  CLAIM
+  COMPLETE
+  CANCEL
+  REOPEN
+  RELEASE
+}
+
+enum AuditSeverity {
+  INFO
+  WARN
+  SECURITY
+  CRITICAL
+}
+
+enum ExportFormat {
+  PDF
+  XLSX
+  CSV
+}
+
+enum ExportStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+  EXPIRED
+}
+
+enum SettingType {
+  STRING
+  INTEGER
+  DECIMAL
+  BOOLEAN
+  DATE
+  ENUM
+  JSON
+  SECRET
+}
+
+// -----------------------------------------------------------------------------
+//  3.1 Identitet i prava
+// -----------------------------------------------------------------------------
+
+model User {
+  id                   String    @id @db.Uuid
+  email                String    @db.Citext
+  passwordHash         String
+  firstName            String
+  lastName             String
+  displayName          String?
+  phone                String?
+  status               UserStatus @default(ACTIVE)
+  mustChangePassword   Boolean   @default(false)
+  tokenVersion         Int       @default(0)
+  lastLoginAt          DateTime? @db.Timestamptz(6)
+  failedLoginCount     Int       @default(0)
+  lockedUntil          DateTime? @db.Timestamptz(6)
+  timezone             String    @default("Europe/Sarajevo")
+  locale               String    @default("bs")
+  createdById          String?   @db.Uuid
+  createdAt            DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt            DateTime? @db.Timestamptz(6)
+
+  createdBy            User?     @relation("UserCreatedBy", fields: [createdById], references: [id])
+  createdUsers         User[]    @relation("UserCreatedBy")
+  roles                UserRole[]
+  identities           UserIdentity[]
+  refreshSessions      RefreshSession[]
+  authAttempts         AuthAttempt[]
+  deviceTokens         DeviceToken[]
+  notifications        Notification[]
+  notificationPrefs    NotificationPreference[]
+  auditLogs            AuditLog[]
+  taskAssignments      TaskAssignment[]
+  taskEvents           TaskEvent[]
+  taskComments         TaskComment[]
+  createdTasks         Task[]          @relation("TaskCreatedBy")
+  assignedTasks        Task[]          @relation("TaskAssignee")
+  odometerReadings     OdometerReading[]
+  grantedRolePerms     RolePermission[] @relation("RolePermissionGrantedBy")
+  grantedUserRole      UserRole[]      @relation("UserRoleAssignedBy")
+  idempotencyKeys      IdempotencyKey[]
+  exportJobs           ExportJob[]
+  scheduledReminderAcks ScheduledReminder[] @relation("ReminderAcknowledgedBy")
+
+  @@unique([email])
+  @@index([status])
+  @@index([lastName, firstName])
+  @@index([deletedAt])
+  @@map("User")
+  // SQL: partial unique index umjesto @@unique (Prisma ne podržava partial):
+  //   DROP INDEX IF EXISTS "User_email_key";
+  //   CREATE UNIQUE INDEX IF NOT EXISTS ux_user_email_active
+  //     ON "User"(email) WHERE "deletedAt" IS NULL;
+  // SQL: trigger `vfm_guard_last_super_admin()` (docs/03 §3.2) — sprječava
+  //   deaktivaciju/brisanje posljednjeg aktivnog SUPER_ADMIN korisnika.
+  // SQL: 2FA kolone NE postoje (R-05 — 2FA se ne implementira).
+}
+
+model Role {
+  id                 String       @id @db.Uuid
+  code               String       @unique
+  name               String
+  description        String?
+  isSystem           Boolean      @default(false)
+  allowedClientTypes ClientType[] @default([WEB, MOBILE_ANDROID])
+  permissionsVersion Int          @default(0)
+  priority           Int          @default(100)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime     @updatedAt @db.Timestamptz(6)
+  deletedAt          DateTime?    @db.Timestamptz(6)
+
+  users              UserRole[]
+  permissions        RolePermission[]
+
+  @@map("Role")
+  // SQL: SUPER_ADMIN.allowedClientTypes = {WEB} (seed + provjera u aplikaciji).
+  // SQL: bump `permissionsVersion` pri svakoj izmjeni prava → invalidira keš
+  //      `vfm:permver:*` (docs/05 §1).
+}
+
+model Permission {
+  id          String   @id @db.Uuid
+  code        String   @unique
+  module      String
+  action      String
+  description String?
+  isSensitive Boolean  @default(false)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  roles       RolePermission[]
+
+  @@unique([module, action])
+  @@index([module])
+  @@map("Permission")
+  // Seed: packages/shared/src/permissions.ts → PERMISSION_CATALOG (jedan izvor).
+}
+
+model RolePermission {
+  id              String          @id @db.Uuid
+  roleId          String          @db.Uuid
+  permissionId    String          @db.Uuid
+  scope           PermissionScope @default(ALL)
+  scopeVehicleIds String[]        @db.Uuid
+  scopeDriverIds  String[]        @db.Uuid
+  conditions      Json?
+  grantedById     String?         @db.Uuid
+  grantedAt       DateTime        @default(now()) @db.Timestamptz(6)
+
+  role            Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission      Permission      @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  grantedBy       User?           @relation("RolePermissionGrantedBy", fields: [grantedById], references: [id])
+
+  @@unique([roleId, permissionId])
+  @@index([permissionId])
+  @@map("RolePermission")
+}
+
+model UserRole {
+  id           String     @id @db.Uuid
+  userId       String     @db.Uuid
+  roleId       String     @db.Uuid
+  assignedById String?    @db.Uuid
+  assignedAt   DateTime   @default(now()) @db.Timestamptz(6)
+  note         String?
+  validFrom    DateTime?  @db.Timestamptz(6)
+  validUntil   DateTime?  @db.Timestamptz(6)
+  revokedAt    DateTime?  @db.Timestamptz(6)
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedBy   User?      @relation("UserRoleAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("UserRole")
+  // SQL: trigger koji odbija revokaciju SUPER_ADMIN role posljednjem aktivnom
+  //      Super Adminu (docs/03 §3.2).
+}
+
+model UserIdentity {
+  id        String   @id @db.Uuid
+  userId    String   @db.Uuid
+  driverId  String   @db.Uuid
+  isPrimary Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  driver    Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, driverId])
+  @@index([driverId])
+  @@map("UserIdentity")
+}
+
+model RefreshSession {
+  id           String      @id @db.Uuid
+  userId       String      @db.Uuid
+  tokenHash    String      @unique
+  familyId     String      @db.Uuid
+  clientType   ClientType
+  deviceInfo   Json?
+  ipAddress    String?     @db.Inet
+  userAgent    String?
+  expiresAt    DateTime    @db.Timestamptz(6)
+  revokedAt    DateTime?   @db.Timestamptz(6)
+  replacedById String?     @db.Uuid
+  lastUsedAt   DateTime?   @db.Timestamptz(6)
+  createdAt    DateTime    @default(now()) @db.Timestamptz(6)
+
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([familyId])
+  @@map("RefreshSession")
+  // Rotacija + reuse detection: `familyId` povezuje lanac tokena; ponovna
+  // upotreba iskorištenog tokena → revokacija cijele porodice (docs/05 §5.2).
+}
+
+model AuthAttempt {
+  id            String     @id @db.Uuid
+  email         String
+  userId        String?    @db.Uuid
+  success       Boolean
+  clientType    ClientType
+  ipAddress     String?    @db.Inet
+  userAgent     String?
+  failureReason String?
+  createdAt     DateTime   @default(now()) @db.Timestamptz(6)
+
+  user          User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+  @@map("AuthAttempt")
+  // Retencija: 180 dana (maintenance job, docs/03 §6).
+}
+
+// -----------------------------------------------------------------------------
+//  3.3 Vozila i evidencije
+// -----------------------------------------------------------------------------
+
+model Vehicle {
+  id                    String        @id @db.Uuid
+  internalNo            String
+  make                  String
+  model                 String
+  year                  Int?
+  vin                   String?
+  plateNumber           String?
+  fuelType              FuelType
+  transmission          String?
+  color                 String?
+  bodyType              String?
+  engineCcm             Int?
+  enginePowerKw         Int?
+  seats                 Int?
+  ownershipType         String        @default("OWNED")
+  acquisitionDate       DateTime?     @db.Date
+  acquisitionPrice      Int?
+  costCenter            String?
+  odometerKm            Int           @default(0)
+  odometerUpdatedAt     DateTime?     @db.Timestamptz(6)
+  status                VehicleStatus @default(ACTIVE)
+  registrationExpiresAt DateTime?     @db.Date
+  insuranceExpiresAt    DateTime?     @db.Date
+  nextServiceDueDate    DateTime?     @db.Date
+  nextServiceDueKm      Int?
+  photoAttachmentId     String?       @db.Uuid
+  notes                 String?
+  formSchemaId          String        @db.Uuid
+  formSchemaVersionId   String        @db.Uuid
+  formData              Json          @default("{}")
+  version               Int           @default(0)
+  createdById           String?       @db.Uuid
+  createdAt             DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime      @updatedAt @db.Timestamptz(6)
+  deletedAt             DateTime?     @db.Timestamptz(6)
+  archivedAt            DateTime?     @db.Timestamptz(6)
+
+  formSchema            FormSchema        @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion     FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
+  photoAttachment       Attachment?       @relation("VehiclePhoto", fields: [photoAttachmentId], references: [id])
+  odometerReadings      OdometerReading[]
+  registrations         RegistrationRecord[]
+  insurances            InsuranceRecord[]
+  services              ServiceRecord[]
+  tasks                 Task[]
+  tireInstallations     TireInstallation[]
+
+  @@unique([internalNo])
+  @@index([status])
+  @@index([registrationExpiresAt])
+  @@index([insuranceExpiresAt])
+  @@index([nextServiceDueDate])
+  @@index([make, model])
+  @@index([plateNumber])
+  @@index([deletedAt])
+  @@map("Vehicle")
+  // SQL: partial unique na internalNo (WHERE "deletedAt" IS NULL);
+  //      unique na vin (WHERE vin IS NOT NULL AND "deletedAt" IS NULL);
+  //      CHECK (odometerKm >= 0), CHECK (year BETWEEN 1950 AND 2100),
+  //      CHECK (vin IS NULL OR length(vin) = 17).
+}
+
+model OdometerReading {
+  id               String         @id @db.Uuid
+  vehicleId        String         @db.Uuid
+  valueKm          Int
+  source           OdometerSource @default(MANUAL)
+  referenceType    String?
+  referenceId      String?        @db.Uuid
+  readingAt        DateTime       @db.Timestamptz(6)
+  recordedById     String?        @db.Uuid
+  isCorrection     Boolean        @default(false)
+  correctionReason String?
+  previousValueKm  Int?
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+
+  vehicle          Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  recordedBy       User?          @relation(fields: [recordedById], references: [id])
+
+  @@unique([vehicleId, readingAt, valueKm, source])
+  @@index([vehicleId, readingAt(sort: Desc)])
+  @@map("OdometerReading")
+  // SQL: CHECK (valueKm >= 0). Pravilo regresije: nova vrijednost < max →
+  //      422 ODOMETER_REGRESSION, osim isCorrection=true + correctionReason.
+}
+
+model RegistrationRecord {
+  id                  String       @id @db.Uuid
+  vehicleId           String       @db.Uuid
+  formSchemaId        String       @db.Uuid
+  formSchemaVersionId String       @db.Uuid
+  formData            Json         @default("{}")
+  registrationNumber  String
+  validFrom           DateTime     @db.Date
+  validUntil          DateTime     @db.Date
+  issuedBy            String?
+  costAmount          Int?
+  currency            String       @default("BAM") @db.Char(3)
+  attachmentIds       String[]     @db.Uuid
+  status              RecordStatus @default(ACTIVE)
+  notes               String?
+  version             Int          @default(0)
+  createdById         String?      @db.Uuid
+  createdAt           DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime     @updatedAt @db.Timestamptz(6)
+  deletedAt           DateTime?    @db.Timestamptz(6)
+
+  vehicle             Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  formSchema          FormSchema     @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion   FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
+
+  @@index([vehicleId, validUntil(sort: Desc)])
+  @@index([validUntil])
+  @@map("RegistrationRecord")
+  // SQL: CHECK (validUntil > validFrom);
+  //      EXCLUDE USING gist ("vehicleId" WITH =, daterange(validFrom,validUntil,'[]') WITH &&)
+  //        WHERE ("deletedAt" IS NULL)   → B-10 (bez preklapanja perioda);
+  //      zahtijeva ekstenziju btree_gist.
+}
+
+model InsuranceRecord {
+  id                  String       @id @db.Uuid
+  vehicleId           String       @db.Uuid
+  formSchemaId        String       @db.Uuid
+  formSchemaVersionId String       @db.Uuid
+  formData            Json         @default("{}")
+  policyNumber        String?
+  insuranceCompany    String?
+  type                String?
+  validFrom           DateTime     @db.Date
+  validUntil          DateTime     @db.Date
+  premiumAmount       Int?
+  currency            String       @default("BAM") @db.Char(3)
+  deductibleAmount    Int?
+  attachmentIds       String[]     @db.Uuid
+  status              RecordStatus @default(ACTIVE)
+  notes               String?
+  version             Int          @default(0)
+  createdById         String?      @db.Uuid
+  createdAt           DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime     @updatedAt @db.Timestamptz(6)
+  deletedAt           DateTime?    @db.Timestamptz(6)
+
+  vehicle             Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  formSchema          FormSchema     @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion   FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
+
+  @@index([vehicleId, validUntil(sort: Desc)])
+  @@index([validUntil])
+  @@map("InsuranceRecord")
+  // SQL: CHECK + EXCLUDE kao kod RegistrationRecord.
+}
+
+model ServiceRecord {
+  id                  String       @id @db.Uuid
+  vehicleId           String       @db.Uuid
+  formSchemaId        String       @db.Uuid
+  formSchemaVersionId String       @db.Uuid
+  formData            Json         @default("{}")
+  serviceDate         DateTime     @db.Date
+  odometerKm          Int?
+  serviceType         String
+  workshopId          String?      @db.Uuid
+  workshopName        String?
+  description         String?
+  partsReplaced       String?
+  laborCost           Int?
+  partsCost           Int?
+  totalCost           Int
+  currency            String       @default("BAM") @db.Char(3)
+  nextServiceDueDate  DateTime?    @db.Date
+  nextServiceDueKm    Int?
+  invoiceNumber       String?
+  attachmentIds       String[]     @db.Uuid
+  status              RecordStatus @default(ACTIVE)
+  notes               String?
+  version             Int          @default(0)
+  createdById         String?      @db.Uuid
+  createdAt           DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime     @updatedAt @db.Timestamptz(6)
+  deletedAt           DateTime?    @db.Timestamptz(6)
+
+  vehicle             Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  formSchema          FormSchema     @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion   FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
+  workshop            ListItem?      @relation(fields: [workshopId], references: [id])
+  items               ServiceItem[]
+
+  @@index([vehicleId, serviceDate(sort: Desc)])
+  @@index([nextServiceDueDate])
+  @@index([serviceType])
+  @@map("ServiceRecord")
+  // SQL: CHECK (totalCost >= 0); CHECK (odometerKm IS NULL OR odometerKm >= 0).
+}
+
+model ServiceItem {
+  id             String   @id @db.Uuid
+  serviceRecordId String  @db.Uuid
+  kind           String   @default("OTHER")
+  name           String
+  quantity       Decimal  @default(1.00) @db.Decimal(10, 2)
+  unitPrice      Int?
+  totalPrice     Int
+  partNumber     String?
+  notes          String?
+  position       Int      @default(0)
+
+  serviceRecord  ServiceRecord @relation(fields: [serviceRecordId], references: [id], onDelete: Cascade)
+
+  @@index([serviceRecordId])
+  @@map("ServiceItem")
+  // SQL: CHECK (kind IN ('PART','LABOR','FLUID','OTHER')).
+}
+
+model Driver {
+  id                    String    @id @db.Uuid
+  firstName             String
+  lastName              String
+  phone                 String?
+  email                 String?   @db.Citext
+  dateOfBirth           DateTime? @db.Date
+  address               String?
+  employeeNumber        String?
+  employmentStatus      String?
+  licenseNumber         String?
+  licenseIssuedAt       DateTime? @db.Date
+  licenseExpiresAt      DateTime? @db.Date
+  licenseIssuingAuthority String?
+  restrictions          String?
+  notes                 String?
+  status                String    @default("ACTIVE")
+  photoAttachmentId     String?   @db.Uuid
+  formSchemaId          String?   @db.Uuid
+  formSchemaVersionId   String?   @db.Uuid
+  formData              Json      @default("{}")
+  version               Int       @default(0)
+  createdById           String?   @db.Uuid
+  createdAt             DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt             DateTime? @db.Timestamptz(6)
+
+  photoAttachment       Attachment? @relation("DriverPhoto", fields: [photoAttachmentId], references: [id])
+  formSchema            FormSchema? @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion     FormSchemaVersion? @relation(fields: [formSchemaVersionId], references: [id])
+  categories            DriverLicenseCategory[]
+  identities            UserIdentity[]
+
+  @@index([lastName, firstName])
+  @@index([licenseExpiresAt])
+  @@index([deletedAt])
+  @@map("Driver")
+  // PII (B-20): licenseNumber, dateOfBirth, address, phone, email se vraćaju
+  //   samo uz `driver:view_pii`; Super Admin ih vidi uvijek (R-07).
+}
+
+model DriverLicenseCategory {
+  id           String    @id @db.Uuid
+  driverId     String    @db.Uuid
+  category     String
+  issuedAt     DateTime? @db.Date
+  expiresAt    DateTime? @db.Date
+  restrictions String?
+  notes        String?
+
+  driver       Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@unique([driverId, category])
+  @@index([expiresAt])
+  @@map("DriverLicenseCategory")
+}
+
+// -----------------------------------------------------------------------------
+//  3.4 Gume
+// -----------------------------------------------------------------------------
+
+model TireSet {
+  id               String     @id @db.Uuid
+  code             String
+  brand            String?
+  model            String?
+  size             String?
+  width            Int?
+  aspectRatio      Int?
+  diameterInches   Decimal?   @db.Decimal(4, 1)
+  loadIndex        Int?
+  speedIndex       String?
+  season           TireSeason
+  tireCount        Int        @default(4)
+  purchaseDate     DateTime?  @db.Date
+  purchasePrice    Int?
+  currency         String     @default("BAM") @db.Char(3)
+  status           TireStatus @default(IN_STOCK)
+  currentLocation  String?
+  notes            String?
+  formSchemaId     String?    @db.Uuid
+  formSchemaVersionId String? @db.Uuid
+  formData         Json       @default("{}")
+  version          Int        @default(0)
+  createdById      String?    @db.Uuid
+  createdAt        DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime   @updatedAt @db.Timestamptz(6)
+  deletedAt        DateTime?  @db.Timestamptz(6)
+
+  formSchema       FormSchema? @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion FormSchemaVersion? @relation(fields: [formSchemaVersionId], references: [id])
+  tires            Tire[]
+  installations    TireInstallation[]
+
+  @@unique([code])
+  @@index([season, status])
+  @@map("TireSet")
+  // SQL: partial unique na code (WHERE "deletedAt" IS NULL); CHECK (tireCount BETWEEN 1 AND 8).
+}
+
+model Tire {
+  id             String       @id @db.Uuid
+  setId          String?      @db.Uuid
+  serialNumber   String?
+  dot            String?
+  productionWeek Int?
+  productionYear Int?
+  position       TirePosition?
+  treadDepthMm   Decimal?     @db.Decimal(4, 1)
+  status         TireStatus   @default(IN_STOCK)
+  purchaseDate   DateTime?    @db.Date
+  purchasePrice  Int?
+  notes          String?
+  formData       Json         @default("{}")
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
+  deletedAt      DateTime?    @db.Timestamptz(6)
+
+  set            TireSet?     @relation(fields: [setId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([setId])
+  @@map("Tire")
+  // SQL: partial unique (setId, position) WHERE setId IS NOT NULL AND deletedAt IS NULL.
+}
+
+model TireInstallation {
+  id                       String       @id @db.Uuid
+  setId                    String       @db.Uuid
+  vehicleId                String       @db.Uuid
+  mountedAt                DateTime     @db.Date
+  mountedOdometerKm        Int
+  dismountedAt             DateTime?    @db.Date
+  dismountedOdometerKm     Int?
+  reason                   String?
+  positions                TirePosition[]
+  storageLocationOnDismount String?
+  daysInUse                Int?
+  kmDriven                 Int?
+  formSchemaId             String?      @db.Uuid
+  formSchemaVersionId      String?      @db.Uuid
+  formData                 Json         @default("{}")
+  version                  Int          @default(0)
+  createdById              String?      @db.Uuid
+  createdAt                DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt                DateTime     @updatedAt @db.Timestamptz(6)
+  deletedAt                DateTime?    @db.Timestamptz(6)
+
+  set                      TireSet      @relation(fields: [setId], references: [id], onDelete: Cascade)
+  vehicle                  Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  formSchema               FormSchema?  @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion        FormSchemaVersion? @relation(fields: [formSchemaVersionId], references: [id])
+
+  @@index([vehicleId, mountedAt(sort: Desc)])
+  @@index([setId, mountedAt(sort: Desc)])
+  @@map("TireInstallation")
+  // SQL (B-09, ključno za P-13):
+  //   CREATE UNIQUE INDEX ux_tire_installation_active ON "TireInstallation"("setId")
+  //     WHERE "dismountedAt" IS NULL AND "deletedAt" IS NULL;
+  //   CHECK (dismountedAt IS NULL OR dismountedAt >= mountedAt)
+  //   CHECK (dismountedOdometerKm IS NULL OR dismountedOdometerKm >= mountedOdometerKm)
+}
+
+// -----------------------------------------------------------------------------
+//  3.5 Forme (dinamičke šeme, verzionisane)
+// -----------------------------------------------------------------------------
+
+model FormSchema {
+  id                       String       @id @db.Uuid
+  key                      String       @unique
+  name                     String
+  subject                  FormSubject
+  taskTypeId               String?      @db.Uuid
+  description              String?
+  status                   String       @default("ACTIVE")
+  currentPublishedVersionId String?     @db.Uuid
+  ownerModule              String?
+  createdById              String?      @db.Uuid
+  createdAt                DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt                DateTime     @updatedAt @db.Timestamptz(6)
+  deletedAt                DateTime?    @db.Timestamptz(6)
+
+  taskType                 TaskType?    @relation(fields: [taskTypeId], references: [id])
+  versions                 FormSchemaVersion[]
+  currentPublishedVersion  FormSchemaVersion? @relation("CurrentPublishedVersion", fields: [currentPublishedVersionId], references: [id])
+  migrationJobs            FormMigrationJob[]
+  vehicles                 Vehicle[]
+  registrationRecords      RegistrationRecord[]
+  insuranceRecords         InsuranceRecord[]
+  serviceRecords           ServiceRecord[]
+  drivers                  Driver[]
+  tireSets                 TireSet[]
+  tireInstallations        TireInstallation[]
+  tasks                    Task[]
+
+  @@index([subject])
+  @@map("FormSchema")
+  // SQL: partial unique (subject, taskTypeId) WHERE subject='TASK' AND deletedAt IS NULL.
+}
+
+model FormSchemaVersion {
+  id               String           @id @db.Uuid
+  formSchemaId     String           @db.Uuid
+  version          Int
+  status           FormSchemaStatus @default(DRAFT)
+  definition       Json
+  contentHash      String?
+  changeNote       String?
+  publishedAt      DateTime?        @db.Timestamptz(6)
+  publishedById    String?          @db.Uuid
+  retiredAt        DateTime?        @db.Timestamptz(6)
+  retiredById      String?          @db.Uuid
+  normalizedName   Json?
+  compatibility    Json?
+  mobileCompatible Boolean          @default(true)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(6)
+  createdById      String?          @db.Uuid
+
+  formSchema       FormSchema       @relation(fields: [formSchemaId], references: [id], onDelete: Cascade)
+  publishedVersionOf FormSchema[]   @relation("CurrentPublishedVersion")
+  migrationJobsFrom FormMigrationJob[] @relation("MigrationFromVersion")
+  migrationJobsTo   FormMigrationJob[] @relation("MigrationToVersion")
+
+  @@unique([formSchemaId, version])
+  @@index([formSchemaId, status, publishedAt(sort: Desc)])
+  @@map("FormSchemaVersion")
+  // IMMUTABILNOST (P-10): DB trigger odbija UPDATE (definition/version/status→DRAFT)
+  //   i DELETE kada je status='PUBLISHED'. Dozvoljen samo prelaz PUBLISHED→RETIRED.
+  // SQL: CHECK (version > 0).
+}
+
+model FieldKeyRegistry {
+  id                  String   @id @db.Uuid
+  key                 String   @unique
+  dataType            String
+  unit                String?
+  normalizedColumn    String?
+  usedByFormSchemaIds String[] @db.Uuid
+  createdAt           DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("FieldKeyRegistry")
+  // U-16: isti ključ = isti tip i značenje u svim formama.
+  // RESERVED_FIELD_KEY greška se baca kad forma pokuša koristiti rezervisani ključ.
+}
+
+model FormMigrationJob {
+  id               String             @id @db.Uuid
+  formSchemaId     String             @db.Uuid
+  fromVersionId    String             @db.Uuid
+  toVersionId      String             @db.Uuid
+  targetEntityType String
+  targetEntityIds  String[]           @db.Uuid
+  filter           Json?
+  status           MigrationJobStatus @default(PENDING)
+  previewResult    Json?
+  requestedById    String?            @db.Uuid
+  startedAt        DateTime?          @db.Timestamptz(6)
+  finishedAt       DateTime?          @db.Timestamptz(6)
+  summary          Json?
+  notes            String?
+  createdAt        DateTime           @default(now()) @db.Timestamptz(6)
+
+  formSchema       FormSchema         @relation(fields: [formSchemaId], references: [id], onDelete: Cascade)
+  fromVersion      FormSchemaVersion  @relation("MigrationFromVersion", fields: [fromVersionId], references: [id])
+  toVersion        FormSchemaVersion  @relation("MigrationToVersion", fields: [toVersionId], references: [id])
+  items            FormMigrationItem[]
+
+  @@index([status, createdAt])
+  @@map("FormMigrationJob")
+}
+
+model FormMigrationItem {
+  id          String    @id @db.Uuid
+  jobId       String    @db.Uuid
+  entityId    String    @db.Uuid
+  before      Json?
+  after       Json?
+  status      String    @default("PENDING")
+  error       String?
+  processedAt DateTime? @db.Timestamptz(6)
+
+  job         FormMigrationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, entityId])
+  @@map("FormMigrationItem")
+}
+
+// -----------------------------------------------------------------------------
+//  3.6 Zadaci
+// -----------------------------------------------------------------------------
+
+model TaskType {
+  id                    String          @id @db.Uuid
+  code                  String          @unique
+  name                  String
+  description           String?
+  iconName              String?
+  colorHex              String?
+  requiresVehicle       Boolean         @default(true)
+  requiresOdometer      Boolean         @default(false)
+  requiresPhotos        Boolean         @default(false)
+  defaultPriority       TaskPriority    @default(NORMAL)
+  defaultAssignMode     TaskAssignMode  @default(OPEN_CLAIM)
+  allowMultipleClaimants Boolean        @default(false)
+  dueOffsetHours        Int?
+  formSchemaId          String?         @db.Uuid
+  active                Boolean         @default(true)
+  sortOrder             Int             @default(100)
+  createdById           String?         @db.Uuid
+  createdAt             DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime        @updatedAt @db.Timestamptz(6)
+  deletedAt             DateTime?       @db.Timestamptz(6)
+
+  formSchema            FormSchema?     @relation(fields: [formSchemaId], references: [id])
+  formSchemas           FormSchema[]
+  tasks                 Task[]
+  completionRequirements TaskCompletionRequirement[]
+
+  @@map("TaskType")
+  // Seed: WASH, INTERIOR_CLEANING, FUEL_REFILL, SERVICE_VISIT, TIRE_CHANGE,
+  //       TECHNICAL_INSPECTION, REGISTRATION, CUSTOM.
+}
+
+model Task {
+  id                  String          @id @db.Uuid
+  code                String          @unique
+  title               String
+  description         String?
+  vehicleId           String?         @db.Uuid
+  taskTypeId          String          @db.Uuid
+  priority            TaskPriority    @default(NORMAL)
+  status              TaskStatus      @default(OPEN)
+  assignMode          TaskAssignMode  @default(OPEN_CLAIM)
+  createdById         String          @db.Uuid
+  assigneeUserId      String?         @db.Uuid
+  claimedAt           DateTime?       @db.Timestamptz(6)
+  completedAt         DateTime?       @db.Timestamptz(6)
+  completedById       String?         @db.Uuid
+  dueAt               DateTime?       @db.Timestamptz(6)
+  dueDate             DateTime?       @db.Date
+  cancelledAt         DateTime?       @db.Timestamptz(6)
+  cancelReason        String?
+  reopenedAt          DateTime?       @db.Timestamptz(6)
+  releasedAt          DateTime?       @db.Timestamptz(6)
+  durationMinutes     Int?
+  odometerKm          Int?
+  totalCost           Int?
+  fuelLiters          Decimal?        @db.Decimal(10, 2)
+  fuelAmount          Int?
+  fuelConsumptionL100 Decimal?        @db.Decimal(6, 2)
+  formSchemaId        String          @db.Uuid
+  formSchemaVersionId String          @db.Uuid
+  formData            Json            @default("{}")
+  version             Int             @default(0)
+  idempotencyKey      String?
+  createdAt           DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime        @updatedAt @db.Timestamptz(6)
+  deletedAt           DateTime?       @db.Timestamptz(6)
+
+  vehicle             Vehicle?        @relation(fields: [vehicleId], references: [id])
+  taskType            TaskType        @relation(fields: [taskTypeId], references: [id])
+  createdBy           User            @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  assignee            User?           @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
+  formSchema          FormSchema      @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion   FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
+  assignments         TaskAssignment[]
+  events              TaskEvent[]
+  comments            TaskComment[]
+  attachments         Attachment[]    @relation("TaskAttachments")
+
+  @@index([status, dueAt])
+  @@index([vehicleId, createdAt(sort: Desc)])
+  @@index([assigneeUserId, status])
+  @@index([taskTypeId, status])
+  @@index([createdById, createdAt(sort: Desc)])
+  @@map("Task")
+  // SQL:
+  //   CHECK (status <> 'COMPLETED' OR (assigneeUserId IS NOT NULL AND completedAt IS NOT NULL))
+  //   CHECK (status <> 'IN_PROGRESS' OR assigneeUserId IS NOT NULL)
+  //   CHECK (odometerKm IS NULL OR odometerKm >= 0)
+  //   partial unique na idempotencyKey (WHERE idempotencyKey IS NOT NULL)
+  //
+  // ATOMSKI CLAIM (P-04) — jedan izvršilac pod konkurencijom:
+  //   UPDATE "Task" SET "status"='IN_PROGRESS', "claimedAt"=now(),
+  //          "version"="version"+1
+  //   WHERE "id"=$1 AND "status"='OPEN' AND "deletedAt" IS NULL
+  //   RETURNING "id","version";
+  //   → prazan RETURNING = 409 TASK_ALREADY_CLAIMED.
+}
+
+model TaskAssignment {
+  id           String   @id @db.Uuid
+  taskId       String   @db.Uuid
+  userId       String   @db.Uuid
+  role         String   @default("INVITED")
+  assignedById String?  @db.Uuid
+  assignedAt   DateTime @default(now()) @db.Timestamptz(6)
+  revokedAt    DateTime? @db.Timestamptz(6)
+  note         String?
+
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId, role])
+  @@index([userId])
+  @@map("TaskAssignment")
+  // SQL (drugi pojas za P-04):
+  //   CREATE UNIQUE INDEX ux_task_assignment_assignee ON "TaskAssignment"("taskId")
+  //     WHERE role='ASSIGNEE' AND "revokedAt" IS NULL;
+  //   CHECK (role IN ('INVITED','ASSIGNEE','OBSERVER'))
+}
+
+model TaskEvent {
+  id                  String          @id @db.Uuid
+  taskId              String          @db.Uuid
+  action              TaskEventAction
+  actorId             String?         @db.Uuid
+  actorRole           String?
+  at                  DateTime        @default(now()) @db.Timestamptz(6)
+  ipAddress           String?         @db.Inet
+  clientType          ClientType?
+  requestId           String?
+  data                Json?
+  formSchemaVersionId String?         @db.Uuid
+
+  task                Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor               User?           @relation(fields: [actorId], references: [id])
+
+  @@index([taskId, at])
+  @@index([actorId, at])
+  @@map("TaskEvent")
+  // IMMUTABILAN: bez updatedAt/deletedAt + DB trigger koji odbija UPDATE/DELETE.
+}
+
+model TaskComment {
+  id              String    @id @db.Uuid
+  taskId          String    @db.Uuid
+  authorId        String    @db.Uuid
+  body            String
+  mentionsUserIds String[]  @db.Uuid
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt       DateTime? @db.Timestamptz(6)
+
+  task            Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author          User      @relation(fields: [authorId], references: [id])
+
+  @@index([taskId, createdAt])
+  @@map("TaskComment")
+}
+
+model TaskCompletionRequirement {
+  id         String          @id @db.Uuid
+  taskTypeId String          @db.Uuid
+  fieldKey   String
+  required   Boolean         @default(true)
+  stage      AttachmentStage @default(GENERAL)
+  minPhotos  Int             @default(0)
+
+  taskType   TaskType        @relation(fields: [taskTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([taskTypeId, fieldKey])
+  @@map("TaskCompletionRequirement")
+  // U-13: npr. obavezna fotografija "prije i poslije" za pranje vozila.
+}
+
+// -----------------------------------------------------------------------------
+//  3.7 Outbox i obavijesti
+// -----------------------------------------------------------------------------
+
+model OutboxEvent {
+  id             String       @id @db.Uuid
+  aggregateType  String
+  aggregateId    String       @db.Uuid
+  eventType      String
+  payload        Json
+  idempotencyKey String       @unique
+  status         OutboxStatus @default(PENDING)
+  attempts       Int          @default(0)
+  lastError      String?
+  lockedAt       DateTime?    @db.Timestamptz(6)
+  lockedBy       String?
+  availableAt    DateTime     @default(now()) @db.Timestamptz(6)
+  processedAt    DateTime?    @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+
+  notifications  Notification[]
+
+  @@index([status, availableAt])
+  @@map("OutboxEvent")
+  // P-05: upis u ISTOJ transakciji kao domenska promjena; worker ga prenosi u
+  //   BullMQ (`vfm-queue-outbox`) i označi PROCESSED/FAILED/DEAD.
+  // SQL: partial index WHERE status IN ('PENDING','FAILED').
+  // Retencija PROCESSED: 30 dana.
+}
+
+model Notification {
+  id             String             @id @db.Uuid
+  userId         String             @db.Uuid
+  type           String
+  title          String
+  body           String?
+  data           Json?
+  linkToType     String?
+  linkToId       String?            @db.Uuid
+  priority       String             @default("NORMAL")
+  status         NotificationStatus @default(PENDING)
+  isRead         Boolean            @default(false)
+  readAt         DateTime?          @db.Timestamptz(6)
+  createdAt      DateTime           @default(now()) @db.Timestamptz(6)
+  sentAt         DateTime?          @db.Timestamptz(6)
+  outboxEventId  String?            @db.Uuid
+  notificationKey String            @unique
+  dedupeKey      String             @unique
+  expiresAt      DateTime?          @db.Timestamptz(6)
+
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outboxEvent    OutboxEvent?       @relation(fields: [outboxEventId], references: [id], onDelete: SetNull)
+  deliveries     NotificationDelivery[]
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("Notification")
+  // B-13: dedupeKey = "{type}:{linkToType}:{linkToId}:{bucket}" → tačno jedna
+  //   in-app obavijest po događaju.
+}
+
+model NotificationDelivery {
+  id               String         @id @db.Uuid
+  notificationId   String         @db.Uuid
+  channel          String
+  deviceTokenId    String?        @db.Uuid
+  status           DeliveryStatus @default(QUEUED)
+  providerMessageId String?
+  errorCode        String?
+  errorMessage     String?
+  attempts         Int            @default(0)
+  sentAt           DateTime?      @db.Timestamptz(6)
+  deliveredAt      DateTime?      @db.Timestamptz(6)
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+
+  notification     Notification   @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  deviceToken      DeviceToken?   @relation(fields: [deviceTokenId], references: [id], onDelete: SetNull)
+
+  @@index([notificationId])
+  @@index([status, createdAt])
+  @@map("NotificationDelivery")
+  // SQL: CHECK (channel IN ('FCM','SSE','EMAIL','IN_APP')).
+}
+
+model DeviceToken {
+  id           String            @id @db.Uuid
+  userId       String            @db.Uuid
+  token        String
+  tokenHash    String            @unique
+  platform     String            @default("android")
+  appVersion   String?
+  deviceModel  String?
+  osVersion    String?
+  locale       String?
+  status       DeviceTokenStatus @default(ACTIVE)
+  lastSeenAt   DateTime?         @db.Timestamptz(6)
+  lastError    String?
+  failureCount Int               @default(0)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(6)
+  revokedAt    DateTime?         @db.Timestamptz(6)
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries   NotificationDelivery[]
+
+  @@index([userId, status])
+  @@map("DeviceToken")
+  // FCM (R-04): Firebase projekat kreira vlasnik ručno; do tada
+  //   FIREBASE_ENABLED=false i push se ne šalje.
+}
+
+model NotificationPreference {
+  id                String   @id @db.Uuid
+  userId            String   @db.Uuid
+  type              String
+  channelFcm        Boolean  @default(true)
+  channelInApp      Boolean  @default(true)
+  channelEmail      Boolean  @default(false)
+  quietHoursStart   String?  @db.Time
+  quietHoursEnd     String?  @db.Time
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(6)
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@map("NotificationPreference")
+}
+
+// -----------------------------------------------------------------------------
+//  3.8 Podsjetnici
+// -----------------------------------------------------------------------------
+
+model ReminderPolicy {
+  id                  String         @id @db.Uuid
+  kind                ReminderKind   @unique
+  enabled             Boolean        @default(true)
+  thresholdsDays      Int[]          @default([5])
+  thresholdsKm        Int[]          @default([])
+  recipientsPermission String        @default("vehicle:view")
+  recipientRoleIds    String[]       @db.Uuid
+  channels            String[]       @default(["IN_APP", "FCM"])
+  escalate            Boolean        @default(false)
+  notes               String?
+  createdAt           DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime       @updatedAt @db.Timestamptz(6)
+
+  scheduledReminders  ScheduledReminder[]
+
+  @@map("ReminderPolicy")
+}
+
+model ScheduledReminder {
+  id                String         @id @db.Uuid
+  policyId          String         @db.Uuid
+  kind              ReminderKind
+  entityType        String
+  entityId          String         @db.Uuid
+  dueDate           DateTime?      @db.Date
+  dueKm             Int?
+  thresholdDays     Int?
+  thresholdKm       Int?
+  fireAt            DateTime       @db.Timestamptz(6)
+  status            ReminderStatus @default(SCHEDULED)
+  dedupeKey         String         @unique
+  sentAt            DateTime?      @db.Timestamptz(6)
+  acknowledgedById  String?        @db.Uuid
+  acknowledgedAt    DateTime?      @db.Timestamptz(6)
+  outboxEventId     String?        @db.Uuid
+  createdAt         DateTime       @default(now()) @db.Timestamptz(6)
+
+  policy            ReminderPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  acknowledgedBy    User?          @relation("ReminderAcknowledgedBy", fields: [acknowledgedById], references: [id])
+
+  @@index([status, fireAt])
+  @@map("ScheduledReminder")
+  // P-07 (idempotentnost): dedupeKey = "{kind}:{entityType}:{entityId}:{dueDate|dueKm}:{threshold}"
+  //   → tačno jedan podsjetnik po (zapis, vrsta, prag).
+  // Računanje `fireAt` ide u Europe/Sarajevo (N-11), čuva se u UTC.
+}
+
+// -----------------------------------------------------------------------------
+//  3.9 Prilozi
+// -----------------------------------------------------------------------------
+
+model Attachment {
+  id             String              @id @db.Uuid
+  ownerId        String              @db.Uuid
+  ownerType      AttachmentOwnerType
+  stage          AttachmentStage     @default(GENERAL)
+  fileName       String
+  storageKey     String              @unique
+  mimeType       String
+  ext            String
+  sizeBytes      BigInt
+  sha256         String
+  width          Int?
+  height         Int?
+  exifStripped   Boolean             @default(true)
+  uploadedById   String
+  taskId         String?             @db.Uuid
+  formFieldKey   String?
+  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
+  deletedAt      DateTime?           @db.Timestamptz(6)
+
+  uploadedBy     User                @relation(fields: [uploadedById], references: [id])
+  task           Task?               @relation("TaskAttachments", fields: [taskId], references: [id])
+  exportJobs     ExportJob[]
+
+  @@unique([ownerType, ownerId, sha256])
+  @@index([sha256])
+  @@index([uploadedById, createdAt])
+  @@index([deletedAt])
+  @@map("Attachment")
+  // B-15: fajl se NIKAD ne servira direktno s diska — isključivo
+  //   GET /attachments/:id/content uz permisiju + potpisani URL.
+  // Pohrana: host bind-mount /data/vfm/attachments (odluka vlasnika).
+}
+
+// -----------------------------------------------------------------------------
+//  3.10 Audit, postavke, šifarnici, izvještaji
+// -----------------------------------------------------------------------------
+
+model AuditLog {
+  id            BigInt        @id @default(autoincrement())
+  actorId       String?       @db.Uuid
+  actorEmail    String?
+  actorRoles    String[]
+  action        AuditAction
+  severity      AuditSeverity @default(INFO)
+  entityType    String?
+  entityId      String?       @db.Uuid
+  entityCode    String?
+  before        Json?
+  after         Json?
+  changedFields String[]
+  reason        String?
+  requestId     String?
+  ipAddress     String?       @db.Inet
+  userAgent     String?
+  clientType    ClientType?
+  metadata      Json?
+  createdAt     DateTime      @default(now()) @db.Timestamptz(6)
+
+  actor         User?         @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@index([severity, createdAt(sort: Desc)])
+  @@map("AuditLog")
+  // IMMUTABILAN: DB trigger odbija UPDATE/DELETE. Retencija: AUDIT_RETENTION_DAYS.
+}
+
+model Setting {
+  id          String      @id @db.Uuid
+  key         String      @unique
+  value       Json
+  type        SettingType
+  valueSchema Json?     @map("schema")
+  category    String?
+  isSecret    Boolean     @default(false)
+  isPublic    Boolean     @default(false)
+  description String?
+  updatedById String?     @db.Uuid
+  updatedAt   DateTime    @updatedAt @db.Timestamptz(6)
+  createdAt   DateTime    @default(now()) @db.Timestamptz(6)
+
+  @@index([category])
+  @@map("Setting")
+}
+
+model List {
+  id          String     @id @db.Uuid
+  code        String     @unique
+  name        String
+  description String?
+  isSystem    Boolean    @default(false)
+  sortOrder   Int        @default(100)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @db.Timestamptz(6)
+
+  items       ListItem[]
+
+  @@map("List")
+}
+
+model ListItem {
+  id        String    @id @db.Uuid
+  listId    String    @db.Uuid
+  code      String?
+  label     String
+  value     Json?
+  sortOrder Int       @default(100)
+  active    Boolean   @default(true)
+  parentId  String?   @db.Uuid
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  list      List      @relation(fields: [listId], references: [id], onDelete: Cascade)
+  parent    ListItem? @relation("ListItemHierarchy", fields: [parentId], references: [id])
+  children  ListItem[] @relation("ListItemHierarchy")
+  serviceRecords ServiceRecord[]
+
+  @@unique([listId, code])
+  @@index([listId, sortOrder])
+  @@map("ListItem")
+}
+
+model IdempotencyKey {
+  id             String    @id @db.Uuid
+  key            String
+  userId         String
+  method         String?
+  path           String?
+  requestHash    String
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  expiresAt      DateTime  @db.Timestamptz(6)
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([expiresAt])
+  @@map("IdempotencyKey")
+  // P-06: TTL 24 h (IDEMPOTENCY_TTL_HOURS); maintenance job čisti istekle.
+}
+
+model ReportDefinition {
+  id                 String   @id @db.Uuid
+  code               String   @unique
+  name               String
+  category           String   @default("GENERAL")
+  sourceView         String
+  columns            Json?
+  defaultFilters     Json?
+  requiredPermission String
+  isSystem           Boolean  @default(false)
+  sortOrder          Int      @default(100)
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(6)
+
+  exportJobs         ExportJob[]
+
+  @@map("ReportDefinition")
+  // sourceView: jedan od `vfm_v_*` view-ova (docs/03 §4) — čitaju samo
+  //   normalizovane kolone, nikad formData JSONB (U-03).
+}
+
+model ExportJob {
+  id                 String       @id @db.Uuid
+  reportDefinitionId String       @db.Uuid
+  format             ExportFormat
+  filters            Json?
+  status             ExportStatus @default(QUEUED)
+  requestedById      String?      @db.Uuid
+  rowCount           Int?
+  attachmentId       String?      @db.Uuid
+  errorMessage       String?
+  startedAt          DateTime?    @db.Timestamptz(6)
+  finishedAt         DateTime?    @db.Timestamptz(6)
+  expiresAt          DateTime?    @db.Timestamptz(6)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(6)
+
+  reportDefinition   ReportDefinition @relation(fields: [reportDefinitionId], references: [id])
+  requestedBy        User?        @relation(fields: [requestedById], references: [id])
+  attachment         Attachment?  @relation(fields: [attachmentId], references: [id])
+
+  @@index([requestedById, createdAt(sort: Desc)])
+  @@index([status])
+  @@map("ExportJob")
+  // P-13: PDF/XLSX/CSV kroz red `vfm-queue-reports`; Download centar u web UI-u.
+}
