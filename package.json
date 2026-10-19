@@ -1,0 +1,34 @@
+{
+  "name": "vehicle-fleet-management-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vozni park (VFM) — sistem za upravljanje službenim voznim parkom",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.34.7",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "env:check": "node scripts/env-sync-check.mjs",
+    "env:check:strict": "node scripts/env-sync-check.mjs --strict",
+    "secrets:gen": "node scripts/gen-secrets.mjs",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml,css}\"",
+    "prisma:generate": "pnpm --filter @vfm/api exec prisma generate",
+    "prisma:migrate:dev": "pnpm --filter @vfm/api exec prisma migrate dev",
+    "prisma:migrate:deploy": "pnpm --filter @vfm/api exec prisma migrate deploy"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10",
+    "turbo": "2.11.9",
+    "typescript": "5.9.3"
+  }
+}

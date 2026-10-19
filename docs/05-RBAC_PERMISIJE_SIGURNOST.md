@@ -155,6 +155,9 @@ Legenda: **✓** = `ALL`, **○** = `OWN`, **—** = nema pravo.
 | `report:manage_definitions` | ✓ | — | — |
 
 **Napomene**
+- **R-07 (odluka vlasnika):** Super Admin **vidi sve** — `driver:view_pii`, `user:view_pii` i svi
+  ostali opsezi su `ALL`. Za Administratora i običnog korisnika `view_pii` ostaje zasebna permisija
+  koju Super Admin dodjeljuje/oduzima iz matrice (default: nemaju je).
 - Tabela je **seed**, ne hardkod: Super Admin je može mijenjati iz matrice prava (uključujući
   davanje `driver:create` običnom korisniku ili oduzimanje istog administratoru — §3.1 zadatka).
 - `SUPER_ADMIN` je jedina rola čiji se skup prava ne može smanjiti ispod sistemskog minimuma
@@ -245,7 +248,7 @@ vraćaju `403 MOBILE_SCOPE_NOT_ALLOWED` kada je `ct` mobilni, neovisno o permisi
 | Kompleksnost | min 3 od 4 klase; provjera protiv liste najčešćih 100k lozinki |
 | Lockout | 5 neuspjelih / 15 min po (email + IP); nakon 20 → trajno zaključano do admin intervencije |
 | Rate limit login | `THROTTLE_LOGIN_LIMIT` / `THROTTLE_LOGIN_TTL_SECONDS` |
-| 2FA (opciono, R-05) | TOTP, obavezno za `SUPER_ADMIN` ako se uključi |
+| 2FA | **NE implementira se** (R-05, odluka vlasnika). Kompenzacija: politika lozinke (min 12), lockout, rate limit, rotacija refresh tokena s reuse detection, `tokenVersion`, audit |
 | Reset lozinke | jednokratni token, 30 min, jednokratno korištenje, šalje se samo ako nalog postoji (**ali** odgovor je uvijek isti radi enumeracije) |
 | Enumeracija korisnika | odgovor `/auth/login` je generičan: „Pogrešan e-mail ili lozinka" |
 | Sesije | max `AUTH_MAX_SESSIONS_PER_USER`; pregled i revokacija iz profila |
@@ -320,7 +323,7 @@ Za svaki zapis: `actorId`, `actorRoles`, `action`, `severity`, `entityType/Id`, 
 
 | # | Prijetnja | Uticaj | Kontrola |
 |---|---|---|---|
-| T-01 | Brute force login | Visok | Throttle + lockout + audit + (opciono) 2FA |
+| T-01 | Brute force login | Visok | Throttle (5/15 min) + lockout + audit + politika lozinke (min 12, provjera najčešćih 100k). 2FA **nije** u obimu (R-05) → preporučena kompenzacija: VPN/IP allowlist za web portal u produkciji |
 | T-02 | Ukraden access token | Visok | Kratak TTL (10 min) + `tv`/`pv` provjera + revokacija sesija |
 | T-03 | Ukraden refresh token | Kritičan | Hash u DB + rotacija + reuse detection (ukida sve sesije) |
 | T-04 | Super Admin na mobilnoj | Kritičan | Tri sloja provjere (§6), audit SECURITY |
@@ -353,7 +356,7 @@ Za svaki zapis: `actorId`, `actorRoles`, `action`, `severity`, `entityType/Id`, 
 - [ ] Redis konekcija s `vfm-api` ACL korisnikom; keš permisija + verzija.
 - [ ] `AuditInterceptor` + `AuditService` (diff, redigovanje).
 - [ ] Throttler profili (global/login/upload/export).
-- [ ] argon2id + password policy + lockout + reuse detection.
+- [ ] argon2id + password policy + lockout + reuse detection (bez 2FA — R-05).
 - [ ] `scripts/bootstrap-super-admin.mjs` + `scripts/gen-secrets.mjs`.
 - [ ] Testovi: P1, P2, P3, P14 + T-01…T-04, T-11, T-19.
 - [ ] Web: matrica prava, korisnici, audit pregled, profil/sesije.

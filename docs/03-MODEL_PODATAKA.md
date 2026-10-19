@@ -112,8 +112,7 @@ erDiagram
 | status | UserStatus | NOT NULL, default `ACTIVE` | |
 | mustChangePassword | bool | default `false` | nakon bootstrap/reset-a |
 | tokenVersion | int | NOT NULL, default `0` | bump = odjava svih sesija |
-| twoFactorEnabled | bool | default `false` | opciono (R-05) |
-| twoFactorSecret | text | nullable, šifrovano | |
+| ~~twoFactorEnabled / twoFactorSecret~~ | — | **uklonjeno** | 2FA se NE implementira (R-05, odluka vlasnika 19.10.2026.) |
 | lastLoginAt | timestamptz | | |
 | failedLoginCount | int | default 0 | reset pri uspješnoj prijavi |
 | lockedUntil | timestamptz | | lockout |

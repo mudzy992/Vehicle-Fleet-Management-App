@@ -1,0 +1,9 @@
+{
+  "$comment": "Koristi se NAKON `pnpm prisma:generate` (zahtijeva pristup binaries.prisma.sh). Uključuje src/prisma/** koji u sandboxu bez pristupa tom hostu ostaje izvan build-a. Docker build koristi ovu konfiguraciju (apps/api/Dockerfile).",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "test", "src/**/*.spec.ts", "src/**/*.test.ts"]
+}

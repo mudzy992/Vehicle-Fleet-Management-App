@@ -8,8 +8,9 @@ izvještaji i pun audit trag.
 |---|---|
 | **Stack** | NestJS 12 · PostgreSQL 17 · Prisma 7 · Redis 7.4 (ACL, prefix `vfm`) · BullMQ 6 · Vite 8 + React 19 + Tailwind 4 + shadcn/ui · Expo 57 (Android) · Firebase Cloud Messaging |
 | **Monorepo** | pnpm workspaces + Turborepo (`apps/api`, `apps/web`, `apps/mobile`, `packages/*`) |
-| **Deploy** | Coolify (Docker Compose), mreže `db_net` (Postgres) i `redis_net` (Redis) |
+| **Deploy** | Coolify (Docker Compose) · web `https://vehicle.ba101.top` · API `https://api.vehicle.ba101.top` · mreže `db_net` (globalni Postgres) i `redis_net` (globalni Redis) |
 | **Jezik / valuta / TZ** | bosanski (`bs`) · `BAM/KM` · `Europe/Sarajevo` (baza u UTC) |
+| **Odluke vlasnika** | 2FA se **ne** implementira (R-05) · Super Admin vidi sve PII (R-07) · Firebase kreira vlasnik ručno (R-04) · backup **odgođen** (R-10) |
 
 ---
 
@@ -59,8 +60,10 @@ corepack enable && pnpm install
 cp .env.example .env
 node scripts/gen-secrets.mjs --write .env --redis   # tajne + Redis ACL hash-ovi
 
-# 3) Infrastruktura (PostgreSQL 17 + Redis 7.4 s ACL-om) i aplikacija
+# 3) LOKALNA infrastruktura (dev compose DIŽE vlastiti postgres+redis) i aplikacija
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#    → produkcijski docker-compose.yml NE sadrži postgres/redis: on se samo
+#      povezuje na GLOBALNE instance (db_net / redis_net, external: true).
 
 # 4) Provjera
 curl -s localhost:3000/health/live
@@ -100,17 +103,30 @@ Detaljno, uključujući backup/restore, rollback i troubleshooting:
 ## Struktura repozitorija
 
 ```
-apps/api        NestJS REST API (/api/v1) + Prisma + BullMQ (api/worker/migrate iz istog image-a)
-apps/web        Vite + React + Tailwind + shadcn/ui (nginx image)
-apps/mobile     Expo SDK 57 (Android APK/AAB, EAS Build) — NIJE dio Docker stacka
-packages/       shared · form-engine · form-renderer · api-client · config
+apps/api        NestJS 12 REST API (/api/v1) + Prisma + BullMQ (api/worker/migrate iz istog image-a)
+apps/web        Vite 8 + React 19 + Tailwind 4 + shadcn-stil (nginx image)
+apps/mobile     Expo SDK 57 (Android, EAS) — skeleton, NIJE dio workspace-a ni Docker stacka
+packages/shared dijeljeni ugovor: enumi, permisije, greške, formatiranje (bs), ENV šema
+packages/config tsconfig + eslint flat config
 infra/          redis (ACL + redis.conf) · postgres (init SQL)
 scripts/        env-sync-check · gen-secrets · bootstrap-super-admin · backup/restore
-docs/           sva dokumentacija (10 dokumenata + master plan)
+docs/           dokumentacija (01–10 + master plan + izvještaji po fazama)
 docker-compose.yml / .dev.yml / .coolify.yml
-.env.example    ← uvijek ažuran
+.env.example    ← uvijek ažuran (178 varijabli, 1:1 sa env šemom)
 REDIS_ACL.md    ← uvijek ažuran
 ```
+
+### Trenutno stanje: Faza 0 ✅
+
+| Provjera | Rezultat |
+|---|---|
+| `pnpm turbo lint typecheck test build` | 16/16 zadataka zeleno |
+| Unit testovi | 287 (shared 200 · api 60 · web 27) |
+| `node scripts/env-sync-check.mjs` | exit 0, **0 upozorenja** |
+| Health probe API-ja | `/health/live`, `/health/ready`, `/health/startup` |
+
+Detalji, dokazi i **blokeri koje vlasnik mora riješiti prije Faze 1** (Prisma engine,
+PG ekstenzije, Redis ACL): [`docs/FAZA0_IZVJESTAJ.md`](docs/FAZA0_IZVJESTAJ.md).
 
 ---
 

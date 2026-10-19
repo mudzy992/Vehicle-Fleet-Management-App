@@ -98,7 +98,7 @@ Legenda: 🔒 = autorizovano; **P** = potrebna permisija; `Idem` = podržava `Id
 | POST | `/auth/reset-password` | javno (token) | |
 | GET | `/auth/sessions` | 🔒 | lista aktivnih sesija/uređaja |
 | DELETE | `/auth/sessions/:id` | 🔒 | revokacija jedne sesije |
-| POST | `/auth/2fa/enroll` · `/auth/2fa/verify` | 🔒 | opciono (R-05) |
+| ~~`/auth/2fa/*`~~ | — | **uklonjeno** | 2FA se NE implementira (R-05) |
 
 ### 2.2 Korisnici (`/users`)
 

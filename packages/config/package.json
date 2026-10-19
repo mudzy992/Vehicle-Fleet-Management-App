@@ -1,0 +1,30 @@
+{
+  "name": "@vfm/config",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VFM — zajedničke konfiguracije (tsconfig, eslint, prettier)",
+  "files": [
+    "tsconfig",
+    "eslint"
+  ],
+  "exports": {
+    "./tsconfig/node.json": "./tsconfig/node.json",
+    "./tsconfig/react.json": "./tsconfig/react.json",
+    "./tsconfig/nest.json": "./tsconfig/nest.json",
+    "./eslint/base": "./eslint/base.mjs",
+    "./prettier": "../../.prettierrc.json"
+  },
+  "scripts": {
+    "build": "node -e \"console.log('@vfm/config: nema build koraka')\"",
+    "lint": "node -e \"console.log('@vfm/config: lint n/a')\"",
+    "typecheck": "node -e \"console.log('@vfm/config: typecheck n/a')\"",
+    "test": "node -e \"console.log('@vfm/config: test n/a')\"",
+    "clean": "node -e \"console.log('@vfm/config: clean n/a')\""
+  },
+  "dependencies": {
+    "@eslint/js": "9.39.5",
+    "eslint-config-prettier": "10.1.8",
+    "typescript-eslint": "8.71.2",
+    "globals": "17.13.0"
+  }
+}

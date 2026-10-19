@@ -67,6 +67,13 @@ x-api-base-env: &api-base-env
   REDIS_TLS: ${REDIS_TLS:-false}
   REDIS_DB: ${REDIS_DB:-0}
   VFM_REDIS_KEY_PREFIX: ${VFM_REDIS_KEY_PREFIX:-vfm:}
+  # ACL korisnici (REDIS_ACL.md): svaki proces koristi svog — least privilege.
+  REDIS_USER_API: ${REDIS_USER_API:-vfm-api}
+  REDIS_PASSWORD_API: ${REDIS_PASSWORD_API:?REDIS_PASSWORD_API je obavezan (vidi REDIS_ACL.md)}
+  REDIS_USER_WORKER: ${REDIS_USER_WORKER:-vfm-worker}
+  REDIS_PASSWORD_WORKER: ${REDIS_PASSWORD_WORKER:?REDIS_PASSWORD_WORKER je obavezan (vidi REDIS_ACL.md)}
+  REDIS_USER_READONLY: ${REDIS_USER_READONLY:-vfm-readonly}
+  REDIS_PASSWORD_READONLY: ${REDIS_PASSWORD_READONLY:-}
   # --- Throttling ------------------------------------------------------------
   THROTTLE_ENABLED: ${THROTTLE_ENABLED:-true}
   THROTTLE_GLOBAL_TTL_SECONDS: ${THROTTLE_GLOBAL_TTL_SECONDS:-60}
@@ -117,9 +124,7 @@ services:
       <<: *api-base-env
       # ENV_PROFILE=tool → env validator preskače API-only varijable (JWT, CORS, COOKIE…)
       ENV_PROFILE: tool
-      # Redis lock za migracije (vfm:lock:migrate) — koristi isti ACL user kao api
-      REDIS_USER: ${REDIS_USER_API:?REDIS_USER_API je obavezan (vidi REDIS_ACL.md)}
-      REDIS_PASSWORD: ${REDIS_PASSWORD_API:?REDIS_PASSWORD_API je obavezan}
+      # Redis lock za migracije (vfm:lock:migrate) koristi worker ACL korisnika.
       RUN_DB_SEED: ${RUN_DB_SEED:-false}
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
       BOOTSTRAP_SUPER_ADMIN_ENABLED: ${BOOTSTRAP_SUPER_ADMIN_ENABLED:-false}
@@ -165,8 +170,6 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-loopback}
       API_CSP_ENABLED: ${API_CSP_ENABLED:-true}
       # --- Redis ACL (api korisnik) ---
-      REDIS_USER: ${REDIS_USER_API:?REDIS_USER_API je obavezan (vidi REDIS_ACL.md)}
-      REDIS_PASSWORD: ${REDIS_PASSWORD_API:?REDIS_PASSWORD_API je obavezan}
       PERMISSIONS_CACHE_TTL_SECONDS: ${PERMISSIONS_CACHE_TTL_SECONDS:-60}
       # --- Auth / JWT ---
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET je obavezan}
@@ -245,8 +248,6 @@ services:
     environment:
       <<: *api-base-env
       WORKER_ENABLED: "true"
-      REDIS_USER: ${REDIS_USER_WORKER:?REDIS_USER_WORKER je obavezan (vidi REDIS_ACL.md)}
-      REDIS_PASSWORD: ${REDIS_PASSWORD_WORKER:?REDIS_PASSWORD_WORKER je obavezan}
       WORKER_CONCURRENCY_OUTBOX: ${WORKER_CONCURRENCY_OUTBOX:-5}
       WORKER_CONCURRENCY_NOTIFICATIONS: ${WORKER_CONCURRENCY_NOTIFICATIONS:-10}
       WORKER_CONCURRENCY_REMINDERS: ${WORKER_CONCURRENCY_REMINDERS:-2}

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "stream",
+  "globalDependencies": [
+    "tsconfig.base.json",
+    ".env.example"
+  ],
+  "globalEnv": [
+    "NODE_ENV",
+    "APP_ENV",
+    "ENV_PROFILE",
+    "LOG_LEVEL",
+    "LOG_FORMAT",
+    "DATABASE_URL",
+    "REDIS_HOST",
+    "REDIS_PORT",
+    "REDIS_USER_API",
+    "REDIS_USER_WORKER",
+    "REDIS_USER_READONLY",
+    "REDIS_PASSWORD_API",
+    "REDIS_PASSWORD_WORKER",
+    "REDIS_PASSWORD_READONLY",
+    "API_PORT",
+    "CI"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        ".turbo/**"
+      ],
+      "env": [
+        "VITE_*",
+        "APP_ENV",
+        "NODE_ENV"
+      ],
+      "inputs": [
+        "src/**",
+        "test/**",
+        "tsconfig*.json",
+        "package.json",
+        "vite.config.ts",
+        "vitest.config.ts",
+        "prisma/schema.prisma"
+      ]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "outputs": [],
+      "inputs": [
+        "src/**",
+        "test/**",
+        "eslint.config.mjs",
+        ".eslintrc*",
+        "package.json"
+      ]
+    },
+    "typecheck": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [],
+      "inputs": [
+        "src/**",
+        "test/**",
+        "tsconfig*.json",
+        "package.json"
+      ],
+      "env": [
+        "ENV_PROFILE"
+      ]
+    },
+    "test": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "coverage/**"
+      ],
+      "inputs": [
+        "src/**",
+        "test/**",
+        "vitest.config.ts",
+        "package.json"
+      ],
+      "env": [
+        "ENV_PROFILE",
+        "DATABASE_URL",
+        "TEST_DATABASE_URL",
+        "REDIS_HOST",
+        "REDIS_PORT"
+      ]
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}

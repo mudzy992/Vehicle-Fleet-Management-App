@@ -9,7 +9,7 @@
 | Parametar | Vrijednost | Obrazloženje |
 |---|---|---|
 | Dostupnost (mjesečno) | ≥ 99 % | jedan server, interni sistem; ~7 h zastoja mjesečno je prihvatljivo (uklj. održavanje) |
-| **RPO** (max gubitak podataka) | ≤ 24 h | dnevni backup baze + prilogа; za strožije → kontinuirani WAL arhiv (v2) |
+| **RPO** (max gubitak podataka) | ≤ 24 h | dnevni backup baze + priloga; za strožije → kontinuirani WAL arhiv (v2) |
 | **RTO** (max vrijeme oporavka) | ≤ 4 h | restore iz backup-a + redeploy |
 | Planirano održavanje | van radnog vremena, najava 24 h | deploy/rollback |
 
@@ -168,6 +168,11 @@ scripts/restore-db.sh --to-test-env --dump /data/vfm/backups/vfm-<STAMP>.dump
 
 **Pravilo:** backup koji nije testiran restore-om **ne postoji**.
 
+> 🔴 **STATUS (R-10, odluka vlasnika 19.10.2026.): backup/restore se NE implementira u ovom
+> ciklusu.** Skripte i procedura iznad ostaju dokumentovane i spremne za aktivaciju.
+> Posljedica: **RPO = ∞** (gubitak podataka je nepovratan dok se backup ne uključi).
+> Preporuka: uključiti barem `pg_dump` cron **prije** unosa stvarnih podataka u produkciju.
+
 ---
 
 ## 7. Klasifikacija incidenata i komunikacija
@@ -207,7 +212,7 @@ Za svaki SEV-1/2 zapisati: vrijeme, uticaj, uzrok, akcija, prevencija → `docs/
 | Rotacija tajni (`JWT_*`, `FILE_SIGNING_SECRET`, DB, Redis) | 6 mjesečno + pri odlasku osobe |
 | Pregled prava (ko ima šta) | kvartalno (Super Admin) |
 | Pregled audit loga (SECURITY događaji) | mjesečno |
-| Test restore-a | kvartalno |
+| Test restore-a | **odgođeno (R-10)** — aktivirati kad vlasnik uključi backup |
 
 ---
 
@@ -237,5 +242,5 @@ dok se ne uvede eksplicitna koordinacija (Faza 8+ / v2).
 | 5 | Kreirati Firebase projekat, dodati Android app, `firebase-service-account.json` na host (400), `FIREBASE_ENABLED=true` |
 | 6 | EAS nalog, `google-services.json`, keystore za potpisivanje, Play Console (AAB) |
 | 7 | Potvrditi setove izvještaja i retenciju exportova |
-| 8 | Domena/DNS/TLS, backup raspored, monitoring/uptime, testirani restore, firewall provjera |
+| 8 | Domena/DNS/TLS (**R-03 riješen**: `vehicle.ba101.top` / `api.vehicle.ba101.top`, Coolify izdaje HTTPS), monitoring/uptime, firewall provjera. **Backup raspored i testirani restore su ODGOĐENI (R-10)** |
 | 9 | UAT, korisnička obuka, hiper-care |

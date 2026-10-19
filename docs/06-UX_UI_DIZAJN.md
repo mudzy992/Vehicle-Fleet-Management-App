@@ -169,7 +169,7 @@ prikazuju samo ako korisnik ima barem jedno pravo u njima). Sidebar je sklopiv (
 | `/audit` | Audit log | `audit:view` |
 | `/sistem` | Zdravlje, queue, metrike | `system:view_health` |
 | `/obavijesti` | Centar obavijesti | `notification:view` |
-| `/profil` | Profil, sesije, lozinka, 2FA | `auth:login` |
+| `/profil` | Profil, sesije, lozinka (bez 2FA — R-05) | `auth:login` |
 | `*` | 404 | — |
 
 ---
@@ -361,7 +361,7 @@ obavijest `bell`, prava `key-round`, forma `layout-template`, audit `history`.
 │ │ ☐  │ V-004  │ VW Passat    │ E23-M-18│ 210.880  │ ●Isteklo  │ ⋯        ││
 │ │ ☐  │ V-007  │ Ford Transit │ T07-S-02│  96.410  │ ●Za 3 d   │ ⋯        ││
 │ └────┴────────┴──────────────┴─────────┴──────────┴───────────┴──────────┘│
-│ 3 odabрана  [Arhiviraj] [Dodijeli vozača] [Izvezi odabrano]                │
+│ 3 odabrana  [Arhiviraj] [Dodijeli vozača] [Izvezi odabrano]                │
 │                                                    ◀ 1 2 3 ▶  20 po strani │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```

@@ -28,6 +28,7 @@ Ovaj fajl je **hub**. Sve ostalo je u `docs/` i povezano ovdje. Ako se nešto mi
 | [`08-DOCKER_COOLIFY_DEPLOYMENT.md`](08-DOCKER_COOLIFY_DEPLOYMENT.md) | Dockerfile-ovi, compose varijante, `db_net`/`redis_net`, Coolify koraci, HTTPS/DNS/firewall, backup/restore, rollback |
 | [`09-TEST_PLAN.md`](09-TEST_PLAN.md) | Test strategija, 16 obaveznih kriterija prihvatanja mapiranih na testove, e2e scenariji, seed |
 | [`10-OPERACIJE.md`](10-OPERACIJE.md) | Monitoring, logovi, incidenti, runbook, kapaciteti, nadogradnja |
+| [`FAZA0_IZVJESTAJ.md`](FAZA0_IZVJESTAJ.md) | **Izvještaj o Fazi 0**: šta je isporučeno, dokazi (komande/rezultati), odstupanja, blokeri i obaveze vlasnika prije Faze 1 |
 | [`.env.example`](../.env.example) | **Jedini izvor istine** za sve varijable okruženja (Coolify + lokalno) |
 | [`REDIS_ACL.md`](../REDIS_ACL.md) | **Jedini izvor istine** za Redis ACL (useri, ključevi, komande) — setuje se kroz poseban fajl na Coolify Redis resursu |
 | [`docker-compose.yml`](../docker-compose.yml) / [`.dev.yml`](../docker-compose.dev.yml) / [`.coolify.yml`](../docker-compose.coolify.yml) | Coolify/produkcijski stack (`db_net`, `redis_net`), lokalni dev, hardening override |
@@ -77,6 +78,11 @@ Autentifikacija i RBAC, upravljanje korisnicima/rolama/permisijama, profili voza
 1. Početni obim 10 vozila, ≤ 20 korisnika, ≤ 5 administratora, 1–2 Super Admina.
 2. PostgreSQL i Redis su **globalni resursi koji već rade na istom Docker hostu** (potvrđeno, R-02) i dostupni su preko eksternih mreža `db_net` odnosno `redis_net`. Naš compose ih **ne** pokreće; baza (host/user/dbname/password) je već kreirana, a Redis se dijeli s drugim aplikacijama (ACL varijanta B).
 3. Jedan server, jedan region, jezik `bs` (bosanski), valuta `BAM/KM`, vremenska zona `Europe/Sarajevo`.
+3a. **Domene (R-03):** web `https://vehicle.ba101.top`, API `https://api.vehicle.ba101.top`; Coolify izdaje HTTPS.
+3b. **2FA se NE implementira (R-05)** — iz modela/API-ja/ENV-a uklonjene 2FA stavke.
+3c. **Backup/restore se NE implementira u ovom ciklusu (R-10)** — ostaje dokumentovan i u backlog-u (P16 odgođen).
+3d. **Firebase kreira vlasnik ručno (R-04)** — do tada `FIREBASE_ENABLED=false`, obavijesti in-app.
+3e. **Dev/prod podjela compose-a:** `docker-compose.yml` (Coolify/prod) **NE** sadrži postgres ni redis — samo se povezuje na globalne instance preko `db_net`/`redis_net` (`external: true`). `docker-compose.dev.yml` (lokalne sesije) **podže** lokalni `vfm-postgres` i `vfm-redis`.
 4. Mobilna aplikacija se distribuira interno (APK) + Google Play (AAB) preko EAS Build-a; ne builda se u Dockeru.
 5. Firebase projekat i `service_account.json` obezbjeđuje vlasnik; tajna je dostupna **samo** backend kontejneru.
 
@@ -202,6 +208,13 @@ Legenda: **DoD** = Definition of Done. Svaka faza završava s: (1) prolazećim b
 
 ### FAZA 0 — Temelji: monorepo, infrastruktura, CI (≈ 2–3 dana)
 
+> **Status: ✅ isporučeno** (19.10.2026) — vidi [`FAZA0_IZVJESTAJ.md`](FAZA0_IZVJESTAJ.md).
+> Kvalitet-kapije: `turbo lint typecheck test build` = 16/16 zeleno; 287 unit testova;
+> `env-sync-check` = 0 upozorenja. **Otvoreno:** Prisma engine (`binaries.prisma.sh`
+> nedostupan u sandboxu) → `prisma generate` pokrenuti na mašini s internetom; PG
+> ekstenzije (`citext`, `btree_gist`) i Redis ACL na Coolify hostu.
+
+
 **Cilj:** Repozitorij koji se može buildovati, linterovati, testirati i podići lokalno i na Coolify-u, bez ijedne poslovne funkcionalnosti.
 
 **Zadaci**
@@ -231,11 +244,11 @@ Legenda: **DoD** = Definition of Done. Svaka faza završava s: (1) prolazećim b
 
 ### FAZA 1 — Identitet: auth, RBAC, korisnici, audit, zabrana mobilnog pristupa (≈ 5–7 dana)
 
-**Cilj:** Sigurna prijava, DB-driven prava koja se trenutno oduzimaju, Super Admin portal骨架, audit trag.
+**Cilj:** Sigurna prijava, DB-driven prava koja se trenutno oduzimaju, Super Admin portal, audit trag.
 
 **Zadaci**
 1. Prisma modeli: `User`, `Role`, `Permission`, `RolePermission`, `UserRole`, `UserIdentity`, `RefreshSession`, `AuthAttempt`, `AuditLog`, `Setting`.
-2. Auth: `POST /auth/login` (email + lozinka, argon2id), `POST /auth/refresh` (rotacija + reuse detection → ukida sve sesije korisnika), `POST /auth/logout`, `GET /auth/me` (profil + dozvole + `permissionsVersion`).
+2. Auth: `POST /auth/login` (email + lozinka, argon2id), `POST /auth/refresh` (rotacija + reuse detection → ukida sve sesije korisnika), `POST /auth/logout`, `GET /auth/me` (profil + dozvole + `permissionsVersion`). **2FA se ne implementira (R-05)** — kompenzacijske kontrole: politika lozinke, lockout, rate limit, reuse detection, audit.
 3. **Client type enforcement:** login prima `clientType: WEB | MOBILE_ANDROID | MOBILE_IOS`. Ako je korisnik Super Admin (ili rola ima `allowedClientTypes` bez mobile) → `403 MOBILE_ACCESS_FORBIDDEN`, upisan `SECURITY_EVENT` u audit. Provjera se ponavlja na **svakom** zahtjevu preko guard-a (ne samo pri loginu), jer stari token ne smije zaobići pravilo.
 4. RBAC: `PermissionsGuard` + `@RequirePermissions('vehicle:create')` dekorator; scope evaluator (`ALL` / `OWN` / `VEHICLE_IDS` / `DRIVER_IDS`); permisije se učitavaju iz Redis keša `vfm:perm:{userId}` (TTL 60 s) + invalidacija bump-om `permissionsVersion` (globalni i po roli u `vfm:permver:*`).
 5. Revokacija: promjena role/permisije → bump verzije → sljedeći zahtjev (≤ 5 s) odbija staru permisiju. Test **P3**.
@@ -408,9 +421,9 @@ Legenda: **DoD** = Definition of Done. Svaka faza završava s: (1) prolazećim b
 6. Runbook: česti incidenti (Redis down, DB down, FCM greške, disk pun, migration failed) + koraci.
 7. Finalno: svi testovi P1–P16 prolaze u staging okruženju koje je **identično** produkciji.
 
-**DoD (P15, P16 + security gate)**
+**DoD (P15 + security gate; P16 odgođen)**
 - P15: `docker compose down && up` → podaci i prilozi netaknuti (uklj. Coolify redeploy).
-- P16: Restore iz backup-a u testnom okruženju uspješan, aplikacija funkcionalna, vrijeme zabilježeno.
+- ~~P16~~: **odgođeno (R-10)** — dokumentovano, ne implementira se sada.
 - 0 kritičnih/visokih nalaza dependency i secret skena; svi srednji imaju plan.
 - Load test: 50 korisnika, 200 zadataka/min, p95 < 400 ms, 0 grešaka 5xx.
 
@@ -442,7 +455,7 @@ Legenda: **DoD** = Definition of Done. Svaka faza završava s: (1) prolazećim b
 | 5 | Zadaci + outbox + FCM | 8–10 d | P4–P8 | atomski claim, push pouzdanost |
 | 6 | Expo Android | 6–8 d | P1, P4–P7 | FCM tok, EAS build |
 | 7 | Izvještaji + izvoz | 4–6 d | — | performanse exporta |
-| 8 | Hardening + backup | 4–6 d | P15, P16 | restore u praksi |
+| 8 | Hardening + security (backup odgođen) | 3–5 d | P15 | sigurnosni nalazi |
 | 9 | UAT + go-live | 2–3 d | svi | prihvat vlasnika |
 | **Ukupno** | | **≈ 50–68 radnih dana** | | |
 
@@ -467,7 +480,7 @@ Legenda: **DoD** = Definition of Done. Svaka faza završava s: (1) prolazećim b
 | P13 | Registracije/servisi/gume: historija + podsjetnici | 3, 4 | `reminders-idempotency.integration` |
 | P14 | Bez prava nema pristupa endpointima/dokumentima | 1, 3 | `authorization-sweep.e2e` |
 | P15 | Compose čuva podatke nakon restarta | 0, 8 | `persistence-restart.ops` |
-| P16 | Backup se uspješno vraća | 8 | `backup-restore.ops` |
+| ~~P16~~ | Backup se uspješno vraća | **odgođeno (R-10)** | `backup-restore.ops` (backlog) |
 
 ---
 
@@ -487,7 +500,9 @@ Legenda: **DoD** = Definition of Done. Svaka faza završava s: (1) prolazećim b
 | Rast obima (offline, telemetrija, iOS) | Srednji | Visoka | §3.2 "Van obima" je ugovoren; promjene idu kroz backlog za v2 |
 | Prilozi na host volume-u = rizik pri migraciji servera | Srednji | Srednja | Backup skripta uključuje volume; dokumentovan restore; `Attachment` red čuva relativni `storageKey` → portabilno na S3 kasnije |
 | Prisma 7 nema sve constrainte (EXCLUSION/CHECK) | Srednji | Visoka | Ručni SQL u migracijama (`migrations/*/migration.sql`), `prisma migrate diff` kao pomoć, nikad `db push` u produkciji |
-| Jedan server = single point of failure | Srednji | Srednja | Backup + restore RTO/RPO definisani u `10-OPERACIJE.md`; monitoring; dokumentovan manual failover |
+| Jedan server = single point of failure | Srednji | Srednja | Monitoring + runbook (`10-OPERACIJE.md`); dokumentovan manual failover |
+| **Backup odgođen (R-10)** → gubitak podataka je nepovratan | **Kritičan** | Srednja | Vlasnik svjesno odgodio; procedura i skripte dokumentovani i spremni za aktivaciju u bilo kojem trenutku; preporuka da se uključi prije stvarnih podataka u produkciji |
+| Dijeljeni globalni Postgres/Redis: tuđa aplikacija potroši resurse ili promijeni postavke | Visok | Srednja | Konzervativan pool (`DATABASE_CONNECTION_LIMIT=10`), ACL `~vfm:*`, dogovor o `noeviction`, monitoring `NOPERM`/`ECONN` grešaka |
 
 ---
 
