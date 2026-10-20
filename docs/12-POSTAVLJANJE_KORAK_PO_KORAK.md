@@ -521,8 +521,10 @@ Test: napravi bilo kakvu izmjenu na `main` → Coolify → **Deployments** → n
    pnpm --filter @vfm/api exec prisma migrate dev --name init
    ```
    pa commit `apps/api/prisma/migrations/`, pa u Coolify `MIGRATIONS_STRICT=true`.
-3. Tek tada baza dobija tabele i seed (3 role, katalog permisija + grantovi, forma
-   vozila; demo korisnici i 10 fiktivnih vozila **samo** van produkcije ili uz
+3. Tek tada baza dobija tabele i seed (3 role, katalog permisija + grantovi, tri
+   objavljene početne forme — `vehicle`, `pranje_vozila`, `registracija_vozila`,
+   uz `contentHash` i registar ključeva; demo korisnici i 10 fiktivnih vozila
+   **samo** van produkcije ili uz
    `SEED_DEMO_DATA=true`):
 
    ```bash

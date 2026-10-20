@@ -11,8 +11,10 @@
  *    izmjene napravljene kroz `PUT /roles/matrix`.
  * 4. **Demo podaci** (samo van produkcije ili uz `SEED_DEMO_DATA=true`):
  *    2 korisnika s **generisanim** lozinkama (ispisane jednom) i 10 fiktivnih vozila.
- * 5. **Forma vozila** — minimalna `FormSchema` (key `vehicle`) s objavljenom
- *    verzijom v1; `Vehicle.formSchemaId` je obavezan FK, a pravi form engine je Faza 2.
+ * 5. **Početne forme** (`SEED_FORMS`) — `vehicle`, `pranje_vozila` (default za
+ *    `TASK`) i `registracija_vozila`; svaka dobija objavljenu verziju 1 s
+ *    `contentHash` iz kanonizacije, prolazi sve provjere pri objavi i puni
+ *    `FieldKeyRegistry` (U-16). Postojeća objavljena verzija se **ne dira**.
  *
  * Pravila:
  * - skripta je **idempotentna** (upsert po prirodnim ključevima: `Permission.code`,
@@ -35,15 +37,26 @@ import {
   permissionModule,
   type RoleCode,
 } from '@vfm/shared';
+import { checkPublishable, parseDefinition } from '@vfm/form-engine';
 import { inspectEnv } from '../config/env.js';
 import { PrismaClient } from '../generated/prisma/client.js';
+import type { Prisma } from '../generated/prisma/client.js';
 import { PasswordService } from '../modules/auth/services/password.service.js';
 import { prismaConnectionOptions } from '../prisma/prisma.service.js';
+import { syncFieldKeys, type FieldKeyRegistryClient } from '../modules/form-schemas/field-key-registry.js';
+import { SEED_FORMS } from './seed-forms.js';
 
 /** Sistemske role koje seed uvijek postavlja (P-01: tri role). */
-const SEED_ROLES: readonly Exclude<RoleCode, 'CUSTOM'>[] = ['SUPER_ADMIN', 'ADMINISTRATOR', 'OBICNI_KORISNIK'];
+const SEED_ROLES: readonly Exclude<RoleCode, 'CUSTOM'>[] = [
+  'SUPER_ADMIN',
+  'ADMINISTRATOR',
+  'OBICNI_KORISNIK',
+];
 
-const ROLE_META: Record<Exclude<RoleCode, 'CUSTOM'>, { name: string; priority: number; description: string }> = {
+const ROLE_META: Record<
+  Exclude<RoleCode, 'CUSTOM'>,
+  { name: string; priority: number; description: string }
+> = {
   SUPER_ADMIN: {
     name: 'Super Administrator',
     priority: 10,
@@ -69,16 +82,96 @@ const DEMO_USERS = [
 
 /** 10 fiktivnih vozila (bez stvarnih registracija i VIN-ova). */
 const DEMO_VEHICLES = [
-  { internalNo: 'VFM-001', make: 'Volkswagen', model: 'Golf 7', year: 2019, fuelType: 'DIESEL', odometerKm: 148_320, plateNumber: 'A00-M-001' },
-  { internalNo: 'VFM-002', make: 'Volkswagen', model: 'Caddy', year: 2020, fuelType: 'DIESEL', odometerKm: 96_540, plateNumber: 'A00-M-002' },
-  { internalNo: 'VFM-003', make: 'Škoda', model: 'Octavia', year: 2021, fuelType: 'DIESEL', odometerKm: 62_110, plateNumber: 'A00-M-003' },
-  { internalNo: 'VFM-004', make: 'Renault', model: 'Kangoo', year: 2018, fuelType: 'PETROL', odometerKm: 212_780, plateNumber: 'A00-M-004' },
-  { internalNo: 'VFM-005', make: 'Ford', model: 'Transit', year: 2022, fuelType: 'DIESEL', odometerKm: 34_900, plateNumber: 'A00-M-005' },
-  { internalNo: 'VFM-006', make: 'Toyota', model: 'Corolla Hybrid', year: 2023, fuelType: 'HYBRID', odometerKm: 21_450, plateNumber: 'A00-M-006' },
-  { internalNo: 'VFM-007', make: 'Dacia', model: 'Duster', year: 2020, fuelType: 'LPG', odometerKm: 88_200, plateNumber: 'A00-M-007' },
-  { internalNo: 'VFM-008', make: 'Fiat', model: 'Ducato', year: 2017, fuelType: 'DIESEL', odometerKm: 268_410, plateNumber: 'A00-M-008' },
-  { internalNo: 'VFM-009', make: 'Nissan', model: 'Leaf', year: 2021, fuelType: 'ELECTRIC', odometerKm: 41_600, plateNumber: 'A00-M-009' },
-  { internalNo: 'VFM-010', make: 'Peugeot', model: 'Boxer', year: 2019, fuelType: 'DIESEL', odometerKm: 173_050, plateNumber: 'A00-M-010' },
+  {
+    internalNo: 'VFM-001',
+    make: 'Volkswagen',
+    model: 'Golf 7',
+    year: 2019,
+    fuelType: 'DIESEL',
+    odometerKm: 148_320,
+    plateNumber: 'A00-M-001',
+  },
+  {
+    internalNo: 'VFM-002',
+    make: 'Volkswagen',
+    model: 'Caddy',
+    year: 2020,
+    fuelType: 'DIESEL',
+    odometerKm: 96_540,
+    plateNumber: 'A00-M-002',
+  },
+  {
+    internalNo: 'VFM-003',
+    make: 'Škoda',
+    model: 'Octavia',
+    year: 2021,
+    fuelType: 'DIESEL',
+    odometerKm: 62_110,
+    plateNumber: 'A00-M-003',
+  },
+  {
+    internalNo: 'VFM-004',
+    make: 'Renault',
+    model: 'Kangoo',
+    year: 2018,
+    fuelType: 'PETROL',
+    odometerKm: 212_780,
+    plateNumber: 'A00-M-004',
+  },
+  {
+    internalNo: 'VFM-005',
+    make: 'Ford',
+    model: 'Transit',
+    year: 2022,
+    fuelType: 'DIESEL',
+    odometerKm: 34_900,
+    plateNumber: 'A00-M-005',
+  },
+  {
+    internalNo: 'VFM-006',
+    make: 'Toyota',
+    model: 'Corolla Hybrid',
+    year: 2023,
+    fuelType: 'HYBRID',
+    odometerKm: 21_450,
+    plateNumber: 'A00-M-006',
+  },
+  {
+    internalNo: 'VFM-007',
+    make: 'Dacia',
+    model: 'Duster',
+    year: 2020,
+    fuelType: 'LPG',
+    odometerKm: 88_200,
+    plateNumber: 'A00-M-007',
+  },
+  {
+    internalNo: 'VFM-008',
+    make: 'Fiat',
+    model: 'Ducato',
+    year: 2017,
+    fuelType: 'DIESEL',
+    odometerKm: 268_410,
+    plateNumber: 'A00-M-008',
+  },
+  {
+    internalNo: 'VFM-009',
+    make: 'Nissan',
+    model: 'Leaf',
+    year: 2021,
+    fuelType: 'ELECTRIC',
+    odometerKm: 41_600,
+    plateNumber: 'A00-M-009',
+  },
+  {
+    internalNo: 'VFM-010',
+    make: 'Peugeot',
+    model: 'Boxer',
+    year: 2019,
+    fuelType: 'DIESEL',
+    odometerKm: 173_050,
+    plateNumber: 'A00-M-010',
+  },
 ] as const;
 
 interface SeedSummary {
@@ -89,6 +182,8 @@ interface SeedSummary {
   readonly demoUsersSkipped: boolean;
   readonly vehiclesCreated: number;
   readonly formSchemaCreated: boolean;
+  /** Koje su forme kreirane, a koje su već imale objavljenu verziju. */
+  readonly forms: { created: string[]; existing: string[] };
 }
 
 function log(message: string): void {
@@ -124,7 +219,10 @@ async function seedPermissions(prisma: PrismaClient): Promise<SeedSummary['permi
 }
 
 async function seedRoles(prisma: PrismaClient): Promise<SeedSummary['roles']> {
-  const existing = await prisma.role.findMany({ where: { code: { in: [...SEED_ROLES] } }, select: { code: true } });
+  const existing = await prisma.role.findMany({
+    where: { code: { in: [...SEED_ROLES] } },
+    select: { code: true },
+  });
   const known = new Set(existing.map((row) => row.code));
 
   for (const code of SEED_ROLES) {
@@ -148,14 +246,20 @@ async function seedRoles(prisma: PrismaClient): Promise<SeedSummary['roles']> {
     });
   }
 
-  return { created: SEED_ROLES.filter((code) => !known.has(code)).length, updated: SEED_ROLES.length - known.size };
+  return {
+    created: SEED_ROLES.filter((code) => !known.has(code)).length,
+    updated: SEED_ROLES.length - known.size,
+  };
 }
 
 /** Dodaje grantove iz default matrice — bez diranja postojećih. */
 async function seedGrants(prisma: PrismaClient): Promise<number> {
   const permissions = await prisma.permission.findMany({ select: { id: true, code: true } });
   const permissionIdByCode = new Map(permissions.map((row) => [row.code, row.id]));
-  const roles = await prisma.role.findMany({ where: { code: { in: [...SEED_ROLES] } }, select: { id: true, code: true } });
+  const roles = await prisma.role.findMany({
+    where: { code: { in: [...SEED_ROLES] } },
+    select: { id: true, code: true },
+  });
 
   let added = 0;
 
@@ -193,67 +297,108 @@ async function seedGrants(prisma: PrismaClient): Promise<number> {
   return added;
 }
 
-/** Minimalna forma vozila (Faza 2 je zamjenjuje pravim form engine-om). */
-async function seedVehicleForm(prisma: PrismaClient): Promise<{ formSchemaId: string; versionId: string; created: boolean }> {
-  const key = 'vehicle';
-  const existing = await prisma.formSchema.findUnique({
-    where: { key },
-    select: { id: true, currentPublishedVersionId: true },
-  });
+/**
+ * Osigurava početne forme iz `SEED_FORMS`.
+ *
+ * Redoslijed po formi: validiraj definiciju → ako forma već ima objavljenu
+ * verziju, preskoči (ručne izmjene kroz Builder se ne prepisuju) → kreiraj formu
+ * i verziju 1 → postavi aktivnu verziju → uskladi registar ključeva.
+ *
+ * Definicija koja ne prolazi meta-shemu ili provjere pri objavi **pada seed**
+ * (exit 1): bolje je da deploy stane nego da u bazu uđe forma koja ne prolazi
+ * P11 validaciju zapisa.
+ */
+async function seedForms(prisma: PrismaClient): Promise<{
+  created: string[];
+  existing: string[];
+  byKey: Map<string, { formSchemaId: string; versionId: string }>;
+}> {
+  const created: string[] = [];
+  const existing: string[] = [];
+  const byKey = new Map<string, { formSchemaId: string; versionId: string }>();
 
-  if (existing?.currentPublishedVersionId) {
-    return { formSchemaId: existing.id, versionId: existing.currentPublishedVersionId, created: false };
-  }
+  for (const form of SEED_FORMS) {
+    const parsed = parseDefinition(form.definition);
+    if (!parsed.ok) {
+      throw new Error(
+        `Seed forma "${form.key}" nije validna: ${parsed.issues.map((issue) => `${issue.path} ${issue.message}`).join('; ')}`,
+      );
+    }
 
-  const formSchemaId = existing?.id ?? randomUUID();
-  if (!existing) {
-    await prisma.formSchema.create({
+    const checks = checkPublishable({
+      definition: parsed.definition,
+      changeNote: 'Seed: početna verzija forme.',
+    });
+    if (!checks.ok) {
+      throw new Error(
+        `Seed forma "${form.key}" ne prolazi provjere pri objavi: ${checks.issues.map((issue) => `${issue.code} (${issue.path})`).join('; ')}`,
+      );
+    }
+
+    const existingRow = await prisma.formSchema.findUnique({
+      where: { key: form.key },
+      select: { id: true, currentPublishedVersionId: true },
+    });
+
+    if (existingRow?.currentPublishedVersionId) {
+      existing.push(form.key);
+      byKey.set(form.key, {
+        formSchemaId: existingRow.id,
+        versionId: existingRow.currentPublishedVersionId,
+      });
+      continue;
+    }
+
+    const formSchemaId = existingRow?.id ?? randomUUID();
+    if (!existingRow) {
+      await prisma.formSchema.create({
+        data: {
+          id: formSchemaId,
+          key: form.key,
+          name: form.name,
+          subject: form.subject,
+          description: form.description,
+          status: 'ACTIVE',
+          ownerModule: form.ownerModule,
+        },
+      });
+    }
+
+    const versionId = randomUUID();
+    await prisma.formSchemaVersion.create({
       data: {
-        id: formSchemaId,
-        key,
-        name: 'Vozilo',
-        subject: 'VEHICLE',
-        description: 'Osnovni podaci o vozilu (seed; Faza 2 dodaje form engine).',
-        status: 'ACTIVE',
-        ownerModule: 'vehicles',
+        id: versionId,
+        formSchemaId,
+        version: 1,
+        status: 'PUBLISHED',
+        definition: parsed.definition as unknown as Prisma.InputJsonValue,
+        normalizedName: (parsed.definition.normalizedName ?? []) as unknown as Prisma.InputJsonValue,
+        contentHash: checks.contentHash,
+        mobileCompatible: checks.mobileCompatible,
+        publishedAt: new Date(),
+        changeNote: 'Seed: početna verzija forme.',
       },
     });
+
+    await prisma.formSchema.update({
+      where: { id: formSchemaId },
+      data: { currentPublishedVersionId: versionId },
+    });
+
+    // Prisma delegat ima strože tipove od minimalnog interfejsa registra.
+    await syncFieldKeys(prisma as unknown as FieldKeyRegistryClient, parsed.definition, formSchemaId, {
+      onTypeConflict: (conflict) =>
+        log(
+          `U-16: ključ "${conflict.key}" je u formi "${form.key}" tipa ${conflict.expected}, ` +
+            `a registar ga vodi kao ${conflict.actual} — tip se ne prepisuje.`,
+        ),
+    });
+
+    created.push(form.key);
+    byKey.set(form.key, { formSchemaId, versionId });
   }
 
-  const definition = {
-    version: 1,
-    fields: [
-      { key: 'internalNo', type: 'text', required: true, label: 'Interni broj' },
-      { key: 'make', type: 'text', required: true, label: 'Marka' },
-      { key: 'model', type: 'text', required: true, label: 'Model' },
-      { key: 'year', type: 'number', required: false, label: 'Godina' },
-      { key: 'plateNumber', type: 'text', required: false, label: 'Registracija' },
-      { key: 'fuelType', type: 'select', required: true, label: 'Gorivo' },
-      { key: 'odometerKm', type: 'number', required: false, label: 'Kilometraža' },
-    ],
-  } as const;
-
-  const versionId = randomUUID();
-  const publishedAt = new Date();
-
-  await prisma.formSchemaVersion.create({
-    data: {
-      id: versionId,
-      formSchemaId,
-      version: 1,
-      status: 'PUBLISHED',
-      definition,
-      publishedAt,
-      changeNote: 'Seed: početna verzija forme vozila.',
-    },
-  });
-
-  await prisma.formSchema.update({
-    where: { id: formSchemaId },
-    data: { currentPublishedVersionId: versionId },
-  });
-
-  return { formSchemaId, versionId, created: existing === null };
+  return { created, existing, byKey };
 }
 
 async function seedDemoUsers(
@@ -307,7 +452,10 @@ async function seedDemoVehicles(
   let created = 0;
 
   for (const vehicle of DEMO_VEHICLES) {
-    const exists = await prisma.vehicle.findUnique({ where: { internalNo: vehicle.internalNo }, select: { id: true } });
+    const exists = await prisma.vehicle.findUnique({
+      where: { internalNo: vehicle.internalNo },
+      select: { id: true },
+    });
     if (exists) continue;
 
     await prisma.vehicle.create({
@@ -339,11 +487,15 @@ export async function runSeed(prisma: PrismaClient, env: { NODE_ENV: string }): 
   const permissions = await seedPermissions(prisma);
   const roles = await seedRoles(prisma);
   const grantsAdded = await seedGrants(prisma);
-  const form = await seedVehicleForm(prisma);
+  const forms = await seedForms(prisma);
+  const vehicleForm = forms.byKey.get('vehicle');
+  if (!vehicleForm) {
+    throw new Error('Seed: forma "vehicle" nije dostupna — vozila se ne mogu vezati na formu.');
+  }
 
   const allowDemo = demoAllowed(env);
   const demoUsers = allowDemo ? await seedDemoUsers(prisma, passwords) : [];
-  const vehiclesCreated = allowDemo ? await seedDemoVehicles(prisma, form) : 0;
+  const vehiclesCreated = allowDemo ? await seedDemoVehicles(prisma, vehicleForm) : 0;
 
   return {
     permissions,
@@ -352,7 +504,8 @@ export async function runSeed(prisma: PrismaClient, env: { NODE_ENV: string }): 
     demoUsers,
     demoUsersSkipped: !allowDemo,
     vehiclesCreated,
-    formSchemaCreated: form.created,
+    formSchemaCreated: forms.created.includes('vehicle'),
+    forms: { created: forms.created, existing: forms.existing },
   };
 }
 
@@ -372,8 +525,13 @@ async function main(): Promise<void> {
       `Permisije: ukupno ${ALL_PERMISSIONS.length}, novo ${summary.permissions.created} ` +
         `(postojeći redovi su usklađeni s kodom).`,
     );
-    log(`Role: ${summary.roles.created} novih, ${summary.roles.updated} postojećih; grantova dodano: ${summary.grantsAdded}.`);
-    log(`Forma vozila: ${summary.formSchemaCreated ? 'kreirana' : 'već postoji'}.`);
+    log(
+      `Role: ${summary.roles.created} novih, ${summary.roles.updated} postojećih; grantova dodano: ${summary.grantsAdded}.`,
+    );
+    log(
+      `Forme: ${summary.forms.created.length} novih (${summary.forms.created.join(', ') || '—'}), ` +
+        `${summary.forms.existing.length} već objavljenih (${summary.forms.existing.join(', ') || '—'}).`,
+    );
     log(`Vozila: ${summary.vehiclesCreated} novih (od 10 fiktivnih).`);
 
     if (summary.demoUsersSkipped) {

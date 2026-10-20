@@ -535,6 +535,7 @@ Zahtjev koji prelazi ove granice ide kroz **change request** i procjenu, ne kroz
 | Form Builder API (§12)                            | `apps/api/src/modules/form-schemas/`                                 | ✅ Faza 2 (chunk D) |
 | Headless renderer (§11/§12)                       | `packages/form-renderer/`                                            | ✅ Faza 2 (chunk F) |
 | Form Builder UI (§12)                             | `apps/web/src/features/forms/`                                       | ⏳ Faza 2           |
+| Početne forme u seed-u                            | `apps/api/src/tools/seed-forms.ts`                                   | ✅ Faza 2 (chunk G) |
 | Migracija zapisa (§10, P12)                       | `apps/api/src/modules/form-migrations/`                              | ✅ Faza 2 (chunk E) |
 
 Napomene uz implementaciju (odstupanja i pojašnjenja):

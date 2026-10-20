@@ -107,6 +107,8 @@ export interface FakeFormSchemaRow {
   subject: string;
   status: string;
   currentPublishedVersionId: string | null;
+  description?: string | null;
+  ownerModule?: string | null;
 }
 
 export interface FakeFormSchemaVersionRow {
@@ -115,6 +117,20 @@ export interface FakeFormSchemaVersionRow {
   version: number;
   status: string;
   definition: unknown;
+  contentHash?: string | null;
+  normalizedName?: unknown;
+  mobileCompatible?: boolean;
+  publishedAt?: Date | null;
+  changeNote?: string | null;
+}
+
+export interface FakeFieldKeyRow {
+  id: string;
+  key: string;
+  dataType: string;
+  unit: string | null;
+  normalizedColumn: string | null;
+  usedByFormSchemaIds: string[];
 }
 
 export interface FakeVehicleRow {
@@ -225,6 +241,7 @@ export class FakePrismaClient {
   readonly permissions: FakePermissionRow[] = [];
   readonly passwordResetTokens: FakePasswordResetTokenRow[] = [];
   readonly formSchemas = new Map<string, FakeFormSchemaRow>();
+  readonly fieldKeys = new Map<string, FakeFieldKeyRow>();
   readonly formSchemaVersions: FakeFormSchemaVersionRow[] = [];
   readonly vehicles = new Map<string, FakeVehicleRow>();
   readonly authAttempts: FakeAuthAttemptRow[] = [];
@@ -347,7 +364,10 @@ export class FakePrismaClient {
   readonly refreshSession = {
     create: async (args: { data: UpdateData }): Promise<FakeSessionRow> => {
       this.calls.sessionCreate += 1;
-      const data = args.data as unknown as Omit<FakeSessionRow, 'revokedAt' | 'replacedById' | 'lastUsedAt' | 'createdAt'>;
+      const data = args.data as unknown as Omit<
+        FakeSessionRow,
+        'revokedAt' | 'replacedById' | 'lastUsedAt' | 'createdAt'
+      >;
 
       this.sequence += 1;
       const row: FakeSessionRow = {
@@ -507,7 +527,10 @@ export class FakePrismaClient {
       return { count: args.data.length };
     },
 
-    updateMany: async (args: { where: { userId?: string }; data: UpdateData }): Promise<{ count: number }> => {
+    updateMany: async (args: {
+      where: { userId?: string };
+      data: UpdateData;
+    }): Promise<{ count: number }> => {
       const rows = this.userRoles.filter(
         (entry) => args.where.userId === undefined || entry.userId === args.where.userId,
       );
@@ -596,9 +619,7 @@ export class FakePrismaClient {
       return this.matchAuditLogs(args?.where ?? {}).length;
     },
 
-    findUnique: async (args: {
-      where: { id: bigint | number };
-    }): Promise<FakeAuditLogRow | null> => {
+    findUnique: async (args: { where: { id: bigint | number } }): Promise<FakeAuditLogRow | null> => {
       const id = Number(args.where.id);
       const row = this.auditLogs.find((entry) => entry.id === id);
       return row ? clone(row) : null;
@@ -616,8 +637,9 @@ export class FakePrismaClient {
     },
     create: async (args: { data: Record<string, unknown> }) => {
       const data = args.data as unknown as FakeFormSchemaRow;
-      this.formSchemas.set(data.id, { ...data, currentPublishedVersionId: null });
-      return clone(data);
+      const row: FakeFormSchemaRow = { ...data, currentPublishedVersionId: null };
+      this.formSchemas.set(data.id, row);
+      return clone(row);
     },
     update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
       const row = this.formSchemas.get(args.where.id);
@@ -632,6 +654,24 @@ export class FakePrismaClient {
       const data = args.data as unknown as FakeFormSchemaVersionRow;
       this.formSchemaVersions.push(data);
       return clone(data);
+    },
+  };
+
+  readonly fieldKeyRegistry = {
+    findUnique: async (args: { where: { key: string } }) => {
+      const row = this.fieldKeys.get(args.where.key);
+      return row ? clone(row) : null;
+    },
+    create: async (args: { data: Record<string, unknown> }) => {
+      const data = args.data as unknown as FakeFieldKeyRow;
+      this.fieldKeys.set(data.key, { ...data });
+      return clone(data);
+    },
+    update: async (args: { where: { key: string }; data: Record<string, unknown> }) => {
+      const row = this.fieldKeys.get(args.where.key);
+      if (!row) throw new Error(`FakePrisma: ključ ${args.where.key} nije u registru.`);
+      applyUpdate(row as unknown as Record<string, unknown>, args.data);
+      return clone(row);
     },
   };
 
@@ -656,7 +696,10 @@ export class FakePrismaClient {
   readonly passwordResetToken = {
     create: async (args: { data: UpdateData }): Promise<FakePasswordResetTokenRow> => {
       this.calls.resetTokenCreate += 1;
-      const data = args.data as unknown as Omit<FakePasswordResetTokenRow, 'usedAt' | 'createdAt' | 'ipAddress'>;
+      const data = args.data as unknown as Omit<
+        FakePasswordResetTokenRow,
+        'usedAt' | 'createdAt' | 'ipAddress'
+      >;
 
       const row: FakePasswordResetTokenRow = {
         id: data.id,
@@ -672,9 +715,7 @@ export class FakePrismaClient {
       return clone(row);
     },
 
-    findUnique: async (args: {
-      where: { tokenHash: string };
-    }): Promise<FakePasswordResetTokenRow | null> => {
+    findUnique: async (args: { where: { tokenHash: string } }): Promise<FakePasswordResetTokenRow | null> => {
       const row = this.passwordResetTokens.find((entry) => entry.tokenHash === args.where.tokenHash);
       return row ? clone(row) : null;
     },
@@ -732,8 +773,7 @@ export class FakePrismaClient {
     }) => {
       const where = args?.where ?? {};
       const ids = typeof where.id === 'object' ? where.id?.in : where.id ? [where.id] : undefined;
-      const codes =
-        typeof where.code === 'object' ? where.code?.in : where.code ? [where.code] : undefined;
+      const codes = typeof where.code === 'object' ? where.code?.in : where.code ? [where.code] : undefined;
 
       return [...this.roles.values()]
         .filter((row) => (where.deletedAt === null ? row.deletedAt === null : true))
@@ -790,17 +830,16 @@ export class FakePrismaClient {
       return { count: rows.length };
     },
 
-    create: async (args: { data: Partial<FakeRoleRow> & { id: string; code: string } }): Promise<FakeRoleRow> => {
+    create: async (args: {
+      data: Partial<FakeRoleRow> & { id: string; code: string };
+    }): Promise<FakeRoleRow> => {
       this.calls.roleCreate += 1;
       if (this.roles.has(args.data.id)) throw new Error('role.create: duplikat id');
       const row = this.addRole(args.data);
       return clone(row);
     },
 
-    update: async (args: {
-      where: { id: string };
-      data: Record<string, unknown>;
-    }): Promise<FakeRoleRow> => {
+    update: async (args: { where: { id: string }; data: Record<string, unknown> }): Promise<FakeRoleRow> => {
       this.calls.roleUpdate += 1;
       const row = this.roles.get(args.where.id);
       if (!row) throw new Error(`role.update: rola ${args.where.id} ne postoji.`);
@@ -816,8 +855,7 @@ export class FakePrismaClient {
       where?: { roleId?: { in?: readonly string[] } | string; role?: { deletedAt?: null } };
     }): Promise<Array<FakeRolePermissionRow & { permission: { code: string } }>> => {
       const where = args?.where ?? {};
-      const ids =
-        typeof where.roleId === 'string' ? [where.roleId] : (where.roleId?.in ?? undefined);
+      const ids = typeof where.roleId === 'string' ? [where.roleId] : (where.roleId?.in ?? undefined);
       const activeRolesOnly = where.role?.deletedAt === null;
 
       return this.rolePermissions
@@ -891,9 +929,7 @@ export class FakePrismaClient {
     }): Promise<FakePermissionRow[]> => {
       const ids = args?.where?.code?.in;
 
-      return this.permissions
-        .filter((row) => (ids ? ids.includes(row.code) : true))
-        .map((row) => clone(row));
+      return this.permissions.filter((row) => (ids ? ids.includes(row.code) : true)).map((row) => clone(row));
     },
 
     create: async (args: { data: FakePermissionRow }): Promise<FakePermissionRow> => {
@@ -1062,7 +1098,12 @@ export class FakePrismaClient {
   }
 
   /** Dodaje aktivnu sesiju (fixture) — koristi se u testovima revokacije. */
-  addSession(session: { userId: string; tokenHash: string; expiresAt?: Date; clientType?: string }): FakeSessionRow {
+  addSession(session: {
+    userId: string;
+    tokenHash: string;
+    expiresAt?: Date;
+    clientType?: string;
+  }): FakeSessionRow {
     const row: FakeSessionRow = {
       id: randomUUID(),
       userId: session.userId,
@@ -1157,9 +1198,7 @@ export class FakePrismaClient {
         });
       })
       .filter((row) => {
-        const branches = where.OR as
-          | Array<Record<string, { contains?: string }>>
-          | undefined;
+        const branches = where.OR as Array<Record<string, { contains?: string }>> | undefined;
         if (!branches) return true;
 
         return branches.some((branch) =>
@@ -1173,8 +1212,7 @@ export class FakePrismaClient {
       })
       .sort(
         (left, right) =>
-          left.lastName.localeCompare(right.lastName) ||
-          left.firstName.localeCompare(right.firstName),
+          left.lastName.localeCompare(right.lastName) || left.firstName.localeCompare(right.firstName),
       );
   }
 
@@ -1190,7 +1228,8 @@ export class FakePrismaClient {
       if (where.userId !== undefined && row.userId !== where.userId) return false;
       if (where.tokenHash !== undefined && row.tokenHash !== where.tokenHash) return false;
       if (where.revokedAt === null && row.revokedAt !== null) return false;
-      if (where.expiresAt?.gt && !(row.expiresAt.getTime() > (where.expiresAt.gt.getTime() || now))) return false;
+      if (where.expiresAt?.gt && !(row.expiresAt.getTime() > (where.expiresAt.gt.getTime() || now)))
+        return false;
       return true;
     });
   }

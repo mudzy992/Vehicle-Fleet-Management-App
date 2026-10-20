@@ -52,6 +52,7 @@ import type {
   FormValidationResponse,
 } from '@vfm/shared/schemas';
 import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
+import { syncFieldKeys, type FieldKeyRegistryClient } from './field-key-registry.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 
@@ -459,7 +460,12 @@ export class FormSchemasService {
       });
     });
 
-    await this.syncFieldKeyRegistry(definition, formSchemaId);
+    await syncFieldKeys(this.prisma as unknown as FieldKeyRegistryClient, definition, formSchemaId, {
+      onTypeConflict: (conflict) =>
+        this.logger.warn(
+          `Ključ "${conflict.key}" je u formi ${formSchemaId} tipa ${conflict.expected}, a registar ga vodi kao ${conflict.actual} (U-16).`,
+        ),
+    });
 
     this.logger.log(`Forma ${schema.key}: verzija ${version.version} objavljena.`);
     return {
@@ -719,52 +725,6 @@ export class FormSchemasService {
       }
     }
     return counts;
-  }
-
-  /**
-   * Registar ključeva (U-16): isti `fieldKey` ima isti tip i značenje u svim
-   * formama. Ključ koji se pojavi kao drugi tip je greška definicije — ovdje se
-   * samo bilježi (objava ga ne mijenja), a `usedByFormSchemaIds` se dopunjava.
-   */
-  private async syncFieldKeyRegistry(definition: FormDefinition, formSchemaId: string): Promise<void> {
-    const mappings = new Map((definition.normalizedName ?? []).map((mapping) => [mapping.fieldKey, mapping]));
-    const fields = definition.sections.flatMap((section) => section.fields);
-
-    for (const field of fields) {
-      const existing = await this.prisma.fieldKeyRegistry.findUnique({ where: { key: field.key } });
-      const mapping = mappings.get(field.key);
-      const usedBy = new Set(existing?.usedByFormSchemaIds ?? []);
-      usedBy.add(formSchemaId);
-
-      if (!existing) {
-        await this.prisma.fieldKeyRegistry.create({
-          data: {
-            id: randomUUID(),
-            key: field.key,
-            dataType: field.type,
-            unit: field.computed?.unit ?? null,
-            normalizedColumn: mapping?.column ?? null,
-            usedByFormSchemaIds: [...usedBy],
-          },
-        });
-        continue;
-      }
-
-      if (existing.dataType !== field.type) {
-        this.logger.warn(
-          `Ključ "${field.key}" se u formi ${formSchemaId} koristi kao ${field.type}, a registar ga vodi kao ${existing.dataType} (U-16).`,
-        );
-      }
-
-      await this.prisma.fieldKeyRegistry.update({
-        where: { key: field.key },
-        data: {
-          normalizedColumn: mapping?.column ?? existing.normalizedColumn,
-          unit: field.computed?.unit ?? existing.unit,
-          usedByFormSchemaIds: [...usedBy],
-        },
-      });
-    }
   }
 
   /** Vrijednost `ETag` zaglavlja za definiciju (`"<sha256>"`). */

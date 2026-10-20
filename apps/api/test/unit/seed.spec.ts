@@ -54,8 +54,17 @@ describe('seed', () => {
     expect(new Set(fake.rolePermissions.map((grant) => grant.scope))).toEqual(new Set(['ALL', 'OWN']));
 
     expect(summary.formSchemaCreated).toBe(true);
-    expect(fake.formSchemas.size).toBe(1);
-    expect(fake.formSchemaVersions[0]?.status).toBe('PUBLISHED');
+    // Tri početne forme iz `SEED_FORMS`, svaka s objavljenom verzijom 1.
+    expect(summary.forms.created).toEqual(['vehicle', 'pranje_vozila', 'registracija_vozila']);
+    expect(fake.formSchemas.size).toBe(3);
+    expect(fake.formSchemaVersions).toHaveLength(3);
+    expect(fake.formSchemaVersions.every((version) => version.status === 'PUBLISHED')).toBe(true);
+    expect(
+      fake.formSchemaVersions.every((version) => /^[0-9a-f]{64}$/u.test(version.contentHash ?? '')),
+    ).toBe(true);
+    // Registar ključeva je popunjen (U-16) — npr. `washCost` je MONEY.
+    expect(fake.fieldKeys.get('washCost')?.dataType).toBe('MONEY');
+    expect(fake.fieldKeys.get('odometerKm')?.dataType).toBe('INTEGER');
 
     expect(summary.vehiclesCreated).toBe(10);
     expect(fake.vehicles.size).toBe(10);
