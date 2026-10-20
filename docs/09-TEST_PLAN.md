@@ -148,6 +148,7 @@ i uvijek tačno jedan izvršilac po zadatku (provjera SQL-om nakon testa).
 | `packages/form-engine/test/publish-checks.spec.ts` | §8: svih 9 provjera pojedinačno + strukturni diff |
 | `apps/api/test/unit/form-schemas-service.spec.ts` | P9: `DRAFT→PUBLISHED→RETIRED`, imutabilnost, `ETag` pomoćnik, `active` fallback |
 | `apps/api/test/unit/form-migrations-service.spec.ts` | P12: preview/apply/rollback, `skipped` zapisi, batch 500, idempotentne stavke |
+| `packages/form-renderer/test/render-model.spec.ts` | paritet web/mobilna: deterministički model, vidljivost, STATIC opcije, progres, `collectSubmitValues` |
 
 Integration/E2E varijante iz tabele iznad (P9–P12) traže PostgreSQL i dolaze uz prvi modul koji
 stvarno piše zapise (Faza 3, zadaci).

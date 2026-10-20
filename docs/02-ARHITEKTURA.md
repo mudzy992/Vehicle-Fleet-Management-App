@@ -86,7 +86,7 @@ turbo.json           →  build graph:  shared → form-engine → form-renderer
 |---|---|---|
 | `@vfm/shared` | Zod šeme DTO-ova, enum-i, kodovi permisija, konstante, helper-i (novac, datumi, `bs` formatiranje) | api, web, mobile |
 | `@vfm/form-engine` | Validacija definicije forme, validacija vrijednosti prema verziji, evaluator sigurnih izraza, migracija vrijednosti | api (autoritet), web/mobile (preview) |
-| `@vfm/form-renderer` | Render dinamičke forme: `web` adapter (shadcn/ui) i `mobile` adapter (React Native) | web, mobile |
+| `@vfm/form-renderer` | **Headless** render model (vidljivost, opcije, izračunata polja, greške, progres) + `formatFieldValue`; web i mobilna crtaju svoje kontrole nad istim modelom, pa je paritet po konstrukciji | web, mobile |
 | `@vfm/api-client` | Tipizirani fetch klijent + TanStack Query hooks | web, mobile |
 | `@vfm/config` | tsconfig, eslint flat config, prettier, tailwind preset, tsup/build preseti | svi |
 
