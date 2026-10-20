@@ -181,6 +181,14 @@ export const ERROR_CODES = {
     messageBs: 'Zapis je u međuvremenu izmijenjen. Osvježite podatke i pokušajte ponovo.',
     retryable: true,
   },
+  DUPLICATE_ENTRY: {
+    code: 'DUPLICATE_ENTRY',
+    httpStatus: 409,
+    category: 'DOMAIN',
+    securityRelevant: false,
+    messageBs: 'Zapis s tim podatkom već postoji.',
+    retryable: false,
+  },
   PERIOD_OVERLAP: {
     code: 'PERIOD_OVERLAP',
     httpStatus: 409,
@@ -403,11 +411,7 @@ export function isApiSuccess<T>(response: ApiEnvelope<T>): response is ApiSucces
 }
 
 /** Izračunava pagination meta podatke. */
-export function buildPaginationMeta(
-  page: number,
-  pageSize: number,
-  totalItems: number,
-): PaginationMeta {
+export function buildPaginationMeta(page: number, pageSize: number, totalItems: number): PaginationMeta {
   const safePageSize = pageSize > 0 ? pageSize : 1;
   const totalPages = Math.max(1, Math.ceil(totalItems / safePageSize));
   return {

@@ -277,6 +277,10 @@ Dokaz iz `else` grane ili izvan `if`-a ne važi. Greške pri objavi: `DIVISION_B
 ]
 ```
 
+Pravilo: **identitet zapisa nije forma.** `internalNo`, `make`, `model` i `fuelType` vozila su strukturirani
+dio API-ja, a `normalizedName` popunjava samo kolone iz whitelist-a ispod. API ih spaja u `formData` prije
+validacije (P11), pa zapis i dalje nosi pun snapshot forme (implementirano u `VehiclesService`, Faza 3).
+
 Dozvoljene kolone po entitetu (whitelist — ne može se mapirati na proizvoljnu kolonu):
 
 | Entitet                                  | Dozvoljene kolone                                                                                                              |

@@ -72,6 +72,7 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | Reset lozinke tokenom (`/auth/reset-password`: hash, istek, jednokratnost, politika, revokacija) | `test/unit/auth-service.spec.ts` (describe „reset lozinke tokenom") | 5 | `auth.service.ts` 95 % / 86 % |
 | Seed + bootstrap Super Admina (idempotentnost, demo podaci samo van produkcije, generisane lozinke, zaštita od drugog Super Admina) | `test/unit/seed.spec.ts` | 10 | `src/tools` je izuzet iz coverage izvještaja (CLI alati; `migrate.ts` spawnuje `prisma` i nema šta mjeriti) — logika seeda je pokrivena testovima direktno |
 | Audit log API (P14: SECURITY redovi samo uz `audit:view_security`, filteri/paginacija u bazi, BIGINT → string) | `test/unit/audit-log-service.spec.ts` | 10 | `src/modules/audit-logs` 78 % / 88 % |
+| Vozila (P10/P11: `formData` prema tačnoj verziji, normalizovane kolone iz whitelist-a, `DUPLICATE_ENTRY`, `VERSION_CONFLICT`, status mašina, meka arhiva/brisanje) | `test/unit/vehicles-service.spec.ts` | 19 | `src/modules/vehicles` |
 
 | Web — API klijent (single-flight refresh, retry na 401, istekla sesija, 204) | `apps/web/src/lib/api.test.ts` | 6 | — |
 | Web — sesija (bootstrap anonymous/authenticated, `hasPermission`, R-07, istek sesije) | `apps/web/src/features/auth/session.test.tsx` | 4 | — |

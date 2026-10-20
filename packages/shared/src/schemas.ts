@@ -27,6 +27,9 @@ import {
   MIGRATION_TARGET_ENTITIES,
   PERMISSION_SCOPES,
   USER_STATUSES,
+  FUEL_TYPES,
+  OWNERSHIP_TYPES,
+  VEHICLE_STATUSES,
 } from './enums.js';
 import type { ClientType } from './enums.js';
 import { isKnownPermission } from './permissions.js';
@@ -1442,3 +1445,146 @@ export const formMigrationPreviewSchema = formMigrationJobSchema
   })
   .strict();
 export type FormMigrationPreview = z.output<typeof formMigrationPreviewSchema>;
+
+// -----------------------------------------------------------------------------
+//  Vozila (docs/07 §2.5, docs/03 §3.3)
+// -----------------------------------------------------------------------------
+
+export const vehicleStatusSchema = z.enum(VEHICLE_STATUSES);
+export const fuelTypeSchema = z.enum(FUEL_TYPES);
+export const ownershipTypeSchema = z.enum(OWNERSHIP_TYPES);
+
+/**
+ * Query parametri su uvijek stringovi; `z.coerce.boolean()` bi `"false"` pretvorio
+ * u `true`, pa se `true`/`false` čita eksplicitno.
+ */
+const queryBoolean = z
+  .union([z.boolean(), z.enum(['true', 'false'])])
+  .transform((value) => value === true || value === 'true');
+
+/** Meta podaci vozila koji ne dolaze iz dinamičke forme. */
+const vehicleMetaShape = {
+  notes: z.string().trim().max(2000).nullable().optional(),
+  costCenter: z.string().trim().max(60).nullable().optional(),
+  ownershipType: ownershipTypeSchema.optional(),
+  acquisitionDate: z.iso.date().nullable().optional(),
+  acquisitionPrice: z.number().int().nonnegative().nullable().optional(),
+};
+
+/**
+ * Strukturirani (identitet) dio vozila — **ne** dolazi iz forme: `internalNo`,
+ * `make`, `model` i `fuelType` su obavezne kolone tabele, a forma popunjava samo
+ * kolone iz `NORMALIZATION_COLUMNS.VEHICLE` (docs/04 §7).
+ */
+const vehicleCoreShape = {
+  internalNo: z.string().trim().min(1).max(20),
+  make: z.string().trim().min(1).max(60),
+  model: z.string().trim().min(1).max(60),
+  year: z.number().int().min(1900).max(2100).nullable().optional(),
+  /** VIN je 17 znakova; `null` = nije poznat. */
+  vin: z.string().trim().length(17).nullable().optional(),
+  fuelType: fuelTypeSchema,
+};
+
+export const createVehicleSchema = z
+  .object({
+    ...vehicleCoreShape,
+    /** Vrijednosti dinamičke forme — validiraju se prema tačnoj verziji (P11). */
+    formData: z.record(z.string(), z.unknown()).default({}),
+    /** Bez ovoga se koristi aktivna objavljena `VEHICLE` forma. */
+    formSchemaVersionId: uuidSchema.optional(),
+    ...vehicleMetaShape,
+  })
+  .strict();
+export type CreateVehicleInput = z.output<typeof createVehicleSchema>;
+
+export const updateVehicleSchema = z
+  .object({
+    /** Optimističko zaključavanje (`Vehicle.version`). */
+    version: z.number().int().nonnegative(),
+    internalNo: vehicleCoreShape.internalNo.optional(),
+    make: vehicleCoreShape.make.optional(),
+    model: vehicleCoreShape.model.optional(),
+    year: vehicleCoreShape.year,
+    vin: vehicleCoreShape.vin,
+    fuelType: vehicleCoreShape.fuelType.optional(),
+    formData: z.record(z.string(), z.unknown()).optional(),
+    status: vehicleStatusSchema.optional(),
+    ...vehicleMetaShape,
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 1, { message: 'Nema šta mijenjati.' });
+export type UpdateVehicleInput = z.output<typeof updateVehicleSchema>;
+
+export const archiveVehicleSchema = z.object({ reason: z.string().trim().max(500).optional() }).strict();
+export type ArchiveVehicleInput = z.output<typeof archiveVehicleSchema>;
+
+export const vehicleListQuerySchema = paginationQuerySchema
+  .extend({
+    status: vehicleStatusSchema.optional(),
+    fuelType: fuelTypeSchema.optional(),
+    /** Arhivirana vozila se ne prikazuju osim kad se izričito traže. */
+    includeArchived: queryBoolean.default(false),
+    /** Vozila kojima registracija ili osiguranje ističe u narednih N dana. */
+    expiringInDays: z.coerce.number().int().min(0).max(365).optional(),
+  })
+  .strict();
+export type VehicleListQuery = z.output<typeof vehicleListQuerySchema>;
+
+export const vehicleSummarySchema = z
+  .object({
+    id: uuidSchema,
+    internalNo: z.string(),
+    make: z.string(),
+    model: z.string(),
+    year: z.number().int().nullable(),
+    plateNumber: z.string().nullable(),
+    fuelType: fuelTypeSchema,
+    status: vehicleStatusSchema,
+    odometerKm: z.number().int().nonnegative(),
+    odometerUpdatedAt: z.iso.datetime().nullable(),
+    registrationExpiresAt: z.iso.date().nullable(),
+    insuranceExpiresAt: z.iso.date().nullable(),
+    archivedAt: z.iso.datetime().nullable(),
+    version: z.number().int().nonnegative(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export type VehicleSummary = z.output<typeof vehicleSummarySchema>;
+
+export const vehicleDetailSchema = vehicleSummarySchema
+  .extend({
+    vin: z.string().nullable(),
+    transmission: z.string().nullable(),
+    color: z.string().nullable(),
+    bodyType: z.string().nullable(),
+    engineCcm: z.number().int().nullable(),
+    enginePowerKw: z.number().int().nullable(),
+    seats: z.number().int().nullable(),
+    ownershipType: z.string(),
+    acquisitionDate: z.iso.date().nullable(),
+    acquisitionPrice: z.number().int().nullable(),
+    costCenter: z.string().nullable(),
+    nextServiceDueDate: z.iso.date().nullable(),
+    nextServiceDueKm: z.number().int().nullable(),
+    notes: z.string().nullable(),
+    photoAttachmentId: uuidSchema.nullable(),
+    formSchemaId: uuidSchema,
+    /** Verzija forme kojom je zapis nastao (P10) — nikad se ne prepisuje „u mjesto". */
+    formSchemaVersionId: uuidSchema,
+    formData: z.record(z.string(), z.unknown()),
+    createdAt: z.iso.datetime(),
+  })
+  .strict();
+export type VehicleDetail = z.output<typeof vehicleDetailSchema>;
+
+export const vehicleListResponseSchema = z
+  .object({
+    items: z.array(vehicleSummarySchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type VehicleListResponse = z.output<typeof vehicleListResponseSchema>;

@@ -103,6 +103,9 @@ function vehicleForm(): Record<string, unknown> {
         ],
       },
     ],
+    //  Samo kolone iz `NORMALIZATION_COLUMNS.VEHICLE` (identitet vozila —
+    //  `internalNo`, `make`, `model`, `fuelType` — je strukturirani dio API-ja,
+    //  docs/04 §7).
     normalizedName: [
       { fieldKey: 'odometerKm', column: 'odometerKm', transform: 'TO_INT' },
       { fieldKey: 'plateNumber', column: 'plateNumber', transform: 'TO_TEXT' },
