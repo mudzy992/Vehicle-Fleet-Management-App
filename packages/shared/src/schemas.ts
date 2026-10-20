@@ -18,6 +18,8 @@
 import { z } from 'zod';
 import { MAX_PAGE_SIZE } from './constants.js';
 import {
+  ATTACHMENT_OWNER_TYPES,
+  ATTACHMENT_STAGES,
   AUDIT_ACTIONS,
   AUDIT_SEVERITIES,
   NOTIFICATION_CHANNELS,
@@ -2080,9 +2082,7 @@ export const reminderPolicySchema = z
   .strict();
 export type ReminderPolicy = z.output<typeof reminderPolicySchema>;
 
-export const reminderPolicyListSchema = z
-  .object({ items: z.array(reminderPolicySchema) })
-  .strict();
+export const reminderPolicyListSchema = z.object({ items: z.array(reminderPolicySchema) }).strict();
 export type ReminderPolicyList = z.output<typeof reminderPolicyListSchema>;
 
 export const reminderListQuerySchema = paginationQuerySchema
@@ -2130,9 +2130,7 @@ export const reminderListResponseSchema = z
 export type ReminderListResponse = z.output<typeof reminderListResponseSchema>;
 
 /** `POST /reminders/:id/snooze` — odgađanje u danima (1–90). */
-export const snoozeReminderSchema = z
-  .object({ days: z.number().int().min(1).max(90) })
-  .strict();
+export const snoozeReminderSchema = z.object({ days: z.number().int().min(1).max(90) }).strict();
 export type SnoozeReminderInput = z.output<typeof snoozeReminderSchema>;
 
 /** Rezultat skenera — koliko je kandidata nađeno i koliko je stvarno upisano. */
@@ -2144,3 +2142,93 @@ export const reminderScanResultSchema = z
   })
   .strict();
 export type ReminderScanResult = z.output<typeof reminderScanResultSchema>;
+
+// -----------------------------------------------------------------------------
+//  20) Prilozi (docs/07 §2.12)
+// -----------------------------------------------------------------------------
+
+/** Vlasnik priloga — entitet na koji je fajl vezan (`complete` korak). */
+export const attachmentOwnerTypeSchema = z.enum(ATTACHMENT_OWNER_TYPES);
+export const attachmentStageSchema = z.enum(ATTACHMENT_STAGES);
+
+/** Metapodaci priloga (nikad bajtovi — sadržaj ide kroz `/content`). */
+export const attachmentSchema = z
+  .object({
+    id: uuidSchema,
+    ownerType: attachmentOwnerTypeSchema,
+    ownerId: uuidSchema,
+    stage: attachmentStageSchema,
+    fileName: z.string().min(1),
+    mimeType: z.string().min(1),
+    ext: z.string().min(1),
+    /** `BigInt` u bazi, u API-ju `number` (limit je 5 × `MAX_FILE_SIZE_BYTES`). */
+    sizeBytes: z.number().int().nonnegative(),
+    sha256: z.string().length(64),
+    width: z.number().int().positive().nullable(),
+    height: z.number().int().positive().nullable(),
+    exifStripped: z.boolean(),
+    uploadedById: uuidSchema,
+    taskId: uuidSchema.nullable(),
+    formFieldKey: z.string().nullable(),
+    createdAt: z.iso.datetime(),
+    deletedAt: z.iso.datetime().nullable(),
+  })
+  .strict();
+export type Attachment = z.output<typeof attachmentSchema>;
+
+/** Odgovor `POST /attachments` — dovoljno za `complete` i za optimistic UI. */
+export const attachmentUploadResultSchema = z
+  .object({
+    id: uuidSchema,
+    fileName: z.string().min(1),
+    mimeType: z.string().min(1),
+    ext: z.string().min(1),
+    sizeBytes: z.number().int().nonnegative(),
+    sha256: z.string().length(64),
+  })
+  .strict();
+export type AttachmentUploadResult = z.output<typeof attachmentUploadResultSchema>;
+
+/** `POST /attachments/complete` — vezivanje upload-a na vlasnika. */
+export const completeAttachmentSchema = z
+  .object({
+    /** ID upload-a kojem se dodaje vlasnik. */
+    id: uuidSchema,
+    ownerType: attachmentOwnerTypeSchema,
+    ownerId: uuidSchema,
+    stage: attachmentStageSchema.default('GENERAL'),
+    taskId: uuidSchema.optional(),
+    formFieldKey: z.string().trim().min(1).max(80).optional(),
+  })
+  .strict();
+export type CompleteAttachmentInput = z.output<typeof completeAttachmentSchema>;
+
+/** `GET /attachments?ownerType=&ownerId=` — prilozi jednog zapisa. */
+export const attachmentListQuerySchema = paginationQuerySchema
+  .extend({
+    ownerType: attachmentOwnerTypeSchema,
+    ownerId: uuidSchema,
+  })
+  .strict();
+export type AttachmentListQuery = z.output<typeof attachmentListQuerySchema>;
+
+export const attachmentListResponseSchema = z
+  .object({
+    items: z.array(attachmentSchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type AttachmentListResponse = z.output<typeof attachmentListResponseSchema>;
+
+/** `GET /attachments/:id/url` — potpisani URL (TTL `FILE_SIGNED_URL_TTL_SECONDS`). */
+export const attachmentSignedUrlSchema = z
+  .object({
+    url: z.string().min(1),
+    expiresAt: z.iso.datetime(),
+    token: z.string().min(1),
+  })
+  .strict();
+export type AttachmentSignedUrl = z.output<typeof attachmentSignedUrlSchema>;

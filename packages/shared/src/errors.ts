@@ -301,6 +301,24 @@ export const ERROR_CODES = {
   },
 
   // --- Generičke ---
+  /** Upload: fajl veći od `ATTACHMENT_MAX_SIZE_MB` (docs/07 §1.5). */
+  PAYLOAD_TOO_LARGE: {
+    code: 'PAYLOAD_TOO_LARGE',
+    httpStatus: 413,
+    category: 'VALIDATION',
+    securityRelevant: false,
+    messageBs: 'Fajl je veći od dozvoljene veličine.',
+    retryable: false,
+  },
+  /** Upload: tip nije na `ATTACHMENT_ALLOWED_MIME` ili se ne slaže s magic bytes. */
+  UNSUPPORTED_MEDIA_TYPE: {
+    code: 'UNSUPPORTED_MEDIA_TYPE',
+    httpStatus: 415,
+    category: 'VALIDATION',
+    securityRelevant: false,
+    messageBs: 'Tip fajla nije dozvoljen.',
+    retryable: false,
+  },
   VALIDATION_ERROR: {
     code: 'VALIDATION_ERROR',
     httpStatus: 400,

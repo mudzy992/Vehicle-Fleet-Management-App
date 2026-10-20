@@ -344,9 +344,26 @@ na novu verziju, registar ključeva (`FieldKeyRegistry`, U-16) se dopunjava.
 | POST | `/attachments/complete` | `attachment:upload` | vezuje upload na vlasnika (`ownerType/ownerId/stage/fieldKey`) |
 | GET | `/attachments/:id` | `attachment:view` | metapodaci |
 | GET | `/attachments/:id/content` | `attachment:view` | stream uz provjeru; `Content-Disposition: attachment` |
+| GET | `/attachments?ownerType=&ownerId=&page=` | `attachment:view` | lista priloga jednog zapisa; bez `ALL` opsega samo vlastiti upload-i |
 | GET | `/attachments/:id/url` | `attachment:view` | potpisani URL (TTL `FILE_SIGNED_URL_TTL_SECONDS`) |
-| POST | `/attachments/:id/replace` | `attachment:upload` | nova verzija (stara ostaje u historiji) |
-| DELETE | `/attachments/:id` | `attachment:delete` | soft delete |
+| GET | `/attachments/:id/content` | `attachment:view` | stream; `Content-Disposition: attachment`; audit `FILE_ACCESS` |
+| GET | `/attachments/:id/content/:token` | **potpis (HMAC)** | jedina javna ruta modula — `<img>` bez `Authorization`; token = `exp.sig` nad `id|exp` |
+| POST | `/attachments/:id/replace` | `attachment:upload` | nova verzija (stara ostaje u historiji, soft-delete) |
+| DELETE | `/attachments/:id` | `attachment:delete` | soft delete (fajl ostaje na disku) |
+
+Napomene (Faza 3):
+
+- **Tip se određuje iz sadržaja**, ne iz `Content-Type` headera: JPEG/PNG/WEBP/PDF/HEIC
+  (`ATTACHMENT_ALLOWED_MIME`). Nepoznat sadržaj → `415 UNSUPPORTED_MEDIA_TYPE`,
+  prevelik fajl → `413 PAYLOAD_TOO_LARGE` (limit `ATTACHMENT_MAX_SIZE_MB`).
+- **Metapodaci se uklanjaju prije spremanja** — JPEG `APPn`/`COM` i PNG `eXIf`/`tEXt`
+  (GPS lokacija, ime uređaja); `exifStripped` govori da li je obrada stvarno urađena.
+- **Idempotentnost:** `@@unique([ownerType, ownerId, sha256])` — ponovni upload istog
+  sadržaja vraća postojeći zapis, ne duplikat.
+- **`POST /attachments/complete`** prima `{ id, ownerType, ownerId, stage?, taskId?, formFieldKey? }`;
+  do tada je prilog vezan na uploadera (`ownerType: OTHER`).
+- **Pohrana:** host bind-mount (`VFM_STORAGE_CONTAINER_PATH`), ključ
+  `YYYY/MM/<sha[0..2]>/<uuid>.<ext>`; fajl se **nikad** ne servira direktno s diska (B-15).
 
 ### 2.13 Obavijesti (`/notifications`)
 

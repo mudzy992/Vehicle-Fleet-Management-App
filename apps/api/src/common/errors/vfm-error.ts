@@ -66,6 +66,13 @@ export const VfmErrors = {
   validationError: (details: readonly ApiErrorDetail[]) =>
     new VfmException('VALIDATION_ERROR', undefined, details),
   unknownField: (details: readonly ApiErrorDetail[]) => new VfmException('UNKNOWN_FIELD', undefined, details),
+  // --- Upload priloga (docs/07 §1.5) ---
+  payloadTooLarge: (maxSizeBytes: number) =>
+    new VfmException('PAYLOAD_TOO_LARGE', undefined, undefined, { maxSizeBytes }),
+  unsupportedMediaType: (allowed: readonly string[]) =>
+    new VfmException('UNSUPPORTED_MEDIA_TYPE', undefined, [
+      { path: ['file'], message: `Dozvoljeno: ${allowed.join(', ')}`, code: 'MIME' },
+    ]),
 
   // --- Domena i infrastruktura ---
   notFound: (resource?: string) =>
