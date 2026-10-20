@@ -150,6 +150,7 @@ class FakeDriverPrisma {
       return row ? this.withCategories(row) : null;
     },
     create: async (args: { data: Partial<FakeDriverRow> }) => {
+      assertDates(args.data, ['dateOfBirth', 'licenseIssuedAt', 'licenseExpiresAt']);
       const now = new Date();
       const row: FakeDriverRow = {
         id: this.nextId('drv'),
@@ -183,6 +184,7 @@ class FakeDriverPrisma {
       return this.withCategories(row);
     },
     update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+      assertDates(args.data, ['dateOfBirth', 'licenseIssuedAt', 'licenseExpiresAt']);
       const index = this.drivers.findIndex((item) => item.id === args.where.id);
       if (index < 0) throw new Error('nema reda');
       const next = { ...this.drivers[index]!, ...args.data, updatedAt: new Date() } as FakeDriverRow;
@@ -225,6 +227,7 @@ class FakeDriverPrisma {
           (args.where.category === undefined || row.category === args.where.category),
       ) ?? null,
     create: async (args: { data: Partial<FakeLicenseRow> }) => {
+      assertDates(args.data as Record<string, unknown>, ['issuedAt', 'expiresAt']);
       const row: FakeLicenseRow = {
         id: this.nextId('cat'),
         driverId: String(args.data.driverId),
@@ -238,6 +241,7 @@ class FakeDriverPrisma {
       return row;
     },
     update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+      assertDates(args.data, ['issuedAt', 'expiresAt']);
       const index = this.licenses.findIndex((item) => item.id === args.where.id);
       if (index < 0) throw new Error('nema reda');
       const next = { ...this.licenses[index]!, ...args.data } as FakeLicenseRow;
@@ -368,6 +372,19 @@ class FakeDriverPrisma {
 
       return true;
     });
+  }
+}
+
+/**
+ * `@db.Date` kolone moraju dobiti `Date`, ne `YYYY-MM-DD` — ista greška koju bi
+ * Prisma bacila na deployu („premature end of input").
+ */
+function assertDates(data: Record<string, unknown>, keys: readonly string[]): void {
+  for (const key of keys) {
+    const value = data[key];
+    if (value !== undefined && value !== null && !(value instanceof Date)) {
+      throw new Error(`FakePrisma(@db.Date): \`${key}\` mora biti Date, dobijen ${JSON.stringify(value)}.`);
+    }
   }
 }
 

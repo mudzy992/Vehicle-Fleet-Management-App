@@ -81,13 +81,18 @@ describe('seed', () => {
     expect(fake.drivers.size).toBe(5);
     expect([...fake.drivers.values()].every((driver) => driver.formSchemaVersionId)).toBe(true);
     expect(fake.driverCategories.length).toBeGreaterThanOrEqual(5);
-    const licenses = [...fake.drivers.values()].map((driver) => String(driver.licenseExpiresAt));
-    expect(licenses.some((date) => date < new Date().toISOString().slice(0, 10))).toBe(true);
+    // Datumi su u bazi `Date` (ne string) — upoređujemo ISO datum.
+    const licenses = [...fake.drivers.values()].map((driver) =>
+      (driver.licenseExpiresAt as Date).toISOString().slice(0, 10),
+    );
+    const today = new Date().toISOString().slice(0, 10);
+    expect(licenses.some((date) => date < today)).toBe(true);
 
     // Demo registracije: jedna istekla, jedna ističe za 3 dana.
     expect(summary.registrationsCreated).toBe(2);
-    const untils = fake.registrations.map((row) => String(row.validUntil)).sort();
-    const today = new Date().toISOString().slice(0, 10);
+    const untils = fake.registrations
+      .map((row) => (row.validUntil as Date).toISOString().slice(0, 10))
+      .sort();
     expect(untils.filter((date) => date < today)).toHaveLength(1);
     expect(untils[1]! > today).toBe(true);
 

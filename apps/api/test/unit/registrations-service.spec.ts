@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { RegistrationsService, daysLeft } from '../../src/modules/registrations/registrations.service.js';
+import { toLocalDateString } from '@vfm/shared';
 import type { RegistrationListQuery } from '@vfm/shared/schemas';
 import { asPrisma, baseRegistrationInput, catchVfm, FakePeriodPrisma } from '../helpers/periods-fake.js';
 
@@ -33,6 +34,17 @@ describe('RegistrationsService — kreiranje', () => {
     expect(created.data.status).toBe('ACTIVE');
     expect(created.data.validUntil).toBe('2026-12-31');
     expect(fake.vehicles[0]!.registrationExpiresAt?.toISOString().slice(0, 10)).toBe('2026-12-31');
+  });
+
+  it('period ide u bazu kao `Date` (`@db.Date`), ne kao `YYYY-MM-DD`', async () => {
+    const { fake, svc } = service();
+    fake.addForm('REGISTRATION');
+    const vehicle = fake.addVehicle();
+
+    await svc.create(baseRegistrationInput(vehicle.id) as never);
+
+    expect(fake.registrations[0]!.validFrom).toBeInstanceOf(Date);
+    expect(fake.registrations[0]!.validUntil).toBeInstanceOf(Date);
   });
 
   it('preklapanje perioda je `409 PERIOD_OVERLAP` s ID-jem sukoba', async () => {
@@ -301,6 +313,20 @@ describe('RegistrationsService — brisanje i lista', () => {
     const list = await svc.list(query({ expiringInDays: 7 }));
     expect(list.total).toBe(1);
     expect(list.items[0]!.daysLeft).toBeGreaterThanOrEqual(0);
+  });
+
+  it('zapis koji ističe **danas** ulazi u `expiringInDays` (granica je početak dana)', async () => {
+    const { fake, svc } = service();
+    fake.addForm('REGISTRATION');
+    const vehicle = fake.addVehicle();
+    const today = toLocalDateString(new Date());
+    const from = new Date(new Date(today).getTime() - 30 * 86_400_000).toISOString().slice(0, 10);
+
+    await svc.create(baseRegistrationInput(vehicle.id, { validFrom: from, validUntil: today }) as never);
+
+    const list = await svc.list(query({ expiringInDays: 0 }));
+    expect(list.total).toBe(1);
+    expect(list.items[0]!.daysLeft).toBe(0);
   });
 
   it('`daysLeft` je negativan za istekao period', () => {

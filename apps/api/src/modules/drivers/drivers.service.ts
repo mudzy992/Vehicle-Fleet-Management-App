@@ -48,6 +48,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.js';
 import { VfmException } from '../../common/errors/vfm-error.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { toDatabaseDate } from '../../common/dates.js';
 
 /** Snapshot za audit (`before`/`after`) — kontroler ga predaje `AuditContext`. */
 export interface DriverMutation<T> {
@@ -261,13 +262,14 @@ export class DriversService {
       lastName: input.lastName,
       phone: input.phone ?? null,
       email: input.email ?? null,
-      dateOfBirth: input.dateOfBirth ?? null,
+      // `@db.Date` u Prismi traži DateTime — vidi `common/dates.ts`.
+      dateOfBirth: toDatabaseDate(input.dateOfBirth),
       address: input.address ?? null,
       employeeNumber: input.employeeNumber ?? null,
       employmentStatus: input.employmentStatus ?? null,
       licenseNumber: input.licenseNumber ?? null,
-      licenseIssuedAt: input.licenseIssuedAt ?? null,
-      licenseExpiresAt: input.licenseExpiresAt ?? null,
+      licenseIssuedAt: toDatabaseDate(input.licenseIssuedAt),
+      licenseExpiresAt: toDatabaseDate(input.licenseExpiresAt),
       licenseIssuingAuthority: input.licenseIssuingAuthority ?? null,
       restrictions: input.restrictions ?? null,
       notes: input.notes ?? null,
@@ -324,6 +326,11 @@ export class DriversService {
       'notes',
     ] as const) {
       if (input[key] !== undefined) data[key] = input[key];
+    }
+
+    // Datumi su u API-ju date-only stringovi, a kolone su `@db.Date`.
+    for (const key of ['dateOfBirth', 'licenseIssuedAt', 'licenseExpiresAt'] as const) {
+      if (input[key] !== undefined) data[key] = toDatabaseDate(input[key]);
     }
 
     if (input.status && input.status !== current.status) {
@@ -485,8 +492,8 @@ export class DriversService {
         id: randomUUID(),
         driverId,
         category,
-        issuedAt: input.issuedAt ?? null,
-        expiresAt: input.expiresAt ?? null,
+        issuedAt: toDatabaseDate(input.issuedAt),
+        expiresAt: toDatabaseDate(input.expiresAt),
         restrictions: input.restrictions ?? null,
         notes: input.notes ?? null,
       },
@@ -507,8 +514,11 @@ export class DriversService {
     const current = await this.loadCategoryOrThrow(driverId, categoryId);
 
     const data: Record<string, unknown> = {};
-    for (const key of ['issuedAt', 'expiresAt', 'restrictions', 'notes'] as const) {
+    for (const key of ['restrictions', 'notes'] as const) {
       if (input[key] !== undefined) data[key] = input[key];
+    }
+    for (const key of ['issuedAt', 'expiresAt'] as const) {
+      if (input[key] !== undefined) data[key] = toDatabaseDate(input[key]);
     }
 
     const updated = await this.prisma.driverLicenseCategory.update({

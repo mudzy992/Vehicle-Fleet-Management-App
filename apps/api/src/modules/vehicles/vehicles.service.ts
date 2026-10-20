@@ -46,6 +46,7 @@ import {
 import type { Prisma } from '../../generated/prisma/client.js';
 import { VfmException } from '../../common/errors/vfm-error.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { toDatabaseDate } from '../../common/dates.js';
 
 /** Snapshot za audit (`before`/`after`) — kontroler ga predaje `AuditContext`. */
 export interface VehicleMutation<T> {
@@ -192,9 +193,14 @@ function dateOnly(value: Date | null): string | null {
   return value ? toLocalDateString(value) : null;
 }
 
-/** Date → `YYYY-MM-DD` za `@db.Date` kolone ( Prisma prima ISO string). */
-function toDbDate(value: string | null | undefined): string | null {
-  return value ?? null;
+/**
+ * Date-only string (`2026-09-11`) → `Date` za `@db.Date` kolone.
+ *
+ * Prisma za `@db.Date` traži pun ISO DateTime; date-only string pada s
+ * „premature end of input" (vidi `common/dates.ts`).
+ */
+function toDbDate(value: string | null | undefined): Date | null {
+  return toDatabaseDate(value);
 }
 
 @Injectable()

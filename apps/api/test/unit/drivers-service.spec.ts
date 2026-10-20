@@ -102,6 +102,19 @@ describe('DriversService — kreiranje', () => {
     expect(created.data.phone).toBe('•••••222');
   });
 
+  it('datumi idu u bazu kao `Date` (`@db.Date`), ne kao `YYYY-MM-DD`', async () => {
+    const { fake, svc } = service();
+    fake.addForm();
+
+    const input = baseDriverInput({ licenseIssuedAt: '2022-09-11' });
+    await svc.create(input as never, actor(['driver:create']));
+
+    expect(fake.drivers[0]!.licenseIssuedAt).toBeInstanceOf(Date);
+    expect(fake.drivers[0]!.licenseExpiresAt).toBeInstanceOf(Date);
+    expect(fake.drivers[0]!.dateOfBirth).toBeInstanceOf(Date);
+    expect((fake.drivers[0]!.licenseIssuedAt as Date).toISOString()).toBe('2022-09-11T00:00:00.000Z');
+  });
+
   it('greška forme ide po polju (`formData.<key>`)', async () => {
     const { fake, svc } = service();
     fake.addForm();

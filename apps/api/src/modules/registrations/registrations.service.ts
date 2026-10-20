@@ -38,6 +38,7 @@ import {
 } from '../../common/form-record-support.js';
 import { VfmException } from '../../common/errors/vfm-error.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { toDatabaseDate } from '../../common/dates.js';
 
 export interface RegistrationMutation<T> {
   readonly data: T;
@@ -219,8 +220,9 @@ export class RegistrationsService {
           formSchemaVersionId: version.id,
           formData: validated.values,
           registrationNumber,
-          validFrom,
-          validUntil,
+          // `@db.Date` u Prismi traži DateTime — vidi `common/dates.ts`.
+          validFrom: toDatabaseDate(validFrom),
+          validUntil: toDatabaseDate(validUntil),
           issuedBy: input.issuedBy ?? null,
           costAmount,
           attachmentIds: input.attachmentIds ?? [],
@@ -257,8 +259,8 @@ export class RegistrationsService {
           detail('validUntil', 'period'),
         ]);
       }
-      data.validFrom = validFrom;
-      data.validUntil = validUntil;
+      data.validFrom = toDatabaseDate(validFrom);
+      data.validUntil = toDatabaseDate(validUntil);
       await this.assertNoOverlap({
         vehicleId: current.vehicleId,
         validFrom,
@@ -446,7 +448,9 @@ export class RegistrationsService {
     }
 
     if (query.expiringInDays !== undefined) {
-      const today = new Date();
+      // `@db.Date` ne nosi vrijeme: granica je početak **lokalnog** dana
+      // (`Europe/Sarajevo`), inače zapis koji ističe danas ispadne iz liste.
+      const today = toDatabaseDate(toLocalDateString(new Date()))!;
       const until = new Date(today.getTime() + query.expiringInDays * 24 * 60 * 60 * 1000);
       where.validUntil = { gte: today, lte: until };
       where.status = 'ACTIVE';

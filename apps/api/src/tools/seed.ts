@@ -41,6 +41,7 @@ import { checkPublishable, parseDefinition } from '@vfm/form-engine';
 import { inspectEnv } from '../config/env.js';
 import { PrismaClient } from '../generated/prisma/client.js';
 import type { Prisma } from '../generated/prisma/client.js';
+import { toDatabaseDate } from '../common/dates.js';
 import { PasswordService } from '../modules/auth/services/password.service.js';
 import { prismaConnectionOptions } from '../prisma/prisma.service.js';
 import { syncFieldKeys, type FieldKeyRegistryClient } from '../modules/form-schemas/field-key-registry.js';
@@ -572,8 +573,9 @@ async function seedDemoDrivers(
         employeeNumber: driver.employeeNumber,
         employmentStatus: 'STALNI',
         licenseNumber: driver.licenseNumber,
-        licenseIssuedAt: dateFromNow(-1500),
-        licenseExpiresAt,
+        // `@db.Date` u Prismi traži DateTime, ne `YYYY-MM-DD` (vidi common/dates.ts).
+        licenseIssuedAt: toDatabaseDate(dateFromNow(-1500)),
+        licenseExpiresAt: toDatabaseDate(licenseExpiresAt),
         licenseIssuingAuthority: 'KS Sarajevo',
         status: 'ACTIVE',
         formSchemaId: form.formSchemaId,
@@ -590,8 +592,8 @@ async function seedDemoDrivers(
           id: randomUUID(),
           driverId: row.id,
           category,
-          issuedAt: dateFromNow(-1500),
-          expiresAt: licenseExpiresAt,
+          issuedAt: toDatabaseDate(dateFromNow(-1500)),
+          expiresAt: toDatabaseDate(licenseExpiresAt),
         },
       });
     }
@@ -623,7 +625,8 @@ async function seedDemoRegistrations(
     if (!vehicle) continue;
 
     const exists = await prisma.registrationRecord.findFirst({
-      where: { vehicleId: vehicle.id, validFrom: entry.validFrom },
+      // Poređenje mora ići istim tipom kao kolona (`@db.Date` → `Date`).
+      where: { vehicleId: vehicle.id, validFrom: toDatabaseDate(entry.validFrom)! },
       select: { id: true },
     });
     if (exists) continue;
@@ -636,8 +639,8 @@ async function seedDemoRegistrations(
         formSchemaVersionId: form.versionId,
         formData: {},
         registrationNumber: `REG-DEMO-${index + 1}`,
-        validFrom: entry.validFrom,
-        validUntil: entry.validUntil,
+        validFrom: toDatabaseDate(entry.validFrom)!,
+        validUntil: toDatabaseDate(entry.validUntil)!,
         issuedBy: 'Demo osiguranje',
         costAmount: 25_000,
         status: 'ACTIVE',
@@ -647,7 +650,7 @@ async function seedDemoRegistrations(
 
     await prisma.vehicle.updateMany({
       where: { id: vehicle.id },
-      data: { registrationExpiresAt: entry.validUntil },
+      data: { registrationExpiresAt: toDatabaseDate(entry.validUntil) },
     });
 
     created += 1;

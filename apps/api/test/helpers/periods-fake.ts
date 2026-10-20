@@ -47,9 +47,16 @@ interface FakeVehicle {
 
 type Where = Record<string, unknown>;
 
+/**
+ * Prisma za `@db.Date` prima **samo** `Date` (ili pun ISO DateTime); date-only
+ * string pada s „premature end of input". Fake namjerno baca istu grešku da se
+ * regresija (`validFrom: "2026-01-01"`) uhvati u testu, a ne na deployu.
+ */
 function toDate(value: unknown): Date {
   if (value instanceof Date) return value;
-  return new Date(`${String(value)}T00:00:00.000Z`);
+  throw new Error(
+    `FakePrisma(@db.Date): očekivan Date, dobijen ${JSON.stringify(value)} — koristi toDatabaseDate().`,
+  );
 }
 
 function matches(row: FakePeriodRow, where: Where): boolean {

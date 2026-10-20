@@ -232,6 +232,24 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
+/**
+ * `@db.Date` prima `Date`, ne `YYYY-MM-DD` — fake baca istu grešku kao Prisma,
+ * da seed regresija padne u testu (vidi `apps/api/src/common/dates.ts`).
+ */
+function assertDbDates(data: Record<string, unknown>, keys: readonly string[]): void {
+  for (const key of keys) {
+    const value = data[key];
+    if (value !== undefined && value !== null && !(value instanceof Date)) {
+      throw new Error(`FakePrisma(@db.Date): \`${key}\` mora biti Date, dobijen ${JSON.stringify(value)}.`);
+    }
+  }
+}
+
+/** Poređenje `@db.Date` vrijednosti: `Date` po vremenu, ostalo po vrijednosti. */
+function sameValue(a: unknown, b: unknown): boolean {
+  return a instanceof Date && b instanceof Date ? a.getTime() === b.getTime() : a === b;
+}
+
 export class FakePrismaClient {
   readonly users = new Map<string, FakeUserRow>();
   readonly sessions = new Map<string, FakeSessionRow>();
@@ -723,6 +741,7 @@ export class FakePrismaClient {
     },
     create: async (args: { data: Record<string, unknown> }) => {
       const data = { ...args.data } as Record<string, unknown>;
+      assertDbDates(data, ['dateOfBirth', 'licenseIssuedAt', 'licenseExpiresAt']);
       if (this.drivers.has(String(data.id))) {
         throw new Error('FakePrisma: vozač već postoji.');
       }
@@ -733,17 +752,18 @@ export class FakePrismaClient {
 
   readonly driverLicenseCategory = {
     create: async (args: { data: Record<string, unknown> }) => {
+      assertDbDates(args.data, ['issuedAt', 'expiresAt']);
       this.driverCategories.push({ ...args.data });
       return clone(args.data);
     },
   };
 
   readonly registrationRecord = {
-    findFirst: async (args: { where: { vehicleId?: string; validFrom?: string } }) => {
+    findFirst: async (args: { where: { vehicleId?: string; validFrom?: Date | string } }) => {
       for (const row of this.registrations) {
         if (
           (args.where.vehicleId === undefined || row.vehicleId === args.where.vehicleId) &&
-          (args.where.validFrom === undefined || row.validFrom === args.where.validFrom)
+          (args.where.validFrom === undefined || sameValue(row.validFrom, args.where.validFrom))
         ) {
           return clone(row);
         }
@@ -751,6 +771,7 @@ export class FakePrismaClient {
       return null;
     },
     create: async (args: { data: Record<string, unknown> }) => {
+      assertDbDates(args.data, ['validFrom', 'validUntil']);
       this.registrations.push({ ...args.data });
       return clone(args.data);
     },
