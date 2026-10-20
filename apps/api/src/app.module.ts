@@ -30,6 +30,7 @@ import { VehiclesModule } from './modules/vehicles/vehicles.module.js';
 import { DriversModule } from './modules/drivers/drivers.module.js';
 import { RegistrationsModule } from './modules/registrations/registrations.module.js';
 import { InsurancesModule } from './modules/insurances/insurances.module.js';
+import { RemindersModule } from './modules/reminders/reminders.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { ClientTypeGuard } from './common/guards/client-type.guard.js';
 import { PermissionsGuard } from './common/guards/permissions.guard.js';
@@ -63,6 +64,8 @@ import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
     // Registracije i osiguranje (docs/07 §2.6) — historija perioda (B-10).
     RegistrationsModule,
     InsurancesModule,
+    // Podsjetnici (docs/07 §2.14) — idempotentni skener (P-07).
+    RemindersModule,
   ],
   controllers: [],
   providers: [

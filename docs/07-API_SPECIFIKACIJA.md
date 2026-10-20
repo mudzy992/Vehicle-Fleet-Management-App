@@ -366,9 +366,24 @@ na novu verziju, registar ključeva (`FieldKeyRegistry`, U-16) se dopunjava.
 
 ### 2.14 Podsjetnici (`/reminders`)
 
-`GET /reminders?status=&kind=&dueBefore=`, `POST /reminders/:id/acknowledge`,
-`POST /reminders/:id/snooze` `{days}`, `GET/PUT /reminders/policies` (`reminder:manage_policies`),
-`POST /reminders/scan` (`system:run_maintenance` — ručno pokretanje skenera).
+| Metoda | Put | P |
+|---|---|---|
+| GET | `/reminders` | `reminder:view` — `?page&pageSize&kind&status&entityType&entityId&dueWithinDays` |
+| POST | `/reminders/:id/acknowledge` | `reminder:acknowledge` — idempotentno (`ACKNOWLEDGED`) |
+| POST | `/reminders/:id/snooze` `{days 1–90}` | `reminder:snooze` — pomjera `fireAt`, status `SNOOZED` |
+| GET | `/reminders/policies` | `reminder:manage_policies` |
+| PUT | `/reminders/policies/:kind` | `reminder:manage_policies` — `SETTINGS_CHANGE` u auditu |
+| POST | `/reminders/scan` | `system:run_maintenance` — ručno pokretanje skenera |
+
+**P-07 idempotentnost:** `ScheduledReminder.dedupeKey` =
+`{kind}:{entityType}:{entityId}:{dueDate|dueKm}:{threshold}` je unique, a skener piše kroz
+`createMany({ skipDuplicates: true })`. Drugo pokretanje (ručno + cron) vraća `created: 0`.
+
+**Raspored:** worker dodaje repeatable job `reminder-scan` (`schedulerId:
+reminder-scan-daily`) s cronom `0 6 * * *` i `tz: Europe/Sarajevo`; `fireAt` je 06:00 lokalno na
+dan `dueDate − threshold` (CET/CEST se računa iz zone, ne fiksno +1). Polise bez reda u
+`ReminderPolicy` se preskaču — default prag (5 dana) se primjenjuje kad politika postoji, a
+`thresholdsDays` je prazan.
 
 ### 2.15 Izvještaji (`/reports`)
 

@@ -18,7 +18,7 @@
  * 🔴 Ako Redis nije dostupan, worker ostaje živ i pokušava ponovo — ne izlazi,
  * jer bi compose healthcheck onda stalno restartovao kontejner.
  */
-import { Worker, type Job } from 'bullmq';
+import { Queue, Worker, type Job } from 'bullmq';
 import { QUEUE_NAMES, REDIS_ACL_KEY_PATTERN } from '@vfm/shared';
 import type { QueueName } from '@vfm/shared';
 import type { BaseEnv } from '@vfm/shared/env';
@@ -27,6 +27,10 @@ import { inspectEnv } from '../config/env.js';
 import { setupLogger } from '../config/logger.js';
 import type { PinoLoggerService } from '../config/logger.js';
 import { queueConcurrency, queueFullName } from '../infra/queue/queue.service.js';
+import { REMINDER_SCAN_JOB, scheduleReminderScan } from '../infra/queue/reminder-scheduler.js';
+import { runReminderScanJob } from '../infra/queue/reminder-job.js';
+import { PrismaClient } from '../generated/prisma/client.js';
+import { buildPrismaAdapter, prismaConnectionOptions } from '../prisma/prisma.service.js';
 
 const HEARTBEAT_KEY = 'vfm:metrics:worker:heartbeat';
 const HEARTBEAT_TTL_SECONDS = 90;
@@ -111,6 +115,21 @@ async function main(): Promise<number> {
     context.workers.push(createWorker(env, name, connection, prefix, logger));
   }
 
+  // Dnevni skener podsjetnika (06:00 Europe/Sarajevo). `upsertJobScheduler` je
+  // idempotentan — restart ne pravi novi raspored. Ako Redis nije dostupan,
+  // worker ostaje živ (kao i za redove) i pokušava ponovo pri sljedećem startu.
+  const reminderQueue = new Queue(queueFullName(env, 'reminders'), { connection, prefix });
+  try {
+    await scheduleReminderScan(reminderQueue);
+    logger.log('Podsjetnici: skener zakazan za 06:00 Europe/Sarajevo.');
+  } catch (error) {
+    logger.warn(
+      `Podsjetnici: zakazivanje skenera nije uspjelo (${
+        error instanceof Error ? error.message : String(error)
+      }) — red radi, cron se dodaje pri sljedećem startu.`,
+    );
+  }
+
   // Heartbeat (compose healthcheck čita ovaj ključ).
   const heartbeatTimer = setInterval(() => {
     void writeHeartbeat(connection, context.workers.length, logger);
@@ -136,6 +155,7 @@ async function main(): Promise<number> {
       }
     });
     await Promise.allSettled(closing);
+    await reminderQueue.close().catch(() => undefined);
     logger.log('Worker zaustavljen.');
     process.exit(0);
   };
@@ -144,7 +164,7 @@ async function main(): Promise<number> {
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('unhandledRejection', (reason: unknown) => {
     logger.error(
-      `Unhandled rejection: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`,
+      `Unhandled rejection: ${reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)}`,
     );
   });
   process.on('uncaughtException', (error: Error) => {
@@ -180,7 +200,7 @@ function createWorker(
 
       // Faza 0: generički handler. Domena logika se dodaje po fazama:
       //   Faza 5 → outbox (FCM/in-app), Faza 5 → reminders, Faza 7 → reports.
-      await handleJob(name, job, logger);
+      await handleJob(name, job, logger, env);
 
       logger.log(
         `Posao "${job.name}" završen za ${Date.now() - startedAt} ms (red=${full}, id=${job.id ?? 'n/a'})`,
@@ -240,6 +260,7 @@ async function handleJob(
   queue: QueueName,
   job: Job<Record<string, unknown>>,
   logger: PinoLoggerService,
+  env: BaseEnv,
 ): Promise<void> {
   switch (queue) {
     case 'outbox':
@@ -251,8 +272,15 @@ async function handleJob(
       logger.debug(`[notifications] Faza 0: "${job.name}" primljen.`);
       return;
     case 'reminders':
-      // Faza 5: idempotentni podsjetnici (entity, type, threshold).
-      logger.debug(`[reminders] Faza 0: "${job.name}" primljen.`);
+      // P-07: dnevni skener u 06:00 Europe/Sarajevo; idempotentan kroz dedupeKey.
+      if (job.name === REMINDER_SCAN_JOB) {
+        await runReminderScanJob(
+          logger,
+          () => new PrismaClient({ adapter: buildPrismaAdapter(prismaConnectionOptions(env)) }),
+        );
+        return;
+      }
+      logger.debug(`[reminders] Nepoznat posao "${job.name}" — preskočen.`);
       return;
     case 'reports':
       // Faza 7: PDF/Excel generisanje + Download centar.
@@ -358,8 +386,7 @@ async function writeHeartbeat(
       return;
     }
     logger.warn(
-      `Heartbeat nije upisan (${message}) — ` +
-        'compose healthcheck će prijaviti worker kao nedostupan.',
+      `Heartbeat nije upisan (${message}) — ` + 'compose healthcheck će prijaviti worker kao nedostupan.',
     );
   }
 }
@@ -369,7 +396,6 @@ main()
     if (code !== 0) process.exit(code);
   })
   .catch((error: unknown) => {
-     
     console.error('Neočekivana greška u worker alatu:', error);
     process.exit(1);
   });

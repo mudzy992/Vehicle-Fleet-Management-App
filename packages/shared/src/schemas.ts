@@ -20,6 +20,9 @@ import { MAX_PAGE_SIZE } from './constants.js';
 import {
   AUDIT_ACTIONS,
   AUDIT_SEVERITIES,
+  NOTIFICATION_CHANNELS,
+  REMINDER_KINDS,
+  REMINDER_STATUSES,
   CLIENT_TYPES,
   DRIVER_STATUSES,
   FORM_SCHEMA_STATUSES,
@@ -2035,3 +2038,109 @@ export const insuranceListResponseSchema = z
   })
   .strict();
 export type InsuranceListResponse = z.output<typeof insuranceListResponseSchema>;
+
+// -----------------------------------------------------------------------------
+//  Podsjetnici (docs/07 §2.14, docs/03 §3.8, P-07)
+// -----------------------------------------------------------------------------
+
+export const reminderKindSchema = z.enum(REMINDER_KINDS);
+export const reminderStatusSchema = z.enum(REMINDER_STATUSES);
+
+/**
+ * Politika podsjetnika — jedan red po vrsti (`kind` je unique).
+ *
+ * Default prag je **5 dana** (zahtjev Faze 3); `thresholdsKm` je prazan jer se
+ * kilometraža koristi samo za `SERVICE_KM`.
+ */
+export const updateReminderPolicySchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    thresholdsDays: z.array(z.number().int().min(0).max(365)).max(10).optional(),
+    thresholdsKm: z.array(z.number().int().min(0).max(100_000)).max(10).optional(),
+    channels: z.array(z.enum(NOTIFICATION_CHANNELS)).max(4).optional(),
+    escalate: z.boolean().optional(),
+    notes: z.string().trim().max(1000).nullable().optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, { message: 'Nema šta mijenjati.' });
+export type UpdateReminderPolicyInput = z.output<typeof updateReminderPolicySchema>;
+
+export const reminderPolicySchema = z
+  .object({
+    id: uuidSchema,
+    kind: reminderKindSchema,
+    enabled: z.boolean(),
+    thresholdsDays: z.array(z.number().int()),
+    thresholdsKm: z.array(z.number().int()),
+    channels: z.array(z.string()),
+    escalate: z.boolean(),
+    notes: z.string().nullable(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export type ReminderPolicy = z.output<typeof reminderPolicySchema>;
+
+export const reminderPolicyListSchema = z
+  .object({ items: z.array(reminderPolicySchema) })
+  .strict();
+export type ReminderPolicyList = z.output<typeof reminderPolicyListSchema>;
+
+export const reminderListQuerySchema = paginationQuerySchema
+  .extend({
+    kind: reminderKindSchema.optional(),
+    status: reminderStatusSchema.optional(),
+    entityType: z.string().trim().max(40).optional(),
+    entityId: uuidSchema.optional(),
+    /** Podsjetnici koji padaju u narednih N dana (`fireAt <= now + N`). */
+    dueWithinDays: z.coerce.number().int().min(0).max(365).optional(),
+  })
+  .strict();
+export type ReminderListQuery = z.output<typeof reminderListQuerySchema>;
+
+export const scheduledReminderSchema = z
+  .object({
+    id: uuidSchema,
+    kind: reminderKindSchema,
+    entityType: z.string(),
+    entityId: z.string(),
+    dueDate: z.iso.date().nullable(),
+    dueKm: z.number().int().nullable(),
+    thresholdDays: z.number().int().nullable(),
+    thresholdKm: z.number().int().nullable(),
+    fireAt: z.iso.datetime(),
+    status: reminderStatusSchema,
+    sentAt: z.iso.datetime().nullable(),
+    acknowledgedAt: z.iso.datetime().nullable(),
+    /** `true` kad je `fireAt` već prošao, a podsjetnik još nije poslan. */
+    due: z.boolean(),
+    createdAt: z.iso.datetime(),
+  })
+  .strict();
+export type ScheduledReminder = z.output<typeof scheduledReminderSchema>;
+
+export const reminderListResponseSchema = z
+  .object({
+    items: z.array(scheduledReminderSchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ReminderListResponse = z.output<typeof reminderListResponseSchema>;
+
+/** `POST /reminders/:id/snooze` — odgađanje u danima (1–90). */
+export const snoozeReminderSchema = z
+  .object({ days: z.number().int().min(1).max(90) })
+  .strict();
+export type SnoozeReminderInput = z.output<typeof snoozeReminderSchema>;
+
+/** Rezultat skenera — koliko je kandidata nađeno i koliko je stvarno upisano. */
+export const reminderScanResultSchema = z
+  .object({
+    candidates: z.number().int().nonnegative(),
+    created: z.number().int().nonnegative(),
+    scannedAt: z.iso.datetime(),
+  })
+  .strict();
+export type ReminderScanResult = z.output<typeof reminderScanResultSchema>;

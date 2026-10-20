@@ -77,6 +77,8 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | Vozači (P11 forma `DRIVER`, PII redakcija bez `driver:view_pii`, `VERSION_CONFLICT`, status mašina, meka arhiva, kategorije dozvole s `DUPLICATE_ENTRY`, filteri `q`/`licenseCategory`/`expiringInDays`) | `test/unit/drivers-service.spec.ts` | 29 | `src/modules/drivers` |
 | Registracije (P11 forma `REGISTRATION`, `409 PERIOD_OVERLAP` s `conflictingId`, zatvoren interval, denormalizovani `registrationExpiresAt`, `VERSION_CONFLICT`, soft-delete oslobađa period, `expiringInDays`) | `test/unit/registrations-service.spec.ts` | 17 | `src/modules/registrations` |
 | Osiguranje (isti period ugovor nad `InsuranceRecord`, `insuranceExpiresAt`, `type`/franšiza, novac u feningama, filteri) | `test/unit/insurances-service.spec.ts` | 9 | `src/modules/insurances` |
+| Podsjetnici (P-07: dupli sken → `created: 0`, `dedupeKey` po zapisu/vrsti/pragu, default 5 dana, `fireAt` 06:00 Europe/Sarajevo s CET/CEST, km pragovi, potvrda/odgađanje) | `test/unit/reminders-service.spec.ts` | 20 | `src/modules/reminders` |
+| Raspored skenera (cron `0 6 * * *`, `tz` zona, stabilan `schedulerId`, upsert bez Redis-a) | `test/unit/reminder-scheduler.spec.ts` | 3 | `src/infra/queue` |
 
 | Web — API klijent (single-flight refresh, retry na 401, istekla sesija, 204) | `apps/web/src/lib/api.test.ts` | 6 | — |
 | Web — sesija (bootstrap anonymous/authenticated, `hasPermission`, R-07, istek sesije) | `apps/web/src/features/auth/session.test.tsx` | 4 | — |
