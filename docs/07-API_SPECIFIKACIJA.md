@@ -229,9 +229,26 @@ dozvole **nije** PII — nosi ga rok i podsjetnik.
 
 ### 2.6 Registracije i osiguranje
 
-`GET/POST /registrations`, `GET/PATCH/DELETE /registrations/:id`, `POST /registrations/:id/attachments`;
-isto za `/insurances`. Validacija preklapanja perioda → `409 PERIOD_OVERLAP`. Permisije `registration:*`,
-`insurance:*`.
+| Metoda | Put | P |
+|---|---|---|
+| GET | `/registrations` | `registration:view` — `?page&pageSize&q&vehicleId&status&expiringInDays` |
+| POST | `/registrations` | `registration:create` — `formData` prema objavljenoj `REGISTRATION` verziji |
+| GET | `/registrations/:id` | `registration:view` |
+| PATCH | `/registrations/:id` | `registration:update` — nosi `version`, provjerava preklapanje |
+| DELETE | `/registrations/:id` | `registration:delete` — soft-delete (oslobađa period) |
+| GET | `/insurances` | `insurance:view` — `?…&type` |
+| POST | `/insurances` | `insurance:create` |
+| GET · PATCH · DELETE | `/insurances/:id` | `insurance:view` · `update` · `delete` |
+| POST | `/registrations/:id/attachments` · `/insurances/:id/attachments` | `attachment:create` — Faza 3 |
+
+**B-10 — bez preklapanja perioda:** period je zatvoren interval `[validFrom, validUntil]`; preklapanje
+po istom vozilu → `409 PERIOD_OVERLAP` s `extra.conflictingId` i rasponom sukoba u `details[]`. Isto
+pravilo čuva baza (`EXCLUDE USING gist`, migracija `2_manual`), pa paralelni zahtjev ne može proći.
+
+**Denormalizovani rok:** nakon svake promjene `Vehicle.registrationExpiresAt` /
+`Vehicle.insuranceExpiresAt` = najdalji `validUntil` zapisa koji nisu `CANCELLED`/`ARCHIVED` i nisu
+obrisani — u istoj transakciji. `status` kroz `PATCH`: `ACTIVE ↔ CANCELLED`; `EXPIRED` postavlja
+sistem, `ARCHIVED` je arhiva evidencije.
 
 ### 2.7 Servisi (`/services`)
 

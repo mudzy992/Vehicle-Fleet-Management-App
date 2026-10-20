@@ -27,6 +27,7 @@ import {
   MIGRATION_JOB_STATUSES,
   MIGRATION_TARGET_ENTITIES,
   PERMISSION_SCOPES,
+  RECORD_STATUSES,
   USER_STATUSES,
   FUEL_TYPES,
   ODOMETER_SOURCES,
@@ -1836,3 +1837,201 @@ export const updateDriverLicenseCategorySchema = z
   })
   .strict();
 export type UpdateDriverLicenseCategoryInput = z.output<typeof updateDriverLicenseCategorySchema>;
+
+// -----------------------------------------------------------------------------
+//  Registracije i osiguranje (docs/07 §2.6, docs/03 §3.3)
+// -----------------------------------------------------------------------------
+
+export const recordStatusSchema = z.enum(RECORD_STATUSES);
+
+/**
+ * Zajednička pravila perioda (B-10).
+ *
+ * Preklapanje se provjerava u servisu (prijateljska `409 PERIOD_OVERLAP` s
+ * `conflictingId`), a baza ga čuva `EXCLUDE USING gist` constraintom — servis
+ * mapira i sirovu grešku baze na isti kod, jer dvije paralelne prijave mogu
+ * proći provjeru u isto vrijeme.
+ */
+const periodShape = {
+  validFrom: z.iso.date(),
+  validUntil: z.iso.date(),
+};
+
+const periodRefine = (value: { validFrom?: string; validUntil?: string }) =>
+  !value.validFrom || !value.validUntil || value.validUntil >= value.validFrom;
+
+const periodRefineOptions = {
+  message: 'Datum isteka ne može biti prije datuma početka.',
+  path: ['validUntil'],
+};
+
+// --- Registracije -----------------------------------------------------------
+
+export const createRegistrationSchema = z
+  .object({
+    vehicleId: uuidSchema,
+    registrationNumber: z.string().trim().min(1).max(40),
+    ...periodShape,
+    issuedBy: z.string().trim().max(120).nullable().optional(),
+    /** Trošak u feningama (BAM × 100) — novac se nikad ne šalje kao decimala. */
+    costAmount: z.number().int().nonnegative().nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+    attachmentIds: z.array(uuidSchema).max(20).optional(),
+    formData: z.record(z.string(), z.unknown()).default({}),
+    formSchemaVersionId: uuidSchema.optional(),
+  })
+  .strict()
+  .refine(periodRefine, periodRefineOptions);
+export type CreateRegistrationInput = z.output<typeof createRegistrationSchema>;
+
+export const updateRegistrationSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    registrationNumber: z.string().trim().min(1).max(40).optional(),
+    validFrom: periodShape.validFrom.optional(),
+    validUntil: periodShape.validUntil.optional(),
+    issuedBy: z.string().trim().max(120).nullable().optional(),
+    costAmount: z.number().int().nonnegative().nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+    attachmentIds: z.array(uuidSchema).max(20).optional(),
+    status: recordStatusSchema.optional(),
+    formData: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict()
+  .refine(periodRefine, periodRefineOptions)
+  .refine((value) => Object.keys(value).length > 1, { message: 'Nema šta mijenjati.' });
+export type UpdateRegistrationInput = z.output<typeof updateRegistrationSchema>;
+
+export const registrationListQuerySchema = paginationQuerySchema
+  .extend({
+    vehicleId: uuidSchema.optional(),
+    status: recordStatusSchema.optional(),
+    /** Aktivne registracije kojima `validUntil` pada u narednih N dana. */
+    expiringInDays: z.coerce.number().int().min(0).max(365).optional(),
+  })
+  .strict();
+export type RegistrationListQuery = z.output<typeof registrationListQuerySchema>;
+
+export const registrationRecordSchema = z
+  .object({
+    id: uuidSchema,
+    vehicleId: uuidSchema,
+    registrationNumber: z.string(),
+    validFrom: z.iso.date(),
+    validUntil: z.iso.date(),
+    issuedBy: z.string().nullable(),
+    costAmount: z.number().int().nullable(),
+    currency: z.string(),
+    status: recordStatusSchema,
+    notes: z.string().nullable(),
+    attachmentIds: z.array(uuidSchema),
+    /** Broj dana do isteka; negativan = istekla (računa server). */
+    daysLeft: z.number().int().nullable(),
+    formSchemaId: uuidSchema,
+    formSchemaVersionId: uuidSchema,
+    formData: z.record(z.string(), z.unknown()),
+    version: z.number().int().nonnegative(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export type RegistrationRecord = z.output<typeof registrationRecordSchema>;
+
+export const registrationListResponseSchema = z
+  .object({
+    items: z.array(registrationRecordSchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type RegistrationListResponse = z.output<typeof registrationListResponseSchema>;
+
+// --- Osiguranje -------------------------------------------------------------
+
+export const createInsuranceSchema = z
+  .object({
+    vehicleId: uuidSchema,
+    policyNumber: z.string().trim().max(60).nullable().optional(),
+    insuranceCompany: z.string().trim().max(120).nullable().optional(),
+    /** Vrsta pokrića (`KASKO`, `ODGOVORNOST`, `PUTNIKO`, …). */
+    type: z.string().trim().max(40).nullable().optional(),
+    ...periodShape,
+    premiumAmount: z.number().int().nonnegative().nullable().optional(),
+    deductibleAmount: z.number().int().nonnegative().nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+    attachmentIds: z.array(uuidSchema).max(20).optional(),
+    formData: z.record(z.string(), z.unknown()).default({}),
+    formSchemaVersionId: uuidSchema.optional(),
+  })
+  .strict()
+  .refine(periodRefine, periodRefineOptions);
+export type CreateInsuranceInput = z.output<typeof createInsuranceSchema>;
+
+export const updateInsuranceSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    policyNumber: z.string().trim().max(60).nullable().optional(),
+    insuranceCompany: z.string().trim().max(120).nullable().optional(),
+    type: z.string().trim().max(40).nullable().optional(),
+    validFrom: periodShape.validFrom.optional(),
+    validUntil: periodShape.validUntil.optional(),
+    premiumAmount: z.number().int().nonnegative().nullable().optional(),
+    deductibleAmount: z.number().int().nonnegative().nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+    attachmentIds: z.array(uuidSchema).max(20).optional(),
+    status: recordStatusSchema.optional(),
+    formData: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict()
+  .refine(periodRefine, periodRefineOptions)
+  .refine((value) => Object.keys(value).length > 1, { message: 'Nema šta mijenjati.' });
+export type UpdateInsuranceInput = z.output<typeof updateInsuranceSchema>;
+
+export const insuranceListQuerySchema = paginationQuerySchema
+  .extend({
+    vehicleId: uuidSchema.optional(),
+    status: recordStatusSchema.optional(),
+    type: z.string().trim().max(40).optional(),
+    expiringInDays: z.coerce.number().int().min(0).max(365).optional(),
+  })
+  .strict();
+export type InsuranceListQuery = z.output<typeof insuranceListQuerySchema>;
+
+export const insuranceRecordSchema = z
+  .object({
+    id: uuidSchema,
+    vehicleId: uuidSchema,
+    policyNumber: z.string().nullable(),
+    insuranceCompany: z.string().nullable(),
+    type: z.string().nullable(),
+    validFrom: z.iso.date(),
+    validUntil: z.iso.date(),
+    premiumAmount: z.number().int().nullable(),
+    deductibleAmount: z.number().int().nullable(),
+    currency: z.string(),
+    status: recordStatusSchema,
+    notes: z.string().nullable(),
+    attachmentIds: z.array(uuidSchema),
+    daysLeft: z.number().int().nullable(),
+    formSchemaId: uuidSchema,
+    formSchemaVersionId: uuidSchema,
+    formData: z.record(z.string(), z.unknown()),
+    version: z.number().int().nonnegative(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export type InsuranceRecord = z.output<typeof insuranceRecordSchema>;
+
+export const insuranceListResponseSchema = z
+  .object({
+    items: z.array(insuranceRecordSchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type InsuranceListResponse = z.output<typeof insuranceListResponseSchema>;

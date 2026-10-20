@@ -231,7 +231,7 @@ function registrationForm(): Record<string, unknown> {
             type: 'MONEY',
             label: 'Trošak registracije',
             order: 4,
-            validation: { min: 0, max: 5000, currency: 'BAM' },
+            validation: { min: 0, max: 500_000, currency: 'BAM' },
           },
           {
             key: 'insuranceCompany',
@@ -304,6 +304,61 @@ function driverForm(): Record<string, unknown> {
   };
 }
 
+function insuranceForm(): Record<string, unknown> {
+  return {
+    $schema: 'vfm-form/1',
+    meta: {
+      title: 'Osiguranje vozila',
+      description: 'Polisa osiguranja i period pokrića',
+      subject: 'INSURANCE',
+      language: 'bs',
+      estimatedMinutes: 3,
+    },
+    layout: { columns: 1, sectionsCollapsible: true, stickySubmit: true },
+    sections: [
+      {
+        key: 'polisa',
+        title: 'Polisa',
+        order: 1,
+        fields: [
+          {
+            key: 'policyNumber',
+            type: 'TEXT',
+            label: 'Broj polise',
+            required: true,
+            order: 1,
+            validation: { maxLength: 60 },
+          },
+          {
+            key: 'insuranceCompany',
+            type: 'TEXT',
+            label: 'Osiguravajuće društvo',
+            required: true,
+            order: 2,
+            validation: { maxLength: 120 },
+          },
+          { key: 'validFrom', type: 'DATE', label: 'Pokriće od', required: true, order: 3 },
+          { key: 'validUntil', type: 'DATE', label: 'Pokriće do', required: true, order: 4 },
+          {
+            key: 'costAmount',
+            type: 'MONEY',
+            label: 'Premija',
+            order: 5,
+            validation: { min: 0, max: 500_000, currency: 'BAM' },
+          },
+        ],
+      },
+    ],
+    normalizedName: [
+      { fieldKey: 'policyNumber', column: 'policyNumber', transform: 'TO_TEXT' },
+      { fieldKey: 'insuranceCompany', column: 'insuranceCompany', transform: 'TO_TEXT' },
+      { fieldKey: 'validFrom', column: 'validFrom', transform: 'TO_DATE' },
+      { fieldKey: 'validUntil', column: 'validUntil', transform: 'TO_DATE' },
+      { fieldKey: 'costAmount', column: 'costAmount', transform: 'MONEY_TO_FENINZI' },
+    ],
+  };
+}
+
 /** Redoslijed je bitan samo za log; sve forme su nezavisne. */
 export const SEED_FORMS: readonly SeedForm[] = [
   {
@@ -329,6 +384,14 @@ export const SEED_FORMS: readonly SeedForm[] = [
     description: 'Generička forma zadatka pranja (default za TASK).',
     ownerModule: 'tasks',
     definition: washForm(),
+  },
+  {
+    key: 'osiguranje_vozila',
+    name: 'Osiguranje vozila',
+    subject: 'INSURANCE',
+    description: 'Polisa osiguranja i period pokrića.',
+    ownerModule: 'insurances',
+    definition: insuranceForm(),
   },
   {
     key: 'registracija_vozila',
