@@ -691,6 +691,79 @@ export class FakePrismaClient {
       return clone(data);
     },
     count: async () => this.vehicles.size,
+    findMany: async (args: { where?: Record<string, unknown> }) =>
+      [...this.vehicles.values()]
+        .filter(
+          (row) =>
+            args.where?.deletedAt !== null ||
+            (row as unknown as { deletedAt?: Date | null }).deletedAt == null,
+        )
+        .map((row) => clone(row)),
+    updateMany: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.vehicles.get(args.where.id);
+      if (!row) return { count: 0 };
+      Object.assign(row, args.data);
+      return { count: 1 };
+    },
+  };
+
+  readonly drivers = new Map<string, Record<string, unknown>>();
+  readonly driverCategories: Array<Record<string, unknown>> = [];
+  readonly registrations: Array<Record<string, unknown>> = [];
+  readonly reminderPolicies = new Map<string, Record<string, unknown>>();
+
+  readonly driver = {
+    findFirst: async (args: { where: { employeeNumber?: string } }) => {
+      for (const row of this.drivers.values()) {
+        if (args.where.employeeNumber === undefined || row.employeeNumber === args.where.employeeNumber) {
+          return clone(row);
+        }
+      }
+      return null;
+    },
+    create: async (args: { data: Record<string, unknown> }) => {
+      const data = { ...args.data } as Record<string, unknown>;
+      if (this.drivers.has(String(data.id))) {
+        throw new Error('FakePrisma: vozač već postoji.');
+      }
+      this.drivers.set(String(data.id), data);
+      return clone(data);
+    },
+  };
+
+  readonly driverLicenseCategory = {
+    create: async (args: { data: Record<string, unknown> }) => {
+      this.driverCategories.push({ ...args.data });
+      return clone(args.data);
+    },
+  };
+
+  readonly registrationRecord = {
+    findFirst: async (args: { where: { vehicleId?: string; validFrom?: string } }) => {
+      for (const row of this.registrations) {
+        if (
+          (args.where.vehicleId === undefined || row.vehicleId === args.where.vehicleId) &&
+          (args.where.validFrom === undefined || row.validFrom === args.where.validFrom)
+        ) {
+          return clone(row);
+        }
+      }
+      return null;
+    },
+    create: async (args: { data: Record<string, unknown> }) => {
+      this.registrations.push({ ...args.data });
+      return clone(args.data);
+    },
+  };
+
+  readonly reminderPolicy = {
+    findUnique: async (args: { where: { kind: string } }) =>
+      this.reminderPolicies.get(args.where.kind) ?? null,
+    create: async (args: { data: Record<string, unknown> }) => {
+      const data = { ...args.data } as Record<string, unknown>;
+      this.reminderPolicies.set(String(data.kind), data);
+      return clone(data);
+    },
   };
 
   readonly passwordResetToken = {

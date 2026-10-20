@@ -76,6 +76,25 @@ describe('seed', () => {
     expect(fake.vehicles.size).toBe(10);
     expect([...fake.vehicles.values()].every((vehicle) => vehicle.formSchemaId.length > 0)).toBe(true);
 
+    // Faza 3: 5 fiktivnih vozača (jedna istekla dozvola) i kategorije.
+    expect(summary.driversCreated).toBe(5);
+    expect(fake.drivers.size).toBe(5);
+    expect([...fake.drivers.values()].every((driver) => driver.formSchemaVersionId)).toBe(true);
+    expect(fake.driverCategories.length).toBeGreaterThanOrEqual(5);
+    const licenses = [...fake.drivers.values()].map((driver) => String(driver.licenseExpiresAt));
+    expect(licenses.some((date) => date < new Date().toISOString().slice(0, 10))).toBe(true);
+
+    // Demo registracije: jedna istekla, jedna ističe za 3 dana.
+    expect(summary.registrationsCreated).toBe(2);
+    const untils = fake.registrations.map((row) => String(row.validUntil)).sort();
+    const today = new Date().toISOString().slice(0, 10);
+    expect(untils.filter((date) => date < today)).toHaveLength(1);
+    expect(untils[1]! > today).toBe(true);
+
+    // Politike podsjetnika postoje i van demo režima (skener ih treba).
+    expect(summary.reminderPoliciesCreated).toBe(8);
+    expect(fake.reminderPolicies.get('REGISTRATION')?.thresholdsDays).toEqual([5]);
+
     expect(summary.demoUsers).toHaveLength(2);
     const [admin, driver] = summary.demoUsers;
     expect(admin?.email).toBe('admin@vfm.local');
@@ -102,6 +121,9 @@ describe('seed', () => {
     expect(second.roles.created).toBe(0);
     expect(second.grantsAdded).toBe(0);
     expect(second.vehiclesCreated).toBe(0);
+    expect(second.driversCreated).toBe(0);
+    expect(second.registrationsCreated).toBe(0);
+    expect(second.reminderPoliciesCreated).toBe(0);
     expect(second.demoUsers).toEqual([]);
     expect(second.formSchemaCreated).toBe(false);
 
@@ -109,6 +131,8 @@ describe('seed', () => {
     expect(fake.roles.size).toBe(3);
     expect(fake.rolePermissions).toHaveLength(grantsAfterFirst);
     expect(fake.vehicles.size).toBe(10);
+    expect(fake.drivers.size).toBe(5);
+    expect(fake.registrations).toHaveLength(2);
     expect(fake.users.size).toBe(2);
     // Nema duplih dodjela rola.
     expect(fake.userRoles).toHaveLength(2);
@@ -132,6 +156,10 @@ describe('seed', () => {
     expect(summary.demoUsersSkipped).toBe(true);
     expect(summary.demoUsers).toEqual([]);
     expect(summary.vehiclesCreated).toBe(0);
+    expect(summary.driversCreated).toBe(0);
+    expect(summary.registrationsCreated).toBe(0);
+    // Politike podsjetnika se seeduju i u produkciji (nisu demo podaci).
+    expect(summary.reminderPoliciesCreated).toBe(8);
     expect(fake.users.size).toBe(0);
     expect(fake.vehicles.size).toBe(0);
 

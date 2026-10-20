@@ -174,6 +174,68 @@ const DEMO_VEHICLES = [
   },
 ] as const;
 
+/**
+ * Fiktivni vozači (5). Jedna dozvola je **istekla** i jedna ističe za 10 dana —
+ * da UI i podsjetnici imaju šta prikazati odmah nakon seed-a.
+ */
+const DEMO_DRIVERS = [
+  {
+    firstName: 'Amar',
+    lastName: 'Begić',
+    employeeNumber: 'EMP-001',
+    licenseNumber: 'BA-100001',
+    categories: ['B', 'C'],
+  },
+  {
+    firstName: 'Lejla',
+    lastName: 'Delić',
+    employeeNumber: 'EMP-002',
+    licenseNumber: 'BA-100002',
+    categories: ['B'],
+  },
+  {
+    firstName: 'Mirza',
+    lastName: 'Kovačević',
+    employeeNumber: 'EMP-003',
+    licenseNumber: 'BA-100003',
+    categories: ['B', 'CE'],
+  },
+  {
+    firstName: 'Selma',
+    lastName: 'Hodžić',
+    employeeNumber: 'EMP-004',
+    licenseNumber: 'BA-100004',
+    categories: ['B'],
+  },
+  {
+    firstName: 'Damir',
+    lastName: 'Softić',
+    employeeNumber: 'EMP-005',
+    licenseNumber: 'BA-100005',
+    categories: ['C'],
+  },
+] as const;
+
+/** Političke vrste koje skener poznaje — sve dobijaju default prag 5 dana. */
+const REMINDER_POLICY_KINDS = [
+  'REGISTRATION',
+  'INSURANCE',
+  'SERVICE_DATE',
+  'SERVICE_KM',
+  'DRIVER_LICENSE',
+  'TECHNICAL_INSPECTION',
+  'TIRE_ROTATION',
+  'CUSTOM',
+] as const;
+
+/** `YYYY-MM-DD` pomjeren za N dana od danas (UTC, dovoljno za demo). */
+function dateFromNow(days: number): string {
+  const date = new Date();
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 interface SeedSummary {
   readonly permissions: { created: number; updated: number };
   readonly roles: { created: number; updated: number };
@@ -181,6 +243,10 @@ interface SeedSummary {
   readonly demoUsers: Array<{ email: string; password: string }>;
   readonly demoUsersSkipped: boolean;
   readonly vehiclesCreated: number;
+  readonly driversCreated: number;
+  /** Demo registracije: jedna istekla, jedna ističe za 3 dana. */
+  readonly registrationsCreated: number;
+  readonly reminderPoliciesCreated: number;
   readonly formSchemaCreated: boolean;
   /** Koje su forme kreirane, a koje su već imale objavljenu verziju. */
   readonly forms: { created: string[]; existing: string[] };
@@ -481,6 +547,140 @@ async function seedDemoVehicles(
   return created;
 }
 
+async function seedDemoDrivers(
+  prisma: PrismaClient,
+  form: { formSchemaId: string; versionId: string },
+): Promise<number> {
+  let created = 0;
+
+  for (const [index, driver] of DEMO_DRIVERS.entries()) {
+    const exists = await prisma.driver.findFirst({
+      where: { employeeNumber: driver.employeeNumber },
+      select: { id: true },
+    });
+    if (exists) continue;
+
+    // Prva dozvola je istekla, druga ističe za 10 dana — ostale su važeće.
+    const licenseExpiresAt =
+      index === 0 ? dateFromNow(-20) : index === 1 ? dateFromNow(10) : dateFromNow(420);
+
+    const row = await prisma.driver.create({
+      data: {
+        id: randomUUID(),
+        firstName: driver.firstName,
+        lastName: driver.lastName,
+        employeeNumber: driver.employeeNumber,
+        employmentStatus: 'STALNI',
+        licenseNumber: driver.licenseNumber,
+        licenseIssuedAt: dateFromNow(-1500),
+        licenseExpiresAt,
+        licenseIssuingAuthority: 'KS Sarajevo',
+        status: 'ACTIVE',
+        formSchemaId: form.formSchemaId,
+        formSchemaVersionId: form.versionId,
+        formData: {},
+        notes: 'Fiktivan vozač iz seed-a (bez stvarnih podataka).',
+      },
+      select: { id: true },
+    });
+
+    for (const category of driver.categories) {
+      await prisma.driverLicenseCategory.create({
+        data: {
+          id: randomUUID(),
+          driverId: row.id,
+          category,
+          issuedAt: dateFromNow(-1500),
+          expiresAt: licenseExpiresAt,
+        },
+      });
+    }
+
+    created += 1;
+  }
+
+  return created;
+}
+
+/**
+ * Demo registracije za dva vozila: jedna **istekla** i jedna koja ističe za
+ * **3 dana** (zahtjev Faze 3). Denormalizovani rok se postavlja na vozilu, isto
+ * kao u servisu — bez toga lista vozila ne bi pokazivala rokove.
+ */
+async function seedDemoRegistrations(
+  prisma: PrismaClient,
+  form: { formSchemaId: string; versionId: string },
+  vehicles: ReadonlyArray<{ id: string; internalNo: string }>,
+): Promise<number> {
+  const demo = [
+    { internalNo: 'VFM-001', validFrom: dateFromNow(-395), validUntil: dateFromNow(-30) },
+    { internalNo: 'VFM-002', validFrom: dateFromNow(-362), validUntil: dateFromNow(3) },
+  ];
+  let created = 0;
+
+  for (const [index, entry] of demo.entries()) {
+    const vehicle = vehicles.find((row) => row.internalNo === entry.internalNo);
+    if (!vehicle) continue;
+
+    const exists = await prisma.registrationRecord.findFirst({
+      where: { vehicleId: vehicle.id, validFrom: entry.validFrom },
+      select: { id: true },
+    });
+    if (exists) continue;
+
+    await prisma.registrationRecord.create({
+      data: {
+        id: randomUUID(),
+        vehicleId: vehicle.id,
+        formSchemaId: form.formSchemaId,
+        formSchemaVersionId: form.versionId,
+        formData: {},
+        registrationNumber: `REG-DEMO-${index + 1}`,
+        validFrom: entry.validFrom,
+        validUntil: entry.validUntil,
+        issuedBy: 'Demo osiguranje',
+        costAmount: 25_000,
+        status: 'ACTIVE',
+        notes: 'Fiktivna registracija iz seed-a.',
+      },
+    });
+
+    await prisma.vehicle.updateMany({
+      where: { id: vehicle.id },
+      data: { registrationExpiresAt: entry.validUntil },
+    });
+
+    created += 1;
+  }
+
+  return created;
+}
+
+/** Default politike podsjetnika (prag 5 dana) — bez njih skener nema šta raditi. */
+async function seedReminderPolicies(prisma: PrismaClient): Promise<number> {
+  let created = 0;
+
+  for (const kind of REMINDER_POLICY_KINDS) {
+    const exists = await prisma.reminderPolicy.findUnique({ where: { kind } });
+    if (exists) continue;
+
+    await prisma.reminderPolicy.create({
+      data: {
+        id: randomUUID(),
+        kind,
+        enabled: true,
+        thresholdsDays: kind === 'SERVICE_KM' ? [] : [5],
+        thresholdsKm: kind === 'SERVICE_KM' ? [1000] : [],
+        channels: ['IN_APP'],
+        escalate: false,
+      },
+    });
+    created += 1;
+  }
+
+  return created;
+}
+
 export async function runSeed(prisma: PrismaClient, env: { NODE_ENV: string }): Promise<SeedSummary> {
   const passwords = new PasswordService();
 
@@ -493,9 +693,26 @@ export async function runSeed(prisma: PrismaClient, env: { NODE_ENV: string }): 
     throw new Error('Seed: forma "vehicle" nije dostupna — vozila se ne mogu vezati na formu.');
   }
 
+  const driverForm = forms.byKey.get('vozac');
+  const registrationForm = forms.byKey.get('registracija_vozila');
+
   const allowDemo = demoAllowed(env);
   const demoUsers = allowDemo ? await seedDemoUsers(prisma, passwords) : [];
   const vehiclesCreated = allowDemo ? await seedDemoVehicles(prisma, vehicleForm) : 0;
+
+  const driversCreated = allowDemo && driverForm ? await seedDemoDrivers(prisma, driverForm) : 0;
+
+  const demoVehicles = allowDemo
+    ? await prisma.vehicle.findMany({
+        where: { deletedAt: null },
+        select: { id: true, internalNo: true },
+      })
+    : [];
+  const registrationsCreated =
+    allowDemo && registrationForm ? await seedDemoRegistrations(prisma, registrationForm, demoVehicles) : 0;
+
+  // Politike nisu demo podaci — skener ih treba i u produkciji.
+  const reminderPoliciesCreated = await seedReminderPolicies(prisma);
 
   return {
     permissions,
@@ -504,6 +721,9 @@ export async function runSeed(prisma: PrismaClient, env: { NODE_ENV: string }): 
     demoUsers,
     demoUsersSkipped: !allowDemo,
     vehiclesCreated,
+    driversCreated,
+    registrationsCreated,
+    reminderPoliciesCreated,
     formSchemaCreated: forms.created.includes('vehicle'),
     forms: { created: forms.created, existing: forms.existing },
   };
@@ -533,6 +753,9 @@ async function main(): Promise<void> {
         `${summary.forms.existing.length} već objavljenih (${summary.forms.existing.join(', ') || '—'}).`,
     );
     log(`Vozila: ${summary.vehiclesCreated} novih (od 10 fiktivnih).`);
+    log(`Vozači: ${summary.driversCreated} novih (od 5 fiktivnih).`);
+    log(`Registracije (demo): ${summary.registrationsCreated} novih.`);
+    log(`Politike podsjetnika: ${summary.reminderPoliciesCreated} novih.`);
 
     if (summary.demoUsersSkipped) {
       log('Demo podaci preskočeni (produkcija). Postavi SEED_DEMO_DATA=true za demo korisnike/vozila.');
