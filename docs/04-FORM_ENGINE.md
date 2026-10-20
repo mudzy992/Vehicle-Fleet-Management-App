@@ -35,12 +35,12 @@
     "description": "Vanjsko i unutrašnje pranje",
     "subject": "TASK",
     "language": "bs",
-    "estimatedMinutes": 3
+    "estimatedMinutes": 3,
   },
   "layout": {
-    "columns": 1,                       // 1 | 2 (web); mobilna uvijek 1
+    "columns": 1, // 1 | 2 (web); mobilna uvijek 1
     "sectionsCollapsible": true,
-    "stickySubmit": true
+    "stickySubmit": true,
   },
   "sections": [
     {
@@ -60,12 +60,15 @@
           "order": 1,
           "visibleWhen": null,
           "disabled": false,
-          "optionsSource": { "kind": "STATIC", "items": [
-            { "value": "EXTERNAL", "label": "Vanjsko" },
-            { "value": "INTERNAL", "label": "Unutrašnje" },
-            { "value": "FULL",     "label": "Kompletno" }
-          ]},
-          "validation": { "minSelect": 1 }
+          "optionsSource": {
+            "kind": "STATIC",
+            "items": [
+              { "value": "EXTERNAL", "label": "Vanjsko" },
+              { "value": "INTERNAL", "label": "Unutrašnje" },
+              { "value": "FULL", "label": "Kompletno" },
+            ],
+          },
+          "validation": { "minSelect": 1 },
         },
         {
           "key": "washDurationMin",
@@ -73,7 +76,7 @@
           "label": "Trajanje (min)",
           "required": false,
           "order": 2,
-          "validation": { "min": 1, "max": 480 }
+          "validation": { "min": 1, "max": 480 },
         },
         {
           "key": "washCost",
@@ -81,7 +84,7 @@
           "label": "Trošak pranja",
           "required": false,
           "order": 3,
-          "validation": { "min": 0, "max": 100000, "currency": "BAM" }
+          "validation": { "min": 0, "max": 100000, "currency": "BAM" },
         },
         {
           "key": "photosAfter",
@@ -90,9 +93,14 @@
           "required": true,
           "order": 4,
           "visibleWhen": { "field": "washType", "op": "IN", "value": ["EXTERNAL", "FULL"] },
-          "validation": { "minFiles": 1, "maxFiles": 4, "maxSizeMb": 10, "mimeTypes": ["image/jpeg","image/png","image/webp"] }
-        }
-      ]
+          "validation": {
+            "minFiles": 1,
+            "maxFiles": 4,
+            "maxSizeMb": 10,
+            "mimeTypes": ["image/jpeg", "image/png", "image/webp"],
+          },
+        },
+      ],
     },
     {
       "key": "racun",
@@ -108,14 +116,14 @@
             "expression": "if(washDurationMin > 0, round(washCost / washDurationMin, 2), 0)",
             "resultType": "DECIMAL",
             "precision": 2,
-            "unit": "KM/min"
+            "unit": "KM/min",
           },
           "visibleOnForm": true,
-          "storeInFormData": true
-        }
-      ]
-    }
-  ]
+          "storeInFormData": true,
+        },
+      ],
+    },
+  ],
 }
 ```
 
@@ -126,29 +134,30 @@ snimanju drafta validira ovom meta-shemom; bez prolaska nema ni snimanja, ni obj
 
 ## 3. Katalog tipova polja (zatvorena lista)
 
-| Tip | Vrijednost (JSON) | Validacije | Web kontrola | Mobilna kontrola |
-|---|---|---|---|---|
-| `TEXT` | string | `minLength`, `maxLength`, `pattern` (regex whitelist), `trim` | Input | TextInput |
-| `TEXTAREA` | string | isto + `rows` | Textarea | TextInput multiline |
-| `INTEGER` | number (int) | `min`, `max`, `step` | Input number | TextInput numeric |
-| `DECIMAL` | number | `min`, `max`, `precision` (0–4), `step` | Input number | TextInput decimal-pad |
-| `DATE` | `"YYYY-MM-DD"` | `minDate`, `maxDate`, `notInFuture`, `notInPast` | DatePicker | Native picker |
-| `DATETIME` | ISO 8601 UTC | isto + `granularity` (minute) | DateTimePicker | Native picker |
-| `BOOLEAN` | boolean | `requiredTrue` | Switch | Switch |
-| `SINGLE_CHOICE` | string | `optionsSource`, `minSelect/maxSelect=1` | RadioGroup | Radio lista |
-| `MULTI_CHOICE` | string[] | `minSelect`, `maxSelect`, `unique` | CheckboxGroup | Checkbox lista |
-| `DROPDOWN` | string | `optionsSource`, `searchable`, `allowCustom` | Select (combobox) | Bottom-sheet lista |
-| `MONEY` | `{ amount: int(feninzi), currency: "BAM" }` | `min`, `max`, `currency` (whitelist) | Money input | Money input |
-| `CURRENCY` | string (ISO 4217) | whitelist (`BAM`, `EUR`) | Select | Select |
-| `PHOTO` | `attachmentId[]` | `minFiles`, `maxFiles`, `maxSizeMb`, `mimeTypes`, `requireStage` | Dropzone + kamera | `expo-camera` + galerija |
-| `FILE` | `attachmentId[]` | isto + `allowedExtensions` | Dropzone | Dokument picker |
-| `REFERENCE_VEHICLE` | uuid | `filterStatus`, `required` | Combobox s pretragom | Pretraga + lista |
-| `REFERENCE_DRIVER` | uuid | `filterActive`, `piiScope` | Combobox | Pretraga |
-| `REFERENCE_RECORD` | `{ entityType, entityId }` | `entityType` whitelist | Combobox | Lista |
-| `SECTION` | — (grupa) | `visibleWhen`, `order` | Card/fieldset | Sekcija |
-| `COMPUTED` | rezultat izraza | `expression`, `resultType`, `precision`, `unit` | Read-only tekst | Read-only tekst |
+| Tip                 | Vrijednost (JSON)                           | Validacije                                                       | Web kontrola         | Mobilna kontrola         |
+| ------------------- | ------------------------------------------- | ---------------------------------------------------------------- | -------------------- | ------------------------ |
+| `TEXT`              | string                                      | `minLength`, `maxLength`, `pattern` (regex whitelist), `trim`    | Input                | TextInput                |
+| `TEXTAREA`          | string                                      | isto + `rows`                                                    | Textarea             | TextInput multiline      |
+| `INTEGER`           | number (int)                                | `min`, `max`, `step`                                             | Input number         | TextInput numeric        |
+| `DECIMAL`           | number                                      | `min`, `max`, `precision` (0–4), `step`                          | Input number         | TextInput decimal-pad    |
+| `DATE`              | `"YYYY-MM-DD"`                              | `minDate`, `maxDate`, `notInFuture`, `notInPast`                 | DatePicker           | Native picker            |
+| `DATETIME`          | ISO 8601 UTC                                | isto + `granularity` (minute)                                    | DateTimePicker       | Native picker            |
+| `BOOLEAN`           | boolean                                     | `requiredTrue`                                                   | Switch               | Switch                   |
+| `SINGLE_CHOICE`     | string                                      | `optionsSource`, `minSelect/maxSelect=1`                         | RadioGroup           | Radio lista              |
+| `MULTI_CHOICE`      | string[]                                    | `minSelect`, `maxSelect`, `unique`                               | CheckboxGroup        | Checkbox lista           |
+| `DROPDOWN`          | string                                      | `optionsSource`, `searchable`, `allowCustom`                     | Select (combobox)    | Bottom-sheet lista       |
+| `MONEY`             | `{ amount: int(feninzi), currency: "BAM" }` | `min`, `max`, `currency` (whitelist)                             | Money input          | Money input              |
+| `CURRENCY`          | string (ISO 4217)                           | whitelist (`BAM`, `EUR`)                                         | Select               | Select                   |
+| `PHOTO`             | `attachmentId[]`                            | `minFiles`, `maxFiles`, `maxSizeMb`, `mimeTypes`, `requireStage` | Dropzone + kamera    | `expo-camera` + galerija |
+| `FILE`              | `attachmentId[]`                            | isto + `allowedExtensions`                                       | Dropzone             | Dokument picker          |
+| `REFERENCE_VEHICLE` | uuid                                        | `filterStatus`, `required`                                       | Combobox s pretragom | Pretraga + lista         |
+| `REFERENCE_DRIVER`  | uuid                                        | `filterActive`, `piiScope`                                       | Combobox             | Pretraga                 |
+| `REFERENCE_RECORD`  | `{ entityType, entityId }`                  | `entityType` whitelist                                           | Combobox             | Lista                    |
+| `SECTION`           | — (grupa)                                   | `visibleWhen`, `order`                                           | Card/fieldset        | Sekcija                  |
+| `COMPUTED`          | rezultat izraza                             | `expression`, `resultType`, `precision`, `unit`                  | Read-only tekst      | Read-only tekst          |
 
 **Izvor opcija (`optionsSource`):**
+
 - `STATIC` — lista u definiciji (`value`, `label`, `colorHex?`, `sortOrder?`);
 - `LIST` — šifarnik iz baze (`listCode`, npr. `WORKSHOP`) → omogućava promjenu opcija bez nove
   verzije forme;
@@ -160,11 +169,17 @@ snimanju drafta validira ovom meta-shemom; bez prolaska nema ni snimanja, ni obj
 ## 4. Uslovna vidljivost (`visibleWhen`)
 
 ```jsonc
-{ "all": [
+{
+  "all": [
     { "field": "washType", "op": "IN", "value": ["FULL"] },
-    { "any":  [ { "field": "washCost", "op": ">", "value": 0 },
-                { "field": "hasInvoice", "op": "==", "value": true } ] }
-]}
+    {
+      "any": [
+        { "field": "washCost", "op": ">", "value": 0 },
+        { "field": "hasInvoice", "op": "==", "value": true },
+      ],
+    },
+  ],
+}
 ```
 
 - Operatori: `== != > >= < <= IN NOT_IN CONTAINS IS_EMPTY IS_NOT_EMPTY BETWEEN`.
@@ -209,31 +224,31 @@ funcCall    := IDENT "(" ( expression ( "," expression )* )? ")"
 
 ### 6.2 Whitelist funkcija
 
-| Kategorija | Funkcije |
-|---|---|
+| Kategorija  | Funkcije                                                                                                                            |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Matematičke | `round(x, p?)`, `floor(x)`, `ceil(x)`, `abs(x)`, `min(a, b, …)`, `max(a, b, …)`, `sum(a, b, …)`, `avg(a, b, …)`, `clamp(x, lo, hi)` |
-| Logičke | `if(cond, a, b)`, `and(a, b)`, `or(a, b)`, `not(a)`, `coalesce(a, b, …)` |
-| Datumske | `daysBetween(a, b)`, `monthsBetween(a, b)`, `year(d)`, `month(d)`, `day(d)`, `addDays(d, n)`, `today()`* |
-| Tekst | `len(s)`, `upper(s)`, `lower(s)`, `concat(a, b, …)` |
-| Domen | `kmDiff(a, b)`, `fenToKm(x)`, `kmToFen(x)`, `l100km(liters, km)` |
+| Logičke     | `if(cond, a, b)`, `and(a, b)`, `or(a, b)`, `not(a)`, `coalesce(a, b, …)`                                                            |
+| Datumske    | `daysBetween(a, b)`, `monthsBetween(a, b)`, `year(d)`, `month(d)`, `day(d)`, `addDays(d, n)`, `today()`*                            |
+| Tekst       | `len(s)`, `upper(s)`, `lower(s)`, `concat(a, b, …)`                                                                                 |
+| Domen       | `kmDiff(a, b)`, `fenToKm(x)`, `kmToFen(x)`, `l100km(liters, km)`                                                                    |
 
 \* `today()` je **jedina** nedeterministička funkcija i izračunava se **na serveru** (ne na
 klijentu), a rezultat se snapshot-uje u `formData` — stari zapis ostaje stabilan.
 
 ### 6.3 Limite i sigurnost
 
-| Pravilo | Vrijednost |
-|---|---|
-| Maksimalna dužina izraza | 500 znakova |
-| Maksimalna dubina AST-a | 10 |
-| Maksimalan broj čvorova | 200 |
-| Maksimalan broj poziva funkcija | 50 |
-| Dozvoljeni tokeni | samo iz §6.1/§6.2 (lexer odbija sve ostalo) |
-| Zabranjeno | `eval`, `Function`, `import`, `require`, pristup objektima (`a.b` osim preko whitelist polja), indeksi nizova van `coalesce`, assignment, petlje, `;`, komentari |
-| Implementacija | ručni lexer + Pratt parser → AST → interpreter u TypeScriptu; **nijedan** put ne koristi `eval`/`new Function` |
-| Timeout | 10 ms po evaluaciji (prekida se i vraća `COMPUTED_TIMEOUT`) |
-| Determinizam | isti ulaz → isti izlaz; bez I/O, bez mreže, bez vremena osim `today()` (server) |
-| Tipovi | `number`, `string`, `boolean`, `date`, `money`, `null`; miješanje tipova → `TYPE_ERROR` pri objavi (static check) |
+| Pravilo                         | Vrijednost                                                                                                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Maksimalna dužina izraza        | 500 znakova                                                                                                                                                      |
+| Maksimalna dubina AST-a         | 10                                                                                                                                                               |
+| Maksimalan broj čvorova         | 200                                                                                                                                                              |
+| Maksimalan broj poziva funkcija | 50                                                                                                                                                               |
+| Dozvoljeni tokeni               | samo iz §6.1/§6.2 (lexer odbija sve ostalo)                                                                                                                      |
+| Zabranjeno                      | `eval`, `Function`, `import`, `require`, pristup objektima (`a.b` osim preko whitelist polja), indeksi nizova van `coalesce`, assignment, petlje, `;`, komentari |
+| Implementacija                  | ručni lexer + Pratt parser → AST → interpreter u TypeScriptu; **nijedan** put ne koristi `eval`/`new Function`                                                   |
+| Timeout                         | 10 ms po evaluaciji (prekida se i vraća `COMPUTED_TIMEOUT`)                                                                                                      |
+| Determinizam                    | isti ulaz → isti izlaz; bez I/O, bez mreže, bez vremena osim `today()` (server)                                                                                  |
+| Tipovi                          | `number`, `string`, `boolean`, `date`, `money`, `null`; miješanje tipova → `TYPE_ERROR` pri objavi (static check)                                                |
 
 **Static check pri objavi:** evaluator prolazi kroz izraz s apstraktnim tipovima i odbija objavu ako
 referenca nepostojeće polje, dijeli s nulom bez `if`-zaštite ili vraća tip različit od `resultType`.
@@ -260,13 +275,13 @@ referenca nepostojeće polje, dijeli s nulom bez `if`-zaštite ili vraća tip ra
 
 Dozvoljene kolone po entitetu (whitelist — ne može se mapirati na proizvoljnu kolonu):
 
-| Entitet | Dozvoljene kolone |
-|---|---|
-| `Task` | `odometerKm`, `totalCost`, `fuelLiters`, `fuelAmount`, `dueDate`, `dueAt`, `priority`, `title`, `description` |
-| `Vehicle` | `odometerKm`, `status`, `plateNumber`, `registrationExpiresAt`, `insuranceExpiresAt`, `nextServiceDueDate`, `nextServiceDueKm` |
-| `ServiceRecord` | `serviceDate`, `odometerKm`, `totalCost`, `nextServiceDueDate`, `nextServiceDueKm`, `workshopName` |
-| `RegistrationRecord` / `InsuranceRecord` | `validFrom`, `validUntil`, `costAmount`, `registrationNumber`, `policyNumber`, `insuranceCompany` |
-| `TireInstallation` | `mountedAt`, `mountedOdometerKm`, `dismountedAt`, `dismountedOdometerKm`, `kmDriven`, `daysInUse` |
+| Entitet                                  | Dozvoljene kolone                                                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `Task`                                   | `odometerKm`, `totalCost`, `fuelLiters`, `fuelAmount`, `dueDate`, `dueAt`, `priority`, `title`, `description`                  |
+| `Vehicle`                                | `odometerKm`, `status`, `plateNumber`, `registrationExpiresAt`, `insuranceExpiresAt`, `nextServiceDueDate`, `nextServiceDueKm` |
+| `ServiceRecord`                          | `serviceDate`, `odometerKm`, `totalCost`, `nextServiceDueDate`, `nextServiceDueKm`, `workshopName`                             |
+| `RegistrationRecord` / `InsuranceRecord` | `validFrom`, `validUntil`, `costAmount`, `registrationNumber`, `policyNumber`, `insuranceCompany`                              |
+| `TireInstallation`                       | `mountedAt`, `mountedOdometerKm`, `dismountedAt`, `dismountedOdometerKm`, `kmDriven`, `daysInUse`                              |
 
 Transformacije: `TO_INT`, `TO_DECIMAL`, `TO_DATE`, `TO_DATETIME`, `TO_BOOL`, `TO_TEXT`,
 `MONEY_TO_FENINZI`, `FENINZI_TO_MONEY`. Provjera tipa kolone i transformacije se radi pri objavi
@@ -293,6 +308,7 @@ Transformacije: `TO_INT`, `TO_DECIMAL`, `TO_DATE`, `TO_DATETIME`, `TO_BOOL`, `TO
 ```
 
 **Provjere pri objavi (sve moraju proći, inače `422` s listom):**
+
 1. Meta-shema definicije je validna.
 2. Svi `fieldKey` su jedinstveni, u dozvoljenom formatu i nisu rezervisani.
 3. Sve reference u `visibleWhen`/`computed` pokazuju na postojeća polja u istoj verziji.
@@ -343,9 +359,13 @@ Odgovor pri grešci:
       "formSchemaVersionId": "…",
       "formSchemaVersion": 3,
       "fieldErrors": [
-        { "key": "photosAfter", "code": "REQUIRED",  "message": "Fotografija je obavezna." },
-        { "key": "washCost",    "code": "MAX",       "message": "Najveći dozvoljeni iznos je 1.000,00 KM." },
-        { "key": "nepoznato",   "code": "UNKNOWN_FIELD", "message": "Polje ne postoji u ovoj verziji forme." }
+        { "key": "photosAfter", "code": "REQUIRED", "message": "Fotografija je obavezna." },
+        { "key": "washCost", "code": "MAX", "message": "Najveći dozvoljeni iznos je 1.000,00 KM." },
+        {
+          "key": "nepoznato",
+          "code": "UNKNOWN_FIELD",
+          "message": "Polje ne postoji u ovoj verziji forme."
+        }
       ]
     }
   }
@@ -402,6 +422,7 @@ staroj verziji — nikad se ne gube podaci. Job je idempotentan (unique `(jobId,
 ## 12. API i UI
 
 ### API (detalji u `07-API_SPECIFIKACIJA.md`)
+
 ```
 GET    /api/v1/form-schemas                       (lista, filter subject/status)
 POST   /api/v1/form-schemas                       (kreira formu + prvi DRAFT)
@@ -417,15 +438,17 @@ POST   /api/v1/form-schemas/:id/versions/:vid/retire      { changeNote }
 GET    /api/v1/form-schemas/active?subject=TASK&taskTypeId=…
 GET    /api/v1/form-schemas/:id/diff?from=&to=            (strukturni diff verzija)
 ```
+
 Permisije: `form:view`, `form:create`, `form:update`, `form:manage_schema`, `form:publish_version`,
 `form:retire_version`, `form:migrate_records`.
 
 ### Web Form Builder (UX detalji u `06-UX_UI_DIZAJN.md` §7)
+
 - Lijevo: paleta tipova polja (drag & drop). Sredina: canvas s sekcijama (web i „mobilni okvir"
   prekidač). Desno: svojstva odabranog polja + validacije + `visibleWhen` editor (bez pisanja JSON-a,
   ali s „prikaži JSON" za napredne).
 - Donja traka: `Provjeri shemu` (10 provjera iz §8, prikaz kao checklist), `Preview`, `Uporedi s
-  prethodnom verzijom` (diff), `Objavi…` (modal s obaveznom bilješkom i sažetkom promjena).
+prethodnom verzijom` (diff), `Objavi…` (modal s obaveznom bilješkom i sažetkom promjena).
 - Historija verzija s autorom, datumom, bilješkom i brojem zapisa koji koriste tu verziju
   (upozorenje pri povlačenju).
 
@@ -433,17 +456,17 @@ Permisije: `form:view`, `form:create`, `form:update`, `form:manage_schema`, `for
 
 ## 13. Šta **nije** podržano (scope guard protiv feature creep-a)
 
-| Nije podržano | Zašto |
-|---|---|
-| Proizvoljan JavaScript / `eval` / korisničke funkcije | Sigurnost (B-17) |
+| Nije podržano                                                              | Zašto                                                            |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Proizvoljan JavaScript / `eval` / korisničke funkcije                      | Sigurnost (B-17)                                                 |
 | Petlje, rekurzija, `while`, liste pod-formulara s dinamičkim brojem redova | Kompleksnost; za „stavke" postoje posebne tabele (`ServiceItem`) |
-| Server-side pozivi (HTTP, SQL, `QUERY` van whitelist-a) | Sigurnost i predvidljivost |
-| Promjena `status`-a/`assignee`-a/ostalih sistemskih polja kroz formu | U-05 |
-| Uređivanje objavljene verzije | §8 |
-| Validacije koje ovise o drugom korisniku/ulogama | Pripada RBAC-u, ne formi |
-| Custom widgeti bez implementacije u `form-renderer` | Mora postojati paritet web/mobilna |
-| Višejezične definicije (i18n labela) u v1 | UI je `bs`; dodaje se u v2 ako zatreba |
-| Formule koje upisuju u **druge** entitete | Jedan zapis = jedna forma |
+| Server-side pozivi (HTTP, SQL, `QUERY` van whitelist-a)                    | Sigurnost i predvidljivost                                       |
+| Promjena `status`-a/`assignee`-a/ostalih sistemskih polja kroz formu       | U-05                                                             |
+| Uređivanje objavljene verzije                                              | §8                                                               |
+| Validacije koje ovise o drugom korisniku/ulogama                           | Pripada RBAC-u, ne formi                                         |
+| Custom widgeti bez implementacije u `form-renderer`                        | Mora postojati paritet web/mobilna                               |
+| Višejezične definicije (i18n labela) u v1                                  | UI je `bs`; dodaje se u v2 ako zatreba                           |
+| Formule koje upisuju u **druge** entitete                                  | Jedan zapis = jedna forma                                        |
 
 Zahtjev koji prelazi ove granice ide kroz **change request** i procjenu, ne kroz „samo dodaj polje".
 
@@ -452,6 +475,7 @@ Zahtjev koji prelazi ove granice ide kroz **change request** i procjenu, ne kroz
 ## 14. Primjeri verzionisanja u praksi
 
 **Scenario:** Super Admin u septembru doda polje `fuelType` u formu registracije.
+
 1. Otvori `registration.core` → „Nova verzija (nacrt)" → kopija verzije 2 kao verzija 3 (DRAFT).
 2. Doda polje, postavi `required=false` (da stari zapisi ostanu validni), mapira na
    `RegistrationRecord.fuelType` (ako kolona postoji) ili ostavi u JSONB.
@@ -461,3 +485,33 @@ Zahtjev koji prelazi ove granice ide kroz **change request** i procjenu, ne kroz
    verziji 2 i prikazuju se po njoj.
 6. Ako vlasnik kasnije želi popuniti `fuelType` za stare zapise → kreira **FormMigrationJob** s
    preview-om (§10). Bez toga, stari zapisi jednostavno nemaju to polje.
+
+---
+
+## 15. Status implementacije (živi dokument)
+
+| Dio                                               | Gdje                                                                 | Status              |
+| ------------------------------------------------- | -------------------------------------------------------------------- | ------------------- |
+| Meta-shema definicije (§2–§5, §7)                 | `packages/form-engine/src/definition.schema.ts`                      | ✅ Faza 2 (chunk A) |
+| Rezervisani ključevi i format `fieldKey` (§5)     | `packages/form-engine/src/reserved-keys.ts`                          | ✅ Faza 2 (chunk A) |
+| Katalog tipova i dozvoljenih validacija (§3)      | `packages/form-engine/src/field-types.ts`                            | ✅ Faza 2 (chunk A) |
+| Kanonski JSON, `contentHash`, `ETag` (§8.10, §11) | `packages/form-engine/src/canonical.ts`                              | ✅ Faza 2 (chunk A) |
+| Sigurni izrazi: lexer + parser + evaluator (§6)   | `packages/form-engine/src/expression/`                               | ⏳ sljedeći chunk   |
+| Validacija zapisa prema verziji (§9, P11)         | `packages/form-engine/src/record-validation.ts`                      | ⏳ sljedeći chunk   |
+| Form Builder API i UI (§12)                       | `apps/api/src/modules/form-schemas/`, `apps/web/src/features/forms/` | ⏳ Faza 2           |
+| Migracija zapisa (§10, P12)                       | —                                                                    | ⏳ Faza 2           |
+
+Napomene uz implementaciju (odstupanja i pojašnjenja):
+
+- **Primjer iz §2 prolazi meta-shemu bez izmjena** — čuva se kao test fixture
+  (`packages/form-engine/test/fixtures/wash.definition.ts`), pa svaka promjena sheme koja razbije
+  dokumentovani primjer pada na testu.
+- **Shema je zatvorena** (`.strict()` na svakom nivou): nepoznat ključ je greška, ne tiho ignorisanje.
+- `fieldKey` je jedinstven na nivou **cijele forme** (ne samo sekcije jer se vrijednosti drže u jednom
+  JSONB objektu).
+- **`pattern` je ograničen**: lookaround i backreference se odbijaju (ReDoS), uz maksimalnu dužinu 200.
+- `visibleWhen` dubina ≤ 3, `all`/`any` po ≤ 10 djece; operatori koji ne nose vrijednost (`IS_EMPTY`)
+  odbijaju `value`, a `IN`/`BETWEEN` zahtijevaju listu.
+- `COMPUTED` ne može biti `required` (računa se na serveru), a `SECTION` ne nosi vrijednost.
+- Kanonizacija odbija `undefined` u nizovima, `__proto__`, `Map`/`Set`/klase i ciklične reference —
+  sve što bi dalo lažno isti `contentHash` za različite definicije.
