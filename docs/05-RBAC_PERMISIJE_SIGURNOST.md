@@ -244,6 +244,25 @@ vraćaju `403 MOBILE_SCOPE_NOT_ALLOWED` kada je `ct` mobilni, neovisno o permisi
 
 ---
 
+## 6.1 Statusi naloga i prijava
+
+| Status | Prijava | Pristup |
+|---|---|---|
+| `ACTIVE` | ✅ | pun pristup prema permisijama |
+| `PENDING_PASSWORD_CHANGE` | ✅ (s privremenom lozinkom) | **samo** promjena lozinke, `GET /auth/me`, odjava i vlastite sesije; sve ostalo `403 PASSWORD_CHANGE_REQUIRED`; efektivna prava su prazna |
+| `SUSPENDED` | ❌ `403 ACCOUNT_INACTIVE` | ništa |
+| `DEACTIVATED` | ❌ `403 ACCOUNT_INACTIVE` | ništa |
+
+`PENDING_PASSWORD_CHANGE` je stanje nakon bootstrapa, seed-a i kreiranja korisnika od strane
+administratora. Prijava **mora** biti dozvoljena — bez nje korisnik ne može doći do ekrana za promjenu
+lozinke, pa bi svaki novi nalog bio trajno zaključan. Ograničenje pristupa je na serveru
+(`JwtAuthGuard`), ne u UI-u. Uspješna promjena lozinke prebacuje nalog u `ACTIVE` i gasi sve sesije.
+
+Isto važi i za `ACTIVE` nalog s `mustChangePassword=true` (administrator je postavio privremenu
+lozinku): prijava prolazi, ali pristup je ograničen dok se lozinka ne promijeni.
+
+---
+
 ## 7. Autentifikacija — pravila
 
 | Pravilo | Vrijednost |

@@ -10,7 +10,7 @@
  * | `GET  /me`                 | JWT + clientType + permissions | — (često, bez audit-a) |
  * | `GET  /sessions`           | + `auth:manage_sessions` | — |
  * | `DELETE /sessions/:id`     | + `auth:manage_sessions` | `LOGOUT` (SECURITY) |
- * | `POST /change-password`    | + `auth:change_password` | `UPDATE` na `User` (SECURITY) |
+ * | `POST /change-password`    | samo prijava (vlastiti nalog) | `UPDATE` na `User` (SECURITY) |
  * | `POST /reset-password`     | `@Public` + `login` limiter | `UPDATE` na `User` (SECURITY) |
  *
  * HTTP detalji koji **ne** idu u servis:
@@ -169,10 +169,15 @@ export class AuthController {
   /**
    * Promjena lozinke: stara lozinka je obavezna, nova prolazi politiku
    * (`PasswordService.assertPolicy`), a sve sesije se revokuju.
+   *
+   * ⚠️ Namjerno **bez** `@RequirePermissions`: ruta mora raditi i za nalog s
+   * privremenom lozinkom (`PENDING_PASSWORD_CHANGE`), a takav nalog po pravilu
+   * nema efektivna prava. Radi se isključivo o vlastitom nalogu i traži se
+   * trenutna lozinka, pa permisija ne dodaje zaštitu — samo bi zaključala
+   * svaki novi nalog (docs/07 §2.1).
    */
   @Post('change-password')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @RequirePermissions('auth:change_password')
   @Audit('UPDATE', { severity: 'SECURITY', resource: 'User', diff: false })
   async changePassword(
     @Body(new ZodValidationPipe(changePasswordSchema, 'body')) input: ChangePasswordInput,

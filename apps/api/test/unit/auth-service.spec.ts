@@ -331,6 +331,23 @@ describe('AuthService.login — odbijanja', () => {
     expect(sink.events[0]).toMatchObject({ type: 'LOGIN_FAILED', reason: 'STATUS_SUSPENDED' });
   });
 
+  it('PENDING_PASSWORD_CHANGE se MOŽE prijaviti (privremena lozinka) uz mustChangePassword=true', async () => {
+    // Regresija: ranije je svaki nalog s privremenom lozinkom (bootstrap, seed,
+    // korisnik kojeg kreira administrator) dobijao 403 ACCOUNT_INACTIVE i nije
+    // se mogao prijaviti — pa nije mogao ni promijeniti lozinku.
+    const user = prisma.users.get(USER_ADMIN);
+    if (user) {
+      user.status = 'PENDING_PASSWORD_CHANGE';
+      user.mustChangePassword = true;
+    }
+
+    const result = await service.login(loginInput(), CONTEXT);
+
+    expect(result.response.user.mustChangePassword).toBe(true);
+    expect(result.response.user.status).toBe('PENDING_PASSWORD_CHANGE');
+    expect(result.response.accessToken).toBeTruthy();
+  });
+
   it('soft-obrisan nalog se ne može prijaviti', async () => {
     const user = prisma.users.get(USER_ADMIN);
     if (user) user.deletedAt = new Date();
@@ -581,6 +598,24 @@ describe('AuthService.me', () => {
     expect(me.permissionsVersion).toBe(ADMIN_SNAPSHOT.permissionsVersion + 1);
   });
 
+  it('PENDING_PASSWORD_CHANGE: me radi (web mora učitati profil prije promjene lozinke)', async () => {
+    const user = prisma.users.get(USER_ADMIN);
+    if (user) {
+      user.status = 'PENDING_PASSWORD_CHANGE';
+      user.mustChangePassword = true;
+    }
+    // Snapshot u produkciji dolazi iz baze; ovdje je fiksan, pa ga uskladimo.
+    loader.update(USER_ADMIN, { status: 'PENDING_PASSWORD_CHANGE', mustChangePassword: true });
+    await permissions.invalidateUser(USER_ADMIN);
+
+    const me = await service.me(USER_ADMIN, 'WEB');
+
+    expect(me.status).toBe('PENDING_PASSWORD_CHANGE');
+    expect(me.mustChangePassword).toBe(true);
+    // Efektivna prava su prazna — pristup podacima je zatvoren do promjene lozinke.
+    expect(me.permissions).toEqual([]);
+  });
+
   it('obrisan korisnik → 401, neaktivan → 403', async () => {
     const missing = await captureError(service.me('018f0000-0000-7000-8000-0000000000ff', 'WEB'));
     expect(missing.code).toBe('UNAUTHENTICATED');
@@ -628,6 +663,25 @@ describe('AuthService.changePassword', () => {
     expect(await permissions.tokenVersion(USER_DRIVER)).toBeGreaterThan(before);
     expect(prisma.activeSessions(USER_DRIVER)).toHaveLength(0);
     expect(tokens.decodeClaims(login.response.accessToken).tv).toBeLessThan(user?.tokenVersion ?? 0);
+  });
+
+  it('PENDING_PASSWORD_CHANGE: promjena lozinke prelazi nalog u ACTIVE (regresija)', async () => {
+    const user = prisma.users.get(USER_ADMIN);
+    if (user) {
+      user.status = 'PENDING_PASSWORD_CHANGE';
+      user.mustChangePassword = true;
+    }
+
+    await service.changePassword(
+      USER_ADMIN,
+      { currentPassword: PASSWORD, newPassword: 'Nova!Sifra2026x' },
+      CONTEXT,
+    );
+
+    expect(prisma.users.get(USER_ADMIN)).toMatchObject({
+      status: 'ACTIVE',
+      mustChangePassword: false,
+    });
   });
 });
 

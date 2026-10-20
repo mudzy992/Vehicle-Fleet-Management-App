@@ -58,9 +58,9 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 
 | Oblast | Spec | Testova | Coverage (stmts/branch) |
 |---|---|---|---|
-| Auth servis (login, rotacija, reuse detection, odjava, `me`, promjena lozinke, sesije) | `test/unit/auth-service.spec.ts` | 42 | `src/modules/auth` 96 % / 85 % |
+| Auth servis (login, rotacija, reuse detection, odjava, `me`, promjena lozinke, sesije, `PENDING_PASSWORD_CHANGE` tok) | `test/unit/auth-service.spec.ts` | 50 | `src/modules/auth` 96 % / 85 % |
 | Auth kontroler (rute, cookie, metadata, dozvole) | `test/unit/auth-controller.spec.ts` | 17 | `auth.controller.ts` 100 % / 75 % |
-| Guard-ovi (JWT, client type, permisije, rate limit) | `test/unit/auth-guards.spec.ts` | 40 | `src/common/guards` 97 % / 89 % |
+| Guard-ovi (JWT, client type, permisije, rate limit, `PASSWORD_CHANGE_REQUIRED` gate) | `test/unit/auth-guards.spec.ts` | 44 | `src/common/guards` 97 % / 89 % |
 | RBAC servis (opsezi, keš, verzije, revokacija) | `test/unit/permissions-service.spec.ts` | 32 | `auth/permissions` 90 % / 79 % |
 | Tokeni/lozinke | `token-service.spec.ts`, `password-service.spec.ts` | 29 + 25 | `auth/services` 96 % / 88 % |
 | Audit persistencija (`AuditLog` + SECURITY događaji) | `prisma-audit-sink.spec.ts`, `audit.spec.ts` | 10 | `common/audit` 93 % / 77 % |

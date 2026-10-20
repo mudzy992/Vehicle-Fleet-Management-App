@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Reflector } from '@nestjs/core';
 import { JWT_CLAIMS, REDIS_NS, type ClientType } from '@vfm/shared';
 import { __resetEnvCache } from '../../src/config/env.js';
-import { JwtAuthGuard, extractBearerToken } from '../../src/common/guards/jwt-auth.guard.js';
+import {
+  JwtAuthGuard,
+  extractBearerToken,
+  isPasswordChangeAllowedPath,
+} from '../../src/common/guards/jwt-auth.guard.js';
 import {
   ClientTypeGuard,
   fallbackAllowedClientTypes,
@@ -295,6 +299,73 @@ describe('JwtAuthGuard — autentifikacija', () => {
 
     expect(error.code).toBe('ACCOUNT_INACTIVE');
     expect(error.httpStatus).toBe(403);
+  });
+
+  it('PENDING_PASSWORD_CHANGE prolazi auth (inače se novi nalog ne bi mogao prijaviti)', async () => {
+    loader.update(USER_ADMIN, { status: 'PENDING_PASSWORD_CHANGE', mustChangePassword: true });
+    const request = fakeRequest({
+      url: '/api/v1/auth/me',
+      headers: { authorization: `Bearer ${tokenFor(USER_ADMIN)}` },
+    });
+    const { context } = contextFor('noMetadata', request);
+
+    await expect(jwtGuard.canActivate(context)).resolves.toBe(true);
+    expect((request.user as AuthenticatedUser).status).toBe('PENDING_PASSWORD_CHANGE');
+  });
+
+  it('nalog koji mora promijeniti lozinku → 403 PASSWORD_CHANGE_REQUIRED na svemu osim dozvoljenih ruta', async () => {
+    loader.update(USER_ADMIN, { status: 'PENDING_PASSWORD_CHANGE', mustChangePassword: true });
+
+    const blocked = fakeRequest({
+      url: '/api/v1/vehicles',
+      headers: { authorization: `Bearer ${tokenFor(USER_ADMIN)}` },
+    });
+    const error = await captureError(jwtGuard.canActivate(contextFor('noMetadata', blocked).context));
+
+    expect(error.code).toBe('PASSWORD_CHANGE_REQUIRED');
+    expect(error.httpStatus).toBe(403);
+    expect(security.types).toContain('PERMISSION_DENIED');
+    expect(security.events.at(-1)?.reason).toContain('mustChangePassword');
+
+    for (const url of [
+      '/api/v1/auth/change-password',
+      '/api/v1/auth/me',
+      '/api/v1/auth/logout',
+      '/api/v1/auth/sessions',
+      '/api/v1/auth/sessions/018f0000-0000-7000-8000-0000000000aa',
+    ]) {
+      const allowed = fakeRequest({
+        url,
+        headers: { authorization: `Bearer ${tokenFor(USER_ADMIN)}` },
+      });
+      await expect(jwtGuard.canActivate(contextFor('noMetadata', allowed).context), url).resolves.toBe(true);
+    }
+  });
+
+  it('ACTIVE + mustChangePassword (admin kreirao nalog) je takođe ograničen', async () => {
+    loader.update(USER_ADMIN, { mustChangePassword: true });
+    const request = fakeRequest({
+      url: '/api/v1/users',
+      headers: { authorization: `Bearer ${tokenFor(USER_ADMIN)}` },
+    });
+
+    expect((await captureError(jwtGuard.canActivate(contextFor('noMetadata', request).context))).code).toBe(
+      'PASSWORD_CHANGE_REQUIRED',
+    );
+  });
+
+  it('isPasswordChangeAllowedPath ignoriše query string i završnu crtu', () => {
+    const allowed = (url: string): boolean => isPasswordChangeAllowedPath(fakeRequest({ url }));
+
+    expect(allowed('/api/v1/auth/change-password')).toBe(true);
+    expect(allowed('/api/v1/auth/change-password?x=1')).toBe(true);
+    expect(allowed('/api/v1/auth/me/')).toBe(true);
+    expect(allowed('/api/v1/auth/logout')).toBe(true);
+    expect(allowed('/api/v1/auth/sessions/abc')).toBe(true);
+    // Podstring nije dovoljan: `/me-export` ili `/login` ne smiju proći.
+    expect(allowed('/api/v1/auth/me-export')).toBe(false);
+    expect(allowed('/api/v1/auth/login')).toBe(false);
+    expect(allowed('/api/v1/vehicles')).toBe(false);
   });
 
   it('tokenVersion niža od trenutne → 401 TOKEN_REVOKED (prisilno odjavljivanje)', async () => {

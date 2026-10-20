@@ -222,6 +222,14 @@ curl -s -o /dev/null -w '%{http_code}\n' https://api.vehicle.ba101.top/api/v1/us
   i `logoutAll` (sve + `tokenVersion++`).
 - **Audit `after` nije bio redaktovan** — odgovor handlera (npr. login) mogao je u `AuditLog.after` nositi token;
   sada `redactRecord` važi i za `after`.
+- **Nalog s privremenom lozinkom nije se mogao prijaviti (kritično)** — `login`, `refresh`, `me` i
+  `change-password` tražili su `status === 'ACTIVE'`, a bootstrap/seed/„korisnik kojeg kreira administrator"
+  postavljaju `PENDING_PASSWORD_CHANGE`. Posljedica: **nijedan novi nalog nije mogao ući** (403
+  `ACCOUNT_INACTIVE`), pa nije mogao ni promijeniti lozinku. Sada: `PENDING_PASSWORD_CHANGE` smije na
+  prijavu i `me`, a `JwtAuthGuard` ga pušta samo na promjenu lozinke, profil, odjavu i vlastite sesije —
+  sve ostalo je `403 PASSWORD_CHANGE_REQUIRED` (novi kod). Uspješna promjena prebacuje nalog u `ACTIVE`
+  (ranije se status nije mijenjao, pa je korisnik trajno ostajao „pending"). `change-password` više ne
+  traži `auth:change_password` (vlastiti nalog; taj nalog nema efektivna prava).
 - **`RolesModule`/`UsersModule` nisu bili u grafu aplikacije** nakon reseta sandboxa — rute `/roles` su bile nedostupne
   i pored zelenih testova; registracija je vraćena i pokrivena DI testovima modula.
 

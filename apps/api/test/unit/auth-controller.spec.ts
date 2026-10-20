@@ -198,7 +198,7 @@ describe('AuthController — metadata ruta', () => {
     expect(Reflect.getMetadata(IS_PUBLIC_KEY, AuthController.prototype.revokeSession)).toBeUndefined();
   });
 
-  it('dozvole: logout-all/sessions traže auth:manage_sessions, change-password auth:change_password', () => {
+  it('dozvole: logout-all/sessions traže auth:manage_sessions, change-password nema permisiju', () => {
     expect(Reflect.getMetadata(REQUIRED_PERMISSIONS_KEY, AuthController.prototype.logoutAll)).toMatchObject({
       permissions: ['auth:manage_sessions'],
       mode: 'ALL',
@@ -209,10 +209,9 @@ describe('AuthController — metadata ruta', () => {
     expect(Reflect.getMetadata(REQUIRED_PERMISSIONS_KEY, AuthController.prototype.revokeSession)).toMatchObject({
       permissions: ['auth:manage_sessions'],
     });
-    expect(Reflect.getMetadata(REQUIRED_PERMISSIONS_KEY, AuthController.prototype.changePassword)).toMatchObject({
-      permissions: ['auth:change_password'],
-    });
-    // Obična odjava ne traži permisiju: korisnik se uvijek mora moći odjaviti.
+    // Promjena vlastite lozinke i odjava ne traže permisiju: nalog s privremenom
+    // lozinkom nema efektivna prava, a bez tih ruta ne bi mogao ni početi raditi.
+    expect(Reflect.getMetadata(REQUIRED_PERMISSIONS_KEY, AuthController.prototype.changePassword)).toBeUndefined();
     expect(Reflect.getMetadata(REQUIRED_PERMISSIONS_KEY, AuthController.prototype.logout)).toBeUndefined();
   });
 

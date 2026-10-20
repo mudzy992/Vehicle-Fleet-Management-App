@@ -5,7 +5,9 @@
  * 1. `@Public` rute prolaze bez tokena (`/auth/login`, `/auth/refresh`, `/health/*`),
  * 2. `Authorization: Bearer <jwt>` → potpis, `exp`, `iss`, `aud`, obavezni claimovi
  *    (`TokenService`),
- * 3. korisnik postoji i nalog je `ACTIVE`,
+ * 3. korisnik postoji i nalog je `ACTIVE` ili `PENDING_PASSWORD_CHANGE`
+ *    (drugi status je nalog s privremenom lozinkom: pušta se samo na promjenu
+ *    lozinke, profil i odjavu — sve ostalo je `403 PASSWORD_CHANGE_REQUIRED`),
  * 4. `tokenVersion` (claim `tv`) ≥ trenutne verzije → inače `401 TOKEN_REVOKED`
  *    (trenutno odjavljivanje svih sesija, docs/05 §5.4),
  * 5. izračunaju se efektivna prava **s tipom klijenta iz claima `ct`** i prikače na
@@ -20,7 +22,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
 // ⚠️ Value import: `Reflector` se injektira, pa mora biti u DI metadata.
 import { Reflector } from '@nestjs/core';
-import { evaluateEffectivePermissions } from '@vfm/shared';
+import { evaluateEffectivePermissions, isAuthAllowedStatus } from '@vfm/shared';
 import { TokenService } from '../../modules/auth/services/token.service.js';
 import { PermissionsService } from '../../modules/auth/permissions/permissions.service.js';
 import { VfmErrors } from '../errors/vfm-error.js';
@@ -46,6 +48,37 @@ export function extractBearerToken(request: VfmRequest): string | undefined {
   const match = /^Bearer\s+(.+)$/iu.exec(value.trim());
   const token = match?.[1]?.trim();
   return token && token.length > 0 ? token : undefined;
+}
+
+/**
+ * Rute koje ostaju dostupne nalogu koji **mora promijeniti lozinku**
+ * (`mustChangePassword=true`), bez obzira na status.
+ *
+ * Bez ovog spiska korisnik s privremenom lozinkom ne bi mogao ni da je promijeni
+ * (a sve ostale rute bi mu bile otvorene dok god je ne promijeni — što je
+ * suprotno svrsi privremene lozinke).
+ */
+const PASSWORD_CHANGE_ALLOWED_PATHS = [
+  '/auth/change-password',
+  '/auth/me',
+  '/auth/logout',
+  '/auth/logout-all',
+] as const;
+
+/** Putanja zahtjeva bez query stringa i završne kose crte. */
+function normalizePath(request: VfmRequest): string {
+  const raw = request.url ?? '/';
+  const withoutQuery = raw.split('?')[0] ?? '/';
+  const trimmed = withoutQuery.replace(/\/+$/u, '');
+  return trimmed.length > 0 ? trimmed : '/';
+}
+
+/** Da li je ruta dozvoljena dok korisnik ne promijeni lozinku? */
+export function isPasswordChangeAllowedPath(request: VfmRequest): boolean {
+  const path = normalizePath(request);
+  // `/auth/sessions` i `/auth/sessions/:id` — vlastiti uređaji (odjava pojedine sesije).
+  if (path.endsWith('/auth/sessions') || /\/auth\/sessions\/[^/]+$/u.test(path)) return true;
+  return PASSWORD_CHANGE_ALLOWED_PATHS.some((suffix) => path.endsWith(suffix));
 }
 
 @Injectable()
@@ -80,7 +113,7 @@ export class JwtAuthGuard implements CanActivate {
       throw VfmErrors.unauthenticated();
     }
 
-    if (snapshot.status !== 'ACTIVE') {
+    if (!isAuthAllowedStatus(snapshot.status)) {
       this.report('UNAUTHENTICATED', eventContext, {
         userId: claims.sub,
         clientType: claims.ct,
@@ -88,6 +121,21 @@ export class JwtAuthGuard implements CanActivate {
         reason: `nalog nije aktivan (${snapshot.status})`,
       });
       throw VfmErrors.accountInactive();
+    }
+
+    // Nalog s privremenom lozinkom (bootstrap/seed/reset) smije samo promijeniti
+    // lozinku, vidjeti profil i odjaviti se — sve ostalo je zatvoreno dok se
+    // lozinka ne promijeni. Provjera je ovdje (ne u UI-u) da je ne bi bilo
+    // moguće zaobići direktnim pozivom API-ja (P14).
+    if (snapshot.mustChangePassword && !isPasswordChangeAllowedPath(request)) {
+      this.report('PERMISSION_DENIED', eventContext, {
+        userId: claims.sub,
+        clientType: claims.ct,
+        roles: snapshot.roles,
+        reason: 'mustChangePassword=true → dozvoljena je samo promjena lozinke',
+        path: request.url,
+      });
+      throw VfmErrors.passwordChangeRequired();
     }
 
     // Trenutno odjavljivanje: Redis brojač ima prednost nad bazom.

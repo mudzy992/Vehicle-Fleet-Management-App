@@ -26,7 +26,7 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { ClientType } from '@vfm/shared';
-import { SUPER_ADMIN_ROLE } from '@vfm/shared';
+import { SUPER_ADMIN_ROLE, isAuthAllowedStatus } from '@vfm/shared';
 import type {
   AuthTokenResponse,
   AuthUser,
@@ -200,7 +200,11 @@ export class AuthService {
       throw VfmErrors.accountLocked(retryAfterSeconds);
     }
 
-    if (user.status !== 'ACTIVE') {
+    // `PENDING_PASSWORD_CHANGE` je **dozvoljen**: to je nalog s privremenom
+    // lozinkom (bootstrap/seed/kreirao administrator) i bez prijave korisnik
+    // nikad ne bi mogao doći do ekrana za promjenu lozinke. Sva ostala prava
+    // su zatvorena u `JwtAuthGuard`-u (`403 PASSWORD_CHANGE_REQUIRED`).
+    if (!isAuthAllowedStatus(user.status)) {
       await this.recordAttempt({
         email: user.email,
         userId: user.id,
@@ -378,7 +382,7 @@ export class AuthService {
       select: USER_SELECT,
     });
     if (!user) throw VfmErrors.unauthenticated('Nalog više nije dostupan.');
-    if (user.status !== 'ACTIVE') throw VfmErrors.accountInactive();
+    if (!isAuthAllowedStatus(user.status)) throw VfmErrors.accountInactive();
 
     const snapshot = await this.permissions.snapshot(user.id);
     if (!snapshot) throw VfmErrors.unauthenticated('Nalog više nije dostupan.');
@@ -491,7 +495,9 @@ export class AuthService {
       select: USER_SELECT,
     });
     if (!user) throw VfmErrors.unauthenticated('Nalog nije pronađen.');
-    if (user.status !== 'ACTIVE') throw VfmErrors.accountInactive();
+    // `me` mora raditi i za nalog s privremenom lozinkom — web poslije prijave
+    // učitava profil (i `mustChangePassword`) prije preusmjeravanja na promjenu.
+    if (!isAuthAllowedStatus(user.status)) throw VfmErrors.accountInactive();
 
     const snapshot = await this.permissions.snapshot(userId);
     if (!snapshot) throw VfmErrors.unauthenticated('Prava korisnika nisu dostupna.');
@@ -513,7 +519,8 @@ export class AuthService {
       select: { id: true, email: true, passwordHash: true, status: true },
     });
     if (!user) throw VfmErrors.unauthenticated('Nalog nije pronađen.');
-    if (user.status !== 'ACTIVE') throw VfmErrors.accountInactive();
+    // Promjena lozinke je jedina radnja dozvoljena nalogu s privremenom lozinkom.
+    if (!isAuthAllowedStatus(user.status)) throw VfmErrors.accountInactive();
 
     const currentValid = await this.passwords.verify(user.passwordHash, input.currentPassword);
     if (!currentValid) {
@@ -533,7 +540,14 @@ export class AuthService {
     const passwordHash = await this.passwords.hash(input.newPassword);
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { passwordHash, mustChangePassword: false },
+      data: {
+        passwordHash,
+        mustChangePassword: false,
+        // Nalog s privremenom lozinkom prelazi u `ACTIVE` **tek** ovdje —
+        // ranije se status nije mijenjao, pa je korisnik zauvijek ostajao
+        // `PENDING_PASSWORD_CHANGE` i gubio pristup nakon prve promjene.
+        ...(user.status === 'PENDING_PASSWORD_CHANGE' ? { status: 'ACTIVE' as const } : {}),
+      },
     });
 
     // Redoslijed je bitan: prvo DB `tokenVersion++` (izvor istine), zatim Redis

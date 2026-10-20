@@ -51,6 +51,7 @@ export const VfmErrors = {
       retryAfterSeconds === undefined ? undefined : { retryAfterSeconds },
     ),
   accountInactive: () => new VfmException('ACCOUNT_INACTIVE'),
+  passwordChangeRequired: () => new VfmException('PASSWORD_CHANGE_REQUIRED'),
   refreshReuseDetected: () => new VfmException('REFRESH_TOKEN_REUSE_DETECTED'),
 
   // --- Autorizacija i klijent (N-05, P1) ---

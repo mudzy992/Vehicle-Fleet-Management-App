@@ -68,7 +68,7 @@ GET /api/v1/tasks?page=1&pageSize=20&sort=createdAt:desc,dueAt:asc
 |---|---|---|
 | 400 | `VALIDATION_FAILED`, `INVALID_FILTER`, `INVALID_SORT`, `MALFORMED_JSON` | loš zahtjev |
 | 401 | `UNAUTHENTICATED`, `TOKEN_EXPIRED`, `TOKEN_REVOKED`, `PERMISSIONS_STALE`, `REFRESH_REUSED` | auth |
-| 403 | `PERMISSION_DENIED`, `SCOPE_DENIED`, `MOBILE_ACCESS_FORBIDDEN`, `MOBILE_SCOPE_NOT_ALLOWED`, `LAST_SUPER_ADMIN_PROTECTED`, `PII_ACCESS_DENIED` | autorizacija |
+| 403 | `PERMISSION_DENIED`, `SCOPE_DENIED`, `MOBILE_ACCESS_FORBIDDEN`, `MOBILE_SCOPE_NOT_ALLOWED`, `LAST_SUPER_ADMIN_PROTECTED`, `PII_ACCESS_DENIED`, `PASSWORD_CHANGE_REQUIRED` | autorizacija |
 | 404 | `NOT_FOUND`, `ATTACHMENT_NOT_FOUND` | resurs ne postoji (ili nije u scope-u) |
 | 409 | `TASK_ALREADY_CLAIMED`, `TASK_NOT_OPEN`, `NOT_ASSIGNEE`, `VERSION_CONFLICT`, `DUPLICATE_ENTRY`, `PERIOD_OVERLAP`, `TIRE_ALREADY_MOUNTED`, `ODOMETER_REGRESSION`, `IDEMPOTENCY_KEY_REUSED` | sukob stanja |
 | 413 | `PAYLOAD_TOO_LARGE` | upload |
@@ -93,7 +93,7 @@ Legenda: 🔒 = autorizovano; **P** = potrebna permisija; `Idem` = podržava `Id
 | POST | `/auth/logout` | 🔒 | ukida **trenutnu** sesiju (prema refresh tokenu ili `sid`); ostali uređaji rade dalje |
 | POST | `/auth/logout-all` | 🔒 `auth:manage_sessions` | revoke svih sesija + `User.tokenVersion++` → postojeći access tokeni padaju odmah |
 | GET | `/auth/me` | 🔒 | profil + role + efektivne permisije + `pv`/`tv` + postavke (`timezone`, `locale`) |
-| POST | `/auth/change-password` | 🔒 `auth:change_password` | provjera stare lozinke + politika; `mustChangePassword=false`; revoke svih sesija + `tokenVersion++` |
+| POST | `/auth/change-password` | 🔒 (bez permisije — vlastiti nalog) | provjera stare lozinke + politika; `mustChangePassword=false`; `PENDING_PASSWORD_CHANGE → ACTIVE`; revoke svih sesija + `tokenVersion++` |
 | POST | `/auth/forgot-password` | javno | uvijek 200 (bez enumeracije) — ⏳ Faza 5 (treba Outbox/e-mail; token se u Fazi 1 izdaje adminu kroz `/users/:id/reset-password`) |
 | POST | `/auth/reset-password` | javno + limiter `login` | `{token, newPassword}` → 200 `{userId, email}`; token se poredi po SHA-256 hashu, važi 30 min i koristi se **jednom**; uspjeh: `mustChangePassword=false`, `tokenVersion++`, revoke **svih** sesija + brisanje RBAC keša |
 | GET | `/auth/sessions` | 🔒 `auth:manage_sessions` | lista aktivnih sesija/uređaja (ISO datumi, IP, UA, `deviceInfo`) |
@@ -136,6 +136,17 @@ piše se u `AuthAttempt` (retencija 180 dana) i — kod odbijanja — u `AuditLo
 - **Zaštite**: `409 LAST_SUPER_ADMIN_PROTECTED` za deaktivaciju/arhiviranje/brisanje/skidanje
   `SUPER_ADMIN` role zadnjem aktivnom Super Adminu; vlastiti nalog se ne može deaktivirati,
   arhivirati ni obrisati (`400 VALIDATION_ERROR`); e-mail se ne mijenja kroz `PATCH`.
+
+**Nalog s privremenom lozinkom (`PENDING_PASSWORD_CHANGE`)** — stanje nakon bootstrapa, seed-a ili
+kada korisnika kreira administrator:
+
+- **prijava je dozvoljena** (inače korisnik nikad ne bi mogao promijeniti lozinku); `mustChangePassword=true`
+  i efektivna prava su **prazna**;
+- `JwtAuthGuard` pušta takav nalog samo na `POST /auth/change-password`, `GET /auth/me`,
+  `POST /auth/logout`, `POST /auth/logout-all` i `/auth/sessions*`; svaka druga ruta → `403 PASSWORD_CHANGE_REQUIRED`
+  (provjera je na serveru, pa se ne može zaobići direktnim pozivom API-ja);
+- `POST /auth/change-password` uspjehom prebacuje nalog u `ACTIVE` i gasi sve sesije — korisnik se prijavljuje
+  ponovo s novom lozinkom.
 
 ### 2.3 Role i permisije (`/roles`, `/permissions`)
 

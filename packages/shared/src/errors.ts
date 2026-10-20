@@ -129,6 +129,14 @@ export const ERROR_CODES = {
     messageBs: 'Nalog nije aktivan. Kontaktirajte administratora.',
     retryable: false,
   },
+  PASSWORD_CHANGE_REQUIRED: {
+    code: 'PASSWORD_CHANGE_REQUIRED',
+    httpStatus: 403,
+    category: 'AUTH',
+    securityRelevant: false,
+    messageBs: 'Prije nastavka morate promijeniti privremenu lozinku.',
+    retryable: false,
+  },
   REFRESH_TOKEN_REUSE_DETECTED: {
     code: 'REFRESH_TOKEN_REUSE_DETECTED',
     httpStatus: 401,

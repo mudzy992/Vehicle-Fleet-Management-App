@@ -68,6 +68,25 @@ export const FORM_SUBJECTS = [
 ] as const;
 export type FormSubject = (typeof FORM_SUBJECTS)[number];
 
+/**
+ * Statusi s kojima je **prijava dozvoljena**.
+ *
+ * `PENDING_PASSWORD_CHANGE` je normalno stanje naloga s privremenom lozinkom
+ * (bootstrap, seed, korisnik kojeg je kreirao administrator): korisnik se mora
+ * moći prijaviti da bi lozinku promijenio. Zabrana prijave za taj status
+ * zaključala bi svaki novi nalog zauvijek.
+ *
+ * Sva ostala prava su i dalje zatvorena: `JwtAuthGuard` pušta takav nalog samo
+ * na rute za promjenu lozinke, profil, odjavu i vlastite sesije, a efektivna
+ * prava su prazna (`evaluateEffectivePermissions` vraća prazan skup).
+ */
+export const AUTH_ALLOWED_STATUSES = ['ACTIVE', 'PENDING_PASSWORD_CHANGE'] as const;
+
+/** Da li se korisnik s ovim statusom smije prijaviti/obnoviti sesiju. */
+export function isAuthAllowedStatus(status: UserStatus): boolean {
+  return (AUTH_ALLOWED_STATUSES as readonly string[]).includes(status);
+}
+
 /** Tipovi polja dinamičke forme. */
 export const FIELD_TYPES = [
   'TEXT',
