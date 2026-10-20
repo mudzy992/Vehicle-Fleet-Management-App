@@ -364,9 +364,11 @@ export const baseEnvSchema = z.object({
   TURBO_TEAM: optionalString,
   TURBO_TOKEN: optionalString,
   RUN_DB_SEED: bool(false),
-  // false = nedostatak Prisma CLI-ja samo preskače migracije (Faza 0);
-  // true  = deploy se prekida ako migracije nisu mogle biti pokrenute.
-  MIGRATIONS_STRICT: bool(false),
+  // true  = deploy se prekida ako migracije nisu mogle biti pokrenute (Faza 1
+  //         default: Prisma CLI i `schema-engine` su dio image-a, pa tiho
+  //         preskakanje znači praznu bazu u produkciji);
+  // false = nedostatak Prisma CLI-ja samo preskače migracije (debug).
+  MIGRATIONS_STRICT: bool(true),
   // Oporavak historije migracija (u normalnom radu PRAZNO) — vidi
   // apps/api/prisma/README.md §E i apps/api/src/tools/migrate-diagnostics.ts.
   // BASELINE označava migracije primijenjenima BEZ izvršavanja DDL-a (greška P3005:

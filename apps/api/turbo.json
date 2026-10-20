@@ -1,0 +1,24 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "//": "Package-level proširenje korijenskog turbo.json ( Turbo 2: `extends: [\"//\"]` ). Prisma 7 generiše TypeScript klijent u `src/generated/prisma` koji NIJE u Git-u, pa svaki zadatak koji kompajlira/linta/testira API mora prvo izvršiti `prisma generate`. Bez ovoga čist clone pada s 'Cannot find module ../generated/prisma/client.js'.",
+  "extends": ["//"],
+  "tasks": {
+    "prisma:generate": {
+      "inputs": ["prisma/schema.prisma", "package.json"],
+      "outputs": ["src/generated/**"],
+      "env": ["PRISMA_SCHEMA_ENGINE_BINARY"]
+    },
+    "build": {
+      "dependsOn": ["^build", "prisma:generate"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build", "prisma:generate"]
+    },
+    "test": {
+      "dependsOn": ["^build", "prisma:generate"]
+    },
+    "lint": {
+      "dependsOn": ["prisma:generate"]
+    }
+  }
+}

@@ -95,46 +95,58 @@ describe('RedisHealthIndicator', () => {
   });
 });
 
-describe('DatabaseHealthIndicator (Faza 0: Prisma još nije povezana)', () => {
-  it('nedostupna baza → degraded, NE down (deploy ne smije pasti)', async () => {
+describe('DatabaseHealthIndicator (Faza 1: stvarni SELECT 1 kroz Prisma adapter)', () => {
+  it('nedostupna baza → down (DB je kritična zavisnost, readiness pada)', async () => {
     const database = {
       isConfigured: () => true,
       check: async () => ({
         ok: false,
-        message: 'Postgres nije dostupan: connect ENETUNREACH',
+        message:
+          'Postgres host je dostupan (TCP vfm-postgres-global:5432), ali SELECT 1 nije prošao: P1010',
         latencyMs: 12,
         host: 'vfm-postgres-global',
         port: 5432,
+        query: 'SELECT 1',
+        tcpOk: true,
       }),
     };
     const indicator = new DatabaseHealthIndicator(indicators, database as never);
 
     const result = await indicator.isHealthy('database');
 
-    expect(result.database?.status).toBe('degraded');
+    expect(result.database?.status).toBe('down');
     expect(result.database?.ok).toBe(false);
-    expect(result.database?.prismaWired).toBe(false);
-    expect(result.database?.nonCritical).toBe(true);
+    expect(result.database?.prismaWired).toBe(true);
+    expect(result.database?.nonCritical).toBe(false);
+    // Dijagnostika: mreža je OK, problem je u upitu/kredencijalima.
+    expect(result.database?.query).toBe('SELECT 1');
+    expect(result.database?.tcpOk).toBe(true);
   });
 
-  it('baza dostupna → up (TCP provjera)', async () => {
+  it('baza dostupna → up (SELECT 1 kroz Prisma, ne samo TCP)', async () => {
     const database = {
       isConfigured: () => true,
       check: async () => ({
         ok: true,
-        message: 'Postgres host dostupan (TCP)',
+        message: 'PostgreSQL dostupan — SELECT 1 za 4 ms',
         latencyMs: 4,
         host: 'vfm-postgres-global',
         port: 5432,
+        query: 'SELECT 1',
       }),
     };
     const indicator = new DatabaseHealthIndicator(indicators, database as never);
 
     const result = await indicator.isHealthy('database');
+    const details = await indicator.probe();
+
     expect(result.database?.status).toBe('up');
+    expect(details.prismaWired).toBe(true);
+    expect(details.query).toBe('SELECT 1');
+    expect(details.tcpOk).toBeUndefined();
   });
 
-  it('DATABASE_URL nije postavljen → ok=false s jasnom porukom', async () => {
+  it('DATABASE_URL nije postavljen → ok=false s jasnom porukom i prismaWired=false', async () => {
     const database = { isConfigured: () => false, check: vi.fn() };
     const indicator = new DatabaseHealthIndicator(indicators, database as never);
 
@@ -142,18 +154,24 @@ describe('DatabaseHealthIndicator (Faza 0: Prisma još nije povezana)', () => {
 
     expect(details.ok).toBe(false);
     expect(details.message).toMatch(/DATABASE_URL/u);
+    expect(details.prismaWired).toBe(false);
     expect(database.check).not.toHaveBeenCalled();
   });
 
-  it('poruka naglašava da puna provjera dolazi s Prisma klijentom', async () => {
+  it('poruka iz provjere se prosljeđuje bez "Faza 0" obećanja', async () => {
     const database = {
       isConfigured: () => true,
-      check: async () => ({ ok: true, message: 'Postgres host dostupan (TCP)', latencyMs: 3 }),
+      check: async () => ({
+        ok: true,
+        message: 'PostgreSQL dostupan — SELECT 1 za 3 ms',
+        latencyMs: 3,
+      }),
     };
     const indicator = new DatabaseHealthIndicator(indicators, database as never);
 
     const details = await indicator.probe();
-    expect(details.message).toMatch(/Fazi 1/u);
+    expect(details.message).toBe('PostgreSQL dostupan — SELECT 1 za 3 ms');
+    expect(details.message).not.toMatch(/Fazi 1|dolazi s Prisma/u);
   });
 });
 

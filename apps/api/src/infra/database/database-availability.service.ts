@@ -1,18 +1,18 @@
 /**
- * Provjera dostupnosti baze — verzija za Fazu 0 (bez Prisma clienta).
+ * Provjera dostupnosti baze (Faza 1: stvarni `SELECT 1` kroz Prisma adapter).
  *
- * Radi ono što je moguće bez generisanog Prisma clienta:
  * - validira prisustvo i oblik `DATABASE_URL`,
- * - provjerava TCP dostupnost Postgres hosta (socket connect),
- * - izvještava health endpoint (`/health/ready`).
+ * - izvršava `SELECT 1` kroz `PrismaService.ping()` → dokazuje da pool,
+ *   kredencijali i šema rade (sam TCP connect to NE dokazuje),
+ * - TCP probe ostaje kao **dijagnostika**: kad upit padne, javlja da li je
+ *   problem mreža (host nedostupan) ili autentifikacija/šema (host dostupan).
  *
- * Od Faze 1 (nakon `prisma generate`) ovdje se koristi
- * `prisma.$queryRaw\`SELECT 1\`` umjesto TCP provjere — vidi
- * `infra/database/database.module.ts` za tačne korake aktivacije.
+ * U porukama nema kredencijala (`safeConnectionInfo` vraća samo host/port/db).
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { connect } from 'node:net';
 import { getEnv } from '../../config/env.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
 import type { BaseEnv } from '@vfm/shared/env';
 
 export interface DatabaseCheckResult {
@@ -22,6 +22,10 @@ export interface DatabaseCheckResult {
   readonly host?: string;
   readonly port?: number;
   readonly database?: string;
+  /** Upit kojim je provjera izvršena (Faza 1: `SELECT 1`). */
+  readonly query?: string;
+  /** TCP dostupnost hosta — ispunjeno samo kad upit padne (dijagnostika). */
+  readonly tcpOk?: boolean;
 }
 
 /** Maksimalno dozvoljeni detalji koje smijemo izložiti (bez lozinke!). */
@@ -48,6 +52,8 @@ export class DatabaseAvailabilityService {
   private readonly logger = new Logger(DatabaseAvailabilityService.name);
   private readonly env: BaseEnv = getEnv();
 
+  constructor(private readonly prisma: PrismaService) {}
+
   /** Da li je `DATABASE_URL` postavljen i parsiv. */
   isConfigured(): boolean {
     const info = safeConnectionInfo(this.env.DATABASE_URL);
@@ -55,11 +61,12 @@ export class DatabaseAvailabilityService {
   }
 
   /**
-   * TCP provjera dostupnosti Postgresa (bez autentifikacije).
+   * Provjera dostupnosti baze: `SELECT 1` kroz Prisma, uz TCP dijagnostiku.
    *
-   * Napomena: uspješan TCP connect ne znači da su kredencijali ispravni, ali
-   * otkriva najčešći problem u Coolify okruženju — kontejner nije spojen na
-   * `db_net` ili je hostname pogrešan (vidi `docs/08-DOCKER_COOLIFY.md` §3).
+   * Napomena: uspješan TCP connect NE znači da su kredencijali ispravni — zato je
+   * od Faze 1 izvor istine upit. TCP dio ostaje samo da razlikuje "kontejner nije
+   * na `db_net`/hostname je pogrešan" od "šema ili kredencijali ne valjaju"
+   * (vidi `docs/08-DOCKER_COOLIFY_DEPLOYMENT.md` §3).
    */
   async check(timeoutMs = 3000): Promise<DatabaseCheckResult> {
     const started = Date.now();
@@ -83,32 +90,45 @@ export class DatabaseAvailabilityService {
     const host = info.host;
     const port = info.port ?? 5432;
 
-    try {
-      await tcpProbe(host, port, timeoutMs);
+    // 1) Stvarni upit kroz Prisma adapter (dokazuje pool + kredencijale + šemu).
+    const ping = await this.prisma.ping(timeoutMs);
+    if (ping.ok) {
       return {
         ok: true,
-        message: 'Postgres host dostupan (TCP)',
+        message: `PostgreSQL dostupan — SELECT 1 za ${ping.latencyMs} ms`,
         latencyMs: Date.now() - started,
         host,
         port,
         database: info.database,
-      };
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      this.logger.warn(
-        `Postgres nije dostupan na ${host}:${port} — ${reason}. ` +
-          `Provjerite da je kontejner spojen na mrežu "${this.env.DB_NETWORK}" ` +
-          `(Coolify: Advanced → Connect To Predefined Network) i da je hostname tačan.`,
-      );
-      return {
-        ok: false,
-        message: `Postgres nije dostupan: ${reason}`,
-        latencyMs: Date.now() - started,
-        host,
-        port,
-        database: info.database,
+        query: 'SELECT 1',
       };
     }
+
+    // 2) Upit je pao → TCP probe razlikuje mrežni problem od kredencijala/šeme.
+    const tcpOk = await tcpProbe(host, port, timeoutMs).then(
+      () => true,
+      () => false,
+    );
+    const message = tcpOk
+      ? `Postgres host je dostupan (TCP ${host}:${port}), ali SELECT 1 nije prošao: ${ping.error}`
+      : `Postgres nije dostupan na ${host}:${port}: ${ping.error}`;
+
+    this.logger.warn(
+      `${message}. Provjerite da je kontejner spojen na mrežu "${this.env.DB_NETWORK}" ` +
+        '(Coolify: Advanced → Connect To Predefined Network), da je hostname tačan i da ' +
+        'DATABASE_URL odgovara korisniku baze (Prisma 7: SSL greške se javljaju kao P1010).',
+    );
+
+    return {
+      ok: false,
+      message,
+      latencyMs: Date.now() - started,
+      host,
+      port,
+      database: info.database,
+      query: 'SELECT 1',
+      tcpOk,
+    };
   }
 }
 

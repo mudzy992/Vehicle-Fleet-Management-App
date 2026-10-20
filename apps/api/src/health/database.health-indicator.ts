@@ -1,14 +1,12 @@
 /**
- * Postgres health indikator (Terminus 12 API).
+ * Postgres health indikator (Terminus) — Faza 1: baza je KRITIČNA zavisnost.
  *
- * 🔴 **Faza 0:** Prisma client nije generisan (sandbox nema pristup
- * `binaries.prisma.sh`), pa se provjera svodi na TCP dostupnost hosta iz
- * `DATABASE_URL`. Zato indikator vraća `degraded` (ne `down`) — Coolify ne
- * smije odbiti deploy ispravne aplikacije zbog toga.
+ * Provjera ide kroz `PrismaService.ping()` (stvarni `SELECT 1` kroz driver
+ * adapter), pa `/health/ready` pada kad pool, kredencijali ili šema ne rade —
+ * ne samo kad TCP handshake ne prođe.
  *
- * **Od Faze 1** (nakon `prisma generate`) ovdje ide `prisma.$queryRaw\`SELECT 1\``
- * i status prelazi u `down` (DB postaje kritična zavisnost).
- * Vidi `infra/database/database.module.ts`.
+ * `/health/live` namjerno NE provjerava bazu: Docker HEALTHCHECK (i Coolify
+ * restart) koriste live, pa prolazni prekid baze ne izaziva crash-loop.
  */
 import { Injectable } from '@nestjs/common';
 import { HealthIndicatorService } from '@nestjs/terminus';
@@ -16,7 +14,7 @@ import { type HealthIndicatorResult } from '@nestjs/terminus';
 import { DatabaseAvailabilityService } from '../infra/database/database-availability.service.js';
 
 /** Dok Prisma nije povezana, DB provjera ne ruši readiness. */
-const DATABASE_CHECK_NON_CRITICAL = true;
+const DATABASE_CHECK_NON_CRITICAL = false;
 
 export interface DatabaseProbeDetails {
   readonly ok: boolean;
@@ -54,6 +52,8 @@ export class DatabaseHealthIndicator {
         ok: false,
         message: 'DATABASE_URL nije postavljen ili nije parsiv',
         latencyMs: 0,
+        // Bez DATABASE_URL Prisma pool uopšte ne postoji (defenzivna grana:
+        // `PrismaService` bi pri bootu bacio, pa ovo služi samo za jasnu poruku).
         prismaWired: false,
         nonCritical: DATABASE_CHECK_NON_CRITICAL,
       };
@@ -62,13 +62,13 @@ export class DatabaseHealthIndicator {
     const result = await this.database.check();
     return {
       ok: result.ok,
-      message: result.ok
-        ? `${result.message} — puna provjera (SELECT 1) dolazi s Prisma klijentom u Fazi 1`
-        : result.message,
+      message: result.message,
       latencyMs: result.latencyMs,
       host: result.host,
       port: result.port,
-      prismaWired: false,
+      ...(result.query ? { query: result.query } : {}),
+      ...(result.tcpOk === undefined ? {} : { tcpOk: result.tcpOk }),
+      prismaWired: true,
       nonCritical: DATABASE_CHECK_NON_CRITICAL,
     };
   }

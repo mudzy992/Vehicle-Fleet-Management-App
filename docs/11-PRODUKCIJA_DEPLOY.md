@@ -307,7 +307,9 @@ Popuniti sljedeće (ostale ostaviti na defaultima iz compose-a):
 | `SWAGGER_ENABLED` | `false` | produkcija ne izlaže API šemu |
 | `FIREBASE_ENABLED` | `false` | push dolazi u Fazi 5 |
 | `FIREBASE_SERVICE_ACCOUNT_HOST_DIR` | `/etc/vfm/secrets` | direktorij iz 1.3 (montira se cijeli direktorij) |
-| `MIGRATIONS_STRICT` | `false` *(Faza 0)* → `true` *(Faza 1)* | vidi §7 |
+| `MIGRATIONS_STRICT` | `true` | Prisma CLI je produkcijska dependencija: ako ga image nema, deploy se prekida (vidi §7) |
+| `MIGRATIONS_BASELINE` | *(prazno)* | oporavak od **P3005**: `migrate resolve --applied` za navedene migracije (npr. `0_extensions,1_init,2_manual`). Nakon uspjeha vratiti na prazno — `apps/api/prisma/README.md` §E |
+| `MIGRATIONS_ROLLED_BACK` | *(prazno)* | `migrate resolve --rolled-back` za red s `finished_at IS NULL` (pao pokušaj) — isti README §E |
 | `VITE_PUBLIC_API_URL` | *(prazno)* | browser koristi relativni `/api/v1` kroz nginx (bez CORS-a) |
 | `VITE_APP_TITLE` | `Vozni park` | naslov u browseru |
 | `LOG_LEVEL` / `LOG_FORMAT` | `info` / `json` | Coolify čita JSON logove |
@@ -418,8 +420,8 @@ U browseru: `https://vehicle.ba101.top` → shell sa sidebarom;
 | Domena: **404 „No Available Server“** | nedostaje interni port u domeni (`:3000` za `api`) ili servis nije zdrav |
 | **502** na `web` | `api` nije podignut → Runtime Logs servisa `api` |
 | Build padne na `pnpm install --frozen-lockfile` | `pnpm-lock.yaml` nije commitovan / izmijenjen `package.json` bez `pnpm install` |
-| Build padne na `prisma generate` | Faza 0: korak je preskočen; ako se ipak izvršava, `prisma` je dodat ali šema nije validna |
-| `migrate` izlazi s 2 ili 1 | Faza 0: vrati `MIGRATIONS_STRICT=false`; inače provjeri `DATABASE_URL` |
+| Build padne na `prisma generate` | šema nije validna (`pnpm --filter @vfm/api exec prisma format` pa pročitaj grešku) ili build nema izlaz ka registry.npmjs.org |
+| `migrate` izlazi s 1 | log servisa `migrate` sadrži uzrok **i** konkretan sljedeći korak (`diagnosePrismaFailure`): **P3005** → `MIGRATIONS_BASELINE`; `permission denied to create extension` → pokreni `apps/api/prisma/sql/0000_bootstrap_extensions.sql` u pgAdmin-u; `schema-engine` download greška → rebuild image-a (Dockerfile korak 1b); red s `finished_at IS NULL` → `MIGRATIONS_ROLLED_BACK`. Dijagnostika stanja baze: `apps/api/prisma/sql/9000_dijagnostika_stanja_baze.sql` |
 | `not a directory` pri startu `api`/`worker` | Firebase mount: montira se **direktorij** `/etc/vfm/secrets`, ne fajl |
 | `EACCES` pri uploadu/exportu | `sudo chown -R 1001:1001 /data/vfm` |
 | Redis `NOPERM … key` | ključ nema prefix `vfm:` ili ACL nije primijenjen (`ACL LIST`). Ako je ACL **ispravan** a worker i dalje javlja `NOPERM`, uzrok je BullMQ `prefix` (default `'bull'` → ključevi `bull:vfm-queue-*` izvan `~vfm:*`); mora biti `vfm:queue` — vidi `REDIS_ACL.md` §4 i changelog 1.0.3 |

@@ -1,23 +1,22 @@
 /**
  * `AuthModule` (Faza 1 — Identitet).
  *
- * Trenutni sadržaj: servisi bez zavisnosti od baze —
+ * Sadržaj:
  * - `PasswordService` (argon2id + politika lozinki, docs/05 §7),
- * - `TokenService` (access JWT HS256 + refresh token/cookie, docs/05 §5).
+ * - `TokenService` (access JWT HS256 + refresh token/cookie, docs/05 §5),
+ * - `PermissionsService` + `PrismaPermissionsLoader` (RBAC nad bazom, docs/05 §1–§5).
  *
- * `AuthService`, `AuthController`, `SessionService` i guard-ovi
- * (`JwtAuthGuard`, `ClientTypeGuard`, `PermissionsGuard`) biće dodati čim Prisma
- * sloj bude dostupan (bloker 1: `prisma generate` + migracija `init` se ne mogu
- * izvršiti u sandboxu). Modul ih je pripremljen prihvatiti bez izmjene strukture.
- *
- * ⚠️ 2FA se NE implementira (R-05).
+ * Guard-ovi (`RateLimitGuard`, `JwtAuthGuard`, `ClientTypeGuard`,
+ * `PermissionsGuard`) registrovani su globalno u `AppModule`. `AuthService` i
+ * `AuthController` (`/api/v1/auth`: login/refresh/logout/me) dolaze u sljedećem
+ * koraku Faze 1 — modul ih prihvata bez izmjene strukture.
  */
 import { Module } from '@nestjs/common';
 import { PASSWORD_BLOCKLIST, PasswordService } from './services/password.service.js';
 import { TokenService } from './services/token.service.js';
 import { PermissionsService } from './permissions/permissions.service.js';
 import { PERMISSIONS_LOADER } from './permissions/permissions.types.js';
-import { UnavailablePermissionsLoader } from './permissions/unavailable-permissions.loader.js';
+import { PrismaPermissionsLoader } from './permissions/prisma-permissions.loader.js';
 import { LoggingSecurityEventSink, SECURITY_EVENT_SINK } from '../../common/audit/security-event.js';
 
 @Module({
@@ -37,12 +36,13 @@ import { LoggingSecurityEventSink, SECURITY_EVENT_SINK } from '../../common/audi
      */
     { provide: SECURITY_EVENT_SINK, useClass: LoggingSecurityEventSink },
     /**
-     * ⛔ BLOKER 1: `PERMISSIONS_LOADER` je privremeno fail-closed zamjena
-     * (`503 DEPENDENCY_UNAVAILABLE`). Čim `prisma generate` + migracija `init`
-     * budu u repou, zamijeniti s `PrismaPermissionsLoader` — guard-ovi, servisi i
-     * testovi ostaju isti jer rade nad interfejsom.
+     * Stvarni izvor RBAC snapshot-a (baza). Guard-ovi i `PermissionsService` rade
+     * nad interfejsom `PermissionsLoader`, pa testovi i dalje ubacuju fake
+     * (`test/helpers/rbac-fakes.ts`) bez izmjene ovog modula.
+     * `UnavailablePermissionsLoader` (fail-closed `503`) ostaje u repou kao
+     * zamjena za degradirani rad bez baze.
      */
-    { provide: PERMISSIONS_LOADER, useClass: UnavailablePermissionsLoader },
+    { provide: PERMISSIONS_LOADER, useClass: PrismaPermissionsLoader },
   ],
   exports: [PasswordService, TokenService, PermissionsService, SECURITY_EVENT_SINK],
 })

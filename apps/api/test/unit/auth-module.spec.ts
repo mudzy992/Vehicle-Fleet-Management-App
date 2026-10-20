@@ -7,6 +7,10 @@ import { RedisService } from '../../src/infra/redis/redis.service.js';
 import { PASSWORD_BLOCKLIST, PasswordService } from '../../src/modules/auth/services/password.service.js';
 import { TokenService } from '../../src/modules/auth/services/token.service.js';
 import { PermissionsService } from '../../src/modules/auth/permissions/permissions.service.js';
+import { PrismaPermissionsLoader } from '../../src/modules/auth/permissions/prisma-permissions.loader.js';
+import { UnavailablePermissionsLoader } from '../../src/modules/auth/permissions/unavailable-permissions.loader.js';
+import { PrismaModule } from '../../src/prisma/prisma.module.js';
+import { PrismaService } from '../../src/prisma/prisma.service.js';
 import {
   PERMISSIONS_LOADER,
   type UserPermissionsSnapshot,
@@ -22,9 +26,10 @@ import {
  *
  * Cilj: dokazati da se servisi za autentifikaciju mogu konstruisati kroz Nest
  * kontejner (bez ručnog `new`) — posebno da `@Optional()` blocklista ne lomi
- * instanciranje, da `TokenService` radi s ENV-om iz profila `test` i da
- * `PermissionsService` **fail closed** dok Prisma loader nije registrovan
- * (bloker 1).
+ * instanciranje, da `TokenService` radi s ENV-om iz profila `test`, da je default
+ * RBAC loader `PrismaPermissionsLoader` (izvor istine = baza) i da
+ * `PermissionsService` **fail closed** (`503`) kada se eksplicitno registruje
+ * zamjena bez baze (`UnavailablePermissionsLoader`).
  */
 
 const ACCESS_SECRET = 'di-test-access-secret-0123456789abcdef0123456789';
@@ -43,6 +48,14 @@ const SNAPSHOT: UserPermissionsSnapshot = {
 };
 
 /** Fake Redis (bez mreže) — `PermissionsService` ga koristi samo preko `getConnection`. */
+/**
+ * Fake Prisma servis: `PrismaPermissionsLoader` zove samo `user.findFirst`, pa je
+ * ovo dovoljno za DI testove (stvarni upit se ne izvršava — nema baze u sandboxu).
+ */
+const fakePrisma = {
+  user: { findFirst: async () => undefined },
+} as unknown as PrismaService;
+
 const fakeRedis = {
   isEnabled: false,
   isAvailable: () => false,
@@ -55,9 +68,14 @@ const fakeRedis = {
  * sve zavisnosti injektibilne bez stvarne infrastrukture.
  */
 function buildModule() {
-  return Test.createTestingModule({ imports: [AuthModule, RedisModule] })
-    .overrideProvider(RedisService)
-    .useValue(fakeRedis);
+  return (
+    Test.createTestingModule({ imports: [AuthModule, RedisModule, PrismaModule] })
+      .overrideProvider(RedisService)
+      .useValue(fakeRedis)
+      // `PrismaModule` je globalan; ovdje ga override-amo da se ne gradi pg.Pool.
+      .overrideProvider(PrismaService)
+      .useValue(fakePrisma)
+  );
 }
 
 let savedSecret: string | undefined;
@@ -140,8 +158,22 @@ describe('AuthModule — dependency injection', () => {
     await moduleRef.close();
   });
 
-  it('PermissionsService bez loadera (Prisma) → 503 DEPENDENCY_UNAVAILABLE (fail closed)', async () => {
+  it('default RBAC loader je PrismaPermissionsLoader (izvor istine = baza)', async () => {
     const moduleRef = await buildModule().compile();
+    const loader = moduleRef.get<PrismaPermissionsLoader>(PERMISSIONS_LOADER);
+
+    expect(loader).toBeInstanceOf(PrismaPermissionsLoader);
+    // Fake Prisma ne nalazi korisnika → `undefined`, nikad izuzetak (guard vraća 401).
+    await expect(loader.loadSnapshot(USER_ID)).resolves.toBeUndefined();
+
+    await moduleRef.close();
+  });
+
+  it('PermissionsService s loaderom bez baze → 503 DEPENDENCY_UNAVAILABLE (fail closed)', async () => {
+    const moduleRef = await buildModule()
+      .overrideProvider(PERMISSIONS_LOADER)
+      .useClass(UnavailablePermissionsLoader)
+      .compile();
     const permissions = moduleRef.get(PermissionsService);
 
     await expect(permissions.effective(USER_ID)).rejects.toMatchObject({

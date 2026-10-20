@@ -130,9 +130,10 @@ services:
       # Redis lock za migracije (vfm:lock:migrate) koristi worker ACL korisnika.
       RUN_DB_SEED: ${RUN_DB_SEED:-false}
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
-      # Faza 0: Prisma CLI još nije u dependencijama. false → migracije se preskaču
-      # uz upozorenje (deploy prolazi); Faza 1: postaviti na true.
-      MIGRATIONS_STRICT: ${MIGRATIONS_STRICT:-false}
+      # Faza 1: Prisma CLI i `schema-engine` su u image-u (Dockerfile korak 1b).
+      # true → ako CLI/engine nedostaju, deploy se PREKIDA umjesto da tiho preskoči
+      # migracije (upravo je tiho preskakanje dovelo do prazne baze u produkciji).
+      MIGRATIONS_STRICT: ${MIGRATIONS_STRICT:-true}
       # Oporavak historije migracija — PRAZNO u normalnom radu (README §E u
       # apps/api/prisma/). BASELINE = `migrate resolve --applied` (P3005),
       # ROLLED_BACK = `migrate resolve --rolled-back` (red s finished_at IS NULL).

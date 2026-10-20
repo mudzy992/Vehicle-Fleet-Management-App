@@ -368,7 +368,7 @@ Coolify je iz compose fajla već napravio spisak varijabli. **Ne lijepi sve** �
 | `REDIS_NETWORK` | ime mreže iz koraka 2 (default `redis_net`) | Redis mora biti dostupan |
 | `PUBLIC_API_URL` | `https://api.vehicle.ba101.top` | linkovi u budućim obavijestima |
 | `TRUST_PROXY` | `all` | iza Traefika i nginx-a; bez toga se u logu vidi IP proxy-ja |
-| `MIGRATIONS_STRICT` | `false` | trenutno stanje (vidi §11) |
+| `MIGRATIONS_STRICT` | `true` | Prisma CLI je u image-u; nedostatak prekida deploy (vidi §11) |
 | `FIREBASE_ENABLED` | `false` | push dolazi u Fazi 5 |
 
 Ostale (timezone, locale, limiti, queue) imaju ispravne defaultove u compose-u — ne diraj ih.

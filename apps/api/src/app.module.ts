@@ -1,10 +1,11 @@
 /**
  * Korijenski Nest modul (Faza 0).
  *
- * Sadržaj: infrastruktura (Redis, redovi, health), zajednički middleware i
- * domenski moduli. `AuthModule` (Faza 1) nosi servise za lozinke/tokene;
- * `AuthService`, `AuthController`, guard-ovi i `PermissionsService` dolaze s
- * Prisma slojem (bloker 1 — vidi `docs/FAZA1_IZVJESTAJ.md`).
+ * Sadržaj: infrastruktura (Prisma, Redis, redovi, health), zajednički middleware
+ * i domenski moduli. `PrismaModule` je globalan (jedan pg.Pool po procesu), a
+ * `AuthModule` nosi servise za lozinke/tokene i RBAC loader nad bazom.
+ * `AuthService` i `AuthController` (`/api/v1/auth`) dolaze u sljedećem koraku
+ * Faze 1 — guard-ovi i `PermissionsService` su već aktivni.
  */
 import type { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { Module } from '@nestjs/common';
@@ -12,6 +13,7 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { ApiEnvelopeInterceptor } from './common/interceptors/api-envelope.interceptor.js';
+import { PrismaModule } from './prisma/prisma.module.js';
 import { DatabaseModule } from './infra/database/database.module.js';
 import { RedisModule } from './infra/redis/redis.module.js';
 import { QueueModule } from './infra/queue/queue.module.js';
@@ -26,7 +28,7 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard.js';
 import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
 
 @Module({
-  imports: [DatabaseModule, RedisModule, QueueModule, HealthModule, AuditModule, AuthModule],
+  imports: [PrismaModule, DatabaseModule, RedisModule, QueueModule, HealthModule, AuditModule, AuthModule],
   controllers: [],
   providers: [
     RateLimitService,
