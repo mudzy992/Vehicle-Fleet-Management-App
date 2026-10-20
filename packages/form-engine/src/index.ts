@@ -152,3 +152,26 @@ export type {
   VisibleWhenNode,
   VisibleWhenOperator,
 } from './definition.schema.js';
+
+export {
+  RECORD_ERROR_CODES,
+  RECORD_VERSION_ERRORS,
+  RECORD_WARNING_CODES,
+  isEmptyRecordValue,
+  normalizeRecordValues,
+  parseMoneyValue,
+  validateRecord,
+  webOnlyFieldTypes,
+} from './record-validation.js';
+export type {
+  AttachmentFacts,
+  FormSchemaVersionStatus,
+  RecordErrorCode,
+  RecordFieldError,
+  RecordValidationResult,
+  RecordVersionError,
+  RecordVersionRef,
+  RecordWarning,
+  RecordWarningCode,
+  ValidateRecordOptions,
+} from './record-validation.js';

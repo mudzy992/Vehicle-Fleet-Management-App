@@ -380,6 +380,22 @@ Odgovor pri grešci:
 konvertuje tipove izuzev eksplicitnih transformacija iz `normalizedName`, i ne primjenjuje novu
 verziju forme na stari zapis.
 
+**Implementacija (`validateRecord`, chunk C):**
+
+| Detalj | Ponašanje |
+| --- | --- |
+| Verzija | `PUBLISHED` za nove zapise; `RETIRED` samo uz `isNew: false`; `DRAFT` nikad → `FORM_VERSION_NOT_PUBLISHED` |
+| Nepoznat ključ | `UNKNOWN_FIELD`; `SECTION` u `formValues` → `TYPE`; `COMPUTED` se odbacuje (računa server) |
+| Skriveno polje | `FIELD_NOT_VISIBLE` samo kad nosi nepraznu vrijednost |
+| Vidljivost | uslovi se evaluiraju nad **trimovanim** unosom (isto čišćenje kao kod validacije teksta) |
+| Tekst | `trim` po defaultu (`trim: false` isključuje), `minLength`/`maxLength`/`pattern` |
+| Brojevi | `TYPE` bez konverzije, `MIN`/`MAX`/`STEP`, `PRECISION` po `validation.precision` |
+| `MONEY` | `{ amount (feninzi, cijeli broj), currency }`; `min`/`max` su u **KM**, `currency` se provjerava |
+| Datumi | `DATE` = `YYYY-MM-DD`; `DATETIME` = ISO 8601 sa zonom i normalizuje se u UTC; `minDate`/`maxDate`/`notInFuture`/`notInPast` |
+| Prilozi | `minFiles`/`maxFiles`/`mimeTypes`/`maxSizeMb`; uz mapu priloga i `ATTACHMENT_UNKNOWN` |
+| Izračunata polja | računaju se samo kad nema grešaka unosa; klijentska vrijednost se odbacuje uz `COMPUTED_MISMATCH` (WARN) |
+| Normalizacija | samo za uspješan zapis; nemoguća transformacija → izuzetak (API: `422 NORMALIZATION_MISMATCH`) |
+
 ---
 
 ## 10. Migracija historijskih zapisa (P12)
@@ -500,8 +516,9 @@ Zahtjev koji prelazi ove granice ide kroz **change request** i procjenu, ne kroz
 | Rezervisani ključevi i format `fieldKey` (§5)     | `packages/form-engine/src/reserved-keys.ts`                          | ✅ Faza 2 (chunk A) |
 | Katalog tipova i dozvoljenih validacija (§3)      | `packages/form-engine/src/field-types.ts`                            | ✅ Faza 2 (chunk A) |
 | Kanonski JSON, `contentHash`, `ETag` (§8.10, §11) | `packages/form-engine/src/canonical.ts`                              | ✅ Faza 2 (chunk A) |
-| Sigurni izrazi: lexer + parser + evaluator (§6)   | `packages/form-engine/src/expression/`                               | ⏳ sljedeći chunk   |
-| Validacija zapisa prema verziji (§9, P11)         | `packages/form-engine/src/record-validation.ts`                      | ⏳ sljedeći chunk   |
+| Sigurni izrazi: lexer + parser + evaluator (§6)   | `packages/form-engine/src/expression/`                               | ✅ Faza 2 (chunk B) |
+| Uslovi vidljivosti (§4)                           | `packages/form-engine/src/conditions.ts`                             | ✅ Faza 2 (chunk B) |
+| Validacija zapisa prema verziji (§9, P11)         | `packages/form-engine/src/record-validation.ts`                      | ✅ Faza 2 (chunk C) |
 | Form Builder API i UI (§12)                       | `apps/api/src/modules/form-schemas/`, `apps/web/src/features/forms/` | ⏳ Faza 2           |
 | Migracija zapisa (§10, P12)                       | —                                                                    | ⏳ Faza 2           |
 
