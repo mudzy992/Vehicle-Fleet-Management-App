@@ -71,49 +71,69 @@ ispravke su **verificirane** (`prisma generate` prolazi):
 
 ---
 
-## Aktivacija na mašini / build serveru (~5 minuta)
+## Migracije — redoslijed i kako do prve
 
-Dependencije su već u `apps/api/package.json` — **korak 1 iz starije verzije ovog
-README-a (`pnpm add …`) više nije potreban.**
+Prisma primjenjuje migracije **abecednim redoslijedom direktorija**, pa su
+direktoriji u `apps/api/prisma/migrations/` imenovani:
+
+| Direktorij | Sadržaj | Ko ga pravi |
+|---|---|---|
+| `0_extensions` | `pgcrypto`, `citext`, `btree_gist` (+ opciono `pg_stat_statements`) i trigger **funkcije** (`vfm_guard_last_super_admin`, `vfm_reject_write`, `vfm_guard_published_form_version`) | ✅ commit-ovano |
+| `1_init` | sav DDL iz `schema.prisma` (45 modela, enumi, FK-ovi, indeksi) | 🔴 generiše se komandom ispod |
+| `2_manual` | CHECK-ovi, `EXCLUDE USING gist`, partial unique indeksi, `AuditLog.id` kao IDENTITY i **vezivanje triggera** na tabele (19 `// SQL:` markera) | ⏳ nakon što `1_init` postoji (imena indeksa/ograničenja moraju odgovarati generisanom DDL-u) |
+
+`migration_lock.toml` (`provider = "postgresql"`) je commit-ovan — bez njega
+`prisma migrate deploy` odbija rad.
+
+### A) Inicijalna migracija BEZ Docker-a i BEZ baze (preporučeno)
+
+`prisma migrate diff --from-empty` ne spaja se ni na jednu bazu — treba samo
+native `schema-engine` (preuzima se s `binaries.prisma.sh`, pa mora imati izlaz
+ka internetu). Rezultat je čist SQL:
 
 ```bash
-git checkout main && git pull origin main
+git switch main && git pull origin main
 pnpm install --frozen-lockfile
 
-# 1) Generiši klijent (pnpm --filter postavlja cwd na apps/api, gdje je prisma.config.ts)
-pnpm --filter @vfm/api prisma:generate
+mkdir -p apps/api/prisma/migrations/1_init
+pnpm --filter @vfm/api exec prisma migrate diff \
+  --from-empty --to-schema prisma/schema.prisma --script \
+  > apps/api/prisma/migrations/1_init/migration.sql
 
-# 2) Validacija + format (ova dva koraka skidaju schema-engine s binaries.prisma.sh)
-pnpm --filter @vfm/api prisma:validate
-pnpm --filter @vfm/api prisma:format
+# provjera: fajl mora imati CREATE TABLE "User" i ~45 tabela
+grep -c "CREATE TABLE" apps/api/prisma/migrations/1_init/migration.sql
 
-# 3) Dev infrastruktura (docker-compose.dev.yml: vfm-postgres na 127.0.0.1:5433)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d vfm-postgres vfm-redis
-#    defaulti iz compose-a: POSTGRES_USER=vfm, POSTGRES_PASSWORD=${DEV_DB_PASSWORD:-vfm_dev_only}
-export DATABASE_URL="postgresql://vfm:vfm_dev_only@localhost:5433/vfm?schema=public"
-
-# 4) Inicijalna migracija (Prisma 7 NE pokreće generate ni seed automatski)
-pnpm --filter @vfm/api exec prisma migrate dev --name init
-
-# 5) Ručni SQL koji Prisma ne može izraziti (sekcija ispod)
-grep -n "// SQL:" apps/api/prisma/schema.prisma   # 19 markera
-#    + apps/api/prisma/sql/0000_bootstrap_extensions.sql
-#    → zalijepiti u apps/api/prisma/migrations/<timestamp>_init/migration.sql
-#      (idempotentno: IF NOT EXISTS / CREATE OR REPLACE)
-pnpm --filter @vfm/api exec prisma migrate dev
-
-# 6) Build s Prisma modulom uključenim
-pnpm --filter @vfm/api build:full
-
-# 7) Commit (migracije MORAJU u Git — pravilo 2 ispod)
-git add apps/api/prisma/migrations pnpm-lock.yaml
-git commit -m "chore(prisma): inicijalna migracija init + ručni SQL (ekstenzije, triggeri, CHECK-ovi)"
+git add apps/api/prisma/migrations
+git commit -m "chore(prisma): inicijalna migracija 1_init (DDL iz schema.prisma)"
 git push origin main
 ```
 
-Bez Docker-a na lokalnoj mašini: umjesto koraka 3–4 može se privremeno
-`DATABASE_URL` usmjeriti na praznu šemu na serveru, ali **nikad** na
-produkcijsku bazu (`migrate dev` briše i ponovo kreira shadow bazu).
+Zatim redeploy: compose servis `migrate` (`node dist/tools/migrate.js`) uzme
+Redis lock `vfm:lock:migrate`, sačeka Postgres i primijeni `0_extensions` +
+`1_init` preko `prisma migrate deploy`.
+
+> ⚠️ `migrate deploy` koristi native `schema-engine`, pa ga runtime kontejner
+> preuzima pri prvom pokretanju (otvorena stavka 5). Ako log servisa `migrate`
+> pokaže grešku mreže/keša, rješenje je preuzeti engine u builder fazi
+> Dockerfile-a.
+
+### B) Lokalni dev s Docker-om (za kasnije izmjene šeme)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d vfm-postgres vfm-redis
+export DATABASE_URL="postgresql://vfm:vfm_dev_only@localhost:5433/vfm?schema=public"
+pnpm --filter @vfm/api exec prisma migrate dev --name <naziv_izmene>
+pnpm --filter @vfm/api prisma:generate     # v7 NE pokreće generate automatski
+```
+
+`migrate dev` diže i gasi **shadow bazu** (treba `CREATEDB`), briše podatke pri
+`reset`-u i nikad se ne pokreće nad produkcijskom bazom.
+
+### C) Seed
+
+U Prisma 7 `migrate dev` **ne** pokreće seed. Kad `prisma/seed.ts` bude napisan,
+dodati `migrations.seed` u `prisma.config.ts` i zvati `prisma db seed` (compose
+već ima `RUN_DB_SEED` / `SEED_DEMO_DATA`).
 
 ---
 
