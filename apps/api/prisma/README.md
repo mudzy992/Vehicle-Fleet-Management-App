@@ -161,9 +161,33 @@ pnpm --filter @vfm/api prisma:generate     # v7 NE pokreće generate automatski
 
 ### C) Seed
 
-U Prisma 7 `migrate dev` **ne** pokreće seed. Kad `prisma/seed.ts` bude napisan,
-dodati `migrations.seed` u `prisma.config.ts` i zvati `prisma db seed` (compose
-već ima `RUN_DB_SEED` / `SEED_DEMO_DATA`).
+Seed je `apps/api/src/tools/seed.ts` (kompajlira se u `dist/tools/seed.js`), a
+`prisma.config.ts` ga registruje kao `migrations.seed` → `prisma db seed` radi.
+
+```bash
+# lokalno (izvor, tsx):
+pnpm --filter @vfm/api seed
+# u kontejneru / nakon builda:
+node dist/tools/seed.js
+# kroz migrate servis (migracije + seed u jednom prolazu):
+node dist/tools/migrate.js --seed
+```
+
+Šta seed radi (idempotentno): katalog permisija (`ALL_PERMISSIONS`), tri sistemske
+role (`SUPER_ADMIN`, `ADMINISTRATOR`, `OBICNI_KORISNIK` — `CUSTOM` je šablon i ne
+seeduje se), grantove iz `defaultGrantsForRole()`, minimalnu formu vozila i — samo
+van produkcije ili uz `SEED_DEMO_DATA=true` — 2 demo korisnika (lozinke ispisane
+jednom) i 10 fiktivnih vozila. Postojeći grantovi se ne diraju (`skipDuplicates`),
+pa ručne izmjene matrice preživljavaju deploy.
+
+Prvi Super Admin se kreira **odvojeno**, nakon seed-a:
+
+```bash
+node scripts/bootstrap-super-admin.mjs --email super@firma.ba --name "Ime Prezime"
+```
+
+Skripta generiše lozinku i ispisuje je jednom (`mustChangePassword=true`); odbija
+rad ako Super Admin već postoji (nema `--force` — dodatni admini idu kroz aplikaciju).
 
 ---
 

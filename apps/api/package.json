@@ -22,7 +22,10 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "prisma:migrate:diff": "prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script"
+    "prisma:migrate:diff": "prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script",
+    "seed": "tsx src/tools/seed.ts",
+    "seed:prod": "node dist/tools/seed.js",
+    "bootstrap:super-admin": "tsx src/tools/bootstrap-super-admin.ts"
   },
   "dependencies": {
     "@nestjs/common": "12.2.0",

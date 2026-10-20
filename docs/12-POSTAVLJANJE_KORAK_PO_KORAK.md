@@ -521,7 +521,27 @@ Test: napravi bilo kakvu izmjenu na `main` → Coolify → **Deployments** → n
    pnpm --filter @vfm/api exec prisma migrate dev --name init
    ```
    pa commit `apps/api/prisma/migrations/`, pa u Coolify `MIGRATIONS_STRICT=true`.
-3. Tek tada baza dobija tabele i seed (10 vozila, 3 role).
+3. Tek tada baza dobija tabele i seed (3 role, katalog permisija + grantovi, forma
+   vozila; demo korisnici i 10 fiktivnih vozila **samo** van produkcije ili uz
+   `SEED_DEMO_DATA=true`):
+
+   ```bash
+   # migracije + seed u jednom prolazu (compose servis `migrate` ili ručno):
+   node dist/tools/migrate.js --seed
+   # ili odvojeno, iz apps/api:
+   pnpm --filter @vfm/api seed          # tsx nad izvorom
+   node dist/tools/seed.js              # kompajlirano (image)
+   ```
+
+4. Kreiraj **prvog Super Admina** (lozinka se generiše i ispisuje samo jednom;
+   pri prvoj prijavi se mijenja):
+
+   ```bash
+   node scripts/bootstrap-super-admin.mjs --email super@firma.ba --name "Ime Prezime"
+   ```
+
+   Skripta odbija rad ako Super Admin već postoji — dodatni administratori se
+   kreiraju kroz aplikaciju (Users → novi korisnik + rola), uz audit.
 
 ---
 

@@ -171,7 +171,7 @@ export class UsersService {
     }
 
     const roles = await this.resolveRoles(input.roleIds);
-    const temporaryPassword = this.generateTemporaryPassword(input.email);
+    const temporaryPassword = this.passwords.generateTemporaryPassword({ email: input.email });
     const passwordHash = await this.passwords.hashUnchecked(temporaryPassword);
     const mustChangePassword = input.mustChangePassword ?? true;
     const id = randomUUID();
@@ -631,44 +631,6 @@ export class UsersService {
     await this.permissions.bumpTokenVersion(userId, updated.tokenVersion);
     await this.permissions.invalidateUser(userId);
     return revoked.count;
-  }
-
-  /** Privremena lozinka: 20 znakova iz 4 klase, provjerena politikom. */
-  private generateTemporaryPassword(email: string): string {
-    for (let attempt = 0; attempt < 25; attempt += 1) {
-      const candidate = this.randomPassword();
-      const issues = this.passwords.validatePolicy(candidate, { email });
-      if (issues.length === 0) return candidate;
-    }
-
-    this.logger.error('Generisana privremena lozinka nije prošla politiku nakon 25 pokušaja.');
-    throw VfmErrors.internal();
-  }
-
-  private randomPassword(): string {
-    const classes = [
-      'abcdefghijkmnopqrstuvwxyz',
-      'ABCDEFGHJKLMNPQRSTUVWXYZ',
-      '23456789',
-      '!@#$%&*?-_+=',
-    ] as const;
-
-    const bytes = randomBytes(20);
-    const chars: string[] = [];
-    for (let index = 0; index < 20; index += 1) {
-      const alphabet = classes[index % classes.length] ?? classes[0];
-      const byte = bytes[index] ?? 0;
-      chars.push(alphabet.charAt(byte % alphabet.length));
-    }
-    // Deterministički promiješaj da klase ne budu na fiksnim pozicijama.
-    for (let index = chars.length - 1; index > 0; index -= 1) {
-      const swap = (bytes[index] ?? 0) % (index + 1);
-      const left = chars[index] ?? '';
-      const right = chars[swap] ?? '';
-      chars[index] = right;
-      chars[swap] = left;
-    }
-    return chars.join('');
   }
 
   private toSummary(

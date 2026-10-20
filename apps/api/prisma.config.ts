@@ -27,9 +27,15 @@ export default defineConfig({
   migrations: {
     /** Direktorij s migracijama — commit-uje se u Git (pravilo 2 u README-u). */
     path: 'prisma/migrations',
-    // `seed` se dodaje kad `prisma/seed.ts` bude napisan (Faza 1, Users/Roles +
-    // 10 fiktivnih vozila). U Prisma 7 `migrate dev` NE pokreće seed automatski,
-    // nego se zove eksplicitno: `prisma db seed`.
+    /**
+     * `prisma db seed` (i `migrate --seed` u compose-u) pokreće kompajlirani
+     * seed. Zašto `dist`, a ne `tsx`: u produkcijskom image-u nema `src` ni
+     * devDependencies, a `dist/tools/seed.js` postoji. Lokalno koristi
+     * `pnpm --filter @vfm/api seed` (tsx nad izvorom).
+     *
+     * Prisma 7 `migrate dev` NE pokreće seed automatski — poziva se eksplicitno.
+     */
+    seed: 'node dist/tools/seed.js',
   },
 
   datasource: {

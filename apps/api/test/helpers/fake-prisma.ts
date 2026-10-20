@@ -100,6 +100,37 @@ export interface FakeUserRoleRow {
   role: FakeRoleRow;
 }
 
+export interface FakeFormSchemaRow {
+  id: string;
+  key: string;
+  name: string;
+  subject: string;
+  status: string;
+  currentPublishedVersionId: string | null;
+}
+
+export interface FakeFormSchemaVersionRow {
+  id: string;
+  formSchemaId: string;
+  version: number;
+  status: string;
+  definition: unknown;
+}
+
+export interface FakeVehicleRow {
+  id: string;
+  internalNo: string;
+  make: string;
+  model: string;
+  year: number | null;
+  fuelType: string;
+  odometerKm: number;
+  plateNumber: string | null;
+  status: string;
+  formSchemaId: string;
+  formSchemaVersionId: string;
+}
+
 export interface FakePasswordResetTokenRow {
   id: string;
   userId: string;
@@ -193,6 +224,9 @@ export class FakePrismaClient {
   readonly rolePermissions: FakeRolePermissionRow[] = [];
   readonly permissions: FakePermissionRow[] = [];
   readonly passwordResetTokens: FakePasswordResetTokenRow[] = [];
+  readonly formSchemas = new Map<string, FakeFormSchemaRow>();
+  readonly formSchemaVersions: FakeFormSchemaVersionRow[] = [];
+  readonly vehicles = new Map<string, FakeVehicleRow>();
   readonly authAttempts: FakeAuthAttemptRow[] = [];
   readonly auditLogs: FakeAuditLogRow[] = [];
 
@@ -562,6 +596,54 @@ export class FakePrismaClient {
     },
   };
 
+  readonly formSchema = {
+    findUnique: async (args: { where: { key?: string; id?: string } }) => {
+      for (const row of this.formSchemas.values()) {
+        if (args.where.key !== undefined && row.key !== args.where.key) continue;
+        if (args.where.id !== undefined && row.id !== args.where.id) continue;
+        return clone(row);
+      }
+      return null;
+    },
+    create: async (args: { data: Record<string, unknown> }) => {
+      const data = args.data as unknown as FakeFormSchemaRow;
+      this.formSchemas.set(data.id, { ...data, currentPublishedVersionId: null });
+      return clone(data);
+    },
+    update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.formSchemas.get(args.where.id);
+      if (!row) throw new Error(`FakePrisma: forma ${args.where.id} ne postoji.`);
+      applyUpdate(row as unknown as Record<string, unknown>, args.data);
+      return clone(row);
+    },
+  };
+
+  readonly formSchemaVersion = {
+    create: async (args: { data: Record<string, unknown> }) => {
+      const data = args.data as unknown as FakeFormSchemaVersionRow;
+      this.formSchemaVersions.push(data);
+      return clone(data);
+    },
+  };
+
+  readonly vehicle = {
+    findUnique: async (args: { where: { internalNo: string } }) => {
+      for (const row of this.vehicles.values()) {
+        if (row.internalNo === args.where.internalNo) return clone(row);
+      }
+      return null;
+    },
+    create: async (args: { data: Record<string, unknown> }) => {
+      const data = args.data as unknown as FakeVehicleRow;
+      if ([...this.vehicles.values()].some((row) => row.internalNo === data.internalNo)) {
+        throw new Error(`FakePrisma: vozilo ${data.internalNo} već postoji.`);
+      }
+      this.vehicles.set(data.id, data);
+      return clone(data);
+    },
+    count: async () => this.vehicles.size,
+  };
+
   readonly passwordResetToken = {
     create: async (args: { data: UpdateData }): Promise<FakePasswordResetTokenRow> => {
       this.calls.resetTokenCreate += 1;
@@ -632,13 +714,22 @@ export class FakePrismaClient {
   };
 
   readonly role = {
-    findMany: async (args?: { where?: { deletedAt?: null; id?: { in?: readonly string[] } } }) => {
+    findMany: async (args?: {
+      where?: {
+        deletedAt?: null;
+        id?: { in?: readonly string[] } | string;
+        code?: { in?: readonly string[] } | string;
+      };
+    }) => {
       const where = args?.where ?? {};
-      const ids = where.id?.in;
+      const ids = typeof where.id === 'object' ? where.id?.in : where.id ? [where.id] : undefined;
+      const codes =
+        typeof where.code === 'object' ? where.code?.in : where.code ? [where.code] : undefined;
 
       return [...this.roles.values()]
         .filter((row) => (where.deletedAt === null ? row.deletedAt === null : true))
         .filter((row) => (ids ? ids.includes(row.id) : true))
+        .filter((row) => (codes ? codes.includes(row.code) : true))
         .sort((left, right) => left.priority - right.priority || left.code.localeCompare(right.code))
         .map((row) => clone(row));
     },
@@ -654,6 +745,40 @@ export class FakePrismaClient {
         return clone(row);
       }
       return null;
+    },
+
+    findUnique: async (args: { where: { id?: string; code?: string } }): Promise<FakeRoleRow | null> => {
+      for (const row of this.roles.values()) {
+        if (args.where.id !== undefined && row.id !== args.where.id) continue;
+        if (args.where.code !== undefined && row.code !== args.where.code) continue;
+        if (args.where.id === undefined && args.where.code === undefined) continue;
+        return clone(row);
+      }
+      return null;
+    },
+
+    upsert: async (args: {
+      where: { code: string };
+      create: Partial<FakeRoleRow> & { id: string; code: string };
+      update: Record<string, unknown>;
+    }): Promise<FakeRoleRow> => {
+      const existing = [...this.roles.values()].find((row) => row.code === args.where.code);
+      if (!existing) return clone(this.addRole(args.create));
+
+      applyUpdate(existing as unknown as Record<string, unknown>, args.update);
+      existing.updatedAt = new Date();
+      return clone(existing);
+    },
+
+    updateMany: async (args: {
+      where: { code?: { in?: readonly string[] } };
+      data: Record<string, unknown>;
+    }): Promise<{ count: number }> => {
+      const codes = args.where.code?.in ?? [...this.roles.values()].map((row) => row.code);
+      const rows = [...this.roles.values()].filter((row) => codes.includes(row.code));
+
+      for (const row of rows) applyUpdate(row as unknown as Record<string, unknown>, args.data);
+      return { count: rows.length };
     },
 
     create: async (args: { data: Partial<FakeRoleRow> & { id: string; code: string } }): Promise<FakeRoleRow> => {
@@ -718,13 +843,40 @@ export class FakePrismaClient {
       return { count: before - this.rolePermissions.length };
     },
 
-    createMany: async (args: { data: readonly FakeRolePermissionRow[] }): Promise<{ count: number }> => {
-      for (const row of args.data) this.rolePermissions.push(clone(row));
-      return { count: args.data.length };
+    createMany: async (args: {
+      data: readonly FakeRolePermissionRow[];
+      skipDuplicates?: boolean;
+    }): Promise<{ count: number }> => {
+      let inserted = 0;
+      for (const row of args.data) {
+        const duplicate = this.rolePermissions.some(
+          (entry) => entry.roleId === row.roleId && entry.permissionId === row.permissionId,
+        );
+        if (duplicate && args.skipDuplicates) continue;
+
+        this.rolePermissions.push(clone(row));
+        inserted += 1;
+      }
+      return { count: inserted };
     },
   };
 
   readonly permission = {
+    upsert: async (args: {
+      where: { code: string };
+      create: FakePermissionRow;
+      update: Partial<FakePermissionRow>;
+    }): Promise<FakePermissionRow> => {
+      const existing = this.permissions.find((row) => row.code === args.where.code);
+      if (!existing) {
+        this.permissions.push(clone(args.create));
+        return clone(args.create);
+      }
+
+      Object.assign(existing, args.update);
+      return clone(existing);
+    },
+
     findMany: async (args?: {
       where?: { code?: { in?: readonly string[] } };
     }): Promise<FakePermissionRow[]> => {
@@ -913,7 +1065,13 @@ export class FakePrismaClient {
 
     return rows
       .filter((row) => (where.deletedAt === null ? row.deletedAt === null : true))
-      .filter((row) => (where.status === undefined ? true : row.status === where.status))
+      .filter((row) => {
+        if (where.status === undefined) return true;
+        if (typeof where.status === 'string') return row.status === where.status;
+
+        const inList = (where.status as { in?: readonly string[] }).in;
+        return inList ? inList.includes(row.status) : true;
+      })
       .filter((row) => {
         const roleFilter = where.roles as
           | {

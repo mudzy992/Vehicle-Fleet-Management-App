@@ -255,6 +255,52 @@ export class PasswordService {
   }
 
   /**
+   * Generiše **privremenu** lozinku koja prolazi politiku (bootstrap, seed,
+   * kreiranje korisnika bez unosa lozinke).
+   *
+   * Zašto ovdje, a ne u pozivaocima: politika i generator moraju dijeliti iste
+   * konstante. 20 znakova iz 4 klase, pa provjera `validatePolicy` (bloklista,
+   * sekvence, lični podaci) — ako kandidat padne, generiše se novi (max 25×).
+   *
+   * Vraćena lozinka se ispisuje korisniku **jednom** i nikad se ne logira.
+   */
+  generateTemporaryPassword(context?: PasswordPolicyContext): string {
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+      const candidate = this.randomPasswordCandidate();
+      if (this.validatePolicy(candidate, context).length === 0) return candidate;
+    }
+
+    this.logger.error('Generisana privremena lozinka nije prošla politiku nakon 25 pokušaja.');
+    throw VfmErrors.internal();
+  }
+
+  /** 20 znakova, ciklično kroz 4 klase, pa Fisher–Yates uz `randomInt`. */
+  private randomPasswordCandidate(): string {
+    const classes = [
+      'abcdefghijkmnopqrstuvwxyz',
+      'ABCDEFGHJKLMNPQRSTUVWXYZ',
+      '23456789',
+      '!@#$%&*?-_+=',
+    ] as const;
+
+    const chars: string[] = [];
+    for (let index = 0; index < 20; index += 1) {
+      const alphabet = classes[index % classes.length] ?? classes[0];
+      chars.push(alphabet.charAt(randomInt(alphabet.length)));
+    }
+
+    for (let index = chars.length - 1; index > 0; index -= 1) {
+      const swap = randomInt(index + 1);
+      const left = chars[index] ?? '';
+      const right = chars[swap] ?? '';
+      chars[index] = right;
+      chars[swap] = left;
+    }
+
+    return chars.join('');
+  }
+
+  /**
    * Provjera politike (bez bacanja greške) — vraća listu problema za UI hintove.
    */
   validatePolicy(password: string, context?: PasswordPolicyContext): readonly PasswordPolicyIssue[] {
