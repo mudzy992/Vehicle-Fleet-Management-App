@@ -1,18 +1,20 @@
 /**
  * `AuditModule` (docs/05 §9) — globalno dostupan sink za audit zapise.
  *
- * ⛔ BLOKER 1: `AuditLog` se piše preko Prisme, pa je `AUDIT_SINK` za sada
- * `LoggingAuditSink` (pino). Čim migracija `init` bude u repou:
- * 1. dodati `PrismaAuditSink` (upis u `AuditLog` + `XADD vfm:stream:audit` za SSE),
- * 2. zamijeniti provider ispod,
- * 3. `AuditInterceptor` i `AuditContext` ostaju **isti** (rade nad portom).
+ * `AUDIT_SINK` je sada `PrismaAuditSink` (upis u `AuditLog`); `LoggingAuditSink`
+ * ostaje u repou kao zamjena za rad bez baze (degradirani režim, testovi).
+ * `AuditInterceptor` i `AuditContext` su nepromijenjeni — rade nad portom.
+ *
+ * `SECURITY_EVENT_SINK` registruje `AuthModule` istom klasom, pa sigurnosni
+ * događaji (guard-ovi, `AuthService`) završavaju u istoj, immutabilnoj tabeli.
  */
 import { Global, Module } from '@nestjs/common';
-import { AUDIT_SINK, LoggingAuditSink } from './audit.types.js';
+import { PrismaAuditSink } from './prisma-audit.sink.js';
+import { AUDIT_SINK } from './audit.types.js';
 
 @Global()
 @Module({
-  providers: [{ provide: AUDIT_SINK, useClass: LoggingAuditSink }],
+  providers: [{ provide: AUDIT_SINK, useClass: PrismaAuditSink }],
   exports: [AUDIT_SINK],
 })
 export class AuditModule {}

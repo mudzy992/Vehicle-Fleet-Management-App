@@ -67,6 +67,27 @@ export interface FakeUserRoleRow {
   role: FakeRoleRow;
 }
 
+export interface FakeAuditLogRow {
+  id: number;
+  actorId: string | null;
+  actorEmail: string | null;
+  actorRoles: string[];
+  action: string;
+  severity: string;
+  entityType: string | null;
+  entityId: string | null;
+  before: unknown;
+  after: unknown;
+  changedFields: string[];
+  reason: string | null;
+  requestId: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  clientType: string | null;
+  metadata: unknown;
+  createdAt: Date;
+}
+
 export interface FakeAuthAttemptRow {
   id: string;
   email: string;
@@ -125,9 +146,13 @@ export class FakePrismaClient {
   readonly sessions = new Map<string, FakeSessionRow>();
   readonly userRoles: FakeUserRoleRow[] = [];
   readonly authAttempts: FakeAuthAttemptRow[] = [];
+  readonly auditLogs: FakeAuditLogRow[] = [];
 
   /** Namjerni kvarovi: `{ authAttempt: new Error(...) }` testira otpornost toka. */
-  failures: { authAttempt?: Error } = {};
+  failures: { authAttempt?: Error; auditLog?: Error } = {};
+
+  /** Autoincrement identitet (`AuditLog.id` je `BigInt @default(autoincrement())`). */
+  private auditSequence = 0;
 
   /** Brojač za deterministički `createdAt` (redoslijed sesija je bitan). */
   private sequence = 0;
@@ -143,6 +168,8 @@ export class FakePrismaClient {
     sessionUpdateMany: 0,
     userRoleFindMany: 0,
     authAttemptCreate: 0,
+    auditLogCreate: 0,
+    auditLogFindMany: 0,
   };
 
   readonly user = {
@@ -257,6 +284,62 @@ export class FakePrismaClient {
 
       rows.sort((left, right) => left.role.priority - right.role.priority);
       return rows.map((entry) => ({ role: clone(entry.role) }));
+    },
+  };
+
+  readonly auditLog = {
+    create: async (args: { data: UpdateData }): Promise<FakeAuditLogRow> => {
+      this.calls.auditLogCreate += 1;
+      if (this.failures.auditLog) throw this.failures.auditLog;
+
+      const data = args.data as Record<string, unknown>;
+      this.auditSequence += 1;
+      const row: FakeAuditLogRow = {
+        id: this.auditSequence,
+        actorId: (data.actorId as string | undefined) ?? null,
+        actorEmail: (data.actorEmail as string | undefined) ?? null,
+        actorRoles: (data.actorRoles as string[] | undefined) ?? [],
+        action: String(data.action),
+        severity: String(data.severity),
+        entityType: (data.entityType as string | undefined) ?? null,
+        entityId: (data.entityId as string | undefined) ?? null,
+        before: data.before ?? null,
+        after: data.after ?? null,
+        changedFields: (data.changedFields as string[] | undefined) ?? [],
+        reason: (data.reason as string | undefined) ?? null,
+        requestId: (data.requestId as string | undefined) ?? null,
+        ipAddress: (data.ipAddress as string | undefined) ?? null,
+        userAgent: (data.userAgent as string | undefined) ?? null,
+        clientType: (data.clientType as string | undefined) ?? null,
+        metadata: data.metadata ?? null,
+        createdAt: (data.createdAt as Date | undefined) ?? new Date(),
+      };
+      this.auditLogs.push(row);
+      return clone(row);
+    },
+
+    findMany: async (args?: {
+      where?: { action?: string; severity?: string; actorId?: string };
+      orderBy?: { createdAt?: 'asc' | 'desc' };
+      take?: number;
+    }): Promise<FakeAuditLogRow[]> => {
+      this.calls.auditLogFindMany += 1;
+      const where = args?.where ?? {};
+
+      const rows = this.auditLogs.filter((row) => {
+        if (where.action !== undefined && row.action !== where.action) return false;
+        if (where.severity !== undefined && row.severity !== where.severity) return false;
+        if (where.actorId !== undefined && row.actorId !== where.actorId) return false;
+        return true;
+      });
+
+      const direction = args?.orderBy?.createdAt ?? 'desc';
+      rows.sort((left, right) =>
+        direction === 'desc'
+          ? right.createdAt.getTime() - left.createdAt.getTime()
+          : left.createdAt.getTime() - right.createdAt.getTime(),
+      );
+      return (args?.take ? rows.slice(0, args.take) : rows).map((row) => clone(row));
     },
   };
 

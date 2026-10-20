@@ -10,16 +10,14 @@ import { PermissionsService } from '../../src/modules/auth/permissions/permissio
 import { PrismaPermissionsLoader } from '../../src/modules/auth/permissions/prisma-permissions.loader.js';
 import { UnavailablePermissionsLoader } from '../../src/modules/auth/permissions/unavailable-permissions.loader.js';
 import { PrismaModule } from '../../src/prisma/prisma.module.js';
+import { PrismaAuditSink } from '../../src/common/audit/prisma-audit.sink.js';
+import { FakePrismaClient, asPrismaService } from '../helpers/fake-prisma.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 import {
   PERMISSIONS_LOADER,
   type UserPermissionsSnapshot,
 } from '../../src/modules/auth/permissions/permissions.types.js';
-import {
-  LoggingSecurityEventSink,
-  SECURITY_EVENT_SINK,
-  type SecurityEventSink,
-} from '../../src/common/audit/security-event.js';
+import { SECURITY_EVENT_SINK, type SecurityEventSink } from '../../src/common/audit/security-event.js';
 
 /**
  * DI smoke testovi za `AuthModule` (Faza 1).
@@ -49,12 +47,12 @@ const SNAPSHOT: UserPermissionsSnapshot = {
 
 /** Fake Redis (bez mreže) — `PermissionsService` ga koristi samo preko `getConnection`. */
 /**
- * Fake Prisma servis: `PrismaPermissionsLoader` zove samo `user.findFirst`, pa je
- * ovo dovoljno za DI testove (stvarni upit se ne izvršava — nema baze u sandboxu).
+ * Fake Prisma servis: `PrismaPermissionsLoader` zove `user.findFirst` (prazan
+ * rezultat), a `PrismaAuditSink` `auditLog.create` — obje metode postoje u
+ * `FakePrismaClient`, pa DI testovi ne trebaju stvarnu bazu.
  */
-const fakePrisma = {
-  user: { findFirst: async () => undefined },
-} as unknown as PrismaService;
+const fakePrismaClient = new FakePrismaClient();
+const fakePrisma = asPrismaService(fakePrismaClient);
 
 const fakeRedis = {
   isEnabled: false,
@@ -202,20 +200,27 @@ describe('AuthModule — dependency injection', () => {
     await moduleRef.close();
   });
 
-  it('SECURITY_EVENT_SINK je registrovan (default logira, ne baca)', async () => {
+  it('SECURITY_EVENT_SINK je PrismaAuditSink i piše SECURITY red u AuditLog', async () => {
     const moduleRef = await buildModule().compile();
 
     const sink = moduleRef.get<SecurityEventSink>(SECURITY_EVENT_SINK);
 
-    expect(sink).toBeInstanceOf(LoggingSecurityEventSink);
-    expect(() =>
-      sink.record({
-        type: 'MOBILE_ACCESS_FORBIDDEN',
-        userId: USER_ID,
-        clientType: 'MOBILE_ANDROID',
-        reason: 'test',
-      }),
-    ).not.toThrow();
+    expect(sink).toBeInstanceOf(PrismaAuditSink);
+    await sink.record({
+      type: 'MOBILE_ACCESS_FORBIDDEN',
+      userId: USER_ID,
+      clientType: 'MOBILE_ANDROID',
+      reason: 'test',
+    });
+
+    expect(fakePrismaClient.auditLogs.at(-1)).toMatchObject({
+      action: 'SECURITY',
+      severity: 'SECURITY',
+      entityType: 'auth',
+      actorId: USER_ID,
+      clientType: 'MOBILE_ANDROID',
+      reason: 'MOBILE_ACCESS_FORBIDDEN:test',
+    });
 
     await moduleRef.close();
   });

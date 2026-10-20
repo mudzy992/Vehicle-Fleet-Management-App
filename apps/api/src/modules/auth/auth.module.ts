@@ -21,7 +21,8 @@ import { TokenService } from './services/token.service.js';
 import { PermissionsService } from './permissions/permissions.service.js';
 import { PERMISSIONS_LOADER } from './permissions/permissions.types.js';
 import { PrismaPermissionsLoader } from './permissions/prisma-permissions.loader.js';
-import { LoggingSecurityEventSink, SECURITY_EVENT_SINK } from '../../common/audit/security-event.js';
+import { PrismaAuditSink } from '../../common/audit/prisma-audit.sink.js';
+import { SECURITY_EVENT_SINK } from '../../common/audit/security-event.js';
 
 @Module({
   providers: [
@@ -35,10 +36,12 @@ import { LoggingSecurityEventSink, SECURITY_EVENT_SINK } from '../../common/audi
     TokenService,
     PermissionsService,
     /**
-     * Sigurnosni događaji se za sada logiraju (pino). `AuditModule` (chunk C)
-     * prepisuje ovaj provider sink-om koji piše u `AuditLog` (severity SECURITY).
+     * Sigurnosni događaji (LOGIN_FAILED, MOBILE_ACCESS_FORBIDDEN,
+     * REFRESH_REUSE_DETECTED, …) pišu se u `AuditLog` s `action='SECURITY'` i
+     * `severity='SECURITY'` (docs/05 §9). `LoggingSecurityEventSink` ostaje kao
+     * zamjena bez baze.
      */
-    { provide: SECURITY_EVENT_SINK, useClass: LoggingSecurityEventSink },
+    { provide: SECURITY_EVENT_SINK, useClass: PrismaAuditSink },
     /**
      * Stvarni izvor RBAC snapshot-a (baza). Guard-ovi i `PermissionsService` rade
      * nad interfejsom `PermissionsLoader`, pa testovi i dalje ubacuju fake
