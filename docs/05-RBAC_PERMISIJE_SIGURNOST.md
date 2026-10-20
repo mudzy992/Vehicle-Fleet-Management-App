@@ -319,7 +319,10 @@ lozinku): prijava prolazi, ali pristup je ograničen dok se lozinka ne promijeni
   prava (osim za `CREATE EXTENSION` pri inicijalizaciji).
 - Firebase service account: file mount `:ro` samo za `api`/`worker`; nikad u Git-u, nikad u
   web/mobile bundle-u (`.dockerignore` + `.gitignore` + gitleaks u CI).
-- CI: `pnpm audit`, Trivy (image scan), gitleaks (secret scan), `env-sync-check`.
+- CI: `pnpm audit`, Trivy (image scan), gitleaks (secret scan), `env-sync-check` + provjera
+  fiksnih lozinki (`grep` po `PATTERN` iz B-16). Ta provjera preskače **samo** blocklist-u
+  (`packages/shared/src/schemas.ts`, `password.service.ts`) i test fajlove — isključenja su po
+  tačnoj putanji, da novi fajl istog imena ne bi bio tiho preskočen.
 
 ---
 

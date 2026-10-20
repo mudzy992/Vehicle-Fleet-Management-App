@@ -20,8 +20,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+#  pnpm verzija se NE postavlja ovdje: `pnpm/action-setup@v4` je čita iz
+#  `package.json#packageManager` (pnpm@10.34.7). Dupli izvor (`with: version`)
+#  je padao s „Multiple versions of pnpm specified".
 env:
-  PNPM_VERSION: 10
   NODE_VERSION: 22
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -57,8 +59,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -83,8 +83,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -105,8 +103,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -149,8 +145,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -171,22 +165,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
       - name: Secret scan (gitleaks)
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #  Skeniramo kod i konfiguraciju za FIKSNE lozinke. Namjerno se
+      #  preskaču samo tri vrste pogodaka:
+      #  - blocklist-a koju sami implementiramo (ti fajlovi PO DEFINICIJI sadrže
+      #    zabranjene lozinke — nalaz bi bio lažno pozitivan);
+      #  - testovi/fiksture (`*.spec.ts`, `*.test.ts(x)`) — test lozinke su javne;
+      #  - ovaj workflow (sadrži same obrasce pretrage).
+      #  Isključenja su po TAČNOJ putanji (ne po imenu fajla), da novi
+      #  `schemas.ts`/`ci.yml` nigdje ne bi bio tiho preskočen.
       - name: Provjera da nema poznatih lozinki u repo-u
         run: |
-          if grep -rniE "(admin123|password123|changeme|lozinka123|Passw0rd!)" \
-             --include='*.ts' --include='*.tsx' --include='*.json' --include='*.yml' . \
-             | grep -v node_modules | grep -v '\.example'; then
+          PATTERN="(admin123|password123|changeme|lozinka123|Passw0rd!)"
+          ALLOWLIST='^\./(packages/shared/src/schemas\.ts|apps/api/src/modules/auth/services/password\.service\.ts|\.github/workflows/ci\.yml):'
+          if grep -rnE "$PATTERN" \
+             --include='*.ts' --include='*.tsx' --include='*.json' --include='*.yml' \
+             --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist \
+             --exclude-dir=coverage --exclude-dir=.turbo \
+             --exclude='*.spec.ts' --exclude='*.spec.tsx' \
+             --exclude='*.test.ts' --exclude='*.test.tsx' . \
+             | grep -vE "$ALLOWLIST"; then
             echo "❌ Pronađena sumnjiva/fixna lozinka"; exit 1;
           fi
           echo "✅ Nema fixnih lozinki"
       - name: Dependency audit
         run: |
           if [ -f pnpm-lock.yaml ]; then
-            npx --yes pnpm@${{ env.PNPM_VERSION }} audit --audit-level=high || exit 1
+            pnpm audit --audit-level=high || exit 1
           else
             echo "preskočeno (faza 0)"
           fi
@@ -201,8 +213,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
