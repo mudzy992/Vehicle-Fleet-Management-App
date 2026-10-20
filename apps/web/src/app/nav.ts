@@ -20,6 +20,7 @@ export const NAV_GROUPS: readonly NavGroup[] = ['Operativa', 'Vozni park', 'Konf
 
 export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/nadzorna-tabla', label: 'Nadzorna tabla', group: 'Operativa', phase: 'Faza 3' },
+  { to: '/rokovi', label: 'Rokovi', group: 'Operativa', permission: 'reminder:view', phase: 'Faza 3' },
   { to: '/zadaci', label: 'Zadaci', group: 'Operativa', permission: 'task:view', phase: 'Faza 5' },
   {
     to: '/obavijesti',

@@ -23,7 +23,9 @@ import { FormsPage } from '../features/forms/forms-page.js';
 import { VehiclesPage } from '../features/vehicles/vehicles-page.js';
 import { VehicleCreatePage } from '../features/vehicles/vehicle-create-page.js';
 import { VehicleEditPage } from '../features/vehicles/vehicle-edit-page.js';
+import { DashboardPage } from '../features/dashboard/dashboard-page.js';
 import { DriversPage } from '../features/drivers/drivers-page.js';
+import { RemindersPage } from '../features/reminders/reminders-page.js';
 import { DriverCreatePage } from '../features/drivers/driver-create-page.js';
 import { DriverDetailPage } from '../features/drivers/driver-detail-page.js';
 import { VehicleDetailPage } from '../features/vehicles/vehicle-detail-page.js';
@@ -48,15 +50,10 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/nadzorna-tabla" replace /> },
       {
+        // Nadzorna tabla — brojevi se uzimaju kao `total` sa servera, rokovi iz
+        // zapisa unutar 30 dana (docs/06 §9.1, ekran „Nadzorna ploča").
         path: 'nadzorna-tabla',
-        element: (
-          <PlaceholderPage
-            title="Nadzorna tabla"
-            code="W02"
-            phase="Faza 3"
-            description="Ključni brojevi, rokovi koji ističu i zadaci koji čekaju preuzimanje."
-          />
-        ),
+        element: <DashboardPage />,
       },
       {
         // W05 — registar vozila (Faza 3). Filteri idu na server; „rokovi"
@@ -93,6 +90,15 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission="vehicle:view">
             <VehicleDetailPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        // W14 — rokovi: skener upisuje podsjetnike, ekran samo potvrđuje/odgađa.
+        path: 'rokovi',
+        element: (
+          <RequirePermission permission="reminder:view">
+            <RemindersPage />
           </RequirePermission>
         ),
       },
