@@ -56,6 +56,55 @@ export {
 } from './canonical.js';
 
 export {
+  COMPUTED_STATIC_TYPE,
+  FIELD_STATIC_TYPE,
+  fieldTypesFromDefinition,
+  findComputedCycles,
+} from './fields.js';
+export type { FieldTypesResult } from './fields.js';
+
+export { checkCondition, evaluateCondition, isFieldVisible } from './conditions.js';
+export type { ConditionIssue, ConditionValues } from './conditions.js';
+
+export {
+  EXPRESSION_ERROR_CODES,
+  EXPRESSION_LIMITS,
+  ExpressionError,
+  FUNCTION_REGISTRY,
+  FUNCTION_SPECS,
+  RESULT_TYPE_COMPATIBILITY,
+  STATIC_TYPES,
+  arityIssue,
+  assertExpression,
+  astDepth,
+  checkExpression,
+  evaluateExpression,
+  evaluateParsed,
+  formatIsoDate,
+  isKnownFunction,
+  nonZeroProofs,
+  parseExpression,
+  parseIsoDate,
+  printAst,
+  roundTo,
+  tokenize,
+} from './expression/index.js';
+export type {
+  AstNode,
+  BinaryOperator,
+  EvaluationContext,
+  EvaluationResult,
+  ExpressionCheckResult,
+  ExpressionErrorCode,
+  ExpressionIssue,
+  ExpressionValue,
+  FieldTypeMap,
+  FunctionSpec,
+  ParsedExpression,
+  StaticType,
+} from './expression/index.js';
+
+export {
   DEFINITION_LIMITS,
   FORBIDDEN_PATTERN_FRAGMENTS,
   FORM_DEFINITION_SCHEMA_ID,

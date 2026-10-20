@@ -252,6 +252,10 @@ klijentu), a rezultat se snapshot-uje u `formData` — stari zapis ostaje stabil
 
 **Static check pri objavi:** evaluator prolazi kroz izraz s apstraktnim tipovima i odbija objavu ako
 referenca nepostojeće polje, dijeli s nulom bez `if`-zaštite ili vraća tip različit od `resultType`.
+Dijeljenje poljem prolazi samo ako ga u `then` grani štiti dokaz da polje nije nula: `x > 0`,
+`x >= 1`, `x != 0` (ili obrnuti redoslijed, npr. `0 < x`), uključujući `&&` s drugim uslovima.
+Dokaz iz `else` grane ili izvan `if`-a ne važi. Greške pri objavi: `DIVISION_BY_ZERO`,
+`UNKNOWN_FIELD`, `WRONG_ARITY`, `UNKNOWN_FUNCTION`, `TYPE_ERROR`, `RESULT_TYPE_MISMATCH`.
 
 ### 6.4 Gdje se izračun izvršava
 
