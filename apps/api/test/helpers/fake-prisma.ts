@@ -10,8 +10,10 @@
  * Ograničenja (namjerna):
  * - `select` se ignoriše — vraća se cijeli red (nadskup je za servis bezopasan),
  * - `where` podržava samo oblike koje domenski kod stvarno koristi,
- * - nema transakcija (`$transaction` se ne koristi u auth tokovima).
+ * - `$transaction` prosljeđuje isti fake (bez rollback-a) — dovoljno za
+ *   provjeru redoslijeda u `PUT /roles/matrix`.
  */
+import { randomUUID } from 'node:crypto';
 import type { PrismaService } from '../../src/prisma/prisma.service.js';
 
 export interface FakeUserRow {
@@ -54,8 +56,35 @@ export interface FakeRoleRow {
   id: string;
   code: string;
   name: string;
+  description: string | null;
+  isSystem: boolean;
+  allowedClientTypes: string[];
+  permissionsVersion: number;
   priority: number;
   deletedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface FakePermissionRow {
+  id: string;
+  code: string;
+  module: string;
+  action: string;
+  description: string | null;
+  isSensitive: boolean;
+}
+
+export interface FakeRolePermissionRow {
+  id: string;
+  roleId: string;
+  permissionId: string;
+  scope: 'ALL' | 'OWN' | 'VEHICLE_IDS' | 'DRIVER_IDS';
+  scopeVehicleIds: string[];
+  scopeDriverIds: string[];
+  conditions: Record<string, unknown> | null;
+  grantedById: string | null;
+  grantedAt: Date | null;
 }
 
 export interface FakeUserRoleRow {
@@ -144,7 +173,10 @@ function clone<T>(value: T): T {
 export class FakePrismaClient {
   readonly users = new Map<string, FakeUserRow>();
   readonly sessions = new Map<string, FakeSessionRow>();
+  readonly roles = new Map<string, FakeRoleRow>();
   readonly userRoles: FakeUserRoleRow[] = [];
+  readonly rolePermissions: FakeRolePermissionRow[] = [];
+  readonly permissions: FakePermissionRow[] = [];
   readonly authAttempts: FakeAuthAttemptRow[] = [];
   readonly auditLogs: FakeAuditLogRow[] = [];
 
@@ -170,6 +202,11 @@ export class FakePrismaClient {
     authAttemptCreate: 0,
     auditLogCreate: 0,
     auditLogFindMany: 0,
+    roleCreate: 0,
+    roleUpdate: 0,
+    rolePermissionDeleteMany: 0,
+    permissionCreate: 0,
+    transaction: 0,
   };
 
   readonly user = {
@@ -285,6 +322,30 @@ export class FakePrismaClient {
       rows.sort((left, right) => left.role.priority - right.role.priority);
       return rows.map((entry) => ({ role: clone(entry.role) }));
     },
+
+    /**
+     * Broj aktivnih korisnika po roli (`RolesService.loadCounts`).
+     *
+     * Broji samo korisnike koji stvarno postoje u `users` i nisu obrisani — pa
+     * test može dokazati da arhivirana/deaktivirana korisnica ne blokira arhiv.
+     */
+    groupBy: async (args: { where?: { roleId?: { in?: readonly string[] } } }) => {
+      const ids = args.where?.roleId?.in ?? [...this.roles.keys()];
+      const now = Date.now();
+
+      return ids.map((roleId) => {
+        const active = this.userRoles.filter((entry) => {
+          if (entry.roleId !== roleId || entry.revokedAt !== null) return false;
+          if (entry.validFrom && entry.validFrom.getTime() > now) return false;
+          if (entry.validUntil && entry.validUntil.getTime() <= now) return false;
+
+          const user = this.users.get(entry.userId);
+          return Boolean(user && user.deletedAt === null && user.status === 'ACTIVE');
+        });
+
+        return { roleId, _count: { _all: active.length } };
+      });
+    },
   };
 
   readonly auditLog = {
@@ -356,6 +417,143 @@ export class FakePrismaClient {
   };
 
   // ---------------------------------------------------------------------------
+  //  Role i matrica prava (chunk I)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * `$transaction` samo prosljeđuje isti fake kao `tx` — dovoljno da se provjeri
+   * redoslijed (delete → create → bump verzije) i da greška u callback-u prekine
+   * upis. Izolacija/rollback se ne simulira (pravi rollback pokriva integracioni
+   * test na PostgreSQL-u).
+   */
+  readonly $transaction = async <T>(fn: (tx: FakePrismaClient) => Promise<T>): Promise<T> => {
+    this.calls.transaction += 1;
+    return fn(this);
+  };
+
+  readonly role = {
+    findMany: async (args?: { where?: { deletedAt?: null; id?: { in?: readonly string[] } } }) => {
+      const where = args?.where ?? {};
+      const ids = where.id?.in;
+
+      return [...this.roles.values()]
+        .filter((row) => (where.deletedAt === null ? row.deletedAt === null : true))
+        .filter((row) => (ids ? ids.includes(row.id) : true))
+        .sort((left, right) => left.priority - right.priority || left.code.localeCompare(right.code))
+        .map((row) => clone(row));
+    },
+
+    findFirst: async (args?: {
+      where?: { id?: string; code?: string; deletedAt?: null };
+    }): Promise<FakeRoleRow | null> => {
+      const where = args?.where ?? {};
+      for (const row of this.roles.values()) {
+        if (where.id !== undefined && row.id !== where.id) continue;
+        if (where.code !== undefined && row.code !== where.code) continue;
+        if (where.deletedAt === null && row.deletedAt !== null) continue;
+        return clone(row);
+      }
+      return null;
+    },
+
+    create: async (args: { data: Partial<FakeRoleRow> & { id: string; code: string } }): Promise<FakeRoleRow> => {
+      this.calls.roleCreate += 1;
+      if (this.roles.has(args.data.id)) throw new Error('role.create: duplikat id');
+      const row = this.addRole(args.data);
+      return clone(row);
+    },
+
+    update: async (args: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<FakeRoleRow> => {
+      this.calls.roleUpdate += 1;
+      const row = this.roles.get(args.where.id);
+      if (!row) throw new Error(`role.update: rola ${args.where.id} ne postoji.`);
+
+      applyUpdate(row as unknown as Record<string, unknown>, args.data);
+      row.updatedAt = new Date();
+      return clone(row);
+    },
+  };
+
+  readonly rolePermission = {
+    findMany: async (args?: {
+      where?: { roleId?: { in?: readonly string[] } | string; role?: { deletedAt?: null } };
+    }): Promise<Array<FakeRolePermissionRow & { permission: { code: string } }>> => {
+      const where = args?.where ?? {};
+      const ids =
+        typeof where.roleId === 'string' ? [where.roleId] : (where.roleId?.in ?? undefined);
+      const activeRolesOnly = where.role?.deletedAt === null;
+
+      return this.rolePermissions
+        .filter((row) => (ids ? ids.includes(row.roleId) : true))
+        .filter((row) => {
+          if (!activeRolesOnly) return true;
+          return (this.roles.get(row.roleId)?.deletedAt ?? null) === null;
+        })
+        .sort((left, right) => left.roleId.localeCompare(right.roleId))
+        .map((row) => ({
+          ...clone(row),
+          permission: { code: this.permissionCode(row.permissionId) },
+        }));
+    },
+
+    groupBy: async (args: { where?: { roleId?: { in?: readonly string[] } } }) => {
+      const ids = args.where?.roleId?.in ?? [...this.roles.keys()];
+
+      return ids.map((roleId) => ({
+        roleId,
+        _count: { _all: this.rolePermissions.filter((row) => row.roleId === roleId).length },
+      }));
+    },
+
+    deleteMany: async (args: { where: { roleId: string } }): Promise<{ count: number }> => {
+      this.calls.rolePermissionDeleteMany += 1;
+      const before = this.rolePermissions.length;
+
+      for (let index = this.rolePermissions.length - 1; index >= 0; index -= 1) {
+        if (this.rolePermissions[index]?.roleId === args.where.roleId) this.rolePermissions.splice(index, 1);
+      }
+      return { count: before - this.rolePermissions.length };
+    },
+
+    createMany: async (args: { data: readonly FakeRolePermissionRow[] }): Promise<{ count: number }> => {
+      for (const row of args.data) this.rolePermissions.push(clone(row));
+      return { count: args.data.length };
+    },
+  };
+
+  readonly permission = {
+    findMany: async (args?: {
+      where?: { code?: { in?: readonly string[] } };
+    }): Promise<FakePermissionRow[]> => {
+      const ids = args?.where?.code?.in;
+
+      return this.permissions
+        .filter((row) => (ids ? ids.includes(row.code) : true))
+        .map((row) => clone(row));
+    },
+
+    create: async (args: { data: FakePermissionRow }): Promise<FakePermissionRow> => {
+      this.calls.permissionCreate += 1;
+      this.permissions.push(clone(args.data));
+      return clone(args.data);
+    },
+
+    update: async (args: {
+      where: { code: string };
+      data: Partial<Omit<FakePermissionRow, 'id' | 'code'>>;
+    }): Promise<FakePermissionRow> => {
+      const row = this.permissions.find((candidate) => candidate.code === args.where.code);
+      if (!row) throw new Error(`permission.update: permisija ${args.where.code} ne postoji.`);
+
+      Object.assign(row, args.data);
+      return clone(row);
+    },
+  };
+
+  // ---------------------------------------------------------------------------
   //  Pomoćne metode za testove
   // ---------------------------------------------------------------------------
 
@@ -382,7 +580,75 @@ export class FakePrismaClient {
   }
 
   addRole(role: Partial<FakeRoleRow> & { id: string; code: string }): FakeRoleRow {
-    return { name: role.code, priority: 100, deletedAt: null, ...role };
+    const full: FakeRoleRow = {
+      name: role.code,
+      description: null,
+      isSystem: false,
+      allowedClientTypes: ['WEB', 'MOBILE_ANDROID'],
+      permissionsVersion: 0,
+      priority: 100,
+      deletedAt: null,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      ...role,
+    };
+    this.roles.set(full.id, full);
+    return full;
+  }
+
+  /** Dodaje permisiju u katalog (fixture). */
+  addPermission(permission: Partial<FakePermissionRow> & { code: string }): FakePermissionRow {
+    const [module, action] = permission.code.split(':');
+    const full: FakePermissionRow = {
+      id: randomUUID(),
+      module: module ?? '',
+      action: action ?? '',
+      description: null,
+      isSensitive: false,
+      ...permission,
+    };
+    this.permissions.push(full);
+    return full;
+  }
+
+  /** Dodaje grant (`RolePermission`) — `permission` može biti kod ili ID. */
+  addGrant(
+    grant: Partial<FakeRolePermissionRow> & { roleId: string; permissionId?: string; permission?: string },
+  ): FakeRolePermissionRow {
+    const { permission, permissionId: explicitId, ...rest } = grant;
+    const permissionId =
+      explicitId ?? this.permissions.find((row) => row.code === permission)?.id ?? randomUUID();
+
+    const full: FakeRolePermissionRow = {
+      id: randomUUID(),
+      scope: 'ALL',
+      scopeVehicleIds: [],
+      scopeDriverIds: [],
+      conditions: null,
+      grantedById: null,
+      grantedAt: new Date('2026-01-01T00:00:00.000Z'),
+      ...rest,
+      permissionId,
+    };
+    this.rolePermissions.push(full);
+    return full;
+  }
+
+  /** Dodaje `UserRole` (bez ugniježđene role — koristi `assignRole` za loader). */
+  addUserRole(row: Partial<Omit<FakeUserRoleRow, 'role'>> & { userId: string; roleId: string }): void {
+    const role = this.roles.get(row.roleId) ?? this.addRole({ id: row.roleId, code: row.roleId });
+    this.userRoles.push({
+      revokedAt: null,
+      validFrom: null,
+      validUntil: null,
+      ...row,
+      role,
+    });
+  }
+
+  /** Kod permisije za ID (grantovi u fake-u čuvaju `permissionId`). */
+  permissionCode(permissionId: string): string {
+    return this.permissions.find((row) => row.id === permissionId)?.code ?? permissionId;
   }
 
   assignRole(userId: string, role: FakeRoleRow, overrides: Partial<FakeUserRoleRow> = {}): FakeUserRoleRow {

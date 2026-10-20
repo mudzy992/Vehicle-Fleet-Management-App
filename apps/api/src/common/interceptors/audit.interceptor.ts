@@ -84,7 +84,10 @@ export class AuditInterceptor implements NestInterceptor {
       // ako je kod greške sigurnosno relevantan (docs/05 §9).
       const severity: AuditSeverity = errorCode ? severityForError(errorCode) : metadata.severity;
 
-      const after = toRecord(data);
+      // 🔴 Redakcija važi i za `after`: odgovor handlera može nositi token ili
+      // hash (npr. `POST /auth/login` vraća `accessToken`), a `AuditLog.after`
+      // je JSONB koji se čita u UI-u — `REDACTED_FIELDS` mora biti primijenjen.
+      const after = redactRecord(audit.after ? audit.after : toRecord(data));
       const before = audit.before ? redactRecord(audit.before) : undefined;
       const diff = before && after ? buildAuditDiff(before, after) : [];
 

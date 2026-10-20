@@ -106,6 +106,11 @@ Ukupno: **120+** permisija (tačan popis se seeduje u Fazi 1 i drži u
 
 Legenda: **✓** = `ALL`, **○** = `OWN`, **—** = nema pravo.
 
+Matrica je **konfigurabilna u bazi** i mijenja se kroz `PUT /roles/matrix` (puna zamjena grantova
+po roli, jedna transakcija). Svaka izmjena diže `Role.permissionsVersion` i briše keš
+(`vfm:perm:*`) → revokacija važi za postojeće tokene u ≤ 5 s (§5.3). `SUPER_ADMIN` se ne uređuje
+matricom: ima sve permisije implicitno (R-07), pa bi upis grantova davao lažan osjećaj revokacije.
+
 | Permisija | SUPER_ADMIN | ADMINISTRATOR | OBICNI_KORISNIK |
 |---|---|---|---|
 | `user:*` (sve) | ✓ | — | — |

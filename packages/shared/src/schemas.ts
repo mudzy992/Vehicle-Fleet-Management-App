@@ -17,8 +17,9 @@
  */
 import { z } from 'zod';
 import { MAX_PAGE_SIZE } from './constants.js';
-import { CLIENT_TYPES, USER_STATUSES } from './enums.js';
+import { CLIENT_TYPES, PERMISSION_SCOPES, USER_STATUSES } from './enums.js';
 import type { ClientType } from './enums.js';
+import { isKnownPermission } from './permissions.js';
 
 // -----------------------------------------------------------------------------
 //  Zajedničke šeme (koriste ih API, web i mobilna)
@@ -565,3 +566,291 @@ export const authTokenResponseSchema = z
   .strict();
 
 export type AuthTokenResponse = z.output<typeof authTokenResponseSchema>;
+
+// -----------------------------------------------------------------------------
+//  Role i permisije (docs/07 §2.3, docs/05 §3–§4)
+// -----------------------------------------------------------------------------
+
+/** `POST /roles/:id/archive` i `GET/PATCH /roles/:id` — UUID identifikator. */
+export const roleIdSchema = uuidSchema;
+
+/**
+ * Kod role: velika slova, cifre i donja crta (npr. `DISPECER`, `SERVISER`).
+ *
+ * Sistemski kodovi (`SUPER_ADMIN`, `ADMINISTRATOR`, `OBICNI_KORISNIK`, `CUSTOM`)
+ * su rezervisani — API odbija kreiranje role s tim kodovima.
+ */
+export const roleCodeSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(40)
+  .regex(/^[A-Z][A-Z0-9_]*$/u, { message: 'Kod role mora biti VELIKA_SLOVA (npr. DISPECER).' });
+
+/**
+ * Kod permisije mora postojati u katalogu (`PERMISSION_CATALOG`).
+ *
+ * Zašto iz kataloga, a ne slobodan string: prava se evaluiraju u kodu
+ * (`evaluateEffectivePermissions`), pa permisija koje nema u katalogu ne bi
+ * imala nikakav efekat — greška bi bila tiha.
+ */
+export const permissionCodeSchema = z
+  .string()
+  .trim()
+  .refine(isKnownPermission, { message: 'Permisija nije u katalogu (packages/shared → PERMISSION_CATALOG).' });
+
+export const permissionScopeSchema = z.enum(PERMISSION_SCOPES);
+
+/**
+ * Jedan grant (`RolePermission`) u ulazu za matricu prava.
+ *
+ * Pravila opsega (docs/05 §1):
+ * - `VEHICLE_IDS` → `scopeVehicleIds` obavezan i neprazan,
+ * - `DRIVER_IDS` → `scopeDriverIds` obavezan i neprazan,
+ * - `ALL`/`OWN` → ID liste nisu dozvoljene (ne bi imale značenje).
+ */
+export const permissionGrantInputSchema = z
+  .object({
+    permission: permissionCodeSchema,
+    scope: permissionScopeSchema,
+    scopeVehicleIds: z.array(uuidSchema).max(500).optional(),
+    scopeDriverIds: z.array(uuidSchema).max(500).optional(),
+    /** Dodatna pravila (whitelist evaluator) — samo jednostavne JSON vrijednosti. */
+    conditions: z
+      .record(
+        z.string(),
+        z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.array(z.number())]),
+      )
+      .optional(),
+  })
+  .strict()
+  .superRefine((grant, ctx) => {
+    if (grant.scope === 'VEHICLE_IDS') {
+      if (!grant.scopeVehicleIds || grant.scopeVehicleIds.length === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['scopeVehicleIds'],
+          message: 'Opseg VEHICLE_IDS traži neprazan spisak vozila.',
+        });
+      }
+      if (grant.scopeDriverIds && grant.scopeDriverIds.length > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['scopeDriverIds'],
+          message: 'Uz opseg VEHICLE_IDS nije dozvoljen spisak vozača.',
+        });
+      }
+      return;
+    }
+
+    if (grant.scope === 'DRIVER_IDS') {
+      if (!grant.scopeDriverIds || grant.scopeDriverIds.length === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['scopeDriverIds'],
+          message: 'Opseg DRIVER_IDS traži neprazan spisak vozača.',
+        });
+      }
+      if (grant.scopeVehicleIds && grant.scopeVehicleIds.length > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['scopeVehicleIds'],
+          message: 'Uz opseg DRIVER_IDS nije dozvoljen spisak vozila.',
+        });
+      }
+      return;
+    }
+
+    if (grant.scopeVehicleIds && grant.scopeVehicleIds.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['scopeVehicleIds'],
+        message: `Opseg ${grant.scope} ne koristi spisak vozila.`,
+      });
+    }
+    if (grant.scopeDriverIds && grant.scopeDriverIds.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['scopeDriverIds'],
+        message: `Opseg ${grant.scope} ne koristi spisak vozača.`,
+      });
+    }
+  });
+
+export type PermissionGrantInput = z.output<typeof permissionGrantInputSchema>;
+
+/** `POST /roles` — nova rola (kod je unique, `isSystem` se ne može postaviti). */
+export const createRoleSchema = z
+  .object({
+    code: roleCodeSchema,
+    name: z.string().trim().min(2).max(80),
+    description: z.string().trim().max(500).nullish(),
+    /** Default: `ROLE_ALLOWED_CLIENT_TYPES.CUSTOM` (WEB + MOBILE_ANDROID). */
+    allowedClientTypes: z.array(clientTypeSchema).min(1).max(4).optional(),
+    priority: z.number().int().min(1).max(1000).optional(),
+  })
+  .strict();
+
+export type CreateRoleInput = z.output<typeof createRoleSchema>;
+
+/** `PATCH /roles/:id` — kod i `isSystem` se ne mijenjaju (audit trag ostaje jasan). */
+export const updateRoleSchema = z
+  .object({
+    name: z.string().trim().min(2).max(80).optional(),
+    description: z.string().trim().max(500).nullish(),
+    allowedClientTypes: z.array(clientTypeSchema).min(1).max(4).optional(),
+    priority: z.number().int().min(1).max(1000).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Barem jedno polje za izmjenu je obavezno.',
+  });
+
+export type UpdateRoleInput = z.output<typeof updateRoleSchema>;
+
+/** `POST /roles/:id/archive` — razlog je opcion, ali ide u audit. */
+export const archiveRoleSchema = z
+  .object({
+    reason: z.string().trim().min(3).max(300).optional(),
+  })
+  .strict();
+
+export type ArchiveRoleInput = z.output<typeof archiveRoleSchema>;
+
+/**
+ * `PUT /roles/matrix` — bulk izmjena matrice prava (P2).
+ *
+ * Cijela izmjena ide u **jednoj transakciji**: grantovi se zamjenjuju po roli,
+ * `Role.permissionsVersion` raste, a nakon commit-a se invalidira Redis keš
+ * (`vfm:perm:*` + `vfm:permver:role:{id}`) → korisnici bez ponovne prijave
+ * dobijaju 403 u ≤ 5 s (P3).
+ */
+export const roleMatrixUpdateSchema = z
+  .object({
+    roles: z
+      .array(
+        z
+          .object({
+            roleId: roleIdSchema,
+            /** Puna lista grantova za rolu (prazna lista = sva prava ukinuta). */
+            grants: z.array(permissionGrantInputSchema).max(400),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(20),
+  })
+  .strict();
+
+export type RoleMatrixUpdateInput = z.output<typeof roleMatrixUpdateSchema>;
+
+// --- Odgovori (web ih parsira ovim šemama) ---
+
+/** Jedan red matrice: koja rola ima koju permisiju i s kojim opsegom. */
+export const roleMatrixGrantSchema = z
+  .object({
+    roleId: roleIdSchema,
+    permission: permissionCodeSchema,
+    scope: permissionScopeSchema,
+    scopeVehicleIds: z.array(uuidSchema),
+    scopeDriverIds: z.array(uuidSchema),
+    conditions: z.record(z.string(), z.unknown()).nullable(),
+    grantedAt: z.iso.datetime().nullable(),
+  })
+  .strict();
+
+export type RoleMatrixGrant = z.output<typeof roleMatrixGrantSchema>;
+
+/** Rola u listi (s brojem aktivnih korisnika — prikaz u UI-u). */
+export const roleSummarySchema = z
+  .object({
+    id: roleIdSchema,
+    code: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    isSystem: z.boolean(),
+    allowedClientTypes: z.array(clientTypeSchema),
+    permissionsVersion: z.number().int().nonnegative(),
+    priority: z.number().int(),
+    activeUserCount: z.number().int().nonnegative(),
+    grantedCount: z.number().int().nonnegative(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+
+export type RoleSummary = z.output<typeof roleSummarySchema>;
+
+/** Rola s grantovima (`GET /roles/:id`). */
+export const roleDetailSchema = roleSummarySchema.extend({ grants: z.array(roleMatrixGrantSchema) }).strict();
+
+export type RoleDetail = z.output<typeof roleDetailSchema>;
+
+/** Grupa kataloga (`GET /permissions`). */
+export const permissionCatalogGroupSchema = z
+  .object({
+    module: z.string(),
+    permissions: z.array(
+      z
+        .object({
+          code: z.string(),
+          action: z.string(),
+          description: z.string().nullable(),
+          isSensitive: z.boolean(),
+          /** Da li permisija postoji u bazi (sync status za deploy provjeru). */
+          inDatabase: z.boolean(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+export type PermissionCatalogGroup = z.output<typeof permissionCatalogGroupSchema>;
+
+/** `GET /roles/matrix` — sve što editor matrice treba u jednom odgovoru. */
+export const permissionMatrixResponseSchema = z
+  .object({
+    modules: z.array(permissionCatalogGroupSchema),
+    roles: z.array(roleSummarySchema),
+    grants: z.array(roleMatrixGrantSchema),
+    generatedAt: z.iso.datetime(),
+  })
+  .strict();
+
+export type PermissionMatrixResponse = z.output<typeof permissionMatrixResponseSchema>;
+
+/** Rezultat `PUT /roles/matrix` (broj izmjena po kategoriji — audit i toast u UI). */
+export const roleMatrixUpdateResultSchema = z
+  .object({
+    affectedRoles: z.number().int().nonnegative(),
+    added: z.number().int().nonnegative(),
+    removed: z.number().int().nonnegative(),
+    scopeChanged: z.number().int().nonnegative(),
+    changed: z.array(
+      z
+        .object({
+          roleId: roleIdSchema,
+          roleCode: z.string(),
+          permission: z.string(),
+          before: permissionScopeSchema.nullable(),
+          after: permissionScopeSchema.nullable(),
+        })
+        .strict(),
+    ),
+    permissionsVersion: z.record(roleIdSchema, z.number().int().nonnegative()),
+  })
+  .strict();
+
+export type RoleMatrixUpdateResult = z.output<typeof roleMatrixUpdateResultSchema>;
+
+/** Rezultat `POST /permissions/sync` (deploy korak). */
+export const permissionSyncResultSchema = z
+  .object({
+    total: z.number().int().nonnegative(),
+    created: z.number().int().nonnegative(),
+    updated: z.number().int().nonnegative(),
+    unchanged: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type PermissionSyncResult = z.output<typeof permissionSyncResultSchema>;

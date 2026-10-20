@@ -36,7 +36,7 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | ID | Kriterij | Faza | Tip | Fajl | Ključni koraci i tvrdnje |
 |---|---|---|---|---|---|
 | **P1** | Super Admin: web OK, mobilno NE | 1, 6 | unit ✅ + integration + e2e | ✅ `apps/api/test/unit/auth-service.spec.ts`, `auth-controller.spec.ts`, `auth-guards.spec.ts`; ⏳ `apps/api/test/e2e/auth-superadmin-mobile-blocked.spec.ts` | 1) login `clientType=WEB` → 200; 2) login `MOBILE_ANDROID` → 403 `MOBILE_ACCESS_FORBIDDEN`; 3) web token poslan s `X-Client-Type: MOBILE_ANDROID` na `/tasks` → 403 `MOBILE_SCOPE_NOT_ALLOWED`; 4) audit `SECURITY` zapis postoji; 5) Maestro: mobilni login Super Admina prikazuje poruku |
-| **P2** | Kreiranje rola i izmjena prava | 1 | integration | `roles-matrix.integration.spec.ts` | `POST /roles` → 201; `PUT /roles/matrix` (dodaj `vehicle:create` za `OBICNI_KORISNIK`) → 200; `GET /roles/matrix` odražava promjenu; audit diff sadrži 3 izmjene |
+| **P2** | Kreiranje rola i izmjena prava | 1 | unit ✅ + integration | ✅ `roles-service.spec.ts`, `roles-controller.spec.ts`; ⏳ `roles-matrix.integration.spec.ts` | `POST /roles` → 201; `PUT /roles/matrix` (dodaj `vehicle:create` za `OBICNI_KORISNIK`) → 200; `GET /roles/matrix` odražava promjenu; audit diff sadrži 3 izmjene |
 | **P3** | Oduzeto pravo odmah blokira API | 1 | unit ✅ + integration | ✅ `permissions-service.spec.ts`, `auth-guards.spec.ts`, `auth-service.spec.ts` (`me` nakon revokacije); ⏳ `rbac-revocation-latency.integration.spec.ts` | korisnik s `vehicle:create` → `POST /vehicles` 201; oduzeti pravo → isti **access token** (bez re-logina) → `POST /vehicles` 403 u ≤ 5 s; mjeri se `Date.now()` delta i tvrdi `< 5000` |
 | **P4** | Admin kreira zadatak na mobilu | 5, 6 | e2e | Maestro `mobile-task-create.yaml` | login administratora → FAB → wizard → vozilo/tip → potvrdi → zadatak vidljiv u listi i na webu; bez `task:create` → FAB ne postoji **i** `POST /tasks` → 403 |
 | **P5** | Oba korisnika vide/dobiju slobodan zadatak | 5, 6 | integration | `task-open-visibility.integration.spec.ts` | zadatak `OPEN_CLAIM` s 2 pozvana → `GET /tasks/available` vraća zadatak za oba; `Notification` postoji za oba (unique `notificationKey`); outbox `PROCESSED`; nakon claim-a drugi korisnik vidi `assigneeName` |
@@ -65,8 +65,10 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | Tokeni/lozinke | `token-service.spec.ts`, `password-service.spec.ts` | 29 + 25 | `auth/services` 96 % / 88 % |
 | Audit persistencija (`AuditLog` + SECURITY događaji) | `prisma-audit-sink.spec.ts`, `audit.spec.ts` | 10 | `common/audit` 93 % / 77 % |
 | Validacija ulaza (Zod) + čitanje cookie-ja | `zod-validation-pipe.spec.ts`, `http-cookies.spec.ts` | 31 | `common/pipes` 100 %, `common/http` 100 % |
+| Role i matrica prava (P2: grantovi u transakciji, bump verzije + Redis invalidacija, opsezi, zaštite Super Admina i arhiviranja) | `test/unit/roles-service.spec.ts` | 23 | `src/modules/roles` 97 % / 75 % |
+| Role/Permisije kontroler (permisije po ruti, audit metadata, `AuditContext` diff, redoslijed ruta `matrix` prije `:id`, DI modula) | `test/unit/roles-controller.spec.ts` | 22 | `roles.controller.ts` 100 % / 50 % — tanki passthrough (neskrivene grane su `user?.id` i `?? null`) |
 
-E2E/integration fajlovi iz tabele §2 (P1 koraci 3 i 5, P2, P3 latency) ostaju planirani —
+E2E/integration fajlovi iz tabele §2 (P1 koraci 3 i 5, P2 preko HTTP-a, P3 latency) ostaju planirani —
 zahtijevaju živi PostgreSQL i Redis (`docker-compose.dev.yml`), što u sandboxu nije dostupno.
 
 ---

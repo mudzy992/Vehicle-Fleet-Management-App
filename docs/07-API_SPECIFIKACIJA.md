@@ -130,6 +130,38 @@ piše se u `AuthAttempt` (retencija 180 dana) i — kod odbijanja — u `AuditLo
 | GET | `/permissions` | `permission:view` — katalog (modul, akcija, opis, `isSensitive`) |
 | POST | `/permissions/sync` | `permission:catalog_sync` — sinhronizacija kataloga iz koda u DB (deploy korak) |
 
+**Semantika (implementirano u Fazi 1):**
+
+- `PUT /roles/matrix` je **puna zamjena** grantova za svaku navedenu rolu (lista `grants` je
+  konačno stanje; prazna lista = sva prava ukinuta). Cijela izmjena ide u **jednoj** transakciji,
+  svaka dirana rola dobija `permissionsVersion++`, a Redis (`vfm:perm:*`, `vfm:permver:role:{id}`)
+  se invalidira **nakon** commit-a → postojeći access tokeni vide novo stanje u ≤ 5 s bez prijave (P3).
+- `SUPER_ADMIN` se **ne** uređuje matricom — ima sve permisije implicitno (R-07); pokušaj vraća
+  `400 VALIDATION_ERROR`.
+- Opsezi: `VEHICLE_IDS` traži neprazan `scopeVehicleIds`, `DRIVER_IDS` neprazan `scopeDriverIds`;
+  `ALL`/`OWN` ne primaju ID liste (schema odbija na ulazu). Dodatna pravila idu u `conditions`.
+- `POST /roles/:id/archive` odbija sistemske role (`SUPER_ADMIN`, `ADMINISTRATOR`,
+  `OBICNI_KORISNIK`) i role s aktivnim korisnicima (`400 VALIDATION_ERROR`);
+  Super Admin → `409 LAST_SUPER_ADMIN_PROTECTED` (isto čuva DB trigger).
+- `POST /permissions/sync` je idempotentan; `description` se ne dira (opisi žive u bazi).
+  `GET /permissions` vraća `inDatabase` po permisiji — deploy provjera je li sync pokrenut.
+- Grant čija permisija ne postoji u bazi (sync nije pokrenut) prekida transakciju s porukom koja
+  upućuje na `POST /api/v1/permissions/sync` (bez toga bi pravo bilo tiho neupotrebljivo).
+
+Primjer `PUT /api/v1/roles/matrix`:
+
+```json
+{ "roles": [ { "roleId": "…", "grants": [
+    { "permission": "vehicle:view", "scope": "ALL" },
+    { "permission": "vehicle:create", "scope": "ALL" },
+    { "permission": "task:view", "scope": "DRIVER_IDS",
+      "scopeDriverIds": ["…"] } ] } ] }
+```
+
+`200` → `{ "data": { "affectedRoles": 1, "added": 1, "removed": 0, "scopeChanged": 0,
+"changed": [{ "roleId": "…", "roleCode": "OBICNI_KORISNIK", "permission": "vehicle:create",
+"before": null, "after": "ALL" }], "permissionsVersion": { "…": 7 } } }`
+
 ### 2.4 Vozači (`/drivers`)
 
 `GET/POST /drivers`, `GET/PATCH /drivers/:id`, `POST /drivers/:id/archive`, `DELETE /drivers/:id`,

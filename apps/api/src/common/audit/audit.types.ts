@@ -204,6 +204,7 @@ export const AUDIT_CONTEXT_KEY = Symbol('VFM_AUDIT_CONTEXT');
  */
 export class AuditContext {
   private beforeValue: Readonly<Record<string, unknown>> | undefined;
+  private afterValue: Readonly<Record<string, unknown>> | undefined;
   private readonly metaValue: Record<string, unknown> = {};
   private entityIdValue: string | undefined;
   private resourceValue: string | undefined;
@@ -236,6 +237,22 @@ export class AuditContext {
 
   get entityId(): string | undefined {
     return this.entityIdValue;
+  }
+
+  /**
+   * Postavlja stanje **poslije** izmjene.
+   *
+   * Zašto postoji: interceptor inače uzima `after` iz odgovora handlera, što je
+   * za složene odgovore (npr. matrica prava) neuporedivo s `before` snapshotom.
+   * Servis može predati oba u istom obliku → diff je tačan po polju.
+   */
+  setAfter(value: Readonly<Record<string, unknown>> | undefined): this {
+    this.afterValue = value;
+    return this;
+  }
+
+  get after(): Readonly<Record<string, unknown>> | undefined {
+    return this.afterValue;
   }
 
   /** Naziv resursa (ima prednost nad onim iz `@Audit`). */
