@@ -5,7 +5,7 @@ import {
   contentHash,
   definitionETag,
   sameCanonicalJson,
-} from '../dist/index.js';
+} from '../src/index.js';
 
 describe('kanonski JSON i contentHash (docs/04 §8.10, §11)', () => {
   it('sortira ključeve objekata pa hash ne zavisi od redoslijeda', () => {

@@ -8,7 +8,7 @@ import {
   checkFieldKeys,
   isReservedFieldKey,
   isValidFieldKeyFormat,
-} from '../dist/index.js';
+} from '../src/index.js';
 
 describe('rezervisani ključevi (docs/04 §5)', () => {
   it('odbija svaki ključ iz dokumentovane liste', () => {

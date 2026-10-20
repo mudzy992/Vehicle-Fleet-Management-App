@@ -154,7 +154,21 @@ Trajanje pune kapije: ~30 s na ovom sandboxu. Nijedan test ne dira mrežu, bazu 
    pnpm --filter @vfm/api seed        # dev; u image-u: node dist/tools/seed.js
    ```
 
-2. **Prvi Super Admin** (lozinka se ispisuje jednom; mijenja se pri prvoj prijavi):
+2. **Prvi Super Admin** — automatski kroz `migrate` (varijanta A, bez ručnog koraka):
+
+   ```dotenv
+   RUN_DB_SEED=true
+   BOOTSTRAP_SUPER_ADMIN_ENABLED=true
+   BOOTSTRAP_SUPER_ADMIN_EMAIL=super@firma.ba
+   BOOTSTRAP_SUPER_ADMIN_FIRST_NAME=Ime
+   BOOTSTRAP_SUPER_ADMIN_LAST_NAME=Prezime
+   BOOTSTRAP_SUPER_ADMIN_PASSWORD=<jaka lozinka, min 12 znakova>
+   ```
+
+   `migrate` = `migrate deploy` → seed → bootstrap; lozinka se **ne ispisuje**, a
+   korisnik je mijenja pri prvoj prijavi. Kad Super Admin postoji, korak se
+   preskače uz `WARN` (redeploy ne pada) — tada vrati `ENABLED=false` i obriši
+   `PASSWORD`. Ručna alternativa (generisana lozinka, ispiše se jednom):
 
    ```bash
    node scripts/bootstrap-super-admin.mjs --email super@firma.ba --name "Ime Prezime"

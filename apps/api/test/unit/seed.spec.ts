@@ -14,7 +14,7 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ALL_PERMISSIONS, defaultGrantsForRole } from '@vfm/shared';
 import { PasswordService } from '../../src/modules/auth/services/password.service.js';
-import { bootstrapSuperAdmin } from '../../src/tools/bootstrap-super-admin.js';
+import { bootstrapSuperAdmin, SuperAdminBootstrapError } from '../../src/tools/bootstrap-super-admin.js';
 import { runSeed } from '../../src/tools/seed.js';
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
 import { FakePrismaClient } from '../helpers/fake-prisma.js';
@@ -41,7 +41,9 @@ describe('seed', () => {
     expect(fake.roles.size).toBe(3);
     const codes = [...fake.roles.values()].map((role) => role.code).sort();
     expect(codes).toEqual(['ADMINISTRATOR', 'OBICNI_KORISNIK', 'SUPER_ADMIN']);
-    expect([...fake.roles.values()].find((role) => role.code === 'SUPER_ADMIN')?.allowedClientTypes).toEqual(['WEB']);
+    expect([...fake.roles.values()].find((role) => role.code === 'SUPER_ADMIN')?.allowedClientTypes).toEqual([
+      'WEB',
+    ]);
 
     // Grantovi: ADMINISTRATOR + OBICNI_KORISNIK po matrici, SUPER_ADMIN eksplicitno sve.
     const expectedGrants = (['SUPER_ADMIN', 'ADMINISTRATOR', 'OBICNI_KORISNIK'] as const)
@@ -180,6 +182,74 @@ describe('bootstrap-super-admin', () => {
         lastName: 'Admin',
       }),
     ).rejects.toThrow(/već ima aktivnog Super Admina/u);
+  });
+
+  it('lozinka iz ENV-a (varijanta A): koristi se bez generisanja i prolazi politiku', async () => {
+    const fake = new FakePrismaClient();
+    await runSeed(asClient(fake), { NODE_ENV: 'production' });
+
+    const result = await bootstrapSuperAdmin(asClient(fake), passwords, {
+      email: 'super@firma.ba',
+      firstName: 'Amar',
+      lastName: 'Super',
+      password: 'Bootstrap!Vfm2026',
+    });
+
+    expect(result.passwordGenerated).toBe(false);
+    expect(result.password).toBe('Bootstrap!Vfm2026');
+    const stored = fake.users.get(result.userId);
+    expect(await passwords.verify(stored?.passwordHash ?? '', 'Bootstrap!Vfm2026')).toBe(true);
+    expect(stored?.mustChangePassword).toBe(true);
+  });
+
+  it('odbija slabu lozinku iz ENV-a prije nego što išta upiše u bazu', async () => {
+    const fake = new FakePrismaClient();
+    await runSeed(asClient(fake), { NODE_ENV: 'production' });
+    const usersBefore = fake.users.size;
+
+    await expect(
+      bootstrapSuperAdmin(asClient(fake), passwords, {
+        email: 'super@firma.ba',
+        firstName: 'Amar',
+        lastName: 'Super',
+        password: 'sifra123',
+      }),
+    ).rejects.toThrow(/politiku lozinke/u);
+
+    expect(fake.users.size).toBe(usersBefore);
+    await expect(
+      bootstrapSuperAdmin(asClient(fake), passwords, {
+        email: 'super@firma.ba',
+        firstName: 'Amar',
+        lastName: 'Super',
+        password: 'Amar-Super-1990',
+      }),
+    ).rejects.toThrow(/politiku/u);
+  });
+
+  it('greške nose kod (migrate po njemu odlučuje skip vs. prekid)', async () => {
+    const fake = new FakePrismaClient();
+
+    await expect(
+      bootstrapSuperAdmin(asClient(fake), passwords, { email: 'a@b.ba', firstName: 'A', lastName: 'B' }),
+    ).rejects.toMatchObject({ code: 'ROLE_MISSING' });
+
+    await runSeed(asClient(fake), { NODE_ENV: 'production' });
+    await bootstrapSuperAdmin(asClient(fake), passwords, {
+      email: 'prvi@firma.ba',
+      firstName: 'Prvi',
+      lastName: 'Admin',
+      password: 'Bootstrap!Vfm2026',
+    });
+
+    const second = bootstrapSuperAdmin(asClient(fake), passwords, {
+      email: 'drugi@firma.ba',
+      firstName: 'Drugi',
+      lastName: 'Admin',
+      password: 'Bootstrap!Vfm2026',
+    });
+    await expect(second).rejects.toBeInstanceOf(SuperAdminBootstrapError);
+    await expect(second).rejects.toMatchObject({ code: 'SUPER_ADMIN_EXISTS' });
   });
 
   it('traži da seed prethodi bootstrapu (rola mora postojati)', async () => {

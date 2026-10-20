@@ -171,6 +171,8 @@ pnpm --filter @vfm/api seed
 node dist/tools/seed.js
 # kroz migrate servis (migracije + seed u jednom prolazu):
 node dist/tools/migrate.js --seed
+# ili bez flagova, kroz ENV (tako radi Coolify deploy):
+RUN_DB_SEED=true node dist/tools/migrate.js
 ```
 
 Šta seed radi (idempotentno): katalog permisija (`ALL_PERMISSIONS`), tri sistemske
@@ -180,14 +182,34 @@ van produkcije ili uz `SEED_DEMO_DATA=true` — 2 demo korisnika (lozinke ispisa
 jednom) i 10 fiktivnih vozila. Postojeći grantovi se ne diraju (`skipDuplicates`),
 pa ručne izmjene matrice preživljavaju deploy.
 
-Prvi Super Admin se kreira **odvojeno**, nakon seed-a:
+Prvi Super Admin se kreira nakon seed-a, na **jedan** od dva načina.
+
+**A) Automatski u `migrate` servisu (preporučeno za Coolify — bez ručnog koraka):**
+
+```dotenv
+RUN_DB_SEED=true
+BOOTSTRAP_SUPER_ADMIN_ENABLED=true
+BOOTSTRAP_SUPER_ADMIN_EMAIL=super@firma.ba
+BOOTSTRAP_SUPER_ADMIN_FIRST_NAME=Ime
+BOOTSTRAP_SUPER_ADMIN_LAST_NAME=Prezime
+BOOTSTRAP_SUPER_ADMIN_PASSWORD=<jaka lozinka, min 12 znakova>
+```
+
+`migrate` tada radi: `migrate deploy` → seed → bootstrap. Lozinka se **nikad ne
+ispisuje** u logove; korisnik je mijenja pri prvoj prijavi (`mustChangePassword`).
+Ako Super Admin već postoji, korak se preskače uz `WARN` (redeploy ne pada), pa
+nakon prvog uspješnog deploya vrati `BOOTSTRAP_SUPER_ADMIN_ENABLED=false` i
+**obriši** `BOOTSTRAP_SUPER_ADMIN_PASSWORD` iz env-a. Slabu lozinku odbija i
+`validateEnvProfile` (min 12) i `PasswordService` (puna politika, docs/05 §7).
+
+**B) Ručno (generisana lozinka, ispiše se jednom u terminal):**
 
 ```bash
 node scripts/bootstrap-super-admin.mjs --email super@firma.ba --name "Ime Prezime"
 ```
 
-Skripta generiše lozinku i ispisuje je jednom (`mustChangePassword=true`); odbija
-rad ako Super Admin već postoji (nema `--force` — dodatni admini idu kroz aplikaciju).
+Skripta odbija rad ako Super Admin već postoji (nema `--force` — dodatni admini
+idu kroz aplikaciju; izlazni kod je 0 jer je to očekivano stanje).
 
 ---
 

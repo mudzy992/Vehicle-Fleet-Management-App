@@ -139,10 +139,14 @@ services:
       # ROLLED_BACK = `migrate resolve --rolled-back` (red s finished_at IS NULL).
       MIGRATIONS_BASELINE: ${MIGRATIONS_BASELINE:-}
       MIGRATIONS_ROLLED_BACK: ${MIGRATIONS_ROLLED_BACK:-}
+      # Bootstrap prvog Super Admina (varijanta A): lozinka dolazi iz ENV-a i
+      # NIKAD se ne ispisuje u logove. Ako Super Admin već postoji, korak se
+      # preskače uz WARN (redeploy ne pada).
       BOOTSTRAP_SUPER_ADMIN_ENABLED: ${BOOTSTRAP_SUPER_ADMIN_ENABLED:-false}
       BOOTSTRAP_SUPER_ADMIN_EMAIL: ${BOOTSTRAP_SUPER_ADMIN_EMAIL:-}
       BOOTSTRAP_SUPER_ADMIN_FIRST_NAME: ${BOOTSTRAP_SUPER_ADMIN_FIRST_NAME:-}
       BOOTSTRAP_SUPER_ADMIN_LAST_NAME: ${BOOTSTRAP_SUPER_ADMIN_LAST_NAME:-}
+      BOOTSTRAP_SUPER_ADMIN_PASSWORD: ${BOOTSTRAP_SUPER_ADMIN_PASSWORD:-}
     volumes:
       # ⚠️ Coolify validira volume source PRIJE zamjene varijabli — u ${...:?} NE
       # smije biti razmaka/zagrada, inače: "Invalid volume source: contains

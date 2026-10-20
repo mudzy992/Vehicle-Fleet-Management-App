@@ -8,9 +8,12 @@
  * ```
  *
  * Pravila:
- * - lozinka se **generiše** (nikad se ne postavlja kroz argument ni u repou) i
- *   ispisuje **samo jednom** na stdout; `mustChangePassword=true` +
- *   status `PENDING_PASSWORD_CHANGE` tjeraju promjenu pri prvoj prijavi,
+ * - lozinka se **generiše** i ispisuje **samo jednom** na stdout (ručno
+ *   pokretanje) **ili** dolazi iz `BOOTSTRAP_SUPER_ADMIN_PASSWORD` kad se
+ *   bootstrap izvršava automatski u `migrate` kontejneru (varijanta A u
+ *   docs/12) — u tom slučaju se **nikad ne ispisuje** u logove;
+ * - `mustChangePassword=true` + status `PENDING_PASSWORD_CHANGE` tjeraju
+ *   promjenu pri prvoj prijavi (važi za oba načina),
  * - skripta **odbija** rad ako već postoji aktivan Super Admin (`--force` ne
  *   postoji namjerno: drugi Super Admin se dodaje kroz aplikaciju, uz audit),
  * - rola `SUPER_ADMIN` mora postojati → prvo pokreni seed (`node dist/tools/seed.js`),
@@ -30,6 +33,43 @@ interface BootstrapArgs {
   readonly email: string;
   readonly firstName: string;
   readonly lastName: string;
+  /**
+   * Lozinka iz `BOOTSTRAP_SUPER_ADMIN_PASSWORD`. Kad je zadana, **ne** generiše
+   * se nova i ne ispisuje se nigdje — koristi se u automatskom bootstrapu
+   * (`migrate` kontejner, varijanta A). Bez nje se lozinka generiše.
+   */
+  readonly password?: string;
+}
+
+/** Kodovi zbog kojih bootstrap **ne** treba rušiti deploy (idempotentnost). */
+export const BOOTSTRAP_SKIP_CODES = ['SUPER_ADMIN_EXISTS', 'EMAIL_EXISTS'] as const;
+
+export type BootstrapErrorCode =
+  | (typeof BOOTSTRAP_SKIP_CODES)[number]
+  | 'ROLE_MISSING'
+  | 'PASSWORD_POLICY';
+
+/**
+ * Tipizirana greška bootstrapa: `migrate` po kodu odlučuje da li je situacija
+ * „preskoči uz WARN" (Super Admin već postoji — normalan redeploy) ili pravi
+ * prekid (nema role, lozinka ne prolazi politiku).
+ */
+export class SuperAdminBootstrapError extends Error {
+  constructor(
+    readonly code: BootstrapErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'SuperAdminBootstrapError';
+  }
+}
+
+/** Rezultat uspješnog bootstrapa. `passwordGenerated=false` → lozinka je iz ENV-a. */
+export interface BootstrapResult {
+  readonly userId: string;
+  readonly email: string;
+  readonly password: string;
+  readonly passwordGenerated: boolean;
 }
 
 function parseArgs(argv: readonly string[]): BootstrapArgs {
@@ -60,13 +100,14 @@ export async function bootstrapSuperAdmin(
   prisma: PrismaClient,
   passwords: PasswordService,
   args: BootstrapArgs,
-): Promise<{ userId: string; email: string; password: string }> {
+): Promise<BootstrapResult> {
   const role = await prisma.role.findUnique({
     where: { code: SUPER_ADMIN_ROLE },
     select: { id: true },
   });
   if (!role) {
-    throw new Error(
+    throw new SuperAdminBootstrapError(
+      'ROLE_MISSING',
       `Rola '${SUPER_ADMIN_ROLE}' ne postoji — prvo pokreni seed ` +
         '(`node dist/tools/seed.js` ili `pnpm --filter @vfm/api seed`).',
     );
@@ -82,7 +123,8 @@ export async function bootstrapSuperAdmin(
     },
   });
   if (existingSuperAdmin > 0) {
-    throw new Error(
+    throw new SuperAdminBootstrapError(
+      'SUPER_ADMIN_EXISTS',
       'Sistem već ima aktivnog Super Admina — bootstrap se ne izvršava. ' +
         'Dodatne administratore kreiraj kroz aplikaciju (Users → novi korisnik + rola).',
     );
@@ -93,13 +135,35 @@ export async function bootstrapSuperAdmin(
     select: { id: true },
   });
   if (existingEmail) {
-    throw new Error(
+    throw new SuperAdminBootstrapError(
+      'EMAIL_EXISTS',
       `Korisnik s e-mailom '${args.email}' već postoji. Odaberi drugi e-mail ili mu dodijeli ` +
         `rolu '${SUPER_ADMIN_ROLE}' kroz aplikaciju.`,
     );
   }
 
-  const password = passwords.generateTemporaryPassword({ email: args.email });
+  // Lozinka iz ENV-a mora proći **istu** politiku kao svaka druga (docs/05 §7):
+  // bootstrap je jedini put kojim se zaobilazi UI, pa slabu lozinku ne smije
+  // progurati. Generisana lozinka je po konstrukciji usklađena.
+  const passwordGenerated = args.password === undefined;
+  let password: string;
+  if (args.password === undefined) {
+    password = passwords.generateTemporaryPassword({ email: args.email });
+  } else {
+    const policyIssues = passwords.validatePolicy(args.password, {
+      email: args.email,
+      firstName: args.firstName,
+      lastName: args.lastName,
+    });
+    if (policyIssues.length > 0) {
+      throw new SuperAdminBootstrapError(
+        'PASSWORD_POLICY',
+        `BOOTSTRAP_SUPER_ADMIN_PASSWORD ne prolazi politiku lozinke: ` +
+          policyIssues.map((issue) => issue.message).join(' '),
+      );
+    }
+    password = args.password;
+  }
   const passwordHash = await passwords.hashUnchecked(password);
   const userId = randomUUID();
 
@@ -119,7 +183,7 @@ export async function bootstrapSuperAdmin(
     await tx.userRole.create({ data: { id: randomUUID(), userId, roleId: role.id } });
   });
 
-  return { userId, email: args.email, password };
+  return { userId, email: args.email, password, passwordGenerated };
 }
 
 async function main(): Promise<void> {
@@ -133,6 +197,13 @@ async function main(): Promise<void> {
 
   try {
     const result = await bootstrapSuperAdmin(prisma, new PasswordService(), args);
+
+    if (!result.passwordGenerated) {
+      // Lozinka je došla iz ENV-a — ispisujemo samo potvrdu, nikad tajnu.
+      console.log(`[bootstrap] Super Admin je kreiran: ${result.email} (id ${result.userId}).`);
+      console.log('[bootstrap] Lozinka je preuzeta iz BOOTSTRAP_SUPER_ADMIN_PASSWORD i nije ispisana.');
+      return;
+    }
 
     console.log('');
     console.log('════════════════════════════════════════════════════════════════════');
@@ -155,6 +226,13 @@ async function main(): Promise<void> {
 // Pokreće se samo kao CLI (ne i kad se modul importuje u testovima).
 if (process.argv[1]?.includes('bootstrap-super-admin')) {
   main().catch((error: unknown) => {
+    // „Već postoji" nije greška za skriptu koja se pušta više puta: ispiši
+    // objašnjenje i izađi s 0 (inače bi svaki ponovni poziv padao u CI/deployu).
+    const skipCodes: readonly BootstrapErrorCode[] = BOOTSTRAP_SKIP_CODES;
+    if (error instanceof SuperAdminBootstrapError && skipCodes.includes(error.code)) {
+      console.log(`[bootstrap] preskočeno — ${error.message}`);
+      return;
+    }
     console.error(
       `[bootstrap] ${error instanceof Error ? error.message : String(error)}`,
     );

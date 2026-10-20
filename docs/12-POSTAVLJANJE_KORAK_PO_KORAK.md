@@ -533,15 +533,26 @@ Test: napravi bilo kakvu izmjenu na `main` → Coolify → **Deployments** → n
    node dist/tools/seed.js              # kompajlirano (image)
    ```
 
-4. Kreiraj **prvog Super Admina** (lozinka se generiše i ispisuje samo jednom;
-   pri prvoj prijavi se mijenja):
+4. Kreiraj **prvog Super Admina**. Dva načina — biraj jedan.
+
+   **A) Automatski, kroz `migrate` servis (bez ručnog koraka, preporučeno za Coolify):**
+   u ENV dodaj `RUN_DB_SEED=true`, `BOOTSTRAP_SUPER_ADMIN_ENABLED=true`,
+   `BOOTSTRAP_SUPER_ADMIN_EMAIL` / `_FIRST_NAME` / `_LAST_NAME` i
+   `BOOTSTRAP_SUPER_ADMIN_PASSWORD` (min 12 znakova, 3 klase). Na redeploy-u
+   `migrate` odradi seed pa bootstrap; u logu piše `Super Admin spreman`.
+   Lozinka se **ne ispisuje** nigdje — mijenja se pri prvoj prijavi.
+   ⚠️ Nakon uspjeha vrati `BOOTSTRAP_SUPER_ADMIN_ENABLED=false` i **obriši**
+   `BOOTSTRAP_SUPER_ADMIN_PASSWORD`. Ako Super Admin već postoji, korak se
+   preskače uz `WARN` — deploy ne pada.
+
+   **B) Ručno** (lozinka se generiše i ispiše samo jednom):
 
    ```bash
    node scripts/bootstrap-super-admin.mjs --email super@firma.ba --name "Ime Prezime"
    ```
 
-   Skripta odbija rad ako Super Admin već postoji — dodatni administratori se
-   kreiraju kroz aplikaciju (Users → novi korisnik + rola), uz audit.
+   U oba slučaja: dodatni administratori se kreiraju kroz aplikaciju (Users →
+   novi korisnik + rola), uz audit — bootstrap je samo za **prvi** nalog.
 
 ---
 

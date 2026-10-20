@@ -127,8 +127,7 @@ describe('parseEnv — defaulti i normalizacija', () => {
 
   it('CORS_ORIGINS se parsira iz stringa s razmacima i prazninama', () => {
     const env = parseEnv({
-      CORS_ORIGINS:
-        'https://vehicle.ba101.top, http://localhost:5173 ,, https://preview.ba101.top',
+      CORS_ORIGINS: 'https://vehicle.ba101.top, http://localhost:5173 ,, https://preview.ba101.top',
     });
     expect(env.CORS_ORIGINS).toEqual([
       'https://vehicle.ba101.top',
@@ -148,9 +147,7 @@ describe('parseEnv — defaulti i normalizacija', () => {
   it('MIGRATIONS_BASELINE se parsira kao lista naziva migracija (oporavak od P3005)', () => {
     const env = parseEnv({ MIGRATIONS_BASELINE: '0_extensions, 1_init ,, 2_manual' });
     expect(env.MIGRATIONS_BASELINE).toEqual(['0_extensions', '1_init', '2_manual']);
-    expect(parseEnv({ MIGRATIONS_ROLLED_BACK: '1_init' }).MIGRATIONS_ROLLED_BACK).toEqual([
-      '1_init',
-    ]);
+    expect(parseEnv({ MIGRATIONS_ROLLED_BACK: '1_init' }).MIGRATIONS_ROLLED_BACK).toEqual(['1_init']);
   });
 
   it('boolean-like vrijednosti (Coolify često šalje string)', () => {
@@ -235,16 +232,56 @@ describe('validateEnvProfile — profilne obaveze', () => {
     expect(validateEnvProfile(parseEnv({ ...VALID_API_ENV }), 'api')).toEqual([]);
   });
 
+  it('bootstrap u profilu tool traži lozinku (varijanta A, migrate kontejner)', () => {
+    const bezLozinke = validateEnvProfile(
+      parseEnv({
+        ENV_PROFILE: 'tool',
+        DATABASE_URL: 'postgresql://x/y',
+        BOOTSTRAP_SUPER_ADMIN_ENABLED: 'true',
+        BOOTSTRAP_SUPER_ADMIN_EMAIL: 'super@firma.ba',
+      }),
+      'tool',
+    );
+    expect(bezLozinke.join('\n')).toMatch(/BOOTSTRAP_SUPER_ADMIN_PASSWORD je obavezan/u);
+
+    const kratka = validateEnvProfile(
+      parseEnv({
+        ENV_PROFILE: 'tool',
+        DATABASE_URL: 'postgresql://x/y',
+        BOOTSTRAP_SUPER_ADMIN_ENABLED: 'true',
+        BOOTSTRAP_SUPER_ADMIN_EMAIL: 'super@firma.ba',
+        BOOTSTRAP_SUPER_ADMIN_PASSWORD: 'kratka1234',
+      }),
+      'tool',
+    );
+    expect(kratka.join('\n')).toMatch(/barem 12 znakova/u);
+
+    expect(
+      validateEnvProfile(
+        parseEnv({
+          ENV_PROFILE: 'tool',
+          DATABASE_URL: 'postgresql://x/y',
+          BOOTSTRAP_SUPER_ADMIN_ENABLED: 'true',
+          BOOTSTRAP_SUPER_ADMIN_EMAIL: 'super@firma.ba',
+          BOOTSTRAP_SUPER_ADMIN_PASSWORD: 'Bootstrap!Vfm2026',
+        }),
+        'tool',
+      ),
+    ).toEqual([]);
+
+    // Isključen bootstrap → lozinka nije obavezna (nema regresije za deploy).
+    expect(
+      validateEnvProfile(parseEnv({ ENV_PROFILE: 'tool', DATABASE_URL: 'postgresql://x/y' }), 'tool'),
+    ).toEqual([]);
+  });
+
   it('tool profil traži samo DATABASE_URL', () => {
     const errors = validateEnvProfile(parseEnv({ ENV_PROFILE: 'tool' }), 'tool');
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatch(/DATABASE_URL/u);
 
     expect(
-      validateEnvProfile(
-        parseEnv({ ENV_PROFILE: 'tool', DATABASE_URL: 'postgresql://x/y' }),
-        'tool',
-      ),
+      validateEnvProfile(parseEnv({ ENV_PROFILE: 'tool', DATABASE_URL: 'postgresql://x/y' }), 'tool'),
     ).toEqual([]);
   });
 
@@ -277,10 +314,7 @@ describe('validateEnvProfile — profilne obaveze', () => {
   });
 
   it('FIREBASE_ENABLED=true traži projekat i putanju service account-a (R-04)', () => {
-    const errors = validateEnvProfile(
-      parseEnv({ ...VALID_API_ENV, FIREBASE_ENABLED: 'true' }),
-      'api',
-    );
+    const errors = validateEnvProfile(parseEnv({ ...VALID_API_ENV, FIREBASE_ENABLED: 'true' }), 'api');
     expect(errors.join('\n')).toMatch(/FIREBASE_PROJECT_ID/u);
     expect(errors.join('\n')).toMatch(/FIREBASE_SERVICE_ACCOUNT_PATH/u);
   });
@@ -431,9 +465,7 @@ describe('queueKeyPrefix / validateRedisAclScope', () => {
   it('validateRedisAclScope je prazan za ispravnu konfiguraciju', () => {
     expect(validateRedisAclScope(parseEnv({}))).toEqual([]);
     expect(validateRedisAclScope(parseEnv({ VFM_REDIS_KEY_PREFIX: 'vfm' }))).toEqual([]);
-    expect(
-      validateRedisAclScope(parseEnv({ QUEUE_OUTBOX: 'vfm-queue-outbox-v2' })),
-    ).toEqual([]);
+    expect(validateRedisAclScope(parseEnv({ QUEUE_OUTBOX: 'vfm-queue-outbox-v2' }))).toEqual([]);
   });
 
   it('validateRedisAclScope prijavljuje prefiks izvan ~vfm:* (uzrok NOPERM-a)', () => {

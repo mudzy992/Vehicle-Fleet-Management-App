@@ -9,7 +9,7 @@ import {
   allowedValidationKeysFor,
   isKnownFieldType,
   isMobileCompatible,
-} from '../dist/index.js';
+} from '../src/index.js';
 
 describe('katalog tipova polja (docs/04 §3)', () => {
   it('koristi isti izvor tipova kao @vfm/shared (nema drift-a)', () => {

@@ -10,7 +10,7 @@ import {
   inputFields,
   parseDefinition,
   visibleWhenDepth,
-} from '../dist/index.js';
+} from '../src/index.js';
 import { freshWashDefinition, minimalDefinition } from './fixtures/wash.definition.js';
 
 function firstIssue(input: unknown): { code: string; path: string; message: string } {

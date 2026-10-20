@@ -6,8 +6,11 @@
  * 2. Čeka da Postgres prihvati konekcije (`pg_isready` ekvivalent kroz TCP).
  * 3. Uzima Redis lock `vfm:lock:migrate` (sprječava paralelne deploy-e).
  * 4. Pokreće `prisma migrate deploy` nad `prisma/schema.prisma`.
- * 5. (Opciono) `--seed` pokreće seed skriptu.
- * 6. Oslobađa lock i izlazi s kodom 0/1 → compose `service_completed_successfully`.
+ * 5. Seed kad je zadan `--seed` ili `RUN_DB_SEED=true` (idempotentan).
+ * 6. Bootstrap prvog Super Admina kad je `BOOTSTRAP_SUPER_ADMIN_ENABLED=true`
+ *    (lozinka iz `BOOTSTRAP_SUPER_ADMIN_PASSWORD`, nikad se ne ispisuje).
+ *    Ako Super Admin već postoji → `WARN` i nastavak (redeploy ne smije pasti).
+ * 7. Oslobađa lock i izlazi s kodom 0/1 → compose `service_completed_successfully`.
  *
  * Prisma CLI (7.10.1) je produkcijska dependencija `apps/api`, a nativni
  * `schema-engine` se peče u image pri buildu (`apps/api/Dockerfile`, korak 1b) —
@@ -28,8 +31,18 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { redisConfig } from '@vfm/shared/env';
 import type { BaseEnv } from '@vfm/shared/env';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { inspectEnv } from '../config/env.js';
 import { setupLogger } from '../config/logger.js';
+import { PrismaClient } from '../generated/prisma/client.js';
+import { PasswordService } from '../modules/auth/services/password.service.js';
+import { prismaConnectionOptions } from '../prisma/prisma.service.js';
+import {
+  BOOTSTRAP_SKIP_CODES,
+  bootstrapSuperAdmin,
+  SuperAdminBootstrapError,
+  type BootstrapErrorCode,
+} from './bootstrap-super-admin.js';
 import {
   findSchemaEngineBinary,
   listMigrationNames,
@@ -54,6 +67,51 @@ function parseArgs(argv: readonly string[]): CliOptions {
     seed: argv.includes('--seed'),
     skipLock: argv.includes('--skip-lock'),
   };
+}
+
+/**
+ * Bootstrap prvog Super Admina unutar `migrate` kontejnera (varijanta A).
+ *
+ * Lozinka dolazi iz `BOOTSTRAP_SUPER_ADMIN_PASSWORD` (obavezna kad je bootstrap
+ * uključen — provjerava `validateEnvProfile`), nikad se ne generiše i nikad se
+ * ne ispisuje: deploy logovi su dostupni svima s pristupom Coolifyju.
+ *
+ * @returns 0 = uspjeh ili namjerno preskočeno, 1 = stvarna greška
+ */
+async function runBootstrap(env: BaseEnv, logger: ToolLogger): Promise<number> {
+  logger.log(`Bootstrap Super Admina: ${env.BOOTSTRAP_SUPER_ADMIN_EMAIL}`);
+  const prisma = new PrismaClient({ adapter: new PrismaPg(prismaConnectionOptions(env)) });
+
+  try {
+    const result = await bootstrapSuperAdmin(prisma, new PasswordService(), {
+      email: env.BOOTSTRAP_SUPER_ADMIN_EMAIL,
+      firstName: env.BOOTSTRAP_SUPER_ADMIN_FIRST_NAME,
+      lastName: env.BOOTSTRAP_SUPER_ADMIN_LAST_NAME,
+      password: env.BOOTSTRAP_SUPER_ADMIN_PASSWORD,
+    });
+    logger.log(
+      `Super Admin spreman: ${result.email} (id ${result.userId}). ` +
+        'Lozinka je iz BOOTSTRAP_SUPER_ADMIN_PASSWORD — nije ispisana; korisnik je mora promijeniti pri prvoj prijavi.',
+    );
+    return 0;
+  } catch (error) {
+    if (!(error instanceof SuperAdminBootstrapError)) throw error;
+
+    const skipCodes: readonly BootstrapErrorCode[] = BOOTSTRAP_SKIP_CODES;
+    if (skipCodes.includes(error.code)) {
+      logger.warn(`Bootstrap preskočen (${error.code}): ${error.message}`);
+      // Lozinka u ENV-u ostaje nepotrošena. Upozori da je treba ukloniti.
+      logger.warn(
+        'BOOTSTRAP_SUPER_ADMIN_PASSWORD više nije potreban — ukloni ga iz env-a i postavi BOOTSTRAP_SUPER_ADMIN_ENABLED=false.',
+      );
+      return 0;
+    }
+
+    logger.error(`Bootstrap nije uspio (${error.code}): ${error.message}`);
+    return 1;
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
 async function main(): Promise<number> {
@@ -186,14 +244,28 @@ async function main(): Promise<number> {
     }
     logger.log('Migracije primijenjene.');
 
-    // 5) Seed (opciono)
-    if (options.seed) {
-      logger.log('Pokrećem seed…');
+    // 5) Seed — `--seed` ILI `RUN_DB_SEED=true` (Coolify: migracija bez flagova
+    //    u `command`, pa je ENV jedini način da seed ide uz deploy). Seed je
+    //    idempotentan, pa ponovni redeploy ne pravi duplikate.
+    if (options.seed || env.RUN_DB_SEED) {
+      logger.log(
+        options.seed ? 'Pokrećem seed (--seed)…' : 'Pokrećem seed (RUN_DB_SEED=true)…',
+      );
       const seed = await runPrisma(['db', 'seed'], env.DATABASE_URL, logger, engineBinary);
       if (seed.code !== 0) {
         reportFailure('Seed nije uspio', seed, logger);
         return seed.code;
       }
+    } else {
+      logger.log('Seed preskočen (RUN_DB_SEED=false i bez --seed).');
+    }
+
+    // 6) Bootstrap prvog Super Admina — varijanta A: lozinka iz ENV-a, nikad u
+    //    logovima. Najčešća situacija na redeploy-u je „Super Admin već
+    //    postoji", što NIJE greška (inače bi svaki deploy padao).
+    if (env.BOOTSTRAP_SUPER_ADMIN_ENABLED) {
+      const bootstrapCode = await runBootstrap(env, logger);
+      if (bootstrapCode !== 0) return bootstrapCode;
     }
 
     return 0;

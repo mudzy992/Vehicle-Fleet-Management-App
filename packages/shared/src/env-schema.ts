@@ -434,6 +434,25 @@ export function validateEnvProfile(
     );
   }
 
+  // Bootstrap prvog Super Admina izvodi **`migrate` kontejner** (profil `tool`),
+  // pa provjera mora vrijediti i ovdje — ne samo za `api`. Lozinka je obavezna
+  // jer se u deployu ne generiše i ne ispisuje (nikad u logovima).
+  if (env.BOOTSTRAP_SUPER_ADMIN_ENABLED) {
+    if (!env.BOOTSTRAP_SUPER_ADMIN_EMAIL) {
+      errors.push('BOOTSTRAP_SUPER_ADMIN_EMAIL je obavezan kad je bootstrap uključen.');
+    }
+    if (!env.BOOTSTRAP_SUPER_ADMIN_PASSWORD) {
+      errors.push(
+        'BOOTSTRAP_SUPER_ADMIN_PASSWORD je obavezan kad je BOOTSTRAP_SUPER_ADMIN_ENABLED=true ' +
+          '(lozinka se u deployu ne generiše i ne ispisuje u logove — vidi docs/12).',
+      );
+    } else if (env.BOOTSTRAP_SUPER_ADMIN_PASSWORD.length < 12) {
+      // Isto kao `PASSWORD_MIN_LENGTH` (@vfm/shared/schemas); puna politika se
+      // provjerava u `PasswordService.validatePolicy` pri kreiranju naloga.
+      errors.push('BOOTSTRAP_SUPER_ADMIN_PASSWORD mora imati barem 12 znakova.');
+    }
+  }
+
   if (profile === 'tool') return errors;
 
   // Profil "api"
@@ -482,10 +501,6 @@ export function validateEnvProfile(
     if (!env.FIREBASE_SERVICE_ACCOUNT_PATH) {
       errors.push('FIREBASE_SERVICE_ACCOUNT_PATH je obavezan kad je FIREBASE_ENABLED=true.');
     }
-  }
-
-  if (env.BOOTSTRAP_SUPER_ADMIN_ENABLED && !env.BOOTSTRAP_SUPER_ADMIN_EMAIL) {
-    errors.push('BOOTSTRAP_SUPER_ADMIN_EMAIL je obavezan kad je bootstrap uključen.');
   }
 
   return errors;
