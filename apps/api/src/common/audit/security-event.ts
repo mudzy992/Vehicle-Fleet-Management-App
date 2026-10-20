@@ -29,6 +29,7 @@ export const SECURITY_EVENT_TYPES = [
   'PERMISSIONS_STALE',
   'TOKEN_REVOKED',
   'UNAUTHENTICATED',
+  'RATE_LIMITED',
 ] as const;
 
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];

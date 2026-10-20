@@ -22,11 +22,14 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { ClientTypeGuard } from './common/guards/client-type.guard.js';
 import { PermissionsGuard } from './common/guards/permissions.guard.js';
+import { RateLimitGuard } from './common/guards/rate-limit.guard.js';
+import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
 
 @Module({
   imports: [DatabaseModule, RedisModule, QueueModule, HealthModule, AuditModule, AuthModule],
   controllers: [],
   providers: [
+    RateLimitService,
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: ApiEnvelopeInterceptor },
     /**
@@ -35,15 +38,18 @@ import { PermissionsGuard } from './common/guards/permissions.guard.js';
      */
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     /**
-     * Globalni guard-ovi (docs/05 §5.3) — redoslijed registracije je redoslijed
-     * izvršavanja i **nije** proizvoljan:
-     * 1. `JwtAuthGuard`     — važeći token + aktivan nalog + `tokenVersion`,
-     * 2. `ClientTypeGuard`  — Super Admin web-only (N-05/P1) + dozvoljeni klijenti,
-     * 3. `PermissionsGuard` — svježina prava (P3) + `@RequirePermissions`.
+     * Globalni guard-ovi (docs/05 §5.3, docs/07 §5) — redoslijed registracije je
+     * redoslijed izvršavanja i **nije** proizvoljan:
+     * 1. `RateLimitGuard`   — `vfm:rl:*` (global 300/60 s, login 5/900 s, upload
+     *    30/60 s); ide PRVI da odbijanje bude jeftinije od argon2id verifikacije,
+     * 2. `JwtAuthGuard`     — važeći token + aktivan nalog + `tokenVersion`,
+     * 3. `ClientTypeGuard`  — Super Admin web-only (N-05/P1) + dozvoljeni klijenti,
+     * 4. `PermissionsGuard` — svježina prava (P3) + `@RequirePermissions`.
      *
      * Javne rute (`/health/live|ready|startup`, `/auth/login|refresh|
      * forgot-password`) označavaju se s `@Public()`.
      */
+    { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: ClientTypeGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },

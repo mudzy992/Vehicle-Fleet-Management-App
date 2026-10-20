@@ -94,6 +94,8 @@ export const DRIVER_SNAPSHOT = snapshot({
 export class FakeRedis implements PermissionsRedisClient {
   readonly store = new Map<string, string>();
   readonly ttls = new Map<string, number>();
+  /** TTL-ovi postavljeni preko `PEXPIRE` (u ms). */
+  readonly pttls = new Map<string, number>();
   scanCalls = 0;
   /** Simulacija kvara (NOPERM/timeout) — potroši se na prvi poziv. */
   failNext = false;
@@ -116,6 +118,7 @@ export class FakeRedis implements PermissionsRedisClient {
     for (const key of keys) {
       if (this.store.delete(key)) removed += 1;
       this.ttls.delete(key);
+      this.pttls.delete(key);
     }
     return removed;
   }
@@ -147,6 +150,21 @@ export class FakeRedis implements PermissionsRedisClient {
       'u',
     );
     return ['0', [...this.store.keys()].filter((key) => regex.test(key))];
+  }
+
+  /** `PEXPIRE` — pamti TTL u ms (kao ioredis). */
+  async pexpire(key: string, milliseconds: number): Promise<number> {
+    this.maybeFail();
+    if (!this.store.has(key)) return 0;
+    this.pttls.set(key, milliseconds);
+    return 1;
+  }
+
+  /** `PTTL` — preostali TTL u ms; -2 ako ključ ne postoji, -1 ako nema TTL. */
+  async pttl(key: string): Promise<number> {
+    this.maybeFail();
+    if (!this.store.has(key)) return -2;
+    return this.pttls.get(key) ?? -1;
   }
 
   /** Ključevi u store-u (za asertacije). */

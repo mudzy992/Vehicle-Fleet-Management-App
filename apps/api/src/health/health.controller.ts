@@ -24,6 +24,7 @@ import {
   type HealthIndicatorResult,
 } from '@nestjs/terminus';
 import { Public, RequireAnyPermission } from '../common/decorators/auth.decorators.js';
+import { SkipRateLimit } from '../common/rate-limit/rate-limit.decorator.js';
 import { RedisHealthIndicator } from './redis.health-indicator.js';
 import { DatabaseHealthIndicator } from './database.health-indicator.js';
 import { DiskHealthIndicator } from './disk.health-indicator.js';
@@ -35,6 +36,8 @@ import { OutboxService } from '../infra/queue/outbox.service.js';
 /** Vrijeme pokretanja procesa (uptime + startup). */
 const STARTED_AT = Date.now();
 
+// Health probe-ove zovu Docker/Coolify svake sekunde → bez limitera.
+@SkipRateLimit()
 @Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {
   constructor(
