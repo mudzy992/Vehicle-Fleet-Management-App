@@ -64,6 +64,10 @@ vrijednosti, progres i prvo polje s greškom. `collectSubmitValues()` i `formatF
 | `POST .../retire` | `form:retire_version` | aktivna verzija se ne povlači (422) — prvo objavi drugu |
 | `GET /:id/diff?from=&to=` | `form:view` | strukturni diff (`meta`, polja, sekcije, normalizacija) |
 
+Plan (`PLAN_IMPLEMENTACIJE.md` §Faza 2, tačka 8) predviđa i `POST .../versions/:vid/preview`; `docs/07`
+§2.9 ga **ne definiše**, pa nije implementiran — pregled obavlja web Builder (isti render model) uz
+`POST .../validate` za serversku validaciju.
+
 17 unit testova (`test/unit/form-schemas-service.spec.ts`), fake Prisma bez baze.
 
 ### 2.4 API — `/form-migrations` (P12)
@@ -105,7 +109,7 @@ Jedna ruta `/forme`, tri panela: katalog → verzije → editor. Detalji u [`06`
 | # | Kriterij | Dokaz | Status |
 |---|---|---|---|
 | **P9** | Forma: kreirati, validirati, preview, objaviti | `form-schemas-service.spec.ts` (17) — `create` → `DRAFT`, `validate` → P11, `publish` bez bilješke → 422, s bilješkom → `PUBLISHED` + prethodna `RETIRED`; web pregled kroz `buildRenderModel` | ✅ unit + UI |
-| **P10** | Imutabilnost objavljene verzije; zapis renderuje **svoju** verziju | `PUT`/`DELETE` nad `PUBLISHED` → `409 FORM_VERSION_IMMUTABLE`; `buildRenderModel({ formSchemaVersionId, version })` nosi verziju zapisa; `GET /:id/versions/:vid` + `ETag` | ✅ unit + renderer |
+| **P10** | Imutabilnost objavljene verzije; zapis renderuje **svoju** verziju | `PUT`/`DELETE` nad `PUBLISHED` → `409 FORM_VERSION_IMMUTABLE`; **DB trigger** `trg_form_version_immutable` u `2_manual`; `buildRenderModel({ formSchemaVersionId, version })` nosi verziju zapisa; `GET /:id/versions/:vid` + `ETag` | ✅ unit + renderer + SQL (trigger nije primijenjen u sandboxu) |
 | **P11** | Validacija zapisa prema verziji | `record-validation.spec.ts` (20) + `POST .../validate`; nepoznato/skriveno polje, obavezno, tipovi, opcije, prilozi, `COMPUTED`, normalizacija | ✅ unit |
 | **P12** | Migracija zapisa između verzija | `form-migrations-service.spec.ts` (9) — preview bez pisanja, `apply` u serijama 500, `SKIPPED`, `rollback` | ✅ unit |
 | **DoD: isti render na web i mobilnom** | jedan `@vfm/form-renderer` model; web pregled ga koristi; mobilna aplikacija **ne postoji** | `render-model.spec.ts` (13) | ⚠️ djelimično — vidi §6 |
@@ -163,6 +167,10 @@ Trajanje pune kapije: ~30–60 s u sandboxu. Nijedan test ne dira mrežu, bazu n
 | W23 (UI migracije zapisa) | **nije implementiran** | u Fazi 2 nema `FormRecord` zapisa za migraciju; API je gotov i testiran, ekran dolazi kad zapisi postoje (Faza 3/5) |
 | Rute Builder-a | jedna ruta `/forme` sa stanjem odabira (docs/06 ažuriran), bez `/forme/:id/verzije/:vid` | bez deep-linka nema N+1 upita i nema „praznog" ekrana; deep-link nije DoD |
 | „Preview web + mobilni" | pregled koristi **isti** render model; mobilna aplikacija nije u repou | `apps/mobile` sadrži samo `README.md`, pa nema šta renderovati; paritet je na nivou modela i pokriven testovima |
+| Editor definicije | **JSON editor** s provjerom meta-sheme + tab Pregled, umjesto drag&drop platna i panela svojstava polja | drag&drop je UX sloj; integritet (validacija, diff, objava, pregled) je isti, a JSON je i format u kojem se definicija čuva. Drag&drop dolazi ako se pokaže potreba |
+| Publish modal | bilješka je inline polje u panelu (vidljivo samo kad je objava/povlačenje moguće) | manje klikova; ista validacija (≥ 5 znakova) |
+| Seed obim | **3** forme (`vehicle`, `pranje_vozila`, `registracija_vozila`), ne 7 iz plana | ostale (`insurance.core`, `service.core`, `tireset.core`, `tire.installation`) pripadaju entitetima koji dolaze u Fazi 3/4; seed ih dobija kad modeli budu u upotrebi |
+| Renderer adapteri | **headless** model + web adapter (Builder pregled); RN adapter ne postoji | `apps/mobile` nije u repou; model je projektovan da RN adapter bude tanak (mapiranje `widget` → komponenta) |
 | `MONEY` u izrazima | vrijednost je **u feninzima**, dijeljenje sa 100 u izrazu/prikazu | izbjegava greške zaokruživanja; dokumentovano u docs/04 §6/§7 |
 | Registar ključeva pri objavi | konflikt tipa se **ne prepisuje** (`dataType` ostaje prvi) i samo se loguje | U-16: isti ključ u dvije forme ne smije tiho promijeniti tip kolone |
 | `dataType` u seed-u | isti `syncFieldKeys` kao u `publish` | jedna implementacija, nema dvije istine |
