@@ -18,6 +18,10 @@ export default [
       // Prisma 7 generiše TypeScript klijent (fajlovi već nose `/* eslint-disable */`
       // i `// @ts-nocheck`), ali ga ne treba ni parsirati pri svakom lintu (5 MB).
       'src/generated/**',
+      // CommonJS helperi koji se pokreću PRIJE builda (npr. u Docker buildu, korak
+      // 1b: `resolve-prisma-engines.cjs`). Moraju biti čisti CJS bez TS toolchaina
+      // (`require`), pa ESLint pravila za ESM/TS ovdje ne važe.
+      'scripts/**',
       'node_modules/**',
     ],
   }),
