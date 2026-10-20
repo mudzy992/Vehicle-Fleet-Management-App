@@ -707,7 +707,7 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 
 | Ekran | Ruta | Fajl | Napomena |
 |---|---|---|---|
-| Liste formi (W20) + Builder (W21) + verzije/diff (W22) | `/forme` | `features/forms/forms-page.tsx` | jedna ruta, tri panela: katalog → verzije → editor definicije; meta-shema se provjerava u browseru istim kodom kao na serveru (`@vfm/form-engine/definition`); objava/povlačenje traže bilješku ≥ 5 znakova; `PUBLISHED`/`RETIRED` su read-only (server bi vratio `FORM_VERSION_IMMUTABLE`); diff poziva `GET /form-schemas/:id/diff` |
+| Liste formi (W20) + Builder (W21) + verzije/diff (W22) | `/forme` | `features/forms/forms-page.tsx`, `forms-preview.tsx` | jedna ruta, tri panela: katalog → verzije → editor definicije; meta-shema se provjerava u browseru istim kodom kao na serveru (`@vfm/form-engine/definition`); objava/povlačenje traže bilješku ≥ 5 znakova; `PUBLISHED`/`RETIRED` su read-only (server bi vratio `FORM_VERSION_IMMUTABLE`); diff poziva `GET /form-schemas/:id/diff`; tab **Pregled** renderuje formu kroz `@vfm/form-renderer` (`buildRenderModel`) — isti model koji koristi zapis i mobilna, pa pregled nije odvojen „demo" |
 | Migracija zapisa (W23) | — | — | ⏳ odgođeno: u Fazi 2 još nema `FormRecord` zapisa za migraciju; API (`/form-migrations`) je gotov (chunk E) |
 
 Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);

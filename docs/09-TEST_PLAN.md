@@ -77,6 +77,7 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | Web — sesija (bootstrap anonymous/authenticated, `hasPermission`, R-07, istek sesije) | `apps/web/src/features/auth/session.test.tsx` | 4 | — |
 | Web — matrica prava (diff payload: samo izmijenjene role, bez SUPER_ADMIN, opsezi) | `apps/web/src/features/roles/matrix.test.ts` | 6 | — |
 | Web — Form Builder (dozvoljene akcije po statusu verzije i permisijama, predlog verzije, parse rezultat, diff linije, `bs-BA` prikaz datuma) | `apps/web/src/features/forms/forms-model.test.ts` | 14 | — |
+| Web — pregled forme u Builder-u (MONEY → feninzi, prazno polje ≠ 0, višestruki izbor, `Europe/Sarajevo` datum) | `apps/web/src/features/forms/forms-preview-values.test.ts` | 8 | `forms-preview-values.ts` 100 % |
 
 E2E/integration fajlovi iz tabele §2 (P1 koraci 3 i 5, P2 preko HTTP-a, P3 latency) ostaju planirani —
 zahtijevaju živi PostgreSQL i Redis (`docker-compose.dev.yml`), što u sandboxu nije dostupno.

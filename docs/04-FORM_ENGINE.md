@@ -540,6 +540,9 @@ Zahtjev koji prelazi ove granice ide kroz **change request** i procjenu, ne kroz
 
 Napomene uz implementaciju (odstupanja i pojašnjenja):
 
+- **Pregled u Builder-u koristi isti renderer**: tab „Pregled" zove `buildRenderModel` iz
+  `@vfm/form-renderer` (isti kod koji će koristiti zapis i mobilna), pa se vidljivost, izračunata
+  polja i progres ne mogu razlikovati između pregleda i stvarnog unosa.
 - **Primjer iz §2 prolazi meta-shemu bez izmjena** — čuva se kao test fixture
   (`packages/form-engine/test/fixtures/wash.definition.ts`), pa svaka promjena sheme koja razbije
   dokumentovani primjer pada na testu.

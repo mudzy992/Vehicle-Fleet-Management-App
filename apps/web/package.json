@@ -18,6 +18,7 @@
   "dependencies": {
     "@tanstack/react-query": "5.104.4",
     "@vfm/form-engine": "workspace:*",
+    "@vfm/form-renderer": "workspace:*",
     "@vfm/shared": "workspace:*",
     "react": "19.3.1",
     "react-dom": "19.3.1",

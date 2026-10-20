@@ -129,6 +129,9 @@ importers:
       '@vfm/form-engine':
         specifier: workspace:*
         version: link:../../packages/form-engine
+      '@vfm/form-renderer':
+        specifier: workspace:*
+        version: link:../../packages/form-renderer
       '@vfm/shared':
         specifier: workspace:*
         version: link:../../packages/shared

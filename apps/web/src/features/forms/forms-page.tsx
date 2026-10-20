@@ -54,6 +54,7 @@ import {
   suggestedVersionId,
   toParseResult,
 } from './forms-model.js';
+import { FormsPreview } from './forms-preview.js';
 
 const textareaClassName = `${inputClassName} h-64 font-mono text-xs leading-5`;
 
@@ -66,6 +67,7 @@ export function FormsPage() {
   const [changeNote, setChangeNote] = useState('');
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [diff, setDiff] = useState<FormVersionDiff | null>(null);
+  const [mode, setMode] = useState<'editor' | 'pregled'>('editor');
 
   const permissions = {
     canUpdate: hasPermission('form:update'),
@@ -120,16 +122,20 @@ export function FormsPage() {
     }
   }, [versionQuery.data]);
 
-  const parsed = useMemo(() => {
+  //  Isti parser kao na serveru. Rezultat se drži u dva oblika: `definition`
+  //  (tipizirano, za pregled) i `parsed` (poruke za UI).
+  const definitionResult = useMemo(() => {
     try {
-      return toParseResult(parseDefinition(JSON.parse(editor)));
+      return parseDefinition(JSON.parse(editor));
     } catch (error) {
-      return toParseResult({
-        ok: false,
+      return {
+        ok: false as const,
         issues: [{ path: '$', message: error instanceof Error ? error.message : 'Neispravan JSON.' }],
-      });
+      };
     }
   }, [editor]);
+
+  const parsed = useMemo(() => toParseResult(definitionResult), [definitionResult]);
 
   const actions = availableActions({
     version: selected,
@@ -432,24 +438,57 @@ export function FormsPage() {
                   </Field>
                 ) : null}
 
-                <Field
-                  label="Definicija (JSON)"
-                  htmlFor="form-definition"
-                  hint={
-                    parsed.ok
-                      ? 'Meta-shema je ispravna. Server ponovo provjerava pri čuvanju i objavi.'
-                      : 'Definicija ima greške — čuvanje i objava su onemogućeni.'
-                  }
-                >
-                  <textarea
-                    id="form-definition"
-                    className={textareaClassName}
-                    spellCheck={false}
-                    value={editor}
-                    onChange={(event) => setEditor(event.target.value)}
-                    readOnly={!actions.includes('edit')}
-                  />
-                </Field>
+                <div className="flex gap-1" role="tablist" aria-label="Način prikaza">
+                  <Button
+                    size="sm"
+                    variant={mode === 'editor' ? 'primary' : 'ghost'}
+                    role="tab"
+                    aria-selected={mode === 'editor'}
+                    onClick={() => setMode('editor')}
+                  >
+                    Editor
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={mode === 'pregled' ? 'primary' : 'ghost'}
+                    role="tab"
+                    aria-selected={mode === 'pregled'}
+                    onClick={() => setMode('pregled')}
+                  >
+                    Pregled
+                  </Button>
+                </div>
+
+                {mode === 'pregled' && definitionResult.ok ? (
+                  <div className="rounded-md border border-[var(--border)] p-3">
+                    <FormsPreview
+                      definition={definitionResult.definition}
+                      version={selected.version}
+                      formSchemaVersionId={selected.id}
+                    />
+                  </div>
+                ) : null}
+
+                {mode === 'editor' ? (
+                  <Field
+                    label="Definicija (JSON)"
+                    htmlFor="form-definition"
+                    hint={
+                      parsed.ok
+                        ? 'Meta-shema je ispravna. Server ponovo provjerava pri čuvanju i objavi.'
+                        : 'Definicija ima greške — čuvanje i objava su onemogućeni.'
+                    }
+                  >
+                    <textarea
+                      id="form-definition"
+                      className={textareaClassName}
+                      spellCheck={false}
+                      value={editor}
+                      onChange={(event) => setEditor(event.target.value)}
+                      readOnly={!actions.includes('edit')}
+                    />
+                  </Field>
+                ) : null}
 
                 {!parsed.ok ? (
                   <ul role="alert" className="space-y-1 rounded-md border border-[var(--danger)] p-2 text-xs">

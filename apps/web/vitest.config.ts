@@ -34,6 +34,7 @@ export default defineConfig({
         'src/features/auth/session.tsx',
         'src/features/roles/matrix.ts',
         'src/features/forms/forms-model.ts',
+        'src/features/forms/forms-preview-values.ts',
         'src/components/ui/badge.tsx',
       ],
       exclude: ['src/test/**', 'src/**/*.d.ts'],
