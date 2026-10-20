@@ -44,7 +44,10 @@ export interface EvaluationResult {
   readonly type: 'number' | 'string' | 'boolean' | 'null' | 'date';
 }
 
-const DEFAULT_TIMEOUT_MS = 10;
+const DEFAULT_TIMEOUT_MS = 100;
+
+/** Nezavisna granica od sata (vidi `guard()`). */
+const MAX_NODES = 10_000;
 
 /** `MONEY` polje je `{amount, currency}` — u izrazima se koristi iznos u feninzima. */
 function coerceFieldValue(raw: unknown): ExpressionValue {
@@ -152,6 +155,13 @@ class Interpreter {
 
   /** Tvrda granica rada: i pored limita iz parsera, evaluacija se prekida. */
   private guard(): void {
+    //  Tvrda granica rada ne zavisi od sata: i kad je proces na trenutak
+    //  descheduled (spor CI, GC pauza), evaluacija ne može potrošiti
+    //  neograničeno vrijeme — prekidamo po broju čvorova.
+    if (this.nodes > MAX_NODES) {
+      throw new ExpressionError('COMPUTED_TIMEOUT', 'Izraz je prevelik za izračunavanje.');
+    }
+
     // Prvih nekoliko čvorova se provjerava uvijek (da i mali izraz padne kad je
     // budžet već potrošen), dalje svakih 64 čvora — `Date.now()` nije besplatan.
     if ((this.nodes <= 8 || (this.nodes & 0x3f) === 0) && Date.now() > this.deadline) {

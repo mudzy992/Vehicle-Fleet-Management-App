@@ -246,7 +246,7 @@ klijentu), a rezultat se snapshot-uje u `formData` — stari zapis ostaje stabil
 | Dozvoljeni tokeni               | samo iz §6.1/§6.2 (lexer odbija sve ostalo)                                                                                                                      |
 | Zabranjeno                      | `eval`, `Function`, `import`, `require`, pristup objektima (`a.b` osim preko whitelist polja), indeksi nizova van `coalesce`, assignment, petlje, `;`, komentari |
 | Implementacija                  | ručni lexer + Pratt parser → AST → interpreter u TypeScriptu; **nijedan** put ne koristi `eval`/`new Function`                                                   |
-| Timeout                         | 10 ms po evaluaciji (prekida se i vraća `COMPUTED_TIMEOUT`)                                                                                                      |
+| Timeout                         | 100 ms po evaluaciji **i** tvrd limit 10.000 čvorova (prekid → `COMPUTED_TIMEOUT`; limit čvorova ne zavisi od sata, pa spor CI ne daje lažne padove)                |
 | Determinizam                    | isti ulaz → isti izlaz; bez I/O, bez mreže, bez vremena osim `today()` (server)                                                                                  |
 | Tipovi                          | `number`, `string`, `boolean`, `date`, `money`, `null`; miješanje tipova → `TYPE_ERROR` pri objavi (static check)                                                |
 

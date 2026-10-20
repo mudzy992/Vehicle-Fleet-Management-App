@@ -10,6 +10,9 @@
  * | `POST /vehicles/:id/archive`  | `vehicle:archive` | `ARCHIVE` (WARN)   |
  * | `POST /vehicles/:id/restore`  | `vehicle:archive` | `RESTORE`          |
  * | `DELETE /vehicles/:id`        | `vehicle:delete`  | `DELETE` (CRITICAL)|
+ * | `GET /vehicles/:id/odometer`  | `odometer:view`   | —                  |
+ * | `POST /vehicles/:id/odometer` | `odometer:create` | `UPDATE`           |
+ * | `POST .../odometer/correct`   | `odometer:correct`| `UPDATE` (WARN)    |
  *
  * Vozilo se kreira **kroz dinamičku formu** (`formData`), pa je audit diff nad
  * meta podacima i normalizovanim kolonama; same vrijednosti forme ostaju u
@@ -30,15 +33,23 @@ import {
 } from '@nestjs/common';
 import type {
   ArchiveVehicleInput,
+  CorrectOdometerReadingInput,
+  CreateOdometerReadingInput,
   CreateVehicleInput,
+  OdometerListResponse,
+  OdometerReading,
   UpdateVehicleInput,
   VehicleDetail,
+  PaginationQuery,
   VehicleListQuery,
   VehicleListResponse,
 } from '@vfm/shared/schemas';
 import {
   archiveVehicleSchema,
+  correctOdometerReadingSchema,
+  createOdometerReadingSchema,
   createVehicleSchema,
+  paginationQuerySchema,
   updateVehicleSchema,
   uuidSchema,
   vehicleListQuerySchema,
@@ -133,6 +144,55 @@ export class VehiclesController {
       .setBefore(outcome.before)
       .setAfter(outcome.after)
       .setResource('Vehicle');
+  }
+
+  // --- Kilometraža (docs/07 §2.5) --------------------------------------------
+
+  @Get(':id/odometer')
+  @RequirePermissions('odometer:view')
+  listOdometer(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @Query(new ZodValidationPipe(paginationQuerySchema, 'query')) query: PaginationQuery,
+  ): Promise<OdometerListResponse> {
+    return this.vehicles.listOdometer(id, query);
+  }
+
+  @Post(':id/odometer')
+  @RequirePermissions('odometer:create')
+  @Audit('UPDATE', { severity: 'INFO', resource: 'Vehicle' })
+  async addOdometer(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @Body(new ZodValidationPipe(createOdometerReadingSchema, 'body')) input: CreateOdometerReadingInput,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ): Promise<OdometerReading> {
+    const outcome = await this.vehicles.addOdometer(id, input, actor?.id);
+    AuditContext.from(request)
+      .setEntityId(id)
+      .setResource('Vehicle')
+      .setBefore(outcome.before)
+      .setAfter(outcome.after)
+      .set('odometerReadingId', outcome.data.id);
+    return outcome.data;
+  }
+
+  @Post(':id/odometer/correct')
+  @RequirePermissions('odometer:correct')
+  @Audit('UPDATE', { severity: 'WARN', resource: 'Vehicle' })
+  async correctOdometer(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @Body(new ZodValidationPipe(correctOdometerReadingSchema, 'body')) input: CorrectOdometerReadingInput,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ): Promise<OdometerReading> {
+    const outcome = await this.vehicles.correctOdometer(id, input, actor?.id);
+    AuditContext.from(request)
+      .setEntityId(id)
+      .setResource('Vehicle')
+      .setBefore(outcome.before)
+      .setAfter(outcome.after)
+      .set('correctionReason', input.correctionReason);
+    return outcome.data;
   }
 
   @Delete(':id')

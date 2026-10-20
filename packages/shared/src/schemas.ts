@@ -28,6 +28,7 @@ import {
   PERMISSION_SCOPES,
   USER_STATUSES,
   FUEL_TYPES,
+  ODOMETER_SOURCES,
   OWNERSHIP_TYPES,
   VEHICLE_STATUSES,
 } from './enums.js';
@@ -1588,3 +1589,58 @@ export const vehicleListResponseSchema = z
   })
   .strict();
 export type VehicleListResponse = z.output<typeof vehicleListResponseSchema>;
+
+// -----------------------------------------------------------------------------
+//  Kilometraža (docs/07 §2.5, docs/03 §3.3)
+// -----------------------------------------------------------------------------
+
+export const odometerSourceSchema = z.enum(ODOMETER_SOURCES);
+
+/** `POST /vehicles/:id/odometer` — nova vrijednost ne smije biti manja od zatečene. */
+export const createOdometerReadingSchema = z
+  .object({
+    valueKm: z.number().int().min(0).max(5_000_000),
+    source: odometerSourceSchema.default('MANUAL'),
+    /** Vrijeme očitanja; bez njega je „sada" (server). */
+    readingAt: z.iso.datetime().optional(),
+    /** Veza na zapis koji je izvor (zadatak, servis…). */
+    referenceType: z.string().trim().max(40).optional(),
+    referenceId: uuidSchema.optional(),
+  })
+  .strict();
+export type CreateOdometerReadingInput = z.output<typeof createOdometerReadingSchema>;
+
+/** `POST /vehicles/:id/odometer/correct` — niža vrijednost samo s razlogom. */
+export const correctOdometerReadingSchema = createOdometerReadingSchema
+  .extend({
+    correctionReason: z.string().trim().min(5, 'Razlog korekcije je obavezan.').max(500),
+  })
+  .strict();
+export type CorrectOdometerReadingInput = z.output<typeof correctOdometerReadingSchema>;
+
+export const odometerReadingSchema = z
+  .object({
+    id: uuidSchema,
+    vehicleId: uuidSchema,
+    valueKm: z.number().int().nonnegative(),
+    source: odometerSourceSchema,
+    readingAt: z.iso.datetime(),
+    isCorrection: z.boolean(),
+    correctionReason: z.string().nullable(),
+    previousValueKm: z.number().int().nullable(),
+    recordedById: uuidSchema.nullable(),
+    createdAt: z.iso.datetime(),
+  })
+  .strict();
+export type OdometerReading = z.output<typeof odometerReadingSchema>;
+
+export const odometerListResponseSchema = z
+  .object({
+    items: z.array(odometerReadingSchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type OdometerListResponse = z.output<typeof odometerListResponseSchema>;

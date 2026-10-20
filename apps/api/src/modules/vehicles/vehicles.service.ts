@@ -19,12 +19,17 @@
  *    atomski (`updateMany` s `version` u `where`), pa paralelna izmjena daje
  *    `409 VERSION_CONFLICT` s trenutnom verzijom.
  */
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { ApiErrorDetail, VehicleStatus } from '@vfm/shared';
 import { VEHICLE_STATUSES, toLocalDateString } from '@vfm/shared';
 import type {
   ArchiveVehicleInput,
+  CorrectOdometerReadingInput,
+  CreateOdometerReadingInput,
   CreateVehicleInput,
+  OdometerListResponse,
+  OdometerReading,
   UpdateVehicleInput,
   VehicleDetail,
   VehicleListQuery,
@@ -166,6 +171,19 @@ interface VehicleRow {
   archivedAt: Date | null;
 }
 
+interface OdometerRow {
+  id: string;
+  vehicleId: string;
+  valueKm: number;
+  source: string;
+  readingAt: Date;
+  recordedById: string | null;
+  isCorrection: boolean;
+  correctionReason: string | null;
+  previousValueKm: number | null;
+  createdAt: Date;
+}
+
 function detail(path: string, message: string): ApiErrorDetail {
   return { path: [path], message };
 }
@@ -247,6 +265,7 @@ export class VehiclesService {
     await this.assertUnique({ internalNo: input.internalNo, vin: input.vin ?? null });
 
     const data = {
+      id: randomUUID(),
       ...this.columnsFrom(normalized),
       formData: validated.values,
       internalNo: input.internalNo,
@@ -447,6 +466,157 @@ export class VehiclesService {
       data: { id },
       before: this.auditSnapshot(current),
       after: { id, deletedAt: new Date().toISOString(), deletedById: actorId ?? null },
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  //  Kilometraža (docs/07 §2.5, docs/03 §3.3)
+  // ---------------------------------------------------------------------------
+
+  async listOdometer(
+    vehicleId: string,
+    query: { page: number; pageSize: number },
+  ): Promise<OdometerListResponse> {
+    await this.loadOrThrow(vehicleId);
+
+    const [total, rows] = await Promise.all([
+      this.prisma.odometerReading.count({ where: { vehicleId } }),
+      this.prisma.odometerReading.findMany({
+        where: { vehicleId },
+        orderBy: { readingAt: 'desc' },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+    ]);
+
+    return {
+      items: (rows as OdometerRow[]).map((row) => this.toOdometer(row)),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+      totalPages: Math.ceil(total / query.pageSize),
+    };
+  }
+
+  /**
+   * Novo očitanje. Niža vrijednost od zatečene je `422 ODOMETER_REGRESSION` —
+   * ispravka ide isključivo kroz `/correct` s razlogom (auditovano).
+   */
+  async addOdometer(
+    vehicleId: string,
+    input: CreateOdometerReadingInput,
+    actorId?: string,
+  ): Promise<VehicleMutation<OdometerReading>> {
+    const vehicle = await this.loadOrThrow(vehicleId);
+
+    if (input.valueKm < vehicle.odometerKm) {
+      throw new VfmException(
+        'ODOMETER_REGRESSION',
+        `Nova kilometraža (${input.valueKm}) je manja od zatečene (${vehicle.odometerKm}).`,
+        [detail('valueKm', `Zatečeno: ${vehicle.odometerKm} km`)],
+        { currentKm: vehicle.odometerKm },
+      );
+    }
+
+    return this.writeOdometer(vehicle, { ...input, isCorrection: false }, actorId);
+  }
+
+  /** Ispravka zatečene vrijednosti — dopušta nižu kilometražu, uz obavezan razlog. */
+  async correctOdometer(
+    vehicleId: string,
+    input: CorrectOdometerReadingInput,
+    actorId?: string,
+  ): Promise<VehicleMutation<OdometerReading>> {
+    const vehicle = await this.loadOrThrow(vehicleId);
+    const reason = input.correctionReason.trim();
+
+    if (reason.length < 5) {
+      throw new VfmException('VALIDATION_ERROR', 'Razlog korekcije je obavezan (najmanje 5 znakova).', [
+        detail('correctionReason', 'Prekratko.'),
+      ]);
+    }
+
+    return this.writeOdometer(vehicle, { ...input, isCorrection: true, reason }, actorId);
+  }
+
+  private async writeOdometer(
+    vehicle: VehicleRow,
+    input: (CreateOdometerReadingInput | CorrectOdometerReadingInput) & {
+      isCorrection: boolean;
+      reason?: string;
+    },
+    actorId?: string,
+  ): Promise<VehicleMutation<OdometerReading>> {
+    const readingAt = input.readingAt ? new Date(input.readingAt) : new Date();
+    if (Number.isNaN(readingAt.getTime())) {
+      throw new VfmException('VALIDATION_ERROR', 'Neispravan datum očitanja.', [
+        detail('readingAt', 'Datum'),
+      ]);
+    }
+    // Očitanje „iz budućnosti" nije dozvoljeno — tolerancija je samo satni pomak.
+    if (readingAt.getTime() > Date.now() + 5 * 60 * 1000) {
+      throw new VfmException('VALIDATION_ERROR', 'Datum očitanja je u budućnosti.', [
+        detail('readingAt', readingAt.toISOString()),
+      ]);
+    }
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const reading = await tx.odometerReading.create({
+        data: {
+          id: randomUUID(),
+          vehicleId: vehicle.id,
+          valueKm: input.valueKm,
+          source: input.source,
+          readingAt,
+          recordedById: actorId ?? null,
+          isCorrection: input.isCorrection,
+          correctionReason: input.isCorrection ? (input.reason ?? null) : null,
+          previousValueKm: input.isCorrection ? vehicle.odometerKm : null,
+          ...(input.referenceType ? { referenceType: input.referenceType } : {}),
+          ...(input.referenceId ? { referenceId: input.referenceId } : {}),
+        },
+      });
+
+      // Denormalizovana vrijednost se mijenja u ISTOJ transakciji (docs/03 §3.3);
+      // `version` raste da bi stari klijenti dobili `VERSION_CONFLICT` (P10 duh).
+      const updated = await tx.vehicle.updateMany({
+        where: { id: vehicle.id, deletedAt: null },
+        data: {
+          odometerKm: input.valueKm,
+          odometerUpdatedAt: readingAt,
+          version: { increment: 1 },
+        },
+      });
+
+      if (updated.count === 0) throw new VfmException('NOT_FOUND', 'Vozilo nije pronađeno.');
+
+      return reading;
+    });
+
+    return {
+      data: this.toOdometer(created as OdometerRow),
+      before: { odometerKm: vehicle.odometerKm },
+      after: {
+        odometerKm: input.valueKm,
+        isCorrection: input.isCorrection,
+        previousValueKm: input.isCorrection ? vehicle.odometerKm : null,
+        readingAt: readingAt.toISOString(),
+      },
+    };
+  }
+
+  private toOdometer(row: OdometerRow): OdometerReading {
+    return {
+      id: row.id,
+      vehicleId: row.vehicleId,
+      valueKm: row.valueKm,
+      source: row.source as OdometerReading['source'],
+      readingAt: row.readingAt.toISOString(),
+      isCorrection: row.isCorrection,
+      correctionReason: row.correctionReason,
+      previousValueKm: row.previousValueKm,
+      recordedById: row.recordedById,
+      createdAt: row.createdAt.toISOString(),
     };
   }
 
