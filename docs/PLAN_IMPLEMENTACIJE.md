@@ -30,6 +30,7 @@ Ovaj fajl je **hub**. Sve ostalo je u `docs/` i povezano ovdje. Ako se nešto mi
 | [`10-OPERACIJE.md`](10-OPERACIJE.md) | Monitoring, logovi, incidenti, runbook, kapaciteti, nadogradnja |
 | [`11-PRODUKCIJA_DEPLOY.md`](11-PRODUKCIJA_DEPLOY.md) | **Operativni runbook za Coolify**: PostgreSQL/REDIS konekcija, `redis-cli` ACL komande, ENV lista, domene, auto-deploy, verifikacija, troubleshooting |
 | [`FAZA0_IZVJESTAJ.md`](FAZA0_IZVJESTAJ.md) | **Izvještaj o Fazi 0**: šta je isporučeno, dokazi (komande/rezultati), odstupanja, blokeri i obaveze vlasnika prije Faze 1 |
+| [`FAZA1_IZVJESTAJ.md`](FAZA1_IZVJESTAJ.md) | **Izvještaj o Fazi 1 (identitet)**: P1/P2/P3/P14 status, 776 testova, coverage, šta vlasnik mora pokrenuti (migracija 3, seed, bootstrap) i odstupanja (anonimizacija umjesto DELETE, reset token preko admina, odgođeni audit stream) |
 | [`.env.example`](../.env.example) | **Jedini izvor istine** za sve varijable okruženja (Coolify + lokalno) |
 | [`REDIS_ACL.md`](../REDIS_ACL.md) | **Jedini izvor istine** za Redis ACL (useri, ključevi, komande) — setuje se kroz poseban fajl na Coolify Redis resursu |
 | [`docker-compose.yml`](../docker-compose.yml) / [`.dev.yml`](../docker-compose.dev.yml) / [`.coolify.yml`](../docker-compose.coolify.yml) | Coolify/produkcijski stack (`db_net`, `redis_net`), lokalni dev, hardening override |

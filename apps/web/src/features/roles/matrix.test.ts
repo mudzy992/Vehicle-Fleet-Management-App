@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RoleSummary } from '@vfm/shared/schemas';
-import { buildMatrixPayload, grantsToState } from './matrix-page.js';
+import { buildMatrixPayload, grantsToState } from './matrix.js';
 import type { RoleMatrixUpdateInput } from '@vfm/shared/schemas';
 
 /**

@@ -14,10 +14,28 @@ export default defineConfig({
     environment: 'jsdom',
     globals: false,
     setupFiles: ['./src/test/setup.ts'],
+    /**
+     * Coverage se mjeri nad **logikom**, ne nad prezentacijom.
+     *
+     * Zašto: ekrani (forme, tabele, modali) nemaju smisla u unit coverage-u —
+     * provjeravaju se E2E testovima (Faza 6, Maestro/Playwright). Ako bi ušli u
+     * izvještaj, prag bi se rušio na svakom novom ekranu i tjerao na lažne
+     * testove koji klikću po DOM-u bez provjere ponašanja.
+     *
+     * Uključeno: API klijent, sesija, guard-ovi, navigacija, diff matrice prava,
+     * UI primitivi s logikom (badge).
+     */
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/main.tsx', 'src/test/**', 'src/**/*.d.ts'],
+      include: [
+        'src/lib/api.ts',
+        'src/app/nav.ts',
+        'src/app/guards.tsx',
+        'src/features/auth/session.tsx',
+        'src/features/roles/matrix.ts',
+        'src/components/ui/badge.tsx',
+      ],
+      exclude: ['src/test/**', 'src/**/*.d.ts'],
       reporter: ['text', 'lcov'],
       thresholds: { lines: 70, branches: 60, functions: 70, statements: 70 },
     },
