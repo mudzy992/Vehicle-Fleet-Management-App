@@ -40,8 +40,13 @@ Coolify build, GitHub Actions runner ili lokalna mašina vlasnika.
 pnpm --filter @vfm/api add prisma@7.10.1
 pnpm --filter @vfm/api add @prisma/client@7.10.1
 
+> ⚠️ Sve komande se pokreću s **root-a monorepo-a**. Skripta `prisma:generate`
+> definisana je samo u `apps/api/package.json`, pa se poziva preko
+> `pnpm --filter @vfm/api …` (poziv `pnpm prisma:generate` s root-a pada).
+
+```bash
 # 2) Generiši client
-pnpm prisma:generate
+pnpm --filter @vfm/api prisma:generate
 
 # 3) Validiraj šemu i provjeri da li se nešto razlikuje od očekivanog
 pnpm --filter @vfm/api exec prisma validate --schema prisma/schema.prisma
@@ -49,15 +54,27 @@ pnpm --filter @vfm/api exec prisma format   --schema prisma/schema.prisma
 
 # 4) Kreiraj inicijalnu migraciju nad dev bazom (docker-compose.dev.yml)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d vfm-postgres vfm-redis
-export DATABASE_URL="postgresql://vfm:vfm-dev-pass@localhost:5433/vfm?schema=public"
+#    korisnik/lozinka/port su defaulti iz docker-compose.dev.yml:
+#    POSTGRES_USER=vfm, POSTGRES_PASSWORD=${DEV_DB_PASSWORD:-vfm_dev_only}, port 5433
+export DATABASE_URL="postgresql://vfm:vfm_dev_only@localhost:5433/vfm?schema=public"
 pnpm --filter @vfm/api exec prisma migrate dev --name init --schema prisma/schema.prisma
 
 # 5) Dodaj ručne SQL dijelove u generisanu migraciju (vidi sekciju ispod)
 #    i ponovo primijeni:
+#    5a) prvo ispiši svih 19 mjesta označenih komentarom `// SQL:`
+grep -n "// SQL:" apps/api/prisma/schema.prisma
+#    5b) sadržaj tih markera + apps/api/prisma/sql/0000_bootstrap_extensions.sql
+#        zalijepi u apps/api/prisma/migrations/<timestamp>_init/migration.sql
+#        (mora biti idempotentno: IF NOT EXISTS / CREATE OR REPLACE)
 pnpm --filter @vfm/api exec prisma migrate dev --schema prisma/schema.prisma
 
 # 6) Build s Prisma modulom uključenim
 pnpm --filter @vfm/api build:full
+
+# 7) Commit generisanih migracija (obavezno u Git — pravilo 2 ispod)
+git add apps/api/prisma/migrations apps/api/package.json pnpm-lock.yaml
+git commit -m "chore(prisma): aktivacija — deps 7.10.1, generate i inicijalna migracija init"
+git push origin main
 ```
 
 Nakon toga:
