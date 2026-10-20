@@ -17,7 +17,15 @@
  */
 import { z } from 'zod';
 import { MAX_PAGE_SIZE } from './constants.js';
-import { AUDIT_ACTIONS, AUDIT_SEVERITIES, CLIENT_TYPES, PERMISSION_SCOPES, USER_STATUSES } from './enums.js';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_SEVERITIES,
+  CLIENT_TYPES,
+  FORM_SCHEMA_STATUSES,
+  FORM_SUBJECTS,
+  PERMISSION_SCOPES,
+  USER_STATUSES,
+} from './enums.js';
 import type { ClientType } from './enums.js';
 import { isKnownPermission } from './permissions.js';
 
@@ -597,7 +605,9 @@ export const roleCodeSchema = z
 export const permissionCodeSchema = z
   .string()
   .trim()
-  .refine(isKnownPermission, { message: 'Permisija nije u katalogu (packages/shared → PERMISSION_CATALOG).' });
+  .refine(isKnownPermission, {
+    message: 'Permisija nije u katalogu (packages/shared → PERMISSION_CATALOG).',
+  });
 
 export const permissionScopeSchema = z.enum(PERMISSION_SCOPES);
 
@@ -1065,10 +1075,9 @@ export const auditLogQuerySchema = z
     to: z.iso.datetime().optional(),
   })
   .strict()
-  .refine(
-    (value) => !value.from || !value.to || new Date(value.from) <= new Date(value.to),
-    { message: '`from` ne smije biti poslije `to`.' },
-  );
+  .refine((value) => !value.from || !value.to || new Date(value.from) <= new Date(value.to), {
+    message: '`from` ne smije biti poslije `to`.',
+  });
 
 export type AuditLogQuery = z.output<typeof auditLogQuerySchema>;
 
@@ -1120,3 +1129,231 @@ export const auditLogDetailSchema = auditLogSummarySchema
   .strict();
 
 export type AuditLogDetail = z.output<typeof auditLogDetailSchema>;
+
+// -----------------------------------------------------------------------------
+//  Forme (docs/04 §12, docs/07 §2.9)
+// -----------------------------------------------------------------------------
+
+/**
+ * Definicija forme (`FormSchemaVersion.definition`) stiže kao JSON i validira se
+ * u `@vfm/form-engine` (`parseDefinition`) — ovdje se ne duplira meta-shema, da
+ * ne postoje dva izvora istine. Oblik je uvijek objekat.
+ */
+export const formDefinitionBodySchema = z.record(z.string(), z.unknown());
+
+/** `FormSchema.key` — stabilan identifikator forme (mijenja se nikad). */
+export const formSchemaKeySchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z][a-z0-9_]{2,48}$/u, 'Ključ forme mora biti ^[a-z][a-z0-9_]{2,48}$.');
+
+const formNameSchema = z.string().trim().min(3).max(120);
+const changeNoteSchema = z
+  .string()
+  .trim()
+  .min(5, 'Bilješka o promjeni je obavezna (najmanje 5 znakova).')
+  .max(500);
+
+export const createFormSchemaSchema = z
+  .object({
+    key: formSchemaKeySchema,
+    name: formNameSchema,
+    subject: z.enum(FORM_SUBJECTS),
+    taskTypeId: uuidSchema.nullable().optional(),
+    description: z.string().trim().max(500).nullable().optional(),
+    ownerModule: z.string().trim().max(60).nullable().optional(),
+    /** Prva verzija se kreira kao `DRAFT` s ovom definicijom. */
+    definition: formDefinitionBodySchema,
+  })
+  .strict();
+export type CreateFormSchemaInput = z.output<typeof createFormSchemaSchema>;
+
+export const updateFormSchemaSchema = z
+  .object({
+    name: formNameSchema.optional(),
+    description: z.string().trim().max(500).nullable().optional(),
+    taskTypeId: uuidSchema.nullable().optional(),
+    ownerModule: z.string().trim().max(60).nullable().optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, { message: 'Nema šta mijenjati.' });
+export type UpdateFormSchemaInput = z.output<typeof updateFormSchemaSchema>;
+
+export const createFormVersionSchema = z
+  .object({
+    /** Ako je zadato, nova verzija kopira definiciju te verzije iste forme. */
+    copyFromVersionId: uuidSchema.optional(),
+    definition: formDefinitionBodySchema.optional(),
+  })
+  .strict()
+  .refine((value) => (value.copyFromVersionId === undefined) !== (value.definition === undefined), {
+    message: 'Zadaj ili `copyFromVersionId` ili `definition` (ne oba).',
+  });
+export type CreateFormVersionInput = z.output<typeof createFormVersionSchema>;
+
+export const updateFormVersionSchema = z.object({ definition: formDefinitionBodySchema }).strict();
+export type UpdateFormVersionInput = z.output<typeof updateFormVersionSchema>;
+
+export const publishFormVersionSchema = z
+  .object({
+    changeNote: changeNoteSchema,
+    /** Objava forme s poljem bez mobilne kontrole (docs/04 §8/7). */
+    allowWebOnly: z.boolean().optional(),
+    /** Potvrda da se mapirano polje smije ukloniti bez migracije zapisa. */
+    confirmNormalizedRemoval: z.boolean().optional(),
+  })
+  .strict();
+export type PublishFormVersionInput = z.output<typeof publishFormVersionSchema>;
+
+export const retireFormVersionSchema = z.object({ changeNote: changeNoteSchema }).strict();
+export type RetireFormVersionInput = z.output<typeof retireFormVersionSchema>;
+
+export const formSchemaListQuerySchema = z
+  .object({
+    subject: z.enum(FORM_SUBJECTS).optional(),
+    status: z.enum(FORM_SCHEMA_STATUSES).optional(),
+    q: z.string().trim().max(120).optional(),
+  })
+  .strict();
+export type FormSchemaListQuery = z.output<typeof formSchemaListQuerySchema>;
+
+export const activeFormSchemaQuerySchema = z
+  .object({
+    subject: z.enum(FORM_SUBJECTS),
+    taskTypeId: uuidSchema.optional(),
+  })
+  .strict();
+export type ActiveFormSchemaQuery = z.output<typeof activeFormSchemaQuerySchema>;
+
+export const validateFormValuesSchema = z
+  .object({
+    values: z.record(z.string(), z.unknown()),
+    isNew: z.boolean().default(true),
+  })
+  .strict();
+export type ValidateFormValuesInput = z.output<typeof validateFormValuesSchema>;
+
+// --- Odgovori ---------------------------------------------------------------
+
+export const formVersionSummarySchema = z
+  .object({
+    id: uuidSchema,
+    version: z.number().int().positive(),
+    status: z.enum(FORM_SCHEMA_STATUSES),
+    changeNote: z.string().nullable(),
+    contentHash: z.string().nullable(),
+    mobileCompatible: z.boolean(),
+    publishedAt: z.iso.datetime().nullable(),
+    publishedById: uuidSchema.nullable(),
+    retiredAt: z.iso.datetime().nullable(),
+    createdAt: z.iso.datetime(),
+    /** Broj zapisa koji koriste ovu verziju (za upozorenje pri povlačenju). */
+    recordCount: z.number().int().nonnegative(),
+  })
+  .strict();
+export type FormVersionSummary = z.output<typeof formVersionSummarySchema>;
+
+export const formSchemaSummarySchema = z
+  .object({
+    id: uuidSchema,
+    key: z.string(),
+    name: z.string(),
+    subject: z.enum(FORM_SUBJECTS),
+    taskTypeId: uuidSchema.nullable(),
+    description: z.string().nullable(),
+    ownerModule: z.string().nullable(),
+    status: z.enum(FORM_SCHEMA_STATUSES),
+    currentPublishedVersionId: uuidSchema.nullable(),
+    currentPublishedVersion: z.number().int().positive().nullable(),
+    versionCount: z.number().int().nonnegative(),
+    updatedAt: z.iso.datetime(),
+    createdAt: z.iso.datetime(),
+  })
+  .strict();
+export type FormSchemaSummary = z.output<typeof formSchemaSummarySchema>;
+
+export const formSchemaDetailSchema = formSchemaSummarySchema
+  .extend({
+    versions: z.array(formVersionSummarySchema),
+  })
+  .strict();
+export type FormSchemaDetail = z.output<typeof formSchemaDetailSchema>;
+
+export const formVersionDetailSchema = formVersionSummarySchema
+  .extend({
+    formSchemaId: uuidSchema,
+    definition: formDefinitionBodySchema,
+    normalizedName: z.array(z.record(z.string(), z.unknown())).nullable(),
+  })
+  .strict();
+export type FormVersionDetail = z.output<typeof formVersionDetailSchema>;
+
+export const formFieldErrorSchema = z
+  .object({
+    key: z.string(),
+    code: z.string(),
+    message: z.string(),
+  })
+  .strict();
+export type FormFieldError = z.output<typeof formFieldErrorSchema>;
+
+export const formValidationResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    formSchemaVersionId: uuidSchema,
+    formSchemaVersion: z.number().int().positive(),
+    /** `FORM_VERSION_NOT_PUBLISHED` kad verzija ne prima zapise. */
+    versionError: z.string().nullable(),
+    values: z.record(z.string(), z.unknown()),
+    computed: z.record(z.string(), z.unknown()),
+    normalized: z.record(z.string(), z.unknown()),
+    errors: z.array(formFieldErrorSchema),
+    warnings: z.array(formFieldErrorSchema),
+  })
+  .strict();
+export type FormValidationResponse = z.output<typeof formValidationResponseSchema>;
+
+export const formVersionRefSchema = z
+  .object({ id: uuidSchema, version: z.number().int().positive() })
+  .strict();
+export type FormVersionRef = z.output<typeof formVersionRefSchema>;
+
+export const formVersionDiffSchema = z
+  .object({
+    from: formVersionRefSchema,
+    to: formVersionRefSchema,
+    meta: z.array(z.object({ path: z.string(), before: z.unknown(), after: z.unknown() }).strict()),
+    addedFields: z.array(z.string()),
+    removedFields: z.array(z.string()),
+    changedFields: z.array(
+      z
+        .object({
+          key: z.string(),
+          label: z.string(),
+          changes: z.array(z.object({ path: z.string(), before: z.unknown(), after: z.unknown() }).strict()),
+        })
+        .strict(),
+    ),
+    addedSections: z.array(z.string()),
+    removedSections: z.array(z.string()),
+    normalizationChanged: z.boolean(),
+    empty: z.boolean(),
+  })
+  .strict();
+export type FormVersionDiff = z.output<typeof formVersionDiffSchema>;
+
+export const activeFormSchemaSchema = z
+  .object({
+    formSchemaId: uuidSchema,
+    key: z.string(),
+    name: z.string(),
+    subject: z.enum(FORM_SUBJECTS),
+    formSchemaVersionId: uuidSchema,
+    version: z.number().int().positive(),
+    /** Vrijednost `ETag` zaglavlja (SHA-256 kanonskog JSON-a definicije). */
+    contentHash: z.string(),
+    mobileCompatible: z.boolean(),
+    definition: formDefinitionBodySchema,
+  })
+  .strict();
+export type ActiveFormSchema = z.output<typeof activeFormSchemaSchema>;

@@ -175,3 +175,14 @@ export type {
   RecordWarningCode,
   ValidateRecordOptions,
 } from './record-validation.js';
+
+export { CHANGE_NOTE_MIN_LENGTH, PUBLISH_ISSUE_CODES, checkPublishable } from './publish-checks.js';
+export type {
+  PublishCheckInput,
+  PublishCheckResult,
+  PublishIssue,
+  PublishIssueCode,
+} from './publish-checks.js';
+
+export { diffDefinitions, diffValues, summarizeDiff } from './diff.js';
+export type { DefinitionDiff, DefinitionFieldChange, DefinitionValueChange } from './diff.js';

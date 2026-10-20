@@ -239,7 +239,33 @@ transakcija) i ažurira `Vehicle.nextServiceDue*`.
 
 ### 2.9 Forme (`/form-schemas`, `/form-migrations`)
 
-Vidi `04-FORM_ENGINE.md` §12. Permisije `form:*`.
+Detalji engine-a: `04-FORM_ENGINE.md` §8–§12. Sve rute traže `form:*` permisiju.
+
+| Metoda | Put | P | Napomena |
+|---|---|---|---|
+| GET | `/form-schemas?subject=&status=&q=` | `form:view` | lista; `status` filtrira po stanju **verzije** |
+| GET | `/form-schemas/active?subject=&taskTypeId=` | `form:view` | aktivna objavljena verzija; `ETag` = `"<contentHash>"` |
+| POST | `/form-schemas` | `form:create` | kreira formu + **prvu `DRAFT`** verziju; audit `CREATE` |
+| GET | `/form-schemas/:id` | `form:view` | detalji + sve verzije (`recordCount` po verziji) |
+| PATCH | `/form-schemas/:id` | `form:update` | naziv, opis, `taskTypeId`, `ownerModule`; audit `UPDATE` |
+| POST | `/form-schemas/:id/versions` | `form:update` | novi `DRAFT` (`copyFromVersionId` ili `definition`) |
+| GET | `/form-schemas/:id/versions/:vid` | `form:view` | definicija; `ETag` = `"<contentHash>"`, `If-None-Match` → `304` |
+| PUT | `/form-schemas/:id/versions/:vid` | `form:manage_schema` | samo `DRAFT` (inače `409 FORM_VERSION_IMMUTABLE`) |
+| DELETE | `/form-schemas/:id/versions/:vid` | `form:manage_schema` | samo `DRAFT`; `204` |
+| POST | `/form-schemas/:id/versions/:vid/validate` | `form:view` | P11 validacija `{ values, isNew }` → greške po polju |
+| POST | `/form-schemas/:id/versions/:vid/publish` | `form:publish_version` | `{ changeNote, allowWebOnly?, confirmNormalizedRemoval? }`; audit `FORM_PUBLISH` |
+| POST | `/form-schemas/:id/versions/:vid/retire` | `form:retire_version` | `{ changeNote }`; aktivna verzija samo ako postoji druga objavljena; audit `FORM_RETIRE` |
+| GET | `/form-schemas/:id/diff?from=&to=` | `form:view` | strukturni diff dvije verzije (dodano/uklonjeno/izmijenjeno) |
+| POST | `/form-migrations` | `form:migrate_records` | P12 — plan migracije zapisa (Faza 2, sljedeći chunk) |
+
+**Objava (P9):** `422 FORM_VALIDATION_FAILED` s `details[].path` i `extra.issues[]` dok ne prođe svih
+9 provjera iz `04` §8 (uključujući `CHANGE_NOTE_REQUIRED` za bilješku kraću od 5 znakova i
+`NORMALIZED_FIELD_REMOVED` kad se uklanja mapirano polje bez potvrde). Uspješna objava u jednoj
+transakciji: prethodna `PUBLISHED` → `RETIRED`, nova → `PUBLISHED` (+ `contentHash`), forma pokazuje
+na novu verziju, registar ključeva (`FieldKeyRegistry`, U-16) se dopunjava.
+
+**Keširanje:** `contentHash` objavljene verzije se nikad ne mijenja, pa `ETag` smije biti trajan;
+`304` nema tijelo i ne prolazi kroz envelope.
 
 ### 2.10 Vrste zadataka (`/task-types`)
 

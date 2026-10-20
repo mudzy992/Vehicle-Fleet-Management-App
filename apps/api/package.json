@@ -37,6 +37,7 @@
     "@node-rs/argon2": "2.2.2",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
+    "@vfm/form-engine": "workspace:*",
     "@vfm/shared": "workspace:*",
     "bullmq": "6.3.17",
     "dotenv": "18.0.8",

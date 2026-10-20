@@ -519,7 +519,9 @@ Zahtjev koji prelazi ove granice ide kroz **change request** i procjenu, ne kroz
 | Sigurni izrazi: lexer + parser + evaluator (§6)   | `packages/form-engine/src/expression/`                               | ✅ Faza 2 (chunk B) |
 | Uslovi vidljivosti (§4)                           | `packages/form-engine/src/conditions.ts`                             | ✅ Faza 2 (chunk B) |
 | Validacija zapisa prema verziji (§9, P11)         | `packages/form-engine/src/record-validation.ts`                      | ✅ Faza 2 (chunk C) |
-| Form Builder API i UI (§12)                       | `apps/api/src/modules/form-schemas/`, `apps/web/src/features/forms/` | ⏳ Faza 2           |
+| Provjere pri objavi (§8) + strukturni diff (§12)  | `packages/form-engine/src/publish-checks.ts`, `diff.ts`              | ✅ Faza 2 (chunk D) |
+| Form Builder API (§12)                            | `apps/api/src/modules/form-schemas/`                                 | ✅ Faza 2 (chunk D) |
+| Form Builder UI (§12)                             | `apps/web/src/features/forms/`                                       | ⏳ Faza 2           |
 | Migracija zapisa (§10, P12)                       | —                                                                    | ⏳ Faza 2           |
 
 Napomene uz implementaciju (odstupanja i pojašnjenja):

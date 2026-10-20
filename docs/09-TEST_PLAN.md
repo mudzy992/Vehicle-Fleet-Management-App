@@ -137,6 +137,20 @@ i uvijek tačno jedan izvršilac po zadatku (provjera SQL-om nakon testa).
 **Sigurnosni testovi evaluatora:** fuzzing (1000 nasumičnih izraza iz gramatike + mutacije) → nikad
 `eval`, nikad `undefined` ponašanje, uvijek ≤ 10 ms, uvijek deterministički rezultat.
 
+**Implementirano (Faza 2, unit nivo — bez DB-a):**
+
+| Fajl | Pokriva |
+|---|---|
+| `packages/form-engine/test/definition.schema.spec.ts` | meta-shema, limiti, zatvorena lista tipova |
+| `packages/form-engine/test/expression-{parser,evaluator,static-check}.spec.ts` | gramatika, evaluacija, statička provjera (§6) |
+| `packages/form-engine/test/conditions.spec.ts` | `visibleWhen` operatori i provjera pri objavi |
+| `packages/form-engine/test/record-validation.spec.ts` | P11: nepoznato/skriveno/obavezno/tipovi/normalizacija |
+| `packages/form-engine/test/publish-checks.spec.ts` | §8: svih 9 provjera pojedinačno + strukturni diff |
+| `apps/api/test/unit/form-schemas-service.spec.ts` | P9: `DRAFT→PUBLISHED→RETIRED`, imutabilnost, `ETag` pomoćnik, `active` fallback |
+
+Integration/E2E varijante iz tabele iznad (P9–P12) traže PostgreSQL i dolaze uz prvi modul koji
+stvarno piše zapise (Faza 3, zadaci).
+
 ---
 
 ## 5. Testiranje sigurnosti

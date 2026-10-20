@@ -24,6 +24,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { AuditLogModule } from './modules/audit-logs/audit-log.module.js';
+import { FormSchemasModule } from './modules/form-schemas/form-schemas.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { ClientTypeGuard } from './common/guards/client-type.guard.js';
 import { PermissionsGuard } from './common/guards/permissions.guard.js';
@@ -46,6 +47,8 @@ import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
     UsersModule,
     // Audit log — read-only API nad AuditLog tabelom (docs/07 §7).
     AuditLogModule,
+    // Forme — katalog, verzije, objava/povlačenje, validacija zapisa (docs/04).
+    FormSchemasModule,
   ],
   controllers: [],
   providers: [
