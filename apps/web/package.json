@@ -5,14 +5,15 @@
   "description": "VFM — web frontend (Vite + React 19 + Tailwind 4 + shadcn stil)",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "tsc -p tsconfig.json && vite build",
-    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "clean": "rm -rf dist coverage .turbo",
+    "dev": "vite --host 0.0.0.0 --port 5173",
     "lint": "eslint .",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "clean": "rm -rf dist coverage .turbo"
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@tanstack/react-query": "5.104.4",
@@ -33,6 +34,7 @@
     "@types/react-dom": "19.3.0",
     "@vfm/config": "workspace:*",
     "@vitejs/plugin-react": "6.1.2",
+    "@vitest/coverage-v8": "5.0.5",
     "eslint": "9.39.5",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-react": "7.37.5",

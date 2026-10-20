@@ -1,0 +1,13 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "//": "Testovi u `@vfm/shared` importuju IZGRAĐENI paket (`../dist/index.js`) — provjera javnog API-ja. Zato `test`/`test:coverage` ovise o vlastitom `build` zadatku; bez toga čist clone (bez `dist`) pada. Ostali paketi testiraju `src` pa im ovo ne treba.",
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "dependsOn": ["build"]
+    },
+    "test:coverage": {
+      "dependsOn": ["build"]
+    }
+  }
+}

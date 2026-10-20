@@ -33,6 +33,7 @@ export default defineConfig({
         'src/app/guards.tsx',
         'src/features/auth/session.tsx',
         'src/features/roles/matrix.ts',
+        'src/features/forms/forms-model.ts',
         'src/components/ui/badge.tsx',
       ],
       exclude: ['src/test/**', 'src/**/*.d.ts'],

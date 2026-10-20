@@ -19,6 +19,9 @@
     },
     "lint": {
       "dependsOn": ["prisma:generate"]
+    },
+    "test:coverage": {
+      "dependsOn": ["^build", "prisma:generate"]
     }
   }
 }

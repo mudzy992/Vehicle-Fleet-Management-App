@@ -109,12 +109,18 @@ jobs:
           cache: pnpm
       - run: test -f pnpm-lock.yaml && pnpm install --frozen-lockfile || echo "skip"
       - name: Testovi + coverage
-        run: if [ -f pnpm-lock.yaml ]; then pnpm -w test -- --coverage; else echo "preskočeno (faza 0)"; fi
+        #  `test:coverage` je turbo task (vidi turbo.json): svaki paket mjeri svoj
+        #  prag iz svog `vitest.config.ts`. Ranije `pnpm -w test -- --coverage`
+        #  je dodavao `--coverage` u SVE `test` skripte, pa je `@vfm/config`
+        #  (`node -e ...`) padao s „node: bad option: --coverage".
+        run: if [ -f pnpm-lock.yaml ]; then pnpm -w test:coverage; else echo "preskočeno (faza 0)"; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage
-          path: coverage/
+          path: |
+            apps/*/coverage/
+            packages/*/coverage/
 
   # ---------------------------------------------------------------------------
   # 4) Integration testovi (pravi PostgreSQL + Redis u servisima)
@@ -150,10 +156,22 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: test -f pnpm-lock.yaml && pnpm install --frozen-lockfile || echo "skip"
+      #  Guard-ovi postoje jer `vitest run` bez ijednog testa pada, a
+      #  `test:stress` skripta još ne postoji (P6 dolazi s Faza 3).
       - name: Integration
-        run: if [ -f pnpm-lock.yaml ]; then pnpm --filter @vfm/api test:integration; else echo "preskočeno (faza 0)"; fi
+        run: |
+          if ls apps/api/test/integration/*.spec.ts >/dev/null 2>&1; then
+            pnpm --filter @vfm/api test:integration
+          else
+            echo "preskočeno: nema integration testova (dolaze s Faza 3)"
+          fi
       - name: Stress (P6 — atomski claim)
-        run: if [ -f pnpm-lock.yaml ]; then pnpm --filter @vfm/api test:stress; else echo "preskočeno (faza 0)"; fi
+        run: |
+          if node -e "process.exit(require('./apps/api/package.json').scripts['test:stress']?0:1)"; then
+            pnpm --filter @vfm/api test:stress
+          else
+            echo "preskočeno: nema stress testova (P6 dolazi s Faza 3)"
+          fi
 
   # ---------------------------------------------------------------------------
   # 5) Sigurnost (uvijek)

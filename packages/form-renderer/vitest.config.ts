@@ -8,6 +8,10 @@ export default defineConfig({
     include: ['test/**/*.spec.ts'],
     environment: 'node',
     globals: false,
+    //  CI mašina je sporija od lokalne, a testovi rade paralelno po paketima:
+    //  default 5 s je pravio povremene padove bez stvarnog nalaza.
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
