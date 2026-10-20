@@ -22,6 +22,7 @@ import { ProfilePage } from '../features/profile/profile-page.js';
 import { FormsPage } from '../features/forms/forms-page.js';
 import { VehiclesPage } from '../features/vehicles/vehicles-page.js';
 import { VehicleCreatePage } from '../features/vehicles/vehicle-create-page.js';
+import { VehicleEditPage } from '../features/vehicles/vehicle-edit-page.js';
 import { DriversPage } from '../features/drivers/drivers-page.js';
 import { DriverCreatePage } from '../features/drivers/driver-create-page.js';
 import { DriverDetailPage } from '../features/drivers/driver-detail-page.js';
@@ -73,6 +74,16 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission="vehicle:create">
             <VehicleCreatePage />
+          </RequirePermission>
+        ),
+      },
+      {
+        // W06 — izmjena vozila: ista polja kao unos, ali forma ostaje verzija
+        // kojom je zapis nastao (P10) i `version` čuva od paralelnog upisa.
+        path: 'vozila/:vehicleId/izmjena',
+        element: (
+          <RequirePermission permission="vehicle:update">
+            <VehicleEditPage />
           </RequirePermission>
         ),
       },

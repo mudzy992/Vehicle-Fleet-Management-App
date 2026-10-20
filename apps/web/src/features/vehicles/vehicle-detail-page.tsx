@@ -26,6 +26,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  buttonClassName,
   EmptyState,
   Field,
   Table,
@@ -37,6 +38,7 @@ import {
   inputClassName,
 } from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
+import { VehicleRecordForm } from './record-form.js';
 import { useSession } from '../auth/session.js';
 import { deadlineLabel, deadlineTone, toQueryString } from './vehicles-model.js';
 
@@ -137,6 +139,11 @@ export function VehicleDetailPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {!archived && hasPermission('vehicle:update') && (
+            <Link className={buttonClassName('secondary', 'sm')} to={`/vozila/${vehicle.id}/izmjena`}>
+              Uredi
+            </Link>
+          )}
           {!archived && hasPermission('vehicle:archive') && (
             <Button
               variant="secondary"
@@ -190,8 +197,8 @@ export function VehicleDetailPage() {
       </div>
 
       {tab === 'osnovno' && <OverviewTab vehicle={vehicle} />}
-      {tab === 'registracije' && <RegistrationsTab vehicleId={vehicle.id} />}
-      {tab === 'osiguranje' && <InsurancesTab vehicleId={vehicle.id} />}
+      {tab === 'registracije' && <RegistrationsTab vehicleId={vehicle.id} onChanged={invalidate} />}
+      {tab === 'osiguranje' && <InsurancesTab vehicleId={vehicle.id} onChanged={invalidate} />}
       {tab === 'kilometraza' && <OdometerTab vehicle={vehicle} onChanged={invalidate} />}
       {tab === 'prilozi' && <AttachmentsTab vehicleId={vehicle.id} />}
     </div>
@@ -285,7 +292,9 @@ function Deadline({ date }: { date: string | null }) {
   );
 }
 
-function RegistrationsTab({ vehicleId }: { vehicleId: string }) {
+function RegistrationsTab({ vehicleId, onChanged }: { vehicleId: string; onChanged: () => Promise<void> }) {
+  const { hasPermission } = useSession();
+  const [adding, setAdding] = useState(false);
   const query = useQuery({
     queryKey: ['registrations', vehicleId],
     queryFn: () =>
@@ -294,102 +303,138 @@ function RegistrationsTab({ vehicleId }: { vehicleId: string }) {
       ),
   });
 
-  if (query.isPending) return <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>;
-  if (!query.data?.items.length) {
-    return (
-      <EmptyState
-        title="Nema registracija"
-        description="Registracija se dodaje kroz formu „Registracija vozila“; periodi se ne smiju preklapati (409 PERIOD_OVERLAP)."
-      />
-    );
-  }
-
   return (
-    <Card>
-      <CardContent>
-        <Table>
-          <THead>
-            <TR>
-              <TH>Broj</TH>
-              <TH>Period</TH>
-              <TH>Status</TH>
-              <TH align="right">Cijena</TH>
-              <TH>Izdavao</TH>
-            </TR>
-          </THead>
-          <TBody>
-            {query.data.items.map((item) => (
-              <TR key={item.id}>
-                <TD>{item.registrationNumber}</TD>
-                <TD>
-                  {formatDate(item.validFrom)} – {formatDate(item.validUntil)}
-                </TD>
-                <TD>
-                  <Badge level="neutral">{statusLabel(item.status, 'record')}</Badge>
-                </TD>
-                <TD align="right">
-                  {item.costAmount === null ? '—' : `${(item.costAmount / 100).toFixed(2)} KM`}
-                </TD>
-                <TD>{item.issuedBy ?? '—'}</TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {hasPermission('registration:create') &&
+        (adding ? (
+          <VehicleRecordForm
+            kind="REGISTRATION"
+            vehicleId={vehicleId}
+            onCreated={async () => {
+              setAdding(false);
+              await onChanged();
+            }}
+          />
+        ) : (
+          <Button size="sm" onClick={() => setAdding(true)}>
+            Nova registracija
+          </Button>
+        ))}
+
+      {query.isPending ? (
+        <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
+      ) : !query.data?.items.length ? (
+        <EmptyState
+          title="Nema registracija"
+          description="Registracija se dodaje kroz formu „Registracija vozila“; periodi se ne smiju preklapati (409 PERIOD_OVERLAP)."
+        />
+      ) : (
+        <Card>
+          <CardContent>
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Broj</TH>
+                  <TH>Period</TH>
+                  <TH>Status</TH>
+                  <TH align="right">Cijena</TH>
+                  <TH>Izdavao</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {query.data.items.map((item) => (
+                  <TR key={item.id}>
+                    <TD>{item.registrationNumber}</TD>
+                    <TD>
+                      {formatDate(item.validFrom)} – {formatDate(item.validUntil)}
+                    </TD>
+                    <TD>
+                      <Badge level="neutral">{statusLabel(item.status, 'record')}</Badge>
+                    </TD>
+                    <TD align="right">
+                      {item.costAmount === null ? '—' : `${(item.costAmount / 100).toFixed(2)} KM`}
+                    </TD>
+                    <TD>{item.issuedBy ?? '—'}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 
-function InsurancesTab({ vehicleId }: { vehicleId: string }) {
+function InsurancesTab({ vehicleId, onChanged }: { vehicleId: string; onChanged: () => Promise<void> }) {
+  const { hasPermission } = useSession();
+  const [adding, setAdding] = useState(false);
   const query = useQuery({
     queryKey: ['insurances', vehicleId],
     queryFn: () =>
       api.get<InsuranceListResponse>(`/insurances?${toQueryString({ vehicleId, page: 1, pageSize: 25 })}`),
   });
 
-  if (query.isPending) return <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>;
-  if (!query.data?.items.length) {
-    return (
-      <EmptyState
-        title="Nema osiguranja"
-        description="Polica se dodaje kroz formu „Osiguranje vozila“; periodi se ne smiju preklapati."
-      />
-    );
-  }
-
   return (
-    <Card>
-      <CardContent>
-        <Table>
-          <THead>
-            <TR>
-              <TH>Polisa</TH>
-              <TH>Kuća</TH>
-              <TH>Period</TH>
-              <TH>Status</TH>
-              <TH align="right">Premija</TH>
-            </TR>
-          </THead>
-          <TBody>
-            {query.data.items.map((item) => (
-              <TR key={item.id}>
-                <TD>{item.policyNumber ?? '—'}</TD>
-                <TD>{item.insuranceCompany ?? '—'}</TD>
-                <TD>
-                  {formatDate(item.validFrom)} – {formatDate(item.validUntil)}
-                </TD>
-                <TD>
-                  <Badge level="neutral">{statusLabel(item.status, 'record')}</Badge>
-                </TD>
-                <TD align="right">
-                  {item.premiumAmount === null ? '—' : `${(item.premiumAmount / 100).toFixed(2)} KM`}
-                </TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {hasPermission('insurance:create') &&
+        (adding ? (
+          <VehicleRecordForm
+            kind="INSURANCE"
+            vehicleId={vehicleId}
+            onCreated={async () => {
+              setAdding(false);
+              await onChanged();
+            }}
+          />
+        ) : (
+          <Button size="sm" onClick={() => setAdding(true)}>
+            Novo osiguranje
+          </Button>
+        ))}
+
+      {query.isPending ? (
+        <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
+      ) : !query.data?.items.length ? (
+        <EmptyState
+          title="Nema osiguranja"
+          description="Polica se dodaje kroz formu „Osiguranje vozila“; periodi se ne smiju preklapati."
+        />
+      ) : (
+        <Card>
+          <CardContent>
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Polisa</TH>
+                  <TH>Kuća</TH>
+                  <TH>Period</TH>
+                  <TH>Status</TH>
+                  <TH align="right">Premija</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {query.data.items.map((item) => (
+                  <TR key={item.id}>
+                    <TD>{item.policyNumber ?? '—'}</TD>
+                    <TD>{item.insuranceCompany ?? '—'}</TD>
+                    <TD>
+                      {formatDate(item.validFrom)} – {formatDate(item.validUntil)}
+                    </TD>
+                    <TD>
+                      <Badge level="neutral">{statusLabel(item.status, 'record')}</Badge>
+                    </TD>
+                    <TD align="right">
+                      {item.premiumAmount === null ? '—' : `${(item.premiumAmount / 100).toFixed(2)} KM`}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 

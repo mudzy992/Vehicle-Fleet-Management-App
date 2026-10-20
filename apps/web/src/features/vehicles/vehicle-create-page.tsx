@@ -14,7 +14,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
-import { FUEL_TYPES, statusLabel } from '@vfm/shared';
 import type { ActiveFormSchema, VehicleDetail } from '@vfm/shared/schemas';
 import { parseDefinition } from '@vfm/form-engine';
 import type { RenderModel } from '@vfm/form-renderer';
@@ -28,32 +27,12 @@ import {
   buttonClassName,
 } from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
-import { CoreFields, FormFields, type CoreFieldSpec } from '../forms/form-fields.js';
+import { CoreFields, FormFields } from '../forms/form-fields.js';
+import {
+  VEHICLE_CORE_FIELDS as CORE_FIELDS,
+  VEHICLE_HIDDEN_FORM_KEYS as HIDDEN_FORM_KEYS,
+} from './vehicle-form-config.js';
 import { sarajevoToday } from '../forms/forms-preview-values.js';
-
-/** Kolone koje se unose statično (forma ih ne prikazuje ponovo). */
-const CORE_FIELDS: readonly CoreFieldSpec[] = [
-  {
-    key: 'internalNo',
-    label: 'Interni broj',
-    kind: 'TEXT',
-    required: true,
-    hint: 'Jedinstven među aktivnim vozilima.',
-  },
-  { key: 'make', label: 'Marka', kind: 'TEXT', required: true },
-  { key: 'model', label: 'Model', kind: 'TEXT', required: true },
-  { key: 'year', label: 'Godina proizvodnje', kind: 'INTEGER', hint: '1900–2100' },
-  { key: 'vin', label: 'VIN', kind: 'TEXT', hint: '17 znakova, ako je poznat.' },
-  {
-    key: 'fuelType',
-    label: 'Gorivo',
-    kind: 'SELECT',
-    required: true,
-    options: FUEL_TYPES.map((value) => ({ value, label: statusLabel(value, 'fuelType') })),
-  },
-];
-
-const HIDDEN_FORM_KEYS = CORE_FIELDS.map((field) => field.key);
 
 export function VehicleCreatePage() {
   const navigate = useNavigate();
