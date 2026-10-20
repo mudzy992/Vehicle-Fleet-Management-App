@@ -19,6 +19,7 @@ import { UsersPage } from '../features/users/users-page.js';
 import { MatrixPage } from '../features/roles/matrix-page.js';
 import { AuditLogPage } from '../features/audit/audit-log-page.js';
 import { ProfilePage } from '../features/profile/profile-page.js';
+import { FormsPage } from '../features/forms/forms-page.js';
 import { NAV_ITEMS } from './nav.js';
 
 export const router = createBrowserRouter([
@@ -95,14 +96,13 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        // W17 — Builder formi (docs/06 §5.5): samo `form:view`; akcije unutar
+        // ekrana traže `form:update`/`form:publish_version`/… (server provjerava).
         path: 'forme',
         element: (
-          <PlaceholderPage
-            title="Forme"
-            code="W17"
-            phase="Faza 2"
-            description="Builder dinamičkih formi s verzijama (nacrt/objavljeno/povučeno)."
-          />
+          <RequirePermission permission="form:view">
+            <FormsPage />
+          </RequirePermission>
         ),
       },
       {

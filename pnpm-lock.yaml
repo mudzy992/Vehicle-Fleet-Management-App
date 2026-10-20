@@ -126,6 +126,9 @@ importers:
       '@tanstack/react-query':
         specifier: 5.104.4
         version: 5.104.4(@types/react@19.3.0)(react@19.3.1)
+      '@vfm/form-engine':
+        specifier: workspace:*
+        version: link:../../packages/form-engine
       '@vfm/shared':
         specifier: workspace:*
         version: link:../../packages/shared

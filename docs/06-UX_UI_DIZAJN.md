@@ -162,7 +162,7 @@ prikazuju samo ako korisnik ima barem jedno pravo u njima). Sidebar je sklopiv (
 | `/zadaci/novi` | Wizard | `task:create` |
 | `/servisi` · `/gume` · `/rokovi` | Liste | odgovarajuće |
 | `/izvjestaji` · `/izvjestaji/:code` | Izvještaji · Download centar | `report:view` |
-| `/forme` · `/forme/:id` · `/forme/:id/verzije/:vid` | Form Builder | `form:view` / `manage_schema` |
+| `/forme` (`?forma=&verzija=`) | Form Builder: katalog + verzije + editor | `form:view` / `manage_schema` |
 | `/korisnici` · `/korisnici/:id` | Korisnici | `user:view` |
 | `/prava` | Matrica prava | `role:view` |
 | `/postavke` · `/postavke/sifarnici` | Postavke | `settings:view` |
@@ -702,6 +702,13 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 | Matrica prava (W25) | `/administracija/prava` | `features/roles/matrix-page.tsx` | editor opsega (`—`/`ALL`/`OWN`), čuva samo izmijenjene role; `VEHICLE_IDS`/`DRIVER_IDS` dolaze s Faza 3 |
 | Audit log (W27) | `/audit-log` | `features/audit/audit-log-page.tsx` | filteri, paginacija, detalj `before/after`; SECURITY redovi uz `audit:view_security` |
 | Profil + sesije | `/profil` | `features/profile/profile-page.tsx` | promjena lozinke (revokuje sesije), lista uređaja, „odjavi sve" |
+
+**Status (Faza 2, implementirano):**
+
+| Ekran | Ruta | Fajl | Napomena |
+|---|---|---|---|
+| Liste formi (W20) + Builder (W21) + verzije/diff (W22) | `/forme` | `features/forms/forms-page.tsx` | jedna ruta, tri panela: katalog → verzije → editor definicije; meta-shema se provjerava u browseru istim kodom kao na serveru (`@vfm/form-engine/definition`); objava/povlačenje traže bilješku ≥ 5 znakova; `PUBLISHED`/`RETIRED` su read-only (server bi vratio `FORM_VERSION_IMMUTABLE`); diff poziva `GET /form-schemas/:id/diff` |
+| Migracija zapisa (W23) | — | — | ⏳ odgođeno: u Fazi 2 još nema `FormRecord` zapisa za migraciju; API (`/form-migrations`) je gotov (chunk E) |
 
 Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);
 sidebar filtrira stavke prema `/auth/me` (`visibleNavItems`), ali **server ostaje

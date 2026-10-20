@@ -76,6 +76,7 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | Web — API klijent (single-flight refresh, retry na 401, istekla sesija, 204) | `apps/web/src/lib/api.test.ts` | 6 | — |
 | Web — sesija (bootstrap anonymous/authenticated, `hasPermission`, R-07, istek sesije) | `apps/web/src/features/auth/session.test.tsx` | 4 | — |
 | Web — matrica prava (diff payload: samo izmijenjene role, bez SUPER_ADMIN, opsezi) | `apps/web/src/features/roles/matrix.test.ts` | 6 | — |
+| Web — Form Builder (dozvoljene akcije po statusu verzije i permisijama, predlog verzije, parse rezultat, diff linije, `bs-BA` prikaz datuma) | `apps/web/src/features/forms/forms-model.test.ts` | 14 | — |
 
 E2E/integration fajlovi iz tabele §2 (P1 koraci 3 i 5, P2 preko HTTP-a, P3 latency) ostaju planirani —
 zahtijevaju živi PostgreSQL i Redis (`docker-compose.dev.yml`), što u sandboxu nije dostupno.
@@ -149,6 +150,7 @@ i uvijek tačno jedan izvršilac po zadatku (provjera SQL-om nakon testa).
 | `apps/api/test/unit/form-schemas-service.spec.ts` | P9: `DRAFT→PUBLISHED→RETIRED`, imutabilnost, `ETag` pomoćnik, `active` fallback |
 | `apps/api/test/unit/form-migrations-service.spec.ts` | P12: preview/apply/rollback, `skipped` zapisi, batch 500, idempotentne stavke |
 | `packages/form-renderer/test/render-model.spec.ts` | paritet web/mobilna: deterministički model, vidljivost, STATIC opcije, progres, `collectSubmitValues` |
+| `apps/web/src/features/forms/forms-model.test.ts` | UI pravila: koje akcije nad kojim statusom, predlog verzije, diff u čitljive linije |
 
 Integration/E2E varijante iz tabele iznad (P9–P12) traže PostgreSQL i dolaze uz prvi modul koji
 stvarno piše zapise (Faza 3, zadaci).
