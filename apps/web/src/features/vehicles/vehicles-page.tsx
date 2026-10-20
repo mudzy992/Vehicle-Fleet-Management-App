@@ -17,6 +17,7 @@ import type { VehicleListResponse, VehicleSummary } from '@vfm/shared/schemas';
 import {
   Badge,
   Button,
+  buttonClassName,
   Card,
   CardContent,
   CardHeader,
@@ -111,6 +112,11 @@ export function VehiclesPage() {
             {isPending ? 'Učitavanje…' : `${total} vozila u registru`}
           </p>
         </div>
+        {hasPermission('vehicle:create') && (
+          <Link className={buttonClassName('primary', 'sm')} to="/vozila/novo">
+            Novo vozilo
+          </Link>
+        )}
         {canArchive && selected.length > 0 && (
           <Button
             variant="danger"

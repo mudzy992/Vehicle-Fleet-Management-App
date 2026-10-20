@@ -21,6 +21,7 @@ import { AuditLogPage } from '../features/audit/audit-log-page.js';
 import { ProfilePage } from '../features/profile/profile-page.js';
 import { FormsPage } from '../features/forms/forms-page.js';
 import { VehiclesPage } from '../features/vehicles/vehicles-page.js';
+import { VehicleCreatePage } from '../features/vehicles/vehicle-create-page.js';
 import { VehicleDetailPage } from '../features/vehicles/vehicle-detail-page.js';
 import { NAV_ITEMS } from './nav.js';
 
@@ -60,6 +61,15 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission="vehicle:view">
             <VehiclesPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        // W07 — novo vozilo: strukturirane kolone + dinamička `VEHICLE` forma.
+        path: 'vozila/novo',
+        element: (
+          <RequirePermission permission="vehicle:create">
+            <VehicleCreatePage />
           </RequirePermission>
         ),
       },

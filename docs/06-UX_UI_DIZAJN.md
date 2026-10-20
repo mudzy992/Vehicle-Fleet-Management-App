@@ -715,6 +715,7 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 | Ekran | Ruta | Fajl | Napomena |
 |---|---|---|---|
 | Vozila — lista (W05) | `/vozila` | `features/vehicles/vehicles-page.tsx` | filteri `q`/`status`/`includeArchived` idu na server, sortiranje (`internalNo`, `odometerKm`, `registrationExpiresAt`, `insuranceExpiresAt`, `updatedAt`), paginacija; „Rokovi" widget iz iste liste (zeleno/žuto/narandžasto/crveno, pragovi 30/7/0 dana); selekcija + arhiviranje (N zahtjeva, prijava djelimičnog uspjeha) |
+| Novo vozilo (W07) | `/vozila/novo` | `features/vehicles/vehicle-create-page.tsx` | strukturirane kolone (interni broj, marka, model, godina, gorivo, VIN) + dinamička `VEHICLE` forma kroz `buildRenderModel`; polja forme koja su već statična se ne dupliraju (`hiddenKeys`); greške servera idu uz tačno polje (`details[].path`, `formData.<key>`); bez objavljene forme ekran kaže zašto zapis ne može nastati (P10) |
 | Vozilo — detalji (W06) | `/vozila/:vehicleId` | `features/vehicles/vehicle-detail-page.tsx` | tabovi **Osnovno**, **Registracije**, **Osiguranje**, **Kilometraža**, **Prilozi**; tabovi Servisi/Gume/Zadaci/Historija su označeni fazom (4/5) umjesto prazni; kilometraža: unos + korekcija s razlogom (`422 ODOMETER_REGRESSION`), historija bez brisanja; prilozi se preuzimaju kroz potpisani URL (`/attachments/:id/url`) jer `<a href>` ne nosi access token iz memorije |
 
 Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);

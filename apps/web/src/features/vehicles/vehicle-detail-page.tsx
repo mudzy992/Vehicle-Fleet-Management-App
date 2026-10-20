@@ -138,12 +138,22 @@ export function VehicleDetailPage() {
         </div>
         <div className="flex gap-2">
           {!archived && hasPermission('vehicle:archive') && (
-            <Button variant="secondary" size="sm" loading={archive.isPending} onClick={() => archive.mutate()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={archive.isPending}
+              onClick={() => archive.mutate()}
+            >
               Arhiviraj
             </Button>
           )}
           {archived && hasPermission('vehicle:archive') && (
-            <Button variant="secondary" size="sm" loading={restore.isPending} onClick={() => restore.mutate()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={restore.isPending}
+              onClick={() => restore.mutate()}
+            >
               Vrati iz arhive
             </Button>
           )}
@@ -211,7 +221,10 @@ function OverviewTab({ vehicle }: { vehicle: VehicleDetail }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
-        <CardHeader title="Podaci vozila" description="Normalizovane kolone (JSONB samo za dodatna polja forme)." />
+        <CardHeader
+          title="Podaci vozila"
+          description="Normalizovane kolone (JSONB samo za dodatna polja forme)."
+        />
         <CardContent>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             {rows.map(([label, value]) => (
@@ -428,7 +441,10 @@ function OdometerTab({ vehicle, onChanged }: { vehicle: VehicleDetail; onChanged
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">
       <Card>
-        <CardHeader title="Novo očitanje" description="Niža vrijednost zahtijeva korekciju s razlogom (422)." />
+        <CardHeader
+          title="Novo očitanje"
+          description="Niža vrijednost zahtijeva korekciju s razlogom (422)."
+        />
         <CardContent>
           <div className="space-y-3">
             <Field label="Kilometraža (km)" htmlFor="odo-km">
@@ -483,7 +499,10 @@ function OdometerTab({ vehicle, onChanged }: { vehicle: VehicleDetail; onChanged
       </Card>
 
       <Card>
-        <CardHeader title="Historija kilometraže" description="Nema brisanja — pogrešno očitanje se ispravlja korekcijom." />
+        <CardHeader
+          title="Historija kilometraže"
+          description="Nema brisanja — pogrešno očitanje se ispravlja korekcijom."
+        />
         <CardContent>
           {query.isPending ? (
             <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
@@ -569,9 +588,7 @@ function AttachmentsTab({ vehicleId }: { vehicleId: string }) {
                         const signed = await api.get<{ url: string }>(`/attachments/${item.id}/url`);
                         window.open(signed.url, '_blank', 'noopener');
                       } catch (cause) {
-                        setError(
-                          cause instanceof ApiError ? cause.message : 'Preuzimanje nije uspjelo.',
-                        );
+                        setError(cause instanceof ApiError ? cause.message : 'Preuzimanje nije uspjelo.');
                       }
                     }}
                   >
