@@ -20,6 +20,8 @@ import { MatrixPage } from '../features/roles/matrix-page.js';
 import { AuditLogPage } from '../features/audit/audit-log-page.js';
 import { ProfilePage } from '../features/profile/profile-page.js';
 import { FormsPage } from '../features/forms/forms-page.js';
+import { VehiclesPage } from '../features/vehicles/vehicles-page.js';
+import { VehicleDetailPage } from '../features/vehicles/vehicle-detail-page.js';
 import { NAV_ITEMS } from './nav.js';
 
 export const router = createBrowserRouter([
@@ -52,25 +54,22 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        // W05 — registar vozila (Faza 3). Filteri idu na server; „rokovi"
+        // widget računa se iz iste liste (docs/06 §7.6).
         path: 'vozila',
         element: (
-          <PlaceholderPage
-            title="Vozila"
-            code="W05"
-            phase="Faza 3"
-            description="Registar vozila s filterima, kilometražom i statusima."
-          />
+          <RequirePermission permission="vehicle:view">
+            <VehiclesPage />
+          </RequirePermission>
         ),
       },
       {
+        // W06 — detalji vozila s tabovima; tabovi Faze 4/5 su označeni, ne prazni.
         path: 'vozila/:vehicleId',
         element: (
-          <PlaceholderPage
-            title="Detalji vozila"
-            code="W06"
-            phase="Faza 3"
-            description="Historija registracija, osiguranja, servisa i guma za jedno vozilo."
-          />
+          <RequirePermission permission="vehicle:view">
+            <VehicleDetailPage />
+          </RequirePermission>
         ),
       },
       {

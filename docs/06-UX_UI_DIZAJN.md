@@ -710,6 +710,13 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 | Liste formi (W20) + Builder (W21) + verzije/diff (W22) | `/forme` | `features/forms/forms-page.tsx`, `forms-preview.tsx` | jedna ruta, tri panela: katalog → verzije → editor definicije; meta-shema se provjerava u browseru istim kodom kao na serveru (`@vfm/form-engine/definition`); objava/povlačenje traže bilješku ≥ 5 znakova; `PUBLISHED`/`RETIRED` su read-only (server bi vratio `FORM_VERSION_IMMUTABLE`); diff poziva `GET /form-schemas/:id/diff`; tab **Pregled** renderuje formu kroz `@vfm/form-renderer` (`buildRenderModel`) — isti model koji koristi zapis i mobilna, pa pregled nije odvojen „demo" |
 | Migracija zapisa (W23) | — | — | ⏳ odgođeno: u Fazi 2 još nema `FormRecord` zapisa za migraciju; API (`/form-migrations`) je gotov (chunk E) |
 
+**Status (Faza 3, implementirano):**
+
+| Ekran | Ruta | Fajl | Napomena |
+|---|---|---|---|
+| Vozila — lista (W05) | `/vozila` | `features/vehicles/vehicles-page.tsx` | filteri `q`/`status`/`includeArchived` idu na server, sortiranje (`internalNo`, `odometerKm`, `registrationExpiresAt`, `insuranceExpiresAt`, `updatedAt`), paginacija; „Rokovi" widget iz iste liste (zeleno/žuto/narandžasto/crveno, pragovi 30/7/0 dana); selekcija + arhiviranje (N zahtjeva, prijava djelimičnog uspjeha) |
+| Vozilo — detalji (W06) | `/vozila/:vehicleId` | `features/vehicles/vehicle-detail-page.tsx` | tabovi **Osnovno**, **Registracije**, **Osiguranje**, **Kilometraža**, **Prilozi**; tabovi Servisi/Gume/Zadaci/Historija su označeni fazom (4/5) umjesto prazni; kilometraža: unos + korekcija s razlogom (`422 ODOMETER_REGRESSION`), historija bez brisanja; prilozi se preuzimaju kroz potpisani URL (`/attachments/:id/url`) jer `<a href>` ne nosi access token iz memorije |
+
 Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);
 sidebar filtrira stavke prema `/auth/me` (`visibleNavItems`), ali **server ostaje
 autoritet** (P14) — ručni unos URL-a bez prava prikazuje ekran „Nemate pristup"
