@@ -21,6 +21,8 @@ import { HealthModule } from './health/health.module.js';
 import { AuditModule } from './common/audit/audit.module.js';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { RolesModule } from './modules/roles/roles.module.js';
+import { UsersModule } from './modules/users/users.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { ClientTypeGuard } from './common/guards/client-type.guard.js';
 import { PermissionsGuard } from './common/guards/permissions.guard.js';
@@ -28,7 +30,20 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard.js';
 import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
 
 @Module({
-  imports: [PrismaModule, DatabaseModule, RedisModule, QueueModule, HealthModule, AuditModule, AuthModule],
+  imports: [
+    PrismaModule,
+    DatabaseModule,
+    RedisModule,
+    QueueModule,
+    HealthModule,
+    AuditModule,
+    AuthModule,
+    // Role i matrica prava (docs/07 §2.3) — nakon AuthModule-a jer koristi
+    // `PermissionsService` za Redis invalidaciju.
+    RolesModule,
+    // Korisnici (docs/07 §2.2) — koristi PasswordService/TokenService iz AuthModule-a.
+    UsersModule,
+  ],
   controllers: [],
   providers: [
     RateLimitService,

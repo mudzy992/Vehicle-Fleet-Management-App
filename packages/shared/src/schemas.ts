@@ -854,3 +854,194 @@ export const permissionSyncResultSchema = z
   .strict();
 
 export type PermissionSyncResult = z.output<typeof permissionSyncResultSchema>;
+
+// -----------------------------------------------------------------------------
+//  Korisnici (docs/07 §2.2, docs/05 §8.2)
+// -----------------------------------------------------------------------------
+
+/** `GET /users` — paginacija + filteri. Query string dolazi kao tekst → `coerce`. */
+export const userListQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).max(10_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    /** Pretraga po e-mailu, imenu i prezimenu (case-insensitive). */
+    q: z.string().trim().max(120).optional(),
+    status: z.enum(USER_STATUSES).optional(),
+    roleId: uuidSchema.optional(),
+  })
+  .strict();
+
+export type UserListQuery = z.output<typeof userListQuerySchema>;
+
+/** `POST /users` — lozinku generiše server (nikad se ne prima iz forme). */
+export const createUserSchema = z
+  .object({
+    email: emailSchema,
+    firstName: z.string().trim().min(2).max(60),
+    lastName: z.string().trim().min(2).max(60),
+    displayName: z.string().trim().max(120).nullish(),
+    phone: z
+      .string()
+      .trim()
+      .regex(/^\+?[0-9 ()/-]{6,32}$/u, { message: 'Telefon nije u ispravnom formatu.' })
+      .nullish(),
+    timezone: z.string().trim().max(64).optional(),
+    locale: z.string().trim().max(10).optional(),
+    /**
+     * Uloge koje korisnik dobija. Barem jedna — korisnik bez role ne može se
+     * prijaviti (nema `allowedClientTypes`, pa ga `ClientTypeGuard` odbija).
+     */
+    roleIds: z.array(uuidSchema).min(1).max(10),
+    /** Default `true`: admin ne zna lozinku korisnika, pa je mijenja pri prijavi. */
+    mustChangePassword: z.boolean().optional(),
+  })
+  .strict();
+
+export type CreateUserInput = z.output<typeof createUserSchema>;
+
+/** `PATCH /users/:id` — e-mail se ne mijenja (identitet + audit trag). */
+export const updateUserSchema = z
+  .object({
+    firstName: z.string().trim().min(2).max(60).optional(),
+    lastName: z.string().trim().min(2).max(60).optional(),
+    displayName: z.string().trim().max(120).nullish(),
+    phone: z
+      .string()
+      .trim()
+      .regex(/^\+?[0-9 ()/-]{6,32}$/u, { message: 'Telefon nije u ispravnom formatu.' })
+      .nullish(),
+    timezone: z.string().trim().max(64).optional(),
+    locale: z.string().trim().max(10).optional(),
+    /**
+     * Dozvoljene tranzicije: `ACTIVE` ⇄ `SUSPENDED` ⇄ `DEACTIVATED`.
+     * `PENDING_PASSWORD_CHANGE` postavlja isključivo reset lozinke.
+     */
+    status: z.enum(['ACTIVE', 'SUSPENDED', 'DEACTIVATED']).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Barem jedno polje za izmjenu je obavezno.',
+  });
+
+export type UpdateUserInput = z.output<typeof updateUserSchema>;
+
+/** `POST /users/:id/archive` i `DELETE /users/:id` — razlog ide u audit. */
+export const archiveUserSchema = z
+  .object({
+    reason: z.string().trim().min(3).max(300).optional(),
+  })
+  .strict();
+
+export type ArchiveUserInput = z.output<typeof archiveUserSchema>;
+
+/** `POST /users/:id/roles`. */
+export const assignUserRoleSchema = z
+  .object({
+    roleId: uuidSchema,
+    validFrom: z.iso.datetime().optional(),
+    validUntil: z.iso.datetime().optional(),
+    note: z.string().trim().max(200).optional(),
+  })
+  .strict();
+
+export type AssignUserRoleInput = z.output<typeof assignUserRoleSchema>;
+
+/**
+ * `POST /users/:id/reset-password` — koliko token važi.
+ *
+ * Default 30 min (docs/05 §7); kraće je dozvoljeno (npr. 10 min za osjetljive
+ * naloge), duže od 2 h nije — token putuje e-mailom/porukom.
+ */
+export const issuePasswordResetSchema = z
+  .object({
+    expiresInMinutes: z.number().int().min(5).max(120).default(30),
+  })
+  .strict();
+
+export type IssuePasswordResetInput = z.output<typeof issuePasswordResetSchema>;
+
+/** `POST /auth/reset-password` — javna ruta koja troši token. */
+export const consumePasswordResetSchema = z
+  .object({
+    token: z.string().trim().min(20).max(200),
+    /** Politiku lozinke provjerava server (`PasswordService.assertPolicy`). */
+    newPassword: z.string().min(8).max(200),
+  })
+  .strict();
+
+export type ConsumePasswordResetInput = z.output<typeof consumePasswordResetSchema>;
+
+// --- Odgovori ---
+
+/** Korisnik u listi (PII redigovan ako akter nema `user:view_pii`). */
+export const userSummarySchema = z
+  .object({
+    id: uuidSchema,
+    email: z.string(),
+    firstName: z.string(),
+    lastName: z.string(),
+    displayName: z.string().nullable(),
+    phone: z.string().nullable(),
+    status: z.enum(USER_STATUSES),
+    mustChangePassword: z.boolean(),
+    roles: z.array(authRoleSchema),
+    lastLoginAt: z.iso.datetime().nullable(),
+    lockedUntil: z.iso.datetime().nullable(),
+    /** `true` kad su `email`/`phone` maskirani (nema `user:view_pii`). */
+    piiRedacted: z.boolean(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+
+export type UserSummary = z.output<typeof userSummarySchema>;
+
+export const userListResponseSchema = z
+  .object({
+    items: z.array(userSummarySchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type UserListResponse = z.output<typeof userListResponseSchema>;
+
+/** Detalj korisnika (`GET /users/:id`). */
+export const userDetailSchema = userSummarySchema
+  .extend({
+    timezone: z.string(),
+    locale: z.string(),
+    tokenVersion: z.number().int().nonnegative(),
+    activeSessions: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type UserDetail = z.output<typeof userDetailSchema>;
+
+/** `POST /users` — lozinka se prikazuje **samo** u ovom odgovoru. */
+export const createUserResultSchema = z
+  .object({
+    user: userDetailSchema,
+    temporaryPassword: z.string(),
+    /** `true` = korisnik mora promijeniti lozinku pri prvoj prijavi. */
+    mustChangePassword: z.boolean(),
+  })
+  .strict();
+
+export type CreateUserResult = z.output<typeof createUserResultSchema>;
+
+/** `POST /users/:id/reset-password` — token admin predaje korisniku (Faza 1). */
+export const passwordResetIssuedSchema = z
+  .object({
+    userId: uuidSchema,
+    email: z.string(),
+    token: z.string(),
+    expiresAt: z.iso.datetime(),
+    /** U Fazi 5 token ide na e-mail (outbox) i više se ne vraća u odgovoru. */
+    deliveredBy: z.literal('ADMIN'),
+  })
+  .strict();
+
+export type PasswordResetIssued = z.output<typeof passwordResetIssuedSchema>;

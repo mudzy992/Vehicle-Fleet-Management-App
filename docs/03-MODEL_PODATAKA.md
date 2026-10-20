@@ -125,6 +125,25 @@ erDiagram
 **IDX:** `(status)`, `(email)`, `(lastName, firstName)` · **PRAVILO:** DB trigger zabranjuje
 deaktivaciju/brisanje posljednjeg aktivnog `SUPER_ADMIN` korisnika (§3.2).
 
+#### `PasswordResetToken`
+Dodato u Fazi 1 (migracija `3_password_reset_tokens`) — bez njega reset lozinke
+mora nositi lozinku u e-mailu ili je vraćati u API odgovoru.
+
+| Polje | Tip | Ograničenja | Napomena |
+|---|---|---|---|
+| id | uuid | PK | |
+| userId | uuid | FK User, NOT NULL, `ON DELETE CASCADE` | |
+| tokenHash | text | UQ, NOT NULL | **SHA-256**; čist token postoji samo u odgovoru adminu |
+| expiresAt | timestamptz | NOT NULL | `now() + 30 min` |
+| usedAt | timestamptz | | postavlja se pri iskorištavanju; novi reset invalidira stare |
+| createdById | uuid | FK User, `ON DELETE SET NULL` | koji je administrator zatražio reset |
+| createdAt | timestamptz | default `now()` | |
+| ipAddress | inet | | IP s kojeg je reset zatražen |
+
+**IDX:** `(userId, createdAt)`, `(expiresAt)` · **PRAVILO:** token važi jednokratno;
+`POST /auth/reset-password` provjerava hash, istek i `usedAt`, pa tek onda mijenja lozinku
+i revokuje sve sesije (`tokenVersion++`). Retencija: istekli tokeni se brišu maintenance jobom.
+
 #### `Role`
 | Polje | Tip | Ograničenja |
 |---|---|---|

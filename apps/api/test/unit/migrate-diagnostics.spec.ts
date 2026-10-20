@@ -107,10 +107,15 @@ describe('parsePendingMigrations', () => {
 });
 
 describe('listMigrationNames', () => {
-  it('navodi stvarne migracije u repo-u (0_extensions, 1_init, 2_manual)', () => {
+  it('navodi stvarne migracije u repo-u (0_extensions, 1_init, 2_manual, 3_password_reset_tokens)', () => {
     // vitest se pokreće iz `apps/api` (turbo/pnpm postavljaju cwd paketa).
     const dir = resolve(process.cwd(), 'prisma', 'migrations');
-    expect(listMigrationNames(dir)).toEqual(['0_extensions', '1_init', '2_manual']);
+    expect(listMigrationNames(dir)).toEqual([
+      '0_extensions',
+      '1_init',
+      '2_manual',
+      '3_password_reset_tokens',
+    ]);
   });
 
   it('ignoriše direktorije bez migration.sql i migration_lock.toml', () => {

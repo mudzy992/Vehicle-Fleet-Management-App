@@ -87,8 +87,21 @@ direktoriji u `apps/api/prisma/migrations/` imenovani:
 
 ### A) Stanje migracija (važi od ovog commit-a)
 
+| # | Migracija | Sadržaj | Provjera |
+|---|---|---|---|
+| 0 | `0_extensions` | `pgcrypto`, `citext`, `btree_gist` (NE mijenjati — checksum) | primijenjeno |
+| 1 | `1_init` | 45 tabela, indeksi, FK-ovi, enum tipovi | primijenjeno + verifier |
+| 2 | `2_manual` | partial unique indeksi, EXCLUDE constraint, triggeri, `last_admin` guard | primijenjeno + verifier |
+| 3 | `3_password_reset_tokens` | tabela `PasswordResetToken` (jednokratni reset tokeni, 30 min) | SQL ručno napisan (Prisma 7 `migrate diff` traži native engine — nema ga u sandboxu) |
+
 `1_init` i `2_manual` **postoje i provjerene su primjenom na pravom
 PostgreSQL-u** (`scripts/db-verify/`, 95 asertacija — vidi odjeljak D).
+
+> ⚠️ **`3_password_reset_tokens` nije provjeren primjenom u sandboxu** (nema
+> PostgreSQL-a ni native engine-a). SQL je pisan po istom obrascu kao `1_init`
+> (`UUID`, `TIMESTAMPTZ(6)`, imena constrainta po Prisma konvenciji), a prije
+> prve migracije na pravoj bazi obavezno pokreni `scripts/db-verify/` — on
+> hvata neusklađenost tipova i imena.
 
 > ⚠️ **Popravka u `1_init`:** `Attachment."uploadedById"` i
 > `IdempotencyKey."userId"` generisali su se kao `TEXT`, a FK cilja

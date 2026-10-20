@@ -94,13 +94,13 @@ Legenda: 🔒 = autorizovano; **P** = potrebna permisija; `Idem` = podržava `Id
 | POST | `/auth/logout-all` | 🔒 `auth:manage_sessions` | revoke svih sesija + `User.tokenVersion++` → postojeći access tokeni padaju odmah |
 | GET | `/auth/me` | 🔒 | profil + role + efektivne permisije + `pv`/`tv` + postavke (`timezone`, `locale`) |
 | POST | `/auth/change-password` | 🔒 `auth:change_password` | provjera stare lozinke + politika; `mustChangePassword=false`; revoke svih sesija + `tokenVersion++` |
-| POST | `/auth/forgot-password` | javno | uvijek 200 (bez enumeracije) — ⏳ s Users modulom (treba Outbox/e-mail) |
-| POST | `/auth/reset-password` | javno (token) | ⏳ s Users modulom |
+| POST | `/auth/forgot-password` | javno | uvijek 200 (bez enumeracije) — ⏳ Faza 5 (treba Outbox/e-mail; token se u Fazi 1 izdaje adminu kroz `/users/:id/reset-password`) |
+| POST | `/auth/reset-password` | javno + limiter `login` | `{token, newPassword}` → 200 `{userId, email}`; token se poredi po SHA-256 hashu, važi 30 min i koristi se **jednom**; uspjeh: `mustChangePassword=false`, `tokenVersion++`, revoke **svih** sesija + brisanje RBAC keša |
 | GET | `/auth/sessions` | 🔒 `auth:manage_sessions` | lista aktivnih sesija/uređaja (ISO datumi, IP, UA, `deviceInfo`) |
 | DELETE | `/auth/sessions/:id` | 🔒 `auth:manage_sessions` | revokacija jedne sesije + `tokenVersion++`; tuđa sesija → `404 NOT_FOUND` |
 
-**Stanje (Faza 1, chunk G):** implementirano `login`, `refresh`, `logout`, `logout-all`, `me`,
-`change-password`, `GET/DELETE /sessions`. Sve rute osim `login`/`refresh` prolaze lanac
+**Stanje (Faza 1):** implementirano `login`, `refresh`, `logout`, `logout-all`, `me`,
+`change-password`, `reset-password`, `GET/DELETE /sessions`. Sve rute osim `login`/`refresh` prolaze lanac
 guard-ova `RateLimit → Jwt → ClientType → Permissions` (docs/05 §5–§6), a svaki pokušaj prijave
 piše se u `AuthAttempt` (retencija 180 dana) i — kod odbijanja — u `AuditLog` (severity `SECURITY`).
 | ~~`/auth/2fa/*`~~ | — | **uklonjeno** | 2FA se NE implementira (R-05) |
@@ -109,7 +109,7 @@ piše se u `AuthAttempt` (retencija 180 dana) i — kod odbijanja — u `AuditLo
 
 | Metoda | Put | P |
 |---|---|---|
-| GET | `/users` | `user:view` |
+| GET | `/users` | `user:view` — `?page&pageSize&q&status&roleId`, PII maskiran bez `user:view_pii` |
 | POST | `/users` `Idem` | `user:create` |
 | GET | `/users/:id` | `user:view` (+ `user:view_pii` za PII) |
 | PATCH | `/users/:id` | `user:update` |
@@ -118,6 +118,24 @@ piše se u `AuthAttempt` (retencija 180 dana) i — kod odbijanja — u `AuditLo
 | POST | `/users/:id/roles` · DELETE `/users/:id/roles/:roleId` | `user:assign_role` |
 | POST | `/users/:id/reset-password` | `user:reset_password` |
 | POST | `/users/:id/force-logout` | `user:force_logout` |
+
+**Semantika (Faza 1):**
+
+- **PII**: `email`/`phone` su maskirani (`a***@vfm.test`, `•••••222`) i odgovor nosi
+  `piiRedacted: true` osim uz `user:view_pii` (Super Admin ga ima implicitno — R-07).
+- **Kreiranje**: `POST /users` ne prima lozinku — server generiše 20-znakovnu privremenu
+  lozinku (prolazi politiku, `mustChangePassword=true`) i vraća je **samo** u tom odgovoru.
+- **Brisanje**: `DELETE /users/:id` je **anonimizacija** — e-mail → `deleted-<id>@invalid`,
+  imena → „Obrisan korisnik", `phone=null`, `deletedAt=now`, role revokovane. Fizički `DELETE`
+  nije dozvoljen jer je `AuditLog` immutabilan i nosi `actorId` (audit trag mora ostati).
+- **Reset lozinke**: `POST /users/:id/reset-password` izdaje jednokratni token (default 30 min,
+  `expiresInMinutes` 5–120). U Fazi 1 admin ga predaje korisniku (`deliveredBy: 'ADMIN'`);
+  u Fazi 5 token ide e-mailom kroz outbox i uklanja se iz odgovora. Novi reset gasi stare tokene.
+- **Revokacija**: promjena statusa, dodjela/skidanje role, reset i force-logout dižu
+  `tokenVersion` (DB pa Redis) i briše `vfm:perm:{userId}` → stari token pada odmah (P3/P14).
+- **Zaštite**: `409 LAST_SUPER_ADMIN_PROTECTED` za deaktivaciju/arhiviranje/brisanje/skidanje
+  `SUPER_ADMIN` role zadnjem aktivnom Super Adminu; vlastiti nalog se ne može deaktivirati,
+  arhivirati ni obrisati (`400 VALIDATION_ERROR`); e-mail se ne mijenja kroz `PATCH`.
 
 ### 2.3 Role i permisije (`/roles`, `/permissions`)
 

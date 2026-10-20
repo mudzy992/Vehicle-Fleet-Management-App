@@ -254,7 +254,7 @@ vraćaju `403 MOBILE_SCOPE_NOT_ALLOWED` kada je `ct` mobilni, neovisno o permisi
 | Lockout | 5 neuspjelih / 15 min po (email + IP); nakon 20 → trajno zaključano do admin intervencije |
 | Rate limit login | `THROTTLE_LOGIN_LIMIT` / `THROTTLE_LOGIN_TTL_SECONDS` |
 | 2FA | **NE implementira se** (R-05, odluka vlasnika). Kompenzacija: politika lozinke (min 12), lockout, rate limit, rotacija refresh tokena s reuse detection, `tokenVersion`, audit |
-| Reset lozinke | jednokratni token, 30 min, jednokratno korištenje, šalje se samo ako nalog postoji (**ali** odgovor je uvijek isti radi enumeracije) |
+| Reset lozinke | jednokratni token, 30 min, jednokratno korištenje; u bazi samo SHA-256 hash (`PasswordResetToken`), novi reset gasi stare; **uspjeh revokuje sve sesije** (`tokenVersion++`). U Fazi 1 token izdaje admin (`POST /users/:id/reset-password` → `deliveredBy: 'ADMIN'`), u Fazi 5 ide e-mailom kroz outbox |
 | Enumeracija korisnika | odgovor `/auth/login` je generičan: „Pogrešan e-mail ili lozinka" |
 | Sesije | max `AUTH_MAX_SESSIONS_PER_USER`; pregled i revokacija iz profila |
 | Bootstrap prvog Super Admina | `scripts/bootstrap-super-admin.mjs`, slučajna lozinka, `mustChangePassword=true` |

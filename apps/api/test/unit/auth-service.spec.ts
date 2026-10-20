@@ -12,6 +12,7 @@
  * Fake-ovi: `FakePrismaClient` (redovi u memoriji), `FakeRedis` + `FakeLoader`
  * (stvarni `PermissionsService`), `RecordingSecuritySink` (događaji).
  */
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { __resetEnvCache } from '../../src/config/env.js';
 import { VfmException } from '../../src/common/errors/vfm-error.js';
@@ -684,5 +685,92 @@ describe('AuthService — sesije', () => {
 
     expect(count).toBe(2);
     expect(prisma.activeSessions(USER_ADMIN)).toHaveLength(0);
+  });
+});
+
+describe('AuthService — reset lozinke tokenom', () => {
+  const NEW_PASSWORD = 'Nova!Sifra2026x';
+
+  function issueToken(userId: string, overrides: { expiresAt?: Date; usedAt?: Date | null } = {}) {
+    const generated = tokens.generatePasswordResetToken();
+    // Isti oblik kao u servisu (`{ data: ... }`) — fake čita `args.data`.
+    prisma.passwordResetToken.create({
+      data: {
+        id: randomUUID(),
+        userId,
+        tokenHash: generated.tokenHash,
+        expiresAt: overrides.expiresAt ?? generated.expiresAt,
+        createdById: USER_SUPER,
+      },
+    });
+
+    const row = prisma.passwordResetTokens.at(-1);
+    if (row && overrides.usedAt) row.usedAt = overrides.usedAt;
+
+    return generated.token;
+  }
+
+  it('uspješan reset: nova lozinka, tokenVersion++, sve sesije revokovane, token iskorišten', async () => {
+    prisma.addSession({ userId: USER_ADMIN, tokenHash: 'session-1' });
+    prisma.addSession({ userId: USER_ADMIN, tokenHash: 'session-2' });
+    redis.store.set(`vfm:perm:${USER_ADMIN}`, '{"keš":true}');
+    const token = issueToken(USER_ADMIN);
+
+    const result = await service.resetPasswordWithToken({ token, newPassword: NEW_PASSWORD }, CONTEXT);
+
+    expect(result).toEqual({ userId: USER_ADMIN, email: ADMIN_EMAIL });
+
+    const stored = prisma.users.get(USER_ADMIN);
+    expect(stored?.tokenVersion).toBe(ADMIN_SNAPSHOT.tokenVersion + 1);
+    expect(stored?.failedLoginCount).toBe(0);
+    expect(stored?.lockedUntil).toBeNull();
+    expect(await passwords.verify(stored?.passwordHash ?? '', NEW_PASSWORD)).toBe(true);
+    expect(await passwords.verify(stored?.passwordHash ?? '', PASSWORD)).toBe(false);
+
+    expect(prisma.activeSessions(USER_ADMIN)).toHaveLength(0);
+    expect(redis.store.get(`vfm:perm:${USER_ADMIN}`)).toBeUndefined();
+    expect(prisma.passwordResetTokens.every((row) => row.usedAt !== null)).toBe(true);
+  });
+
+  it('nepoznat token → 400 VALIDATION_ERROR (bez enumeracije)', async () => {
+    const error = await service
+      .resetPasswordWithToken({ token: 'x'.repeat(43), newPassword: NEW_PASSWORD }, CONTEXT)
+      .catch((caught: unknown) => caught as VfmException);
+
+    expect(error).toBeInstanceOf(VfmException);
+    expect((error as VfmException).code).toBe('VALIDATION_ERROR');
+    expect((error as VfmException).details?.[0]?.path).toEqual(['token']);
+  });
+
+  it('istekao token → odbijeno, lozinka nepromijenjena', async () => {
+    const token = issueToken(USER_ADMIN, { expiresAt: new Date(Date.now() - 1_000) });
+    const before = prisma.users.get(USER_ADMIN)?.passwordHash;
+
+    await expect(
+      service.resetPasswordWithToken({ token, newPassword: NEW_PASSWORD }, CONTEXT),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(prisma.users.get(USER_ADMIN)?.passwordHash).toBe(before);
+  });
+
+  it('iskorišten token se ne može ponoviti', async () => {
+    const token = issueToken(USER_ADMIN);
+    await service.resetPasswordWithToken({ token, newPassword: NEW_PASSWORD }, CONTEXT);
+
+    await expect(
+      service.resetPasswordWithToken({ token, newPassword: 'Druga!Sifra2026y' }, CONTEXT),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
+  it('slaba lozinka ne prolazi politiku i token ostaje neiskorišten', async () => {
+    const token = issueToken(USER_ADMIN);
+
+    await expect(
+      service.resetPasswordWithToken({ token, newPassword: '12345678' }, CONTEXT),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(prisma.passwordResetTokens.every((row) => row.usedAt === null)).toBe(true);
+    const stored = prisma.users.get(USER_ADMIN);
+    expect(stored?.tokenVersion).toBe(ADMIN_SNAPSHOT.tokenVersion);
   });
 });

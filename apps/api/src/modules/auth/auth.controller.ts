@@ -11,6 +11,7 @@
  * | `GET  /sessions`           | + `auth:manage_sessions` | — |
  * | `DELETE /sessions/:id`     | + `auth:manage_sessions` | `LOGOUT` (SECURITY) |
  * | `POST /change-password`    | + `auth:change_password` | `UPDATE` na `User` (SECURITY) |
+ * | `POST /reset-password`     | `@Public` + `login` limiter | `UPDATE` na `User` (SECURITY) |
  *
  * HTTP detalji koji **ne** idu u servis:
  * - refresh token se postavlja u httpOnly cookie (`COOKIE_NAME`, default
@@ -25,17 +26,20 @@ import type {
   AuthTokenResponse,
   AuthUser,
   ChangePasswordInput,
+  ConsumePasswordResetInput,
   LoginInput,
   LogoutInput,
   RefreshInput,
 } from '@vfm/shared/schemas';
 import {
   changePasswordSchema,
+  consumePasswordResetSchema,
   loginSchema,
   logoutSchema,
   refreshSchema,
   sessionIdSchema,
 } from '@vfm/shared/schemas';
+import { AuditContext } from '../../common/audit/audit.types.js';
 import { securityContextFromRequest } from '../../common/audit/security-event.js';
 import { Audit, CurrentUser, Public, RequirePermissions } from '../../common/decorators/auth.decorators.js';
 import { VfmErrors } from '../../common/errors/vfm-error.js';
@@ -133,6 +137,33 @@ export class AuthController {
   async me(@CurrentUser() user: AuthenticatedUser | undefined): Promise<AuthUser> {
     const current = this.requireUser(user);
     return this.auth.me(current.id, current.clientType);
+  }
+
+  /**
+   * Reset lozinke jednokratnim tokenom (token izdaje admin kroz
+   * `POST /users/:id/reset-password`; u Fazi 5 ide e-mailom kroz outbox).
+   *
+   * Javna ruta s `login` limiterom: token je 43 znaka i važi 30 min, ali
+   * ograničenje po IP-u sprječava i ono malo vjerovatnog pogađanja.
+   * Uspjeh revokuje **sve** sesije i diže `tokenVersion` → stari tokeni padaju.
+   */
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit('login')
+  @Audit('UPDATE', { severity: 'SECURITY', resource: 'User', diff: false })
+  async resetPassword(
+    @Body(new ZodValidationPipe(consumePasswordResetSchema, 'body')) input: ConsumePasswordResetInput,
+    @Req() request: VfmRequest,
+  ): Promise<{ userId: string; email: string }> {
+    const result = await this.auth.resetPasswordWithToken(input, this.contextOf(request));
+
+    AuditContext.from(request)
+      .setEntityId(result.userId)
+      .setResource('User')
+      .set('flow', 'RESET_TOKEN');
+
+    return result;
   }
 
   /**

@@ -23,6 +23,7 @@ export interface FakeUserRow {
   firstName: string;
   lastName: string;
   displayName: string | null;
+  phone: string | null;
   status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED' | 'PENDING_PASSWORD_CHANGE';
   mustChangePassword: boolean;
   tokenVersion: number;
@@ -88,12 +89,26 @@ export interface FakeRolePermissionRow {
 }
 
 export interface FakeUserRoleRow {
+  id: string;
   userId: string;
   roleId: string;
+  assignedById: string | null;
   revokedAt: Date | null;
   validFrom: Date | null;
   validUntil: Date | null;
+  note: string | null;
   role: FakeRoleRow;
+}
+
+export interface FakePasswordResetTokenRow {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+  usedAt: Date | null;
+  createdById: string | null;
+  createdAt: Date;
+  ipAddress: string | null;
 }
 
 export interface FakeAuditLogRow {
@@ -177,6 +192,7 @@ export class FakePrismaClient {
   readonly userRoles: FakeUserRoleRow[] = [];
   readonly rolePermissions: FakeRolePermissionRow[] = [];
   readonly permissions: FakePermissionRow[] = [];
+  readonly passwordResetTokens: FakePasswordResetTokenRow[] = [];
   readonly authAttempts: FakeAuthAttemptRow[] = [];
   readonly auditLogs: FakeAuditLogRow[] = [];
 
@@ -207,10 +223,15 @@ export class FakePrismaClient {
     rolePermissionDeleteMany: 0,
     permissionCreate: 0,
     transaction: 0,
+    resetTokenCreate: 0,
+    userCreate: 0,
   };
 
   readonly user = {
-    findFirst: async (args?: { where?: UserWhere }): Promise<FakeUserRow | null> => {
+    findFirst: async (args?: {
+      where?: UserWhere;
+      select?: Record<string, unknown>;
+    }): Promise<(FakeUserRow & { roles?: Array<{ roleId: string }> }) | null> => {
       this.calls.userFindFirst += 1;
       const where = args?.where ?? {};
 
@@ -218,7 +239,15 @@ export class FakePrismaClient {
         if (where.id !== undefined && row.id !== where.id) continue;
         if (where.email !== undefined && row.email.toLowerCase() !== where.email.toLowerCase()) continue;
         if (where.deletedAt === null && row.deletedAt !== null) continue;
-        return clone(row);
+
+        const result = clone(row) as FakeUserRow & { roles?: Array<{ roleId: string }> };
+        // Prisma ugniježđeni `select` — servis traži samo ID-jeve aktivnih rola.
+        if (args?.select && 'roles' in args.select) {
+          result.roles = this.userRoles
+            .filter((entry) => entry.userId === row.id && entry.revokedAt === null)
+            .map((entry) => ({ roleId: entry.roleId }));
+        }
+        return result;
       }
       return null;
     },
@@ -230,6 +259,53 @@ export class FakePrismaClient {
 
       applyUpdate(row as unknown as Record<string, unknown>, args.data);
       row.updatedAt = new Date();
+      return clone(row);
+    },
+
+    findMany: async (args?: {
+      where?: Record<string, unknown>;
+      orderBy?: Array<Record<string, 'asc' | 'desc'>> | Record<string, 'asc' | 'desc'>;
+      skip?: number;
+      take?: number;
+    }): Promise<FakeUserRow[]> => {
+      const rows = this.matchUsers(args?.where ?? {});
+      const skip = args?.skip ?? 0;
+      const take = args?.take ?? rows.length;
+
+      return rows.slice(skip, skip + take).map((row) => clone(row));
+    },
+
+    count: async (args?: { where?: Record<string, unknown> }): Promise<number> => {
+      return this.matchUsers(args?.where ?? {}).length;
+    },
+
+    create: async (args: { data: UpdateData }): Promise<FakeUserRow> => {
+      this.calls.userCreate += 1;
+      const data = args.data as unknown as Partial<FakeUserRow> & { id: string; email: string };
+
+      if (this.users.has(data.id)) throw new Error('FakePrisma: korisnik već postoji.');
+      const row: FakeUserRow = {
+        passwordHash: data.passwordHash ?? 'hash',
+        firstName: data.firstName ?? 'Test',
+        lastName: data.lastName ?? 'Korisnik',
+        displayName: data.displayName ?? null,
+        phone: data.phone ?? null,
+        status: data.status ?? 'ACTIVE',
+        mustChangePassword: data.mustChangePassword ?? false,
+        tokenVersion: data.tokenVersion ?? 0,
+        lastLoginAt: data.lastLoginAt ?? null,
+        failedLoginCount: data.failedLoginCount ?? 0,
+        lockedUntil: null,
+        timezone: data.timezone ?? 'Europe/Sarajevo',
+        locale: data.locale ?? 'bs',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+        ...data,
+        id: data.id,
+        email: data.email,
+      };
+      this.users.set(row.id, row);
       return clone(row);
     },
   };
@@ -299,6 +375,10 @@ export class FakePrismaClient {
       for (const row of rows) applyUpdate(row as unknown as Record<string, unknown>, args.data);
       return { count: rows.length };
     },
+
+    count: async (args?: { where?: { userId?: string; revokedAt?: null; expiresAt?: { gt?: Date } } }) => {
+      return this.matchSessions((args?.where ?? {}) as SessionWhere).length;
+    },
   };
 
   readonly userRole = {
@@ -306,8 +386,17 @@ export class FakePrismaClient {
       this.calls.userRoleFindMany += 1;
       const where = args?.where ?? {};
 
+      const userIdFilter = where.userId as string | { in?: readonly string[] } | undefined;
       const rows = this.userRoles.filter((entry) => {
-        if (where.userId !== undefined && entry.userId !== where.userId) return false;
+        if (typeof userIdFilter === 'string' && entry.userId !== userIdFilter) return false;
+        if (
+          userIdFilter &&
+          typeof userIdFilter === 'object' &&
+          userIdFilter.in &&
+          !userIdFilter.in.includes(entry.userId)
+        ) {
+          return false;
+        }
         if (where.revokedAt === null && entry.revokedAt !== null) return false;
         if (where.role?.deletedAt === null && entry.role.deletedAt !== null) return false;
 
@@ -320,7 +409,76 @@ export class FakePrismaClient {
       });
 
       rows.sort((left, right) => left.role.priority - right.role.priority);
-      return rows.map((entry) => ({ role: clone(entry.role) }));
+      return rows.map((entry) => ({ userId: entry.userId, roleId: entry.roleId, role: clone(entry.role) }));
+    },
+
+    findFirst: async (args?: {
+      where?: { userId?: string; roleId?: string; revokedAt?: null };
+      select?: Record<string, unknown>;
+    }): Promise<FakeUserRoleRow | null> => {
+      const where = args?.where ?? {};
+      const row = this.userRoles.find(
+        (entry) =>
+          (where.userId === undefined || entry.userId === where.userId) &&
+          (where.roleId === undefined || entry.roleId === where.roleId) &&
+          (where.revokedAt !== null || entry.revokedAt === null),
+      );
+      return row ? clone(row) : null;
+    },
+
+    create: async (args: { data: Record<string, unknown> }): Promise<FakeUserRoleRow> => {
+      const data = args.data as { id: string; userId: string; roleId: string };
+      const role = this.roles.get(data.roleId) ?? this.addRole({ id: data.roleId, code: data.roleId });
+
+      const row: FakeUserRoleRow = {
+        id: data.id,
+        userId: data.userId,
+        roleId: data.roleId,
+        assignedById: (args.data.assignedById as string | undefined) ?? null,
+        revokedAt: null,
+        validFrom: (args.data.validFrom as Date | undefined) ?? null,
+        validUntil: (args.data.validUntil as Date | undefined) ?? null,
+        note: (args.data.note as string | undefined) ?? null,
+        role,
+      };
+      this.userRoles.push(row);
+      return clone(row);
+    },
+
+    update: async (args: { where: { id: string }; data: UpdateData }): Promise<FakeUserRoleRow> => {
+      const row = this.userRoles.find((entry) => entry.id === args.where.id);
+      if (!row) throw new Error(`FakePrisma: dodjela role ${args.where.id} ne postoji.`);
+
+      applyUpdate(row as unknown as Record<string, unknown>, args.data);
+      return clone(row);
+    },
+
+    createMany: async (args: {
+      data: ReadonlyArray<{ id: string; userId: string; roleId: string }>;
+    }): Promise<{ count: number }> => {
+      for (const data of args.data) {
+        const role = this.roles.get(data.roleId) ?? this.addRole({ id: data.roleId, code: data.roleId });
+        this.userRoles.push({
+          id: data.id,
+          userId: data.userId,
+          roleId: data.roleId,
+          assignedById: null,
+          revokedAt: null,
+          validFrom: null,
+          validUntil: null,
+          note: null,
+          role,
+        });
+      }
+      return { count: args.data.length };
+    },
+
+    updateMany: async (args: { where: { userId?: string }; data: UpdateData }): Promise<{ count: number }> => {
+      const rows = this.userRoles.filter(
+        (entry) => args.where.userId === undefined || entry.userId === args.where.userId,
+      );
+      for (const row of rows) applyUpdate(row as unknown as Record<string, unknown>, args.data);
+      return { count: rows.length };
     },
 
     /**
@@ -401,6 +559,48 @@ export class FakePrismaClient {
           : left.createdAt.getTime() - right.createdAt.getTime(),
       );
       return (args?.take ? rows.slice(0, args.take) : rows).map((row) => clone(row));
+    },
+  };
+
+  readonly passwordResetToken = {
+    create: async (args: { data: UpdateData }): Promise<FakePasswordResetTokenRow> => {
+      this.calls.resetTokenCreate += 1;
+      const data = args.data as unknown as Omit<FakePasswordResetTokenRow, 'usedAt' | 'createdAt' | 'ipAddress'>;
+
+      const row: FakePasswordResetTokenRow = {
+        id: data.id,
+        userId: data.userId,
+        tokenHash: data.tokenHash,
+        expiresAt: data.expiresAt,
+        usedAt: null,
+        createdById: data.createdById ?? null,
+        createdAt: new Date(),
+        ipAddress: null,
+      };
+      this.passwordResetTokens.push(row);
+      return clone(row);
+    },
+
+    findUnique: async (args: {
+      where: { tokenHash: string };
+    }): Promise<FakePasswordResetTokenRow | null> => {
+      const row = this.passwordResetTokens.find((entry) => entry.tokenHash === args.where.tokenHash);
+      return row ? clone(row) : null;
+    },
+
+    updateMany: async (args: {
+      where: { userId?: string; usedAt?: null };
+      data: { usedAt?: Date };
+    }): Promise<{ count: number }> => {
+      const rows = this.passwordResetTokens.filter(
+        (entry) =>
+          (args.where.userId === undefined || entry.userId === args.where.userId) &&
+          (args.where.usedAt !== null || entry.usedAt === null),
+      );
+      for (const row of rows) {
+        if (args.data.usedAt) row.usedAt = args.data.usedAt;
+      }
+      return { count: rows.length };
     },
   };
 
@@ -562,6 +762,7 @@ export class FakePrismaClient {
       firstName: 'Test',
       lastName: 'Korisnik',
       displayName: null,
+      phone: null,
       status: 'ACTIVE',
       mustChangePassword: false,
       tokenVersion: 1,
@@ -638,9 +839,12 @@ export class FakePrismaClient {
   addUserRole(row: Partial<Omit<FakeUserRoleRow, 'role'>> & { userId: string; roleId: string }): void {
     const role = this.roles.get(row.roleId) ?? this.addRole({ id: row.roleId, code: row.roleId });
     this.userRoles.push({
+      id: randomUUID(),
+      assignedById: null,
       revokedAt: null,
       validFrom: null,
       validUntil: null,
+      note: null,
       ...row,
       role,
     });
@@ -653,16 +857,40 @@ export class FakePrismaClient {
 
   assignRole(userId: string, role: FakeRoleRow, overrides: Partial<FakeUserRoleRow> = {}): FakeUserRoleRow {
     const entry: FakeUserRoleRow = {
+      id: randomUUID(),
       userId,
       roleId: role.id,
+      assignedById: null,
       revokedAt: null,
       validFrom: null,
       validUntil: null,
+      note: null,
       role,
       ...overrides,
     };
     this.userRoles.push(entry);
     return entry;
+  }
+
+  /** Dodaje aktivnu sesiju (fixture) — koristi se u testovima revokacije. */
+  addSession(session: { userId: string; tokenHash: string; expiresAt?: Date; clientType?: string }): FakeSessionRow {
+    const row: FakeSessionRow = {
+      id: randomUUID(),
+      userId: session.userId,
+      tokenHash: session.tokenHash,
+      familyId: randomUUID(),
+      clientType: session.clientType ?? 'WEB',
+      deviceInfo: null,
+      ipAddress: null,
+      userAgent: null,
+      expiresAt: session.expiresAt ?? new Date(Date.now() + 86_400_000),
+      revokedAt: null,
+      replacedById: null,
+      lastUsedAt: null,
+      createdAt: new Date(),
+    };
+    this.sessions.set(row.id, row);
+    return row;
   }
 
   /** Aktivne sesije korisnika (ne-revokovane i ne-istekle). */
@@ -671,6 +899,62 @@ export class FakePrismaClient {
     return [...this.sessions.values()].filter(
       (row) => row.userId === userId && row.revokedAt === null && row.expiresAt.getTime() > now,
     );
+  }
+
+  /**
+   * Filtriranje korisnika za `findMany`/`count`.
+   *
+   * Podržava samo oblike koje `UsersService` koristi: `deletedAt`, `status`,
+   * `roles.some.roleId` i `OR` s `contains` (case-insensitive). Namjerno nije
+   * generički SQL engine — dovoljno da testovi dokazuju filtere i paginaciju.
+   */
+  private matchUsers(where: Record<string, unknown>): FakeUserRow[] {
+    const rows = [...this.users.values()];
+
+    return rows
+      .filter((row) => (where.deletedAt === null ? row.deletedAt === null : true))
+      .filter((row) => (where.status === undefined ? true : row.status === where.status))
+      .filter((row) => {
+        const roleFilter = where.roles as
+          | {
+              some?: {
+                roleId?: string;
+                revokedAt?: null;
+                role?: { code?: string; deletedAt?: null };
+              };
+            }
+          | undefined;
+        const some = roleFilter?.some;
+        if (!some || (!some.roleId && !some.role?.code)) return true;
+
+        return this.userRoles.some((entry) => {
+          if (entry.userId !== row.id || entry.revokedAt !== null) return false;
+          if (some.roleId && entry.roleId !== some.roleId) return false;
+          if (some.role?.code && entry.role.code !== some.role.code) return false;
+          if (some.role?.deletedAt === null && entry.role.deletedAt !== null) return false;
+          return true;
+        });
+      })
+      .filter((row) => {
+        const branches = where.OR as
+          | Array<Record<string, { contains?: string }>>
+          | undefined;
+        if (!branches) return true;
+
+        return branches.some((branch) =>
+          Object.entries(branch).some(([field, condition]) => {
+            const needle = condition?.contains?.toLowerCase();
+            if (!needle) return false;
+            const value = String((row as unknown as Record<string, unknown>)[field] ?? '').toLowerCase();
+            return value.includes(needle);
+          }),
+        );
+      })
+      .sort(
+        (left, right) =>
+          left.lastName.localeCompare(right.lastName) ||
+          left.firstName.localeCompare(right.firstName),
+      );
   }
 
   private matchSessions(where: SessionWhere): FakeSessionRow[] {

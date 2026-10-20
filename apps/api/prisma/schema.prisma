@@ -347,6 +347,8 @@ model User {
   roles                 UserRole[]
   identities            UserIdentity[]
   refreshSessions       RefreshSession[]
+  passwordResetTokens   PasswordResetToken[]     @relation("PasswordResetUser")
+  issuedPasswordResets  PasswordResetToken[]     @relation("PasswordResetCreatedBy")
   authAttempts          AuthAttempt[]
   deviceTokens          DeviceToken[]
   notifications         Notification[]
@@ -517,6 +519,33 @@ model AuthAttempt {
   @@index([email, createdAt])
   @@index([ipAddress, createdAt])
   @@map("AuthAttempt")
+}
+
+/// Jednokratni token za reset lozinke (Faza 1, chunk J).
+///
+/// Bez ovog modela reset lozinke bi morao nositi lozinku u e-mailu ili je
+/// vraćati u odgovoru API-ja — oboje je nedopustivo. Token se **nikad ne čuva
+/// u čistom obliku**: u bazi je `tokenHash` (SHA-256), važi 30 minuta i može se
+/// iskoristiti samo jednom (`usedAt`). Novi reset za istog korisnika invalidira
+/// prethodne tokene (upis `usedAt`), pa stari link ne može ostati aktivan.
+model PasswordResetToken {
+  id          String    @id @db.Uuid
+  userId      String    @db.Uuid
+  tokenHash   String    @unique
+  expiresAt   DateTime  @db.Timestamptz(6)
+  usedAt      DateTime? @db.Timestamptz(6)
+  createdById String?   @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  /// IP s kojeg je token zatražen (forenzika, `AuditLog` nosi isti podatak).
+  ipAddress   String?   @db.Inet
+
+  user      User  @relation("PasswordResetUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("PasswordResetCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  /// Retencija: istekli tokeni se brišu maintenance jobom (docs/03 §6).
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("PasswordResetToken")
 }
 
 // -----------------------------------------------------------------------------

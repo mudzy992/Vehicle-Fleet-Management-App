@@ -31,6 +31,7 @@ import type {
   AuthTokenResponse,
   AuthUser,
   ChangePasswordInput,
+  ConsumePasswordResetInput,
   DeviceInfo,
   LoginInput,
   LogoutInput,
@@ -90,6 +91,7 @@ export interface ActiveSession {
 export type RevokeReason =
   | 'LOGOUT'
   | 'PASSWORD_CHANGE'
+  | 'PASSWORD_RESET'
   | 'REFRESH_ROTATION'
   | 'REFRESH_REUSE'
   | 'SESSION_LIMIT'
@@ -539,6 +541,95 @@ export class AuthService {
     await this.rotateTokenVersion(user.id);
     await this.revokeAllSessions(user.id, 'PASSWORD_CHANGE');
     await this.permissions.invalidateUser(user.id);
+  }
+
+  // ---------------------------------------------------------------------------
+  //  POST /auth/reset-password — potrošnja jednokratnog tokena
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Reset lozinke jednokratnim tokenom (izdat kroz `POST /users/:id/reset-password`).
+   *
+   * Sigurnosna pravila:
+   * - token se poredi **po hashu** (u bazi nikad nema čist token),
+   * - nepoznat, iskorišten i istekao token daju **istu** grešku (bez enumeracije),
+   * - uspjeh: `mustChangePassword=false`, status `ACTIVE` (bootstrap nalog),
+   *   `tokenVersion++`, revokacija **svih** sesija i brisanje RBAC keša → stari
+   *   access/refresh tokeni padaju odmah,
+   * - svi ostali aktivni reset tokeni istog korisnika prestaju važiti.
+   */
+  async resetPasswordWithToken(
+    input: ConsumePasswordResetInput,
+    context: AuthRequestContext = {},
+  ): Promise<{ userId: string; email: string }> {
+    const tokenHash = this.tokens.hashToken(input.token);
+    const record = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+      select: { id: true, userId: true, expiresAt: true, usedAt: true },
+    });
+
+    const now = new Date();
+    const usable =
+      record !== null && record.usedAt === null && record.expiresAt.getTime() > now.getTime();
+
+    if (!record || !usable) {
+      this.report({
+        type: 'LOGIN_FAILED',
+        userId: record?.userId,
+        reason: 'RESET_TOKEN_INVALID',
+        ...this.eventContext(context),
+      });
+      throw VfmErrors.validationError([
+        { path: ['token'], message: 'Token za reset nije važeći ili je istekao. Zatražite novi.' },
+      ]);
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: { id: record.userId, deletedAt: null },
+      select: { id: true, email: true },
+    });
+    if (!user) {
+      throw VfmErrors.validationError([
+        { path: ['token'], message: 'Token za reset nije važeći ili je istekao. Zatražite novi.' },
+      ]);
+    }
+
+    // Politika + bloklista (ista pravila kao pri promjeni lozinke).
+    this.passwords.assertPolicy(input.newPassword, { email: user.email });
+    const passwordHash = await this.passwords.hash(input.newPassword);
+
+    // Jedna transakcija: nova lozinka + gašenje svih reset tokena korisnika.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash,
+          mustChangePassword: false,
+          status: 'ACTIVE',
+          failedLoginCount: 0,
+          lockedUntil: null,
+          tokenVersion: { increment: 1 },
+        },
+        select: { tokenVersion: true },
+      });
+
+      await tx.passwordResetToken.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: now },
+      });
+
+      return next;
+    });
+
+    await this.revokeAllSessions(user.id, 'PASSWORD_RESET');
+    await this.permissions.bumpTokenVersion(user.id, updated.tokenVersion);
+    await this.permissions.invalidateUser(user.id);
+
+    this.logger.warn(
+      `Lozinka resetovana tokenom za korisnika ${user.id} (requestId=${context.requestId ?? '-'}).`,
+    );
+
+    return { userId: user.id, email: user.email };
   }
 
   // ---------------------------------------------------------------------------
