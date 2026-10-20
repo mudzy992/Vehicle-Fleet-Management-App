@@ -9,16 +9,34 @@
  * autoritet — UI samo sakriva akcije radi iskustva).
  */
 import { createBrowserRouter, Navigate } from 'react-router';
+import { AnonymousOnly, RequireAuth, RequirePermission } from './guards.js';
 import { AppShell } from './shell.js';
 import { PlaceholderPage } from '../features/placeholder-page.js';
 import { DesignSystemPage } from '../features/design-system/design-system-page.js';
 import { HealthPage } from '../features/system/health-page.js';
+import { LoginPage } from '../features/auth/login-page.js';
+import { UsersPage } from '../features/users/users-page.js';
+import { MatrixPage } from '../features/roles/matrix-page.js';
+import { AuditLogPage } from '../features/audit/audit-log-page.js';
+import { ProfilePage } from '../features/profile/profile-page.js';
 import { NAV_ITEMS } from './nav.js';
 
 export const router = createBrowserRouter([
   {
+    path: '/prijava',
+    element: (
+      <AnonymousOnly>
+        <LoginPage />
+      </AnonymousOnly>
+    ),
+  },
+  {
     path: '/',
-    element: <AppShell />,
+    element: (
+      <RequireAuth>
+        <AppShell />
+      </RequireAuth>
+    ),
     children: [
       { index: true, element: <Navigate to="/nadzorna-tabla" replace /> },
       {
@@ -112,35 +130,30 @@ export const router = createBrowserRouter([
       {
         path: 'administracija/korisnici',
         element: (
-          <PlaceholderPage
-            title="Korisnici"
-            code="W26"
-            phase="Faza 1"
-            description="Upravljanje nalozima, ulogama i statusima."
-          />
+          <RequirePermission permission="user:view">
+            <UsersPage />
+          </RequirePermission>
         ),
       },
       {
         path: 'administracija/prava',
         element: (
-          <PlaceholderPage
-            title="Matrica prava"
-            code="W27"
-            phase="Faza 1"
-            description="Konfiguracija prava po ulogama (P-01, P-02) — samo Super Admin."
-          />
+          <RequirePermission permission="role:view">
+            <MatrixPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: 'audit-log',
+        element: (
+          <RequirePermission permission="audit:view">
+            <AuditLogPage />
+          </RequirePermission>
         ),
       },
       {
         path: 'profil',
-        element: (
-          <PlaceholderPage
-            title="Profil"
-            code="W28"
-            phase="Faza 1"
-            description="Podaci o nalogu, aktivne sesije i promjena lozinke."
-          />
-        ),
+        element: <ProfilePage />,
       },
       { path: 'dizajn-sistem', element: <DesignSystemPage /> },
       { path: 'zdravlje', element: <HealthPage /> },

@@ -693,6 +693,21 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 | W27 | Audit log | 1 | `audit:view` |
 | W28 | Izvještaji + Download centar + Sistem (health/queue) | 7, 8 | `report:view`, `system:view_health` |
 
+**Status (Faza 1, implementirano):**
+
+| Ekran | Ruta | Fajl | Napomena |
+|---|---|---|---|
+| Prijava (W1) | `/prijava` | `features/auth/login-page.tsx` | javno; poruke grešaka po `code` katalogu |
+| Korisnici (W24) | `/administracija/korisnici` | `features/users/users-page.tsx` | lista s paginacijom/filterima, kreiranje (privremena lozinka jednom), reset token, force-logout, arhiviranje |
+| Matrica prava (W25) | `/administracija/prava` | `features/roles/matrix-page.tsx` | editor opsega (`—`/`ALL`/`OWN`), čuva samo izmijenjene role; `VEHICLE_IDS`/`DRIVER_IDS` dolaze s Faza 3 |
+| Audit log (W27) | `/audit-log` | `features/audit/audit-log-page.tsx` | filteri, paginacija, detalj `before/after`; SECURITY redovi uz `audit:view_security` |
+| Profil + sesije | `/profil` | `features/profile/profile-page.tsx` | promjena lozinke (revokuje sesije), lista uređaja, „odjavi sve" |
+
+Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);
+sidebar filtrira stavke prema `/auth/me` (`visibleNavItems`), ali **server ostaje
+autoritet** (P14) — ručni unos URL-a bez prava prikazuje ekran „Nemate pristup"
+i ne pokreće nijedan upit. Ostali ekrani su placeholderi s oznakom faze.
+
 ### 9.2 Mobilna (11 ekrana)
 
 | # | Ekran | Faza | Permisija |

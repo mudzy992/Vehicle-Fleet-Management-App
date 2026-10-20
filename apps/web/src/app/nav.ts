@@ -40,9 +40,18 @@ export const NAV_ITEMS: readonly NavItem[] = [
     to: '/administracija/prava',
     label: 'Matrica prava',
     group: 'Konfiguracija',
-    permission: 'role:manage_permissions',
+    // Pregled matrice traži `role:view`; dugme „Sačuvaj" traži
+    // `role:manage_permissions` (server i dalje odlučuje — P14).
+    permission: 'role:view',
     phase: 'Faza 1',
     superAdminOnly: true,
+  },
+  {
+    to: '/audit-log',
+    label: 'Audit log',
+    group: 'Sistem',
+    permission: 'audit:view',
+    phase: 'Faza 1',
   },
   { to: '/profil', label: 'Profil', group: 'Sistem', permission: 'auth:login', phase: 'Faza 1' },
   { to: '/zdravlje', label: 'Zdravlje sistema', group: 'Sistem', permission: 'system:view_health', phase: 'Faza 0' },

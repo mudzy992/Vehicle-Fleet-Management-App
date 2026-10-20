@@ -12,4 +12,7 @@ export type { ButtonProps, ButtonSize, ButtonVariant } from './button.js';
 export { Card, CardContent, CardFooter, CardHeader } from './card.js';
 export type { CardProps } from './card.js';
 export { EmptyState } from './empty-state.js';
+export { Field, inputClassName } from './field.js';
+export type { FieldProps } from './field.js';
 export { Stat } from './stat.js';
+export { Table, TBody, TD, TH, THead, TR } from './table.js';

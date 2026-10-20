@@ -4,20 +4,24 @@
  * Raspored: lijevi sidebar (grupisana navigacija) + gornja traka (naslov
  * ekrana, globalna pretraga, obavijesti, profil) + sadržaj.
  *
- * U Fazi 0 sidebar prikazuje sve stavke (nema prijave). Od Faze 1 stavke se
- * filtriraju prema `/auth/me` → `visibleNavItems(permissions, isSuperAdmin)`.
+ * Stavke sidebar-a se filtriraju prema `/auth/me` →
+ * `visibleNavItems(permissions, isSuperAdmin)`; server ostaje autoritet, pa
+ * sakrivena stavka nije sigurnosna mjera (docs/05 §0).
  */
 import { useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { APP_NAME } from '@vfm/shared';
+import { Button } from '../components/ui/index.js';
+import { useSession } from '../features/auth/session.js';
 import { navByGroup, visibleNavItems } from './nav.js';
 
 export function AppShell() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Faza 0: bez prijave → prikazujemo sve stavke.
-  const items = visibleNavItems(undefined, true);
+  const items = visibleNavItems(user?.permissions, user?.isSuperAdmin ?? false);
 
   return (
     <div className="flex min-h-screen bg-[var(--bg)] text-[var(--fg)]">
@@ -77,8 +81,18 @@ export function AppShell() {
         </nav>
 
         <div className="border-t border-[var(--border)] px-4 py-3 text-[11px] text-[var(--fg-muted)]">
-          <p>Faza 0 — temelji</p>
-          <p className="mt-0.5">Lokalno vrijeme: Europe/Sarajevo</p>
+          {user ? (
+            <>
+              <p className="truncate font-medium text-[var(--fg)]">
+                {user.displayName ?? `${user.firstName} ${user.lastName}`}
+              </p>
+              <p className="truncate">{user.email}</p>
+              <p className="mt-0.5 truncate">{user.roles.map((role) => role.name).join(', ')}</p>
+            </>
+          ) : (
+            <p>Niste prijavljeni</p>
+          )}
+          <p className="mt-1">Vremenska zona: Europe/Sarajevo</p>
         </div>
       </aside>
 
@@ -108,6 +122,20 @@ export function AppShell() {
           <span className="hidden rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--fg-muted)] sm:inline">
             bs · BAM · Europe/Sarajevo
           </span>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              void (async () => {
+                await logout();
+                navigate('/prijava', { replace: true });
+              })();
+            }}
+          >
+            Odjava
+          </Button>
         </header>
 
         <main className="flex-1 px-4 py-6 lg:px-6">
@@ -125,6 +153,7 @@ function pageTitle(pathname: string): string {
     .find((candidate) => pathname.startsWith(candidate.to));
   if (item) return item.label;
   if (pathname.startsWith('/dizajn-sistem')) return 'Dizajn sistem';
+  if (pathname.startsWith('/audit-log')) return 'Audit log';
   if (pathname.startsWith('/zdravlje')) return 'Zdravlje sistema';
   if (pathname.startsWith('/vozila/')) return 'Detalji vozila';
   return APP_NAME;
