@@ -310,9 +310,9 @@ Vidi `04-FORM_ENGINE.md` §12. Permisije `form:*`.
 ### 2.16 Audit, postavke, sistem
 
 ```
-GET  /audit-logs                     audit:view      (filteri: actorId, action, entityType, entityId, severity, from, to)
-GET  /audit-logs/:id                 audit:view      (before/after diff)
-POST /audit-logs/export              audit:export
+GET  /audit-logs                     audit:view      (filteri: actorId, action, entityType, entityId, severity, from, to) ✅
+GET  /audit-logs/:id                 audit:view      (before/after diff) ✅
+POST /audit-logs/export              audit:export    ⏳ Faza 7 (xlsx/pdf pipeline)
 GET  /settings                       settings:view   (javne + one s pravom)
 PUT  /settings/:key                  settings:update (+ audit SETTINGS_CHANGE)
 GET  /lists · /lists/:code/items     settings:view   (šifarnici)
@@ -322,6 +322,13 @@ GET  /system/queue                   system:view_queue   (queue depth, failed, D
 GET  /system/metrics                 system:view_metrics (Prometheus tekst)
 POST /system/maintenance/:job        system:run_maintenance
 ```
+
+**Audit log — semantika (Faza 1):** `AuditLog.id` je `BIGINT` pa se u JSON-u
+vraća kao **string** (bez gubitka preciznosti); `before`/`after`/`metadata` samo
+na detalju. `SECURITY` redovi (prijave, odbijanja, promjene prava) traže
+`audit:view_security` — bez njega se ne vraćaju (`securityHidden: true`), a
+eksplicitan `?severity=SECURITY` daje praznu stranicu umjesto „sve ostalo".
+Tabela je immutabilna (DB trigger), pa API nema `PATCH`/`DELETE` nad zapisima.
 
 ---
 

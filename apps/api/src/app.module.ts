@@ -23,6 +23,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { UsersModule } from './modules/users/users.module.js';
+import { AuditLogModule } from './modules/audit-logs/audit-log.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { ClientTypeGuard } from './common/guards/client-type.guard.js';
 import { PermissionsGuard } from './common/guards/permissions.guard.js';
@@ -43,6 +44,8 @@ import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
     RolesModule,
     // Korisnici (docs/07 §2.2) — koristi PasswordService/TokenService iz AuthModule-a.
     UsersModule,
+    // Audit log — read-only API nad AuditLog tabelom (docs/07 §7).
+    AuditLogModule,
   ],
   controllers: [],
   providers: [

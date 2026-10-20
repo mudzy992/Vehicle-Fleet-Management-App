@@ -17,7 +17,7 @@
  */
 import { z } from 'zod';
 import { MAX_PAGE_SIZE } from './constants.js';
-import { CLIENT_TYPES, PERMISSION_SCOPES, USER_STATUSES } from './enums.js';
+import { AUDIT_ACTIONS, AUDIT_SEVERITIES, CLIENT_TYPES, PERMISSION_SCOPES, USER_STATUSES } from './enums.js';
 import type { ClientType } from './enums.js';
 import { isKnownPermission } from './permissions.js';
 
@@ -1045,3 +1045,78 @@ export const passwordResetIssuedSchema = z
   .strict();
 
 export type PasswordResetIssued = z.output<typeof passwordResetIssuedSchema>;
+
+// -----------------------------------------------------------------------------
+//  Audit log (docs/07 §7, docs/05 §9)
+// -----------------------------------------------------------------------------
+
+/** Filteri za `GET /audit-logs` (`audit:view`). */
+export const auditLogQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).max(10_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(200).default(50),
+    actorId: uuidSchema.optional(),
+    action: z.enum(AUDIT_ACTIONS).optional(),
+    entityType: z.string().trim().max(60).optional(),
+    entityId: uuidSchema.optional(),
+    severity: z.enum(AUDIT_SEVERITIES).optional(),
+    /** ISO datum/vrijeme — uključivo (`createdAt >= from`). */
+    from: z.iso.datetime().optional(),
+    to: z.iso.datetime().optional(),
+  })
+  .strict()
+  .refine(
+    (value) => !value.from || !value.to || new Date(value.from) <= new Date(value.to),
+    { message: '`from` ne smije biti poslije `to`.' },
+  );
+
+export type AuditLogQuery = z.output<typeof auditLogQuerySchema>;
+
+/** Jedan red u listi (bez `before`/`after` — preteško za tabelu). */
+export const auditLogSummarySchema = z
+  .object({
+    /** `AuditLog.id` je BIGINT u bazi; u JSON-u je **string** (bez gubitka preciznosti). */
+    id: z.string(),
+    action: z.enum(AUDIT_ACTIONS),
+    severity: z.enum(AUDIT_SEVERITIES),
+    actorId: uuidSchema.nullable(),
+    actorEmail: z.string().nullable(),
+    actorRoles: z.array(z.string()),
+    entityType: z.string().nullable(),
+    entityId: uuidSchema.nullable(),
+    changedFields: z.array(z.string()),
+    reason: z.string().nullable(),
+    requestId: z.string().nullable(),
+    ipAddress: z.string().nullable(),
+    userAgent: z.string().nullable(),
+    clientType: z.enum(CLIENT_TYPES).nullable(),
+    createdAt: z.iso.datetime(),
+  })
+  .strict();
+
+export type AuditLogSummary = z.output<typeof auditLogSummarySchema>;
+
+export const auditLogListResponseSchema = z
+  .object({
+    items: z.array(auditLogSummarySchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+    /** `true` kad su SECURITY redovi sakriveni (nema `audit:view_security`). */
+    securityHidden: z.boolean(),
+  })
+  .strict();
+
+export type AuditLogListResponse = z.output<typeof auditLogListResponseSchema>;
+
+/** Detalj: `before`/`after` diff (za modal „šta se promijenilo"). */
+export const auditLogDetailSchema = auditLogSummarySchema
+  .extend({
+    before: z.record(z.string(), z.unknown()).nullable(),
+    after: z.record(z.string(), z.unknown()).nullable(),
+    metadata: z.record(z.string(), z.unknown()).nullable(),
+  })
+  .strict();
+
+export type AuditLogDetail = z.output<typeof auditLogDetailSchema>;

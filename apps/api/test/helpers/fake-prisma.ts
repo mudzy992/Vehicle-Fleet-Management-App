@@ -572,19 +572,13 @@ export class FakePrismaClient {
     },
 
     findMany: async (args?: {
-      where?: { action?: string; severity?: string; actorId?: string };
+      where?: Record<string, unknown>;
       orderBy?: { createdAt?: 'asc' | 'desc' };
+      skip?: number;
       take?: number;
     }): Promise<FakeAuditLogRow[]> => {
       this.calls.auditLogFindMany += 1;
-      const where = args?.where ?? {};
-
-      const rows = this.auditLogs.filter((row) => {
-        if (where.action !== undefined && row.action !== where.action) return false;
-        if (where.severity !== undefined && row.severity !== where.severity) return false;
-        if (where.actorId !== undefined && row.actorId !== where.actorId) return false;
-        return true;
-      });
+      const rows = this.matchAuditLogs(args?.where ?? {});
 
       const direction = args?.orderBy?.createdAt ?? 'desc';
       rows.sort((left, right) =>
@@ -592,7 +586,22 @@ export class FakePrismaClient {
           ? right.createdAt.getTime() - left.createdAt.getTime()
           : left.createdAt.getTime() - right.createdAt.getTime(),
       );
-      return (args?.take ? rows.slice(0, args.take) : rows).map((row) => clone(row));
+
+      const skip = args?.skip ?? 0;
+      const take = args?.take ?? rows.length;
+      return rows.slice(skip, skip + take).map((row) => clone(row));
+    },
+
+    count: async (args?: { where?: Record<string, unknown> }): Promise<number> => {
+      return this.matchAuditLogs(args?.where ?? {}).length;
+    },
+
+    findUnique: async (args: {
+      where: { id: bigint | number };
+    }): Promise<FakeAuditLogRow | null> => {
+      const id = Number(args.where.id);
+      const row = this.auditLogs.find((entry) => entry.id === id);
+      return row ? clone(row) : null;
     },
   };
 
@@ -1024,6 +1033,34 @@ export class FakePrismaClient {
     return entry;
   }
 
+  /** Dodaje audit zapis (fixture) — `AuditLog.id` je autoincrement u fake-u. */
+  addAuditLog(row: Partial<Omit<FakeAuditLogRow, 'id'>>): FakeAuditLogRow {
+    this.auditSequence += 1;
+    const full: FakeAuditLogRow = {
+      id: this.auditSequence,
+      actorId: null,
+      actorEmail: null,
+      actorRoles: [],
+      action: 'UPDATE',
+      severity: 'INFO',
+      entityType: null,
+      entityId: null,
+      before: null,
+      after: null,
+      changedFields: [],
+      reason: null,
+      requestId: null,
+      ipAddress: null,
+      userAgent: null,
+      clientType: null,
+      metadata: null,
+      createdAt: new Date(),
+      ...row,
+    };
+    this.auditLogs.push(full);
+    return full;
+  }
+
   /** Dodaje aktivnu sesiju (fixture) — koristi se u testovima revokacije. */
   addSession(session: { userId: string; tokenHash: string; expiresAt?: Date; clientType?: string }): FakeSessionRow {
     const row: FakeSessionRow = {
@@ -1051,6 +1088,32 @@ export class FakePrismaClient {
     return [...this.sessions.values()].filter(
       (row) => row.userId === userId && row.revokedAt === null && row.expiresAt.getTime() > now,
     );
+  }
+
+  /**
+   * Filtriranje audit zapisa (podskup `AuditLogWhereInput` koji servis koristi):
+   * tačna polja + `severity: {not}` + `createdAt: {gte,lte}`.
+   */
+  private matchAuditLogs(where: Record<string, unknown>): FakeAuditLogRow[] {
+    return this.auditLogs.filter((row) => {
+      for (const key of ['action', 'actorId', 'entityType', 'entityId'] as const) {
+        const expected = where[key];
+        if (typeof expected === 'string' && (row[key] as string) !== expected) return false;
+      }
+
+      const severity = where.severity;
+      if (typeof severity === 'string' && row.severity !== severity) return false;
+      if (severity && typeof severity === 'object') {
+        const not = (severity as { not?: string }).not;
+        if (not && row.severity === not) return false;
+      }
+
+      const createdAt = where.createdAt as { gte?: Date; lte?: Date } | undefined;
+      if (createdAt?.gte && row.createdAt.getTime() < createdAt.gte.getTime()) return false;
+      if (createdAt?.lte && row.createdAt.getTime() > createdAt.lte.getTime()) return false;
+
+      return true;
+    });
   }
 
   /**
