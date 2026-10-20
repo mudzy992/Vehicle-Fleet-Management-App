@@ -96,7 +96,7 @@ export DATABASE_URL="postgresql://vfm:vfm_dev_only@localhost:5433/vfm?schema=pub
 pnpm --filter @vfm/api exec prisma migrate dev --name init
 
 # 5) Ručni SQL koji Prisma ne može izraziti (sekcija ispod)
-grep -n "SQL:" apps/api/prisma/schema.prisma      # 19 markera
+grep -n "// SQL:" apps/api/prisma/schema.prisma   # 19 markera
 #    + apps/api/prisma/sql/0000_bootstrap_extensions.sql
 #    → zalijepiti u apps/api/prisma/migrations/<timestamp>_init/migration.sql
 #      (idempotentno: IF NOT EXISTS / CREATE OR REPLACE)

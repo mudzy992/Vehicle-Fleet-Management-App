@@ -22,7 +22,8 @@
 //  ⚠️ Sve što Prisma ne može izraziti (CHECK, EXCLUDE USING gist, partial unique
 //     index, DB trigger, identity kolona, view) dodaje se RUČNO u SQL migraciju
 //     nakon `prisma migrate diff` — idempotentno (`IF NOT EXISTS`,
-//     `CREATE OR REPLACE`). Takva mjesta su ovdje označena komentarom `-- SQL:`.
+//     `CREATE OR REPLACE`). Takva mjesta su ovdje označena komentarom `// SQL:`
+//     (19 takvih markera — `grep -n "// SQL:" prisma/schema.prisma`).
 // =============================================================================
 
 datasource db {
@@ -321,54 +322,48 @@ enum SettingType {
 // -----------------------------------------------------------------------------
 
 model User {
-  id                   String    @id @db.Uuid
-  email                String    @db.Citext
-  passwordHash         String
-  firstName            String
-  lastName             String
-  displayName          String?
-  phone                String?
-  status               UserStatus @default(ACTIVE)
-  mustChangePassword   Boolean   @default(false)
-  tokenVersion         Int       @default(0)
-  lastLoginAt          DateTime? @db.Timestamptz(6)
-  failedLoginCount     Int       @default(0)
-  lockedUntil          DateTime? @db.Timestamptz(6)
-  timezone             String    @default("Europe/Sarajevo")
-  locale               String    @default("bs")
-  createdById          String?   @db.Uuid
-  createdAt            DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt            DateTime  @updatedAt @db.Timestamptz(6)
-  deletedAt            DateTime? @db.Timestamptz(6)
+  id                 String     @id @db.Uuid
+  email              String     @db.Citext
+  passwordHash       String
+  firstName          String
+  lastName           String
+  displayName        String?
+  phone              String?
+  status             UserStatus @default(ACTIVE)
+  mustChangePassword Boolean    @default(false)
+  tokenVersion       Int        @default(0)
+  lastLoginAt        DateTime?  @db.Timestamptz(6)
+  failedLoginCount   Int        @default(0)
+  lockedUntil        DateTime?  @db.Timestamptz(6)
+  timezone           String     @default("Europe/Sarajevo")
+  locale             String     @default("bs")
+  createdById        String?    @db.Uuid
+  createdAt          DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime   @updatedAt @db.Timestamptz(6)
+  deletedAt          DateTime?  @db.Timestamptz(6)
 
-  createdBy            User?     @relation("UserCreatedBy", fields: [createdById], references: [id])
-  createdUsers         User[]    @relation("UserCreatedBy")
-  roles                UserRole[]
-  identities           UserIdentity[]
-  refreshSessions      RefreshSession[]
-  authAttempts         AuthAttempt[]
-  deviceTokens         DeviceToken[]
-  notifications        Notification[]
-  notificationPrefs    NotificationPreference[]
-  auditLogs            AuditLog[]
-  taskAssignments      TaskAssignment[]
-  taskEvents           TaskEvent[]
-  taskComments         TaskComment[]
-  createdTasks         Task[]          @relation("TaskCreatedBy")
-  assignedTasks        Task[]          @relation("TaskAssignee")
-  odometerReadings     OdometerReading[]
-  grantedRolePerms     RolePermission[] @relation("RolePermissionGrantedBy")
-  grantedUserRole      UserRole[]      @relation("UserRoleAssignedBy")
-  idempotencyKeys      IdempotencyKey[]
-  exportJobs           ExportJob[]
-  attachments          Attachment[]
-  scheduledReminderAcks ScheduledReminder[] @relation("ReminderAcknowledgedBy")
-
-  @@unique([email])
-  @@index([status])
-  @@index([lastName, firstName])
-  @@index([deletedAt])
-  @@map("User")
+  createdBy             User?                    @relation("UserCreatedBy", fields: [createdById], references: [id])
+  createdUsers          User[]                   @relation("UserCreatedBy")
+  roles                 UserRole[]
+  identities            UserIdentity[]
+  refreshSessions       RefreshSession[]
+  authAttempts          AuthAttempt[]
+  deviceTokens          DeviceToken[]
+  notifications         Notification[]
+  notificationPrefs     NotificationPreference[]
+  auditLogs             AuditLog[]
+  taskAssignments       TaskAssignment[]
+  taskEvents            TaskEvent[]
+  taskComments          TaskComment[]
+  createdTasks          Task[]                   @relation("TaskCreatedBy")
+  assignedTasks         Task[]                   @relation("TaskAssignee")
+  odometerReadings      OdometerReading[]
+  grantedRolePerms      RolePermission[]         @relation("RolePermissionGrantedBy")
+  grantedUserRole       UserRole[]               @relation("UserRoleAssignedBy")
+  idempotencyKeys       IdempotencyKey[]
+  exportJobs            ExportJob[]
+  attachments           Attachment[]
+  scheduledReminderAcks ScheduledReminder[]      @relation("ReminderAcknowledgedBy")
   // SQL: partial unique index umjesto @@unique (Prisma ne podržava partial):
   //   DROP INDEX IF EXISTS "User_email_key";
   //   CREATE UNIQUE INDEX IF NOT EXISTS ux_user_email_active
@@ -376,6 +371,12 @@ model User {
   // SQL: trigger `vfm_guard_last_super_admin()` (docs/03 §3.2) — sprječava
   //   deaktivaciju/brisanje posljednjeg aktivnog SUPER_ADMIN korisnika.
   // SQL: 2FA kolone NE postoje (R-05 — 2FA se ne implementira).
+
+  @@unique([email])
+  @@index([status])
+  @@index([lastName, firstName])
+  @@index([deletedAt])
+  @@map("User")
 }
 
 model Role {
@@ -391,13 +392,13 @@ model Role {
   updatedAt          DateTime     @updatedAt @db.Timestamptz(6)
   deletedAt          DateTime?    @db.Timestamptz(6)
 
-  users              UserRole[]
-  permissions        RolePermission[]
-
-  @@map("Role")
+  users       UserRole[]
+  permissions RolePermission[]
   // SQL: SUPER_ADMIN.allowedClientTypes = {WEB} (seed + provjera u aplikaciji).
   // SQL: bump `permissionsVersion` pri svakoj izmjeni prava → invalidira keš
   //      `vfm:permver:*` (docs/05 §1).
+
+  @@map("Role")
 }
 
 model Permission {
@@ -409,12 +410,12 @@ model Permission {
   isSensitive Boolean  @default(false)
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
 
-  roles       RolePermission[]
+  roles RolePermission[]
+  // Seed: packages/shared/src/permissions.ts → PERMISSION_CATALOG (jedan izvor).
 
   @@unique([module, action])
   @@index([module])
   @@map("Permission")
-  // Seed: packages/shared/src/permissions.ts → PERMISSION_CATALOG (jedan izvor).
 }
 
 model RolePermission {
@@ -428,9 +429,9 @@ model RolePermission {
   grantedById     String?         @db.Uuid
   grantedAt       DateTime        @default(now()) @db.Timestamptz(6)
 
-  role            Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission      Permission      @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-  grantedBy       User?           @relation("RolePermissionGrantedBy", fields: [grantedById], references: [id])
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  grantedBy  User?      @relation("RolePermissionGrantedBy", fields: [grantedById], references: [id])
 
   @@unique([roleId, permissionId])
   @@index([permissionId])
@@ -438,26 +439,26 @@ model RolePermission {
 }
 
 model UserRole {
-  id           String     @id @db.Uuid
-  userId       String     @db.Uuid
-  roleId       String     @db.Uuid
-  assignedById String?    @db.Uuid
-  assignedAt   DateTime   @default(now()) @db.Timestamptz(6)
+  id           String    @id @db.Uuid
+  userId       String    @db.Uuid
+  roleId       String    @db.Uuid
+  assignedById String?   @db.Uuid
+  assignedAt   DateTime  @default(now()) @db.Timestamptz(6)
   note         String?
-  validFrom    DateTime?  @db.Timestamptz(6)
-  validUntil   DateTime?  @db.Timestamptz(6)
-  revokedAt    DateTime?  @db.Timestamptz(6)
+  validFrom    DateTime? @db.Timestamptz(6)
+  validUntil   DateTime? @db.Timestamptz(6)
+  revokedAt    DateTime? @db.Timestamptz(6)
 
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  assignedBy   User?      @relation("UserRoleAssignedBy", fields: [assignedById], references: [id])
+  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedBy User? @relation("UserRoleAssignedBy", fields: [assignedById], references: [id])
+  // SQL: trigger koji odbija revokaciju SUPER_ADMIN role posljednjem aktivnom
+  //      Super Adminu (docs/03 §3.2).
 
   @@unique([userId, roleId])
   @@index([userId])
   @@index([roleId])
   @@map("UserRole")
-  // SQL: trigger koji odbija revokaciju SUPER_ADMIN role posljednjem aktivnom
-  //      Super Adminu (docs/03 §3.2).
 }
 
 model UserIdentity {
@@ -467,8 +468,8 @@ model UserIdentity {
   isPrimary Boolean  @default(true)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  driver    Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   @@unique([userId, driverId])
   @@index([driverId])
@@ -476,27 +477,27 @@ model UserIdentity {
 }
 
 model RefreshSession {
-  id           String      @id @db.Uuid
-  userId       String      @db.Uuid
-  tokenHash    String      @unique
-  familyId     String      @db.Uuid
+  id           String     @id @db.Uuid
+  userId       String     @db.Uuid
+  tokenHash    String     @unique
+  familyId     String     @db.Uuid
   clientType   ClientType
   deviceInfo   Json?
-  ipAddress    String?     @db.Inet
+  ipAddress    String?    @db.Inet
   userAgent    String?
-  expiresAt    DateTime    @db.Timestamptz(6)
-  revokedAt    DateTime?   @db.Timestamptz(6)
-  replacedById String?     @db.Uuid
-  lastUsedAt   DateTime?   @db.Timestamptz(6)
-  createdAt    DateTime    @default(now()) @db.Timestamptz(6)
+  expiresAt    DateTime   @db.Timestamptz(6)
+  revokedAt    DateTime?  @db.Timestamptz(6)
+  replacedById String?    @db.Uuid
+  lastUsedAt   DateTime?  @db.Timestamptz(6)
+  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
 
-  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Rotacija + reuse detection: `familyId` povezuje lanac tokena; ponovna
+  // upotreba iskorištenog tokena → revokacija cijele porodice (docs/05 §5.2).
 
   @@index([userId, expiresAt])
   @@index([familyId])
   @@map("RefreshSession")
-  // Rotacija + reuse detection: `familyId` povezuje lanac tokena; ponovna
-  // upotreba iskorištenog tokena → revokacija cijele porodice (docs/05 §5.2).
 }
 
 model AuthAttempt {
@@ -510,12 +511,12 @@ model AuthAttempt {
   failureReason String?
   createdAt     DateTime   @default(now()) @db.Timestamptz(6)
 
-  user          User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Retencija: 180 dana (maintenance job, docs/03 §6).
 
   @@index([email, createdAt])
   @@index([ipAddress, createdAt])
   @@map("AuthAttempt")
-  // Retencija: 180 dana (maintenance job, docs/03 §6).
 }
 
 // -----------------------------------------------------------------------------
@@ -560,17 +561,21 @@ model Vehicle {
   deletedAt             DateTime?     @db.Timestamptz(6)
   archivedAt            DateTime?     @db.Timestamptz(6)
 
-  formSchema            FormSchema        @relation(fields: [formSchemaId], references: [id])
-  formSchemaVersion     FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
+  formSchema        FormSchema           @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion FormSchemaVersion    @relation(fields: [formSchemaVersionId], references: [id])
   // 1:1 → `photoAttachmentId` mora biti UNIQUE (isti attachment ne može biti
   // naslovna fotografija dva vozila; NULL je dozvoljen više puta).
-  photoAttachment       Attachment?       @relation("VehiclePhoto", fields: [photoAttachmentId], references: [id])
-  odometerReadings      OdometerReading[]
-  registrations         RegistrationRecord[]
-  insurances            InsuranceRecord[]
-  services              ServiceRecord[]
-  tasks                 Task[]
-  tireInstallations     TireInstallation[]
+  photoAttachment   Attachment?          @relation("VehiclePhoto", fields: [photoAttachmentId], references: [id])
+  odometerReadings  OdometerReading[]
+  registrations     RegistrationRecord[]
+  insurances        InsuranceRecord[]
+  services          ServiceRecord[]
+  tasks             Task[]
+  tireInstallations TireInstallation[]
+  // SQL: partial unique na internalNo (WHERE "deletedAt" IS NULL);
+  //      unique na vin (WHERE vin IS NOT NULL AND "deletedAt" IS NULL);
+  //      CHECK (odometerKm >= 0), CHECK (year BETWEEN 1950 AND 2100),
+  //      CHECK (vin IS NULL OR length(vin) = 17).
 
   @@unique([internalNo])
   @@index([status])
@@ -581,10 +586,6 @@ model Vehicle {
   @@index([plateNumber])
   @@index([deletedAt])
   @@map("Vehicle")
-  // SQL: partial unique na internalNo (WHERE "deletedAt" IS NULL);
-  //      unique na vin (WHERE vin IS NOT NULL AND "deletedAt" IS NULL);
-  //      CHECK (odometerKm >= 0), CHECK (year BETWEEN 1950 AND 2100),
-  //      CHECK (vin IS NULL OR length(vin) = 17).
 }
 
 model OdometerReading {
@@ -601,14 +602,14 @@ model OdometerReading {
   previousValueKm  Int?
   createdAt        DateTime       @default(now()) @db.Timestamptz(6)
 
-  vehicle          Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  recordedBy       User?          @relation(fields: [recordedById], references: [id])
+  vehicle    Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  recordedBy User?   @relation(fields: [recordedById], references: [id])
+  // SQL: CHECK (valueKm >= 0). Pravilo regresije: nova vrijednost < max →
+  //      422 ODOMETER_REGRESSION, osim isCorrection=true + correctionReason.
 
   @@unique([vehicleId, readingAt, valueKm, source])
   @@index([vehicleId, readingAt(sort: Desc)])
   @@map("OdometerReading")
-  // SQL: CHECK (valueKm >= 0). Pravilo regresije: nova vrijednost < max →
-  //      422 ODOMETER_REGRESSION, osim isCorrection=true + correctionReason.
 }
 
 model RegistrationRecord {
@@ -632,17 +633,17 @@ model RegistrationRecord {
   updatedAt           DateTime     @updatedAt @db.Timestamptz(6)
   deletedAt           DateTime?    @db.Timestamptz(6)
 
-  vehicle             Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  formSchema          FormSchema     @relation(fields: [formSchemaId], references: [id])
-  formSchemaVersion   FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
-
-  @@index([vehicleId, validUntil(sort: Desc)])
-  @@index([validUntil])
-  @@map("RegistrationRecord")
+  vehicle           Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  formSchema        FormSchema        @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
   // SQL: CHECK (validUntil > validFrom);
   //      EXCLUDE USING gist ("vehicleId" WITH =, daterange(validFrom,validUntil,'[]') WITH &&)
   //        WHERE ("deletedAt" IS NULL)   → B-10 (bez preklapanja perioda);
   //      zahtijeva ekstenziju btree_gist.
+
+  @@index([vehicleId, validUntil(sort: Desc)])
+  @@index([validUntil])
+  @@map("RegistrationRecord")
 }
 
 model InsuranceRecord {
@@ -668,14 +669,14 @@ model InsuranceRecord {
   updatedAt           DateTime     @updatedAt @db.Timestamptz(6)
   deletedAt           DateTime?    @db.Timestamptz(6)
 
-  vehicle             Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  formSchema          FormSchema     @relation(fields: [formSchemaId], references: [id])
-  formSchemaVersion   FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
+  vehicle           Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  formSchema        FormSchema        @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
+  // SQL: CHECK + EXCLUDE kao kod RegistrationRecord.
 
   @@index([vehicleId, validUntil(sort: Desc)])
   @@index([validUntil])
   @@map("InsuranceRecord")
-  // SQL: CHECK + EXCLUDE kao kod RegistrationRecord.
 }
 
 model ServiceRecord {
@@ -707,77 +708,77 @@ model ServiceRecord {
   updatedAt           DateTime     @updatedAt @db.Timestamptz(6)
   deletedAt           DateTime?    @db.Timestamptz(6)
 
-  vehicle             Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  formSchema          FormSchema     @relation(fields: [formSchemaId], references: [id])
-  formSchemaVersion   FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
-  workshop            ListItem?      @relation(fields: [workshopId], references: [id])
-  items               ServiceItem[]
+  vehicle           Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  formSchema        FormSchema        @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
+  workshop          ListItem?         @relation(fields: [workshopId], references: [id])
+  items             ServiceItem[]
+  // SQL: CHECK (totalCost >= 0); CHECK (odometerKm IS NULL OR odometerKm >= 0).
 
   @@index([vehicleId, serviceDate(sort: Desc)])
   @@index([nextServiceDueDate])
   @@index([serviceType])
   @@map("ServiceRecord")
-  // SQL: CHECK (totalCost >= 0); CHECK (odometerKm IS NULL OR odometerKm >= 0).
 }
 
 model ServiceItem {
-  id             String   @id @db.Uuid
+  id              String  @id @db.Uuid
   serviceRecordId String  @db.Uuid
-  kind           String   @default("OTHER")
-  name           String
-  quantity       Decimal  @default(1.00) @db.Decimal(10, 2)
-  unitPrice      Int?
-  totalPrice     Int
-  partNumber     String?
-  notes          String?
-  position       Int      @default(0)
+  kind            String  @default("OTHER")
+  name            String
+  quantity        Decimal @default(1.00) @db.Decimal(10, 2)
+  unitPrice       Int?
+  totalPrice      Int
+  partNumber      String?
+  notes           String?
+  position        Int     @default(0)
 
-  serviceRecord  ServiceRecord @relation(fields: [serviceRecordId], references: [id], onDelete: Cascade)
+  serviceRecord ServiceRecord @relation(fields: [serviceRecordId], references: [id], onDelete: Cascade)
+  // SQL: CHECK (kind IN ('PART','LABOR','FLUID','OTHER')).
 
   @@index([serviceRecordId])
   @@map("ServiceItem")
-  // SQL: CHECK (kind IN ('PART','LABOR','FLUID','OTHER')).
 }
 
 model Driver {
-  id                    String    @id @db.Uuid
-  firstName             String
-  lastName              String
-  phone                 String?
-  email                 String?   @db.Citext
-  dateOfBirth           DateTime? @db.Date
-  address               String?
-  employeeNumber        String?
-  employmentStatus      String?
-  licenseNumber         String?
-  licenseIssuedAt       DateTime? @db.Date
-  licenseExpiresAt      DateTime? @db.Date
+  id                      String    @id @db.Uuid
+  firstName               String
+  lastName                String
+  phone                   String?
+  email                   String?   @db.Citext
+  dateOfBirth             DateTime? @db.Date
+  address                 String?
+  employeeNumber          String?
+  employmentStatus        String?
+  licenseNumber           String?
+  licenseIssuedAt         DateTime? @db.Date
+  licenseExpiresAt        DateTime? @db.Date
   licenseIssuingAuthority String?
-  restrictions          String?
-  notes                 String?
-  status                String    @default("ACTIVE")
-  photoAttachmentId     String?   @unique @db.Uuid
-  formSchemaId          String?   @db.Uuid
-  formSchemaVersionId   String?   @db.Uuid
-  formData              Json      @default("{}")
-  version               Int       @default(0)
-  createdById           String?   @db.Uuid
-  createdAt             DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt             DateTime  @updatedAt @db.Timestamptz(6)
-  deletedAt             DateTime? @db.Timestamptz(6)
+  restrictions            String?
+  notes                   String?
+  status                  String    @default("ACTIVE")
+  photoAttachmentId       String?   @unique @db.Uuid
+  formSchemaId            String?   @db.Uuid
+  formSchemaVersionId     String?   @db.Uuid
+  formData                Json      @default("{}")
+  version                 Int       @default(0)
+  createdById             String?   @db.Uuid
+  createdAt               DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt               DateTime? @db.Timestamptz(6)
 
-  photoAttachment       Attachment? @relation("DriverPhoto", fields: [photoAttachmentId], references: [id])
-  formSchema            FormSchema? @relation(fields: [formSchemaId], references: [id])
-  formSchemaVersion     FormSchemaVersion? @relation(fields: [formSchemaVersionId], references: [id])
-  categories            DriverLicenseCategory[]
-  identities            UserIdentity[]
+  photoAttachment   Attachment?             @relation("DriverPhoto", fields: [photoAttachmentId], references: [id])
+  formSchema        FormSchema?             @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion FormSchemaVersion?      @relation(fields: [formSchemaVersionId], references: [id])
+  categories        DriverLicenseCategory[]
+  identities        UserIdentity[]
+  // PII (B-20): licenseNumber, dateOfBirth, address, phone, email se vraćaju
+  //   samo uz `driver:view_pii`; Super Admin ih vidi uvijek (R-07).
 
   @@index([lastName, firstName])
   @@index([licenseExpiresAt])
   @@index([deletedAt])
   @@map("Driver")
-  // PII (B-20): licenseNumber, dateOfBirth, address, phone, email se vraćaju
-  //   samo uz `driver:view_pii`; Super Admin ih vidi uvijek (R-07).
 }
 
 model DriverLicenseCategory {
@@ -789,7 +790,7 @@ model DriverLicenseCategory {
   restrictions String?
   notes        String?
 
-  driver       Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   @@unique([driverId, category])
   @@index([expiresAt])
@@ -801,105 +802,105 @@ model DriverLicenseCategory {
 // -----------------------------------------------------------------------------
 
 model TireSet {
-  id               String     @id @db.Uuid
-  code             String
-  brand            String?
-  model            String?
-  size             String?
-  width            Int?
-  aspectRatio      Int?
-  diameterInches   Decimal?   @db.Decimal(4, 1)
-  loadIndex        Int?
-  speedIndex       String?
-  season           TireSeason
-  tireCount        Int        @default(4)
-  purchaseDate     DateTime?  @db.Date
-  purchasePrice    Int?
-  currency         String     @default("BAM") @db.Char(3)
-  status           TireStatus @default(IN_STOCK)
-  currentLocation  String?
-  notes            String?
-  formSchemaId     String?    @db.Uuid
-  formSchemaVersionId String? @db.Uuid
-  formData         Json       @default("{}")
-  version          Int        @default(0)
-  createdById      String?    @db.Uuid
-  createdAt        DateTime   @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime   @updatedAt @db.Timestamptz(6)
-  deletedAt        DateTime?  @db.Timestamptz(6)
+  id                  String     @id @db.Uuid
+  code                String
+  brand               String?
+  model               String?
+  size                String?
+  width               Int?
+  aspectRatio         Int?
+  diameterInches      Decimal?   @db.Decimal(4, 1)
+  loadIndex           Int?
+  speedIndex          String?
+  season              TireSeason
+  tireCount           Int        @default(4)
+  purchaseDate        DateTime?  @db.Date
+  purchasePrice       Int?
+  currency            String     @default("BAM") @db.Char(3)
+  status              TireStatus @default(IN_STOCK)
+  currentLocation     String?
+  notes               String?
+  formSchemaId        String?    @db.Uuid
+  formSchemaVersionId String?    @db.Uuid
+  formData            Json       @default("{}")
+  version             Int        @default(0)
+  createdById         String?    @db.Uuid
+  createdAt           DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime   @updatedAt @db.Timestamptz(6)
+  deletedAt           DateTime?  @db.Timestamptz(6)
 
-  formSchema       FormSchema? @relation(fields: [formSchemaId], references: [id])
+  formSchema        FormSchema?        @relation(fields: [formSchemaId], references: [id])
   formSchemaVersion FormSchemaVersion? @relation(fields: [formSchemaVersionId], references: [id])
-  tires            Tire[]
-  installations    TireInstallation[]
+  tires             Tire[]
+  installations     TireInstallation[]
+  // SQL: partial unique na code (WHERE "deletedAt" IS NULL); CHECK (tireCount BETWEEN 1 AND 8).
 
   @@unique([code])
   @@index([season, status])
   @@map("TireSet")
-  // SQL: partial unique na code (WHERE "deletedAt" IS NULL); CHECK (tireCount BETWEEN 1 AND 8).
 }
 
 model Tire {
-  id             String       @id @db.Uuid
-  setId          String?      @db.Uuid
+  id             String        @id @db.Uuid
+  setId          String?       @db.Uuid
   serialNumber   String?
   dot            String?
   productionWeek Int?
   productionYear Int?
   position       TirePosition?
-  treadDepthMm   Decimal?     @db.Decimal(4, 1)
-  status         TireStatus   @default(IN_STOCK)
-  purchaseDate   DateTime?    @db.Date
+  treadDepthMm   Decimal?      @db.Decimal(4, 1)
+  status         TireStatus    @default(IN_STOCK)
+  purchaseDate   DateTime?     @db.Date
   purchasePrice  Int?
   notes          String?
-  formData       Json         @default("{}")
-  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
-  deletedAt      DateTime?    @db.Timestamptz(6)
+  formData       Json          @default("{}")
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @db.Timestamptz(6)
+  deletedAt      DateTime?     @db.Timestamptz(6)
 
-  set            TireSet?     @relation(fields: [setId], references: [id], onDelete: SetNull)
+  set TireSet? @relation(fields: [setId], references: [id], onDelete: SetNull)
+  // SQL: partial unique (setId, position) WHERE setId IS NOT NULL AND deletedAt IS NULL.
 
   @@index([status])
   @@index([setId])
   @@map("Tire")
-  // SQL: partial unique (setId, position) WHERE setId IS NOT NULL AND deletedAt IS NULL.
 }
 
 model TireInstallation {
-  id                       String       @id @db.Uuid
-  setId                    String       @db.Uuid
-  vehicleId                String       @db.Uuid
-  mountedAt                DateTime     @db.Date
-  mountedOdometerKm        Int
-  dismountedAt             DateTime?    @db.Date
-  dismountedOdometerKm     Int?
-  reason                   String?
-  positions                TirePosition[]
+  id                        String         @id @db.Uuid
+  setId                     String         @db.Uuid
+  vehicleId                 String         @db.Uuid
+  mountedAt                 DateTime       @db.Date
+  mountedOdometerKm         Int
+  dismountedAt              DateTime?      @db.Date
+  dismountedOdometerKm      Int?
+  reason                    String?
+  positions                 TirePosition[]
   storageLocationOnDismount String?
-  daysInUse                Int?
-  kmDriven                 Int?
-  formSchemaId             String?      @db.Uuid
-  formSchemaVersionId      String?      @db.Uuid
-  formData                 Json         @default("{}")
-  version                  Int          @default(0)
-  createdById              String?      @db.Uuid
-  createdAt                DateTime     @default(now()) @db.Timestamptz(6)
-  updatedAt                DateTime     @updatedAt @db.Timestamptz(6)
-  deletedAt                DateTime?    @db.Timestamptz(6)
+  daysInUse                 Int?
+  kmDriven                  Int?
+  formSchemaId              String?        @db.Uuid
+  formSchemaVersionId       String?        @db.Uuid
+  formData                  Json           @default("{}")
+  version                   Int            @default(0)
+  createdById               String?        @db.Uuid
+  createdAt                 DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt                 DateTime       @updatedAt @db.Timestamptz(6)
+  deletedAt                 DateTime?      @db.Timestamptz(6)
 
-  set                      TireSet      @relation(fields: [setId], references: [id], onDelete: Cascade)
-  vehicle                  Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  formSchema               FormSchema?  @relation(fields: [formSchemaId], references: [id])
-  formSchemaVersion        FormSchemaVersion? @relation(fields: [formSchemaVersionId], references: [id])
-
-  @@index([vehicleId, mountedAt(sort: Desc)])
-  @@index([setId, mountedAt(sort: Desc)])
-  @@map("TireInstallation")
+  set               TireSet            @relation(fields: [setId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle            @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  formSchema        FormSchema?        @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion FormSchemaVersion? @relation(fields: [formSchemaVersionId], references: [id])
   // SQL (B-09, ključno za P-13):
   //   CREATE UNIQUE INDEX ux_tire_installation_active ON "TireInstallation"("setId")
   //     WHERE "dismountedAt" IS NULL AND "deletedAt" IS NULL;
   //   CHECK (dismountedAt IS NULL OR dismountedAt >= mountedAt)
   //   CHECK (dismountedOdometerKm IS NULL OR dismountedOdometerKm >= mountedOdometerKm)
+
+  @@index([vehicleId, mountedAt(sort: Desc)])
+  @@index([setId, mountedAt(sort: Desc)])
+  @@map("TireInstallation")
 }
 
 // -----------------------------------------------------------------------------
@@ -907,37 +908,37 @@ model TireInstallation {
 // -----------------------------------------------------------------------------
 
 model FormSchema {
-  id                       String       @id @db.Uuid
-  key                      String       @unique
-  name                     String
-  subject                  FormSubject
-  taskTypeId               String?      @db.Uuid
-  description              String?
-  status                   String       @default("ACTIVE")
+  id                        String      @id @db.Uuid
+  key                       String      @unique
+  name                      String
+  subject                   FormSubject
+  taskTypeId                String?     @db.Uuid
+  description               String?
+  status                    String      @default("ACTIVE")
   currentPublishedVersionId String?     @db.Uuid
-  ownerModule              String?
-  createdById              String?      @db.Uuid
-  createdAt                DateTime     @default(now()) @db.Timestamptz(6)
-  updatedAt                DateTime     @updatedAt @db.Timestamptz(6)
-  deletedAt                DateTime?    @db.Timestamptz(6)
+  ownerModule               String?
+  createdById               String?     @db.Uuid
+  createdAt                 DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt                 DateTime    @updatedAt @db.Timestamptz(6)
+  deletedAt                 DateTime?   @db.Timestamptz(6)
 
-  taskType                 TaskType?    @relation("TaskTypeFormSchemas", fields: [taskTypeId], references: [id])
-  defaultForTaskTypes      TaskType[]   @relation("TaskTypeDefaultFormSchema")
-  versions                 FormSchemaVersion[]
-  currentPublishedVersion  FormSchemaVersion? @relation("CurrentPublishedVersion", fields: [currentPublishedVersionId], references: [id])
-  migrationJobs            FormMigrationJob[]
-  vehicles                 Vehicle[]
-  registrationRecords      RegistrationRecord[]
-  insuranceRecords         InsuranceRecord[]
-  serviceRecords           ServiceRecord[]
-  drivers                  Driver[]
-  tireSets                 TireSet[]
-  tireInstallations        TireInstallation[]
-  tasks                    Task[]
+  taskType                TaskType?            @relation("TaskTypeFormSchemas", fields: [taskTypeId], references: [id])
+  defaultForTaskTypes     TaskType[]           @relation("TaskTypeDefaultFormSchema")
+  versions                FormSchemaVersion[]
+  currentPublishedVersion FormSchemaVersion?   @relation("CurrentPublishedVersion", fields: [currentPublishedVersionId], references: [id])
+  migrationJobs           FormMigrationJob[]
+  vehicles                Vehicle[]
+  registrationRecords     RegistrationRecord[]
+  insuranceRecords        InsuranceRecord[]
+  serviceRecords          ServiceRecord[]
+  drivers                 Driver[]
+  tireSets                TireSet[]
+  tireInstallations       TireInstallation[]
+  tasks                   Task[]
+  // SQL: partial unique (subject, taskTypeId) WHERE subject='TASK' AND deletedAt IS NULL.
 
   @@index([subject])
   @@map("FormSchema")
-  // SQL: partial unique (subject, taskTypeId) WHERE subject='TASK' AND deletedAt IS NULL.
 }
 
 model FormSchemaVersion {
@@ -958,28 +959,28 @@ model FormSchemaVersion {
   createdAt        DateTime         @default(now()) @db.Timestamptz(6)
   createdById      String?          @db.Uuid
 
-  formSchema       FormSchema       @relation(fields: [formSchemaId], references: [id], onDelete: Cascade)
-  publishedVersionOf FormSchema[]   @relation("CurrentPublishedVersion")
-  migrationJobsFrom FormMigrationJob[] @relation("MigrationFromVersion")
-  migrationJobsTo   FormMigrationJob[] @relation("MigrationToVersion")
+  formSchema         FormSchema         @relation(fields: [formSchemaId], references: [id], onDelete: Cascade)
+  publishedVersionOf FormSchema[]       @relation("CurrentPublishedVersion")
+  migrationJobsFrom  FormMigrationJob[] @relation("MigrationFromVersion")
+  migrationJobsTo    FormMigrationJob[] @relation("MigrationToVersion")
 
   // Zapisi koji nose `formSchemaVersionId` (U-02: svaki zapis pamti tačnu
   // objavljenu verziju forme kojom je unesen — verzija je immutable, P-10).
-  vehicles             Vehicle[]
-  registrationRecords  RegistrationRecord[]
-  insuranceRecords     InsuranceRecord[]
-  serviceRecords       ServiceRecord[]
-  drivers              Driver[]
-  tireSets             TireSet[]
-  tireInstallations    TireInstallation[]
-  tasks                Task[]
+  vehicles            Vehicle[]
+  registrationRecords RegistrationRecord[]
+  insuranceRecords    InsuranceRecord[]
+  serviceRecords      ServiceRecord[]
+  drivers             Driver[]
+  tireSets            TireSet[]
+  tireInstallations   TireInstallation[]
+  tasks               Task[]
+  // IMMUTABILNOST (P-10): DB trigger odbija UPDATE (definition/version/status→DRAFT)
+  //   i DELETE kada je status='PUBLISHED'. Dozvoljen samo prelaz PUBLISHED→RETIRED.
+  // SQL: CHECK (version > 0).
 
   @@unique([formSchemaId, version])
   @@index([formSchemaId, status, publishedAt(sort: Desc)])
   @@map("FormSchemaVersion")
-  // IMMUTABILNOST (P-10): DB trigger odbija UPDATE (definition/version/status→DRAFT)
-  //   i DELETE kada je status='PUBLISHED'. Dozvoljen samo prelaz PUBLISHED→RETIRED.
-  // SQL: CHECK (version > 0).
 }
 
 model FieldKeyRegistry {
@@ -991,10 +992,10 @@ model FieldKeyRegistry {
   usedByFormSchemaIds String[] @db.Uuid
   createdAt           DateTime @default(now()) @db.Timestamptz(6)
   updatedAt           DateTime @updatedAt @db.Timestamptz(6)
-
-  @@map("FieldKeyRegistry")
   // U-16: isti ključ = isti tip i značenje u svim formama.
   // RESERVED_FIELD_KEY greška se baca kad forma pokuša koristiti rezervisani ključ.
+
+  @@map("FieldKeyRegistry")
 }
 
 model FormMigrationJob {
@@ -1014,10 +1015,10 @@ model FormMigrationJob {
   notes            String?
   createdAt        DateTime           @default(now()) @db.Timestamptz(6)
 
-  formSchema       FormSchema         @relation(fields: [formSchemaId], references: [id], onDelete: Cascade)
-  fromVersion      FormSchemaVersion  @relation("MigrationFromVersion", fields: [fromVersionId], references: [id])
-  toVersion        FormSchemaVersion  @relation("MigrationToVersion", fields: [toVersionId], references: [id])
-  items            FormMigrationItem[]
+  formSchema  FormSchema          @relation(fields: [formSchemaId], references: [id], onDelete: Cascade)
+  fromVersion FormSchemaVersion   @relation("MigrationFromVersion", fields: [fromVersionId], references: [id])
+  toVersion   FormSchemaVersion   @relation("MigrationToVersion", fields: [toVersionId], references: [id])
+  items       FormMigrationItem[]
 
   @@index([status, createdAt])
   @@map("FormMigrationJob")
@@ -1033,7 +1034,7 @@ model FormMigrationItem {
   error       String?
   processedAt DateTime? @db.Timestamptz(6)
 
-  job         FormMigrationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job FormMigrationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@unique([jobId, entityId])
   @@map("FormMigrationItem")
@@ -1044,93 +1045,86 @@ model FormMigrationItem {
 // -----------------------------------------------------------------------------
 
 model TaskType {
-  id                    String          @id @db.Uuid
-  code                  String          @unique
-  name                  String
-  description           String?
-  iconName              String?
-  colorHex              String?
-  requiresVehicle       Boolean         @default(true)
-  requiresOdometer      Boolean         @default(false)
-  requiresPhotos        Boolean         @default(false)
-  defaultPriority       TaskPriority    @default(NORMAL)
-  defaultAssignMode     TaskAssignMode  @default(OPEN_CLAIM)
+  id                     String         @id @db.Uuid
+  code                   String         @unique
+  name                   String
+  description            String?
+  iconName               String?
+  colorHex               String?
+  requiresVehicle        Boolean        @default(true)
+  requiresOdometer       Boolean        @default(false)
+  requiresPhotos         Boolean        @default(false)
+  defaultPriority        TaskPriority   @default(NORMAL)
+  defaultAssignMode      TaskAssignMode @default(OPEN_CLAIM)
   allowMultipleClaimants Boolean        @default(false)
-  dueOffsetHours        Int?
-  formSchemaId          String?         @db.Uuid
-  active                Boolean         @default(true)
-  sortOrder             Int             @default(100)
-  createdById           String?         @db.Uuid
-  createdAt             DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt             DateTime        @updatedAt @db.Timestamptz(6)
-  deletedAt             DateTime?       @db.Timestamptz(6)
+  dueOffsetHours         Int?
+  formSchemaId           String?        @db.Uuid
+  active                 Boolean        @default(true)
+  sortOrder              Int            @default(100)
+  createdById            String?        @db.Uuid
+  createdAt              DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime       @updatedAt @db.Timestamptz(6)
+  deletedAt              DateTime?      @db.Timestamptz(6)
 
   // Dvije NEZAVISNE relacije između TaskType i FormSchema (Prisma traži imena):
   //  - formSchema  = zadana/aktivna forma za ovaj tip zadatka (FK na TaskType strani)
   //  - formSchemas = sve forme čiji je `taskTypeId` ovaj tip (FK na FormSchema strani)
-  formSchema            FormSchema?     @relation("TaskTypeDefaultFormSchema", fields: [formSchemaId], references: [id])
-  formSchemas           FormSchema[]    @relation("TaskTypeFormSchemas")
-  tasks                 Task[]
+  formSchema             FormSchema?                 @relation("TaskTypeDefaultFormSchema", fields: [formSchemaId], references: [id])
+  formSchemas            FormSchema[]                @relation("TaskTypeFormSchemas")
+  tasks                  Task[]
   completionRequirements TaskCompletionRequirement[]
-
-  @@map("TaskType")
   // Seed: WASH, INTERIOR_CLEANING, FUEL_REFILL, SERVICE_VISIT, TIRE_CHANGE,
   //       TECHNICAL_INSPECTION, REGISTRATION, CUSTOM.
+
+  @@map("TaskType")
 }
 
 model Task {
-  id                  String          @id @db.Uuid
-  code                String          @unique
+  id                  String         @id @db.Uuid
+  code                String         @unique
   title               String
   description         String?
-  vehicleId           String?         @db.Uuid
-  taskTypeId          String          @db.Uuid
-  priority            TaskPriority    @default(NORMAL)
-  status              TaskStatus      @default(OPEN)
-  assignMode          TaskAssignMode  @default(OPEN_CLAIM)
-  createdById         String          @db.Uuid
-  assigneeUserId      String?         @db.Uuid
-  claimedAt           DateTime?       @db.Timestamptz(6)
-  completedAt         DateTime?       @db.Timestamptz(6)
-  completedById       String?         @db.Uuid
-  dueAt               DateTime?       @db.Timestamptz(6)
-  dueDate             DateTime?       @db.Date
-  cancelledAt         DateTime?       @db.Timestamptz(6)
+  vehicleId           String?        @db.Uuid
+  taskTypeId          String         @db.Uuid
+  priority            TaskPriority   @default(NORMAL)
+  status              TaskStatus     @default(OPEN)
+  assignMode          TaskAssignMode @default(OPEN_CLAIM)
+  createdById         String         @db.Uuid
+  assigneeUserId      String?        @db.Uuid
+  claimedAt           DateTime?      @db.Timestamptz(6)
+  completedAt         DateTime?      @db.Timestamptz(6)
+  completedById       String?        @db.Uuid
+  dueAt               DateTime?      @db.Timestamptz(6)
+  dueDate             DateTime?      @db.Date
+  cancelledAt         DateTime?      @db.Timestamptz(6)
   cancelReason        String?
-  reopenedAt          DateTime?       @db.Timestamptz(6)
-  releasedAt          DateTime?       @db.Timestamptz(6)
+  reopenedAt          DateTime?      @db.Timestamptz(6)
+  releasedAt          DateTime?      @db.Timestamptz(6)
   durationMinutes     Int?
   odometerKm          Int?
   totalCost           Int?
-  fuelLiters          Decimal?        @db.Decimal(10, 2)
+  fuelLiters          Decimal?       @db.Decimal(10, 2)
   fuelAmount          Int?
-  fuelConsumptionL100 Decimal?        @db.Decimal(6, 2)
-  formSchemaId        String          @db.Uuid
-  formSchemaVersionId String          @db.Uuid
-  formData            Json            @default("{}")
-  version             Int             @default(0)
+  fuelConsumptionL100 Decimal?       @db.Decimal(6, 2)
+  formSchemaId        String         @db.Uuid
+  formSchemaVersionId String         @db.Uuid
+  formData            Json           @default("{}")
+  version             Int            @default(0)
   idempotencyKey      String?
-  createdAt           DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt           DateTime        @updatedAt @db.Timestamptz(6)
-  deletedAt           DateTime?       @db.Timestamptz(6)
+  createdAt           DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime       @updatedAt @db.Timestamptz(6)
+  deletedAt           DateTime?      @db.Timestamptz(6)
 
-  vehicle             Vehicle?        @relation(fields: [vehicleId], references: [id])
-  taskType            TaskType        @relation(fields: [taskTypeId], references: [id])
-  createdBy           User            @relation("TaskCreatedBy", fields: [createdById], references: [id])
-  assignee            User?           @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
-  formSchema          FormSchema      @relation(fields: [formSchemaId], references: [id])
-  formSchemaVersion   FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
-  assignments         TaskAssignment[]
-  events              TaskEvent[]
-  comments            TaskComment[]
-  attachments         Attachment[]    @relation("TaskAttachments")
-
-  @@index([status, dueAt])
-  @@index([vehicleId, createdAt(sort: Desc)])
-  @@index([assigneeUserId, status])
-  @@index([taskTypeId, status])
-  @@index([createdById, createdAt(sort: Desc)])
-  @@map("Task")
+  vehicle           Vehicle?          @relation(fields: [vehicleId], references: [id])
+  taskType          TaskType          @relation(fields: [taskTypeId], references: [id])
+  createdBy         User              @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  assignee          User?             @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
+  formSchema        FormSchema        @relation(fields: [formSchemaId], references: [id])
+  formSchemaVersion FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
+  assignments       TaskAssignment[]
+  events            TaskEvent[]
+  comments          TaskComment[]
+  attachments       Attachment[]      @relation("TaskAttachments")
   // SQL:
   //   CHECK (status <> 'COMPLETED' OR (assigneeUserId IS NOT NULL AND completedAt IS NOT NULL))
   //   CHECK (status <> 'IN_PROGRESS' OR assigneeUserId IS NOT NULL)
@@ -1143,28 +1137,35 @@ model Task {
   //   WHERE "id"=$1 AND "status"='OPEN' AND "deletedAt" IS NULL
   //   RETURNING "id","version";
   //   → prazan RETURNING = 409 TASK_ALREADY_CLAIMED.
+
+  @@index([status, dueAt])
+  @@index([vehicleId, createdAt(sort: Desc)])
+  @@index([assigneeUserId, status])
+  @@index([taskTypeId, status])
+  @@index([createdById, createdAt(sort: Desc)])
+  @@map("Task")
 }
 
 model TaskAssignment {
-  id           String   @id @db.Uuid
-  taskId       String   @db.Uuid
-  userId       String   @db.Uuid
-  role         String   @default("INVITED")
-  assignedById String?  @db.Uuid
-  assignedAt   DateTime @default(now()) @db.Timestamptz(6)
+  id           String    @id @db.Uuid
+  taskId       String    @db.Uuid
+  userId       String    @db.Uuid
+  role         String    @default("INVITED")
+  assignedById String?   @db.Uuid
+  assignedAt   DateTime  @default(now()) @db.Timestamptz(6)
   revokedAt    DateTime? @db.Timestamptz(6)
   note         String?
 
-  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([taskId, userId, role])
-  @@index([userId])
-  @@map("TaskAssignment")
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   // SQL (drugi pojas za P-04):
   //   CREATE UNIQUE INDEX ux_task_assignment_assignee ON "TaskAssignment"("taskId")
   //     WHERE role='ASSIGNEE' AND "revokedAt" IS NULL;
   //   CHECK (role IN ('INVITED','ASSIGNEE','OBSERVER'))
+
+  @@unique([taskId, userId, role])
+  @@index([userId])
+  @@map("TaskAssignment")
 }
 
 model TaskEvent {
@@ -1180,13 +1181,13 @@ model TaskEvent {
   data                Json?
   formSchemaVersionId String?         @db.Uuid
 
-  task                Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  actor               User?           @relation(fields: [actorId], references: [id])
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id])
+  // IMMUTABILAN: bez updatedAt/deletedAt + DB trigger koji odbija UPDATE/DELETE.
 
   @@index([taskId, at])
   @@index([actorId, at])
   @@map("TaskEvent")
-  // IMMUTABILAN: bez updatedAt/deletedAt + DB trigger koji odbija UPDATE/DELETE.
 }
 
 model TaskComment {
@@ -1199,8 +1200,8 @@ model TaskComment {
   updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
   deletedAt       DateTime? @db.Timestamptz(6)
 
-  task            Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  author          User      @relation(fields: [authorId], references: [id])
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
 
   @@index([taskId, createdAt])
   @@map("TaskComment")
@@ -1214,11 +1215,11 @@ model TaskCompletionRequirement {
   stage      AttachmentStage @default(GENERAL)
   minPhotos  Int             @default(0)
 
-  taskType   TaskType        @relation(fields: [taskTypeId], references: [id], onDelete: Cascade)
+  taskType TaskType @relation(fields: [taskTypeId], references: [id], onDelete: Cascade)
+  // U-13: npr. obavezna fotografija "prije i poslije" za pranje vozila.
 
   @@unique([taskTypeId, fieldKey])
   @@map("TaskCompletionRequirement")
-  // U-13: npr. obavezna fotografija "prije i poslije" za pranje vozila.
 }
 
 // -----------------------------------------------------------------------------
@@ -1241,68 +1242,68 @@ model OutboxEvent {
   processedAt    DateTime?    @db.Timestamptz(6)
   createdAt      DateTime     @default(now()) @db.Timestamptz(6)
 
-  notifications  Notification[]
-
-  @@index([status, availableAt])
-  @@map("OutboxEvent")
+  notifications Notification[]
   // P-05: upis u ISTOJ transakciji kao domenska promjena; worker ga prenosi u
   //   BullMQ (`vfm-queue-outbox`) i označi PROCESSED/FAILED/DEAD.
   // SQL: partial index WHERE status IN ('PENDING','FAILED').
   // Retencija PROCESSED: 30 dana.
+
+  @@index([status, availableAt])
+  @@map("OutboxEvent")
 }
 
 model Notification {
-  id             String             @id @db.Uuid
-  userId         String             @db.Uuid
-  type           String
-  title          String
-  body           String?
-  data           Json?
-  linkToType     String?
-  linkToId       String?            @db.Uuid
-  priority       String             @default("NORMAL")
-  status         NotificationStatus @default(PENDING)
-  isRead         Boolean            @default(false)
-  readAt         DateTime?          @db.Timestamptz(6)
-  createdAt      DateTime           @default(now()) @db.Timestamptz(6)
-  sentAt         DateTime?          @db.Timestamptz(6)
-  outboxEventId  String?            @db.Uuid
-  notificationKey String            @unique
-  dedupeKey      String             @unique
-  expiresAt      DateTime?          @db.Timestamptz(6)
+  id              String             @id @db.Uuid
+  userId          String             @db.Uuid
+  type            String
+  title           String
+  body            String?
+  data            Json?
+  linkToType      String?
+  linkToId        String?            @db.Uuid
+  priority        String             @default("NORMAL")
+  status          NotificationStatus @default(PENDING)
+  isRead          Boolean            @default(false)
+  readAt          DateTime?          @db.Timestamptz(6)
+  createdAt       DateTime           @default(now()) @db.Timestamptz(6)
+  sentAt          DateTime?          @db.Timestamptz(6)
+  outboxEventId   String?            @db.Uuid
+  notificationKey String             @unique
+  dedupeKey       String             @unique
+  expiresAt       DateTime?          @db.Timestamptz(6)
 
-  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  outboxEvent    OutboxEvent?       @relation(fields: [outboxEventId], references: [id], onDelete: SetNull)
-  deliveries     NotificationDelivery[]
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outboxEvent OutboxEvent?           @relation(fields: [outboxEventId], references: [id], onDelete: SetNull)
+  deliveries  NotificationDelivery[]
+  // B-13: dedupeKey = "{type}:{linkToType}:{linkToId}:{bucket}" → tačno jedna
+  //   in-app obavijest po događaju.
 
   @@index([userId, isRead, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@map("Notification")
-  // B-13: dedupeKey = "{type}:{linkToType}:{linkToId}:{bucket}" → tačno jedna
-  //   in-app obavijest po događaju.
 }
 
 model NotificationDelivery {
-  id               String         @id @db.Uuid
-  notificationId   String         @db.Uuid
-  channel          String
-  deviceTokenId    String?        @db.Uuid
-  status           DeliveryStatus @default(QUEUED)
+  id                String         @id @db.Uuid
+  notificationId    String         @db.Uuid
+  channel           String
+  deviceTokenId     String?        @db.Uuid
+  status            DeliveryStatus @default(QUEUED)
   providerMessageId String?
-  errorCode        String?
-  errorMessage     String?
-  attempts         Int            @default(0)
-  sentAt           DateTime?      @db.Timestamptz(6)
-  deliveredAt      DateTime?      @db.Timestamptz(6)
-  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  errorCode         String?
+  errorMessage      String?
+  attempts          Int            @default(0)
+  sentAt            DateTime?      @db.Timestamptz(6)
+  deliveredAt       DateTime?      @db.Timestamptz(6)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(6)
 
-  notification     Notification   @relation(fields: [notificationId], references: [id], onDelete: Cascade)
-  deviceToken      DeviceToken?   @relation(fields: [deviceTokenId], references: [id], onDelete: SetNull)
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  deviceToken  DeviceToken? @relation(fields: [deviceTokenId], references: [id], onDelete: SetNull)
+  // SQL: CHECK (channel IN ('FCM','SSE','EMAIL','IN_APP')).
 
   @@index([notificationId])
   @@index([status, createdAt])
   @@map("NotificationDelivery")
-  // SQL: CHECK (channel IN ('FCM','SSE','EMAIL','IN_APP')).
 }
 
 model DeviceToken {
@@ -1322,31 +1323,31 @@ model DeviceToken {
   createdAt    DateTime          @default(now()) @db.Timestamptz(6)
   revokedAt    DateTime?         @db.Timestamptz(6)
 
-  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deliveries   NotificationDelivery[]
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+  // FCM (R-04): Firebase projekat kreira vlasnik ručno; do tada
+  //   FIREBASE_ENABLED=false i push se ne šalje.
 
   @@index([userId, status])
   @@map("DeviceToken")
-  // FCM (R-04): Firebase projekat kreira vlasnik ručno; do tada
-  //   FIREBASE_ENABLED=false i push se ne šalje.
 }
 
 model NotificationPreference {
-  id                String   @id @db.Uuid
-  userId            String   @db.Uuid
-  type              String
-  channelFcm        Boolean  @default(true)
-  channelInApp      Boolean  @default(true)
-  channelEmail      Boolean  @default(false)
+  id              String    @id @db.Uuid
+  userId          String    @db.Uuid
+  type            String
+  channelFcm      Boolean   @default(true)
+  channelInApp    Boolean   @default(true)
+  channelEmail    Boolean   @default(false)
   // docs/03: PostgreSQL TIME. Prisma uz `@db.Time` dozvoljava SAMO `DateTime`,
   // pa se vraća Date s datumom 1970-01-01 — značajan je samo HH:MM:SS dio
   // (lokalno vrijeme Europe/Sarajevo, ne UTC instanta).
-  quietHoursStart   DateTime? @db.Time
-  quietHoursEnd     DateTime? @db.Time
-  createdAt         DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime @updatedAt @db.Timestamptz(6)
+  quietHoursStart DateTime? @db.Time
+  quietHoursEnd   DateTime? @db.Time
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
 
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, type])
   @@map("NotificationPreference")
@@ -1357,51 +1358,51 @@ model NotificationPreference {
 // -----------------------------------------------------------------------------
 
 model ReminderPolicy {
-  id                  String         @id @db.Uuid
-  kind                ReminderKind   @unique
-  enabled             Boolean        @default(true)
-  thresholdsDays      Int[]          @default([5])
-  thresholdsKm        Int[]          @default([])
-  recipientsPermission String        @default("vehicle:view")
-  recipientRoleIds    String[]       @db.Uuid
-  channels            String[]       @default(["IN_APP", "FCM"])
-  escalate            Boolean        @default(false)
-  notes               String?
-  createdAt           DateTime       @default(now()) @db.Timestamptz(6)
-  updatedAt           DateTime       @updatedAt @db.Timestamptz(6)
+  id                   String       @id @db.Uuid
+  kind                 ReminderKind @unique
+  enabled              Boolean      @default(true)
+  thresholdsDays       Int[]        @default([5])
+  thresholdsKm         Int[]        @default([])
+  recipientsPermission String       @default("vehicle:view")
+  recipientRoleIds     String[]     @db.Uuid
+  channels             String[]     @default(["IN_APP", "FCM"])
+  escalate             Boolean      @default(false)
+  notes                String?
+  createdAt            DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime     @updatedAt @db.Timestamptz(6)
 
-  scheduledReminders  ScheduledReminder[]
+  scheduledReminders ScheduledReminder[]
 
   @@map("ReminderPolicy")
 }
 
 model ScheduledReminder {
-  id                String         @id @db.Uuid
-  policyId          String         @db.Uuid
-  kind              ReminderKind
-  entityType        String
-  entityId          String         @db.Uuid
-  dueDate           DateTime?      @db.Date
-  dueKm             Int?
-  thresholdDays     Int?
-  thresholdKm       Int?
-  fireAt            DateTime       @db.Timestamptz(6)
-  status            ReminderStatus @default(SCHEDULED)
-  dedupeKey         String         @unique
-  sentAt            DateTime?      @db.Timestamptz(6)
-  acknowledgedById  String?        @db.Uuid
-  acknowledgedAt    DateTime?      @db.Timestamptz(6)
-  outboxEventId     String?        @db.Uuid
-  createdAt         DateTime       @default(now()) @db.Timestamptz(6)
+  id               String         @id @db.Uuid
+  policyId         String         @db.Uuid
+  kind             ReminderKind
+  entityType       String
+  entityId         String         @db.Uuid
+  dueDate          DateTime?      @db.Date
+  dueKm            Int?
+  thresholdDays    Int?
+  thresholdKm      Int?
+  fireAt           DateTime       @db.Timestamptz(6)
+  status           ReminderStatus @default(SCHEDULED)
+  dedupeKey        String         @unique
+  sentAt           DateTime?      @db.Timestamptz(6)
+  acknowledgedById String?        @db.Uuid
+  acknowledgedAt   DateTime?      @db.Timestamptz(6)
+  outboxEventId    String?        @db.Uuid
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
 
-  policy            ReminderPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
-  acknowledgedBy    User?          @relation("ReminderAcknowledgedBy", fields: [acknowledgedById], references: [id])
-
-  @@index([status, fireAt])
-  @@map("ScheduledReminder")
+  policy         ReminderPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  acknowledgedBy User?          @relation("ReminderAcknowledgedBy", fields: [acknowledgedById], references: [id])
   // P-07 (idempotentnost): dedupeKey = "{kind}:{entityType}:{entityId}:{dueDate|dueKm}:{threshold}"
   //   → tačno jedan podsjetnik po (zapis, vrsta, prag).
   // Računanje `fireAt` ide u Europe/Sarajevo (N-11), čuva se u UTC.
+
+  @@index([status, fireAt])
+  @@map("ScheduledReminder")
 }
 
 // -----------------------------------------------------------------------------
@@ -1409,42 +1410,42 @@ model ScheduledReminder {
 // -----------------------------------------------------------------------------
 
 model Attachment {
-  id             String              @id @db.Uuid
-  ownerId        String              @db.Uuid
-  ownerType      AttachmentOwnerType
-  stage          AttachmentStage     @default(GENERAL)
-  fileName       String
-  storageKey     String              @unique
-  mimeType       String
-  ext            String
-  sizeBytes      BigInt
-  sha256         String
-  width          Int?
-  height         Int?
-  exifStripped   Boolean             @default(true)
-  uploadedById   String
-  taskId         String?             @db.Uuid
-  formFieldKey   String?
-  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
-  deletedAt      DateTime?           @db.Timestamptz(6)
+  id           String              @id @db.Uuid
+  ownerId      String              @db.Uuid
+  ownerType    AttachmentOwnerType
+  stage        AttachmentStage     @default(GENERAL)
+  fileName     String
+  storageKey   String              @unique
+  mimeType     String
+  ext          String
+  sizeBytes    BigInt
+  sha256       String
+  width        Int?
+  height       Int?
+  exifStripped Boolean             @default(true)
+  uploadedById String
+  taskId       String?             @db.Uuid
+  formFieldKey String?
+  createdAt    DateTime            @default(now()) @db.Timestamptz(6)
+  deletedAt    DateTime?           @db.Timestamptz(6)
 
-  uploadedBy     User                @relation(fields: [uploadedById], references: [id])
-  task           Task?               @relation("TaskAttachments", fields: [taskId], references: [id])
+  uploadedBy     User        @relation(fields: [uploadedById], references: [id])
+  task           Task?       @relation("TaskAttachments", fields: [taskId], references: [id])
   exportJobs     ExportJob[]
   // 1:1 "glavna fotografija" — FK je na strani Vehicle/Driver (`photoAttachmentId`),
   // pa suprotna strana ovdje nema polja s FK-om (B-15: attachment je vlasništvo
   // entiteta preko `ownerType`/`ownerId`, ovo su samo pokazivači na naslovnicu).
-  vehiclePhotoOf Vehicle?            @relation("VehiclePhoto")
-  driverPhotoOf  Driver?             @relation("DriverPhoto")
+  vehiclePhotoOf Vehicle?    @relation("VehiclePhoto")
+  driverPhotoOf  Driver?     @relation("DriverPhoto")
+  // B-15: fajl se NIKAD ne servira direktno s diska — isključivo
+  //   GET /attachments/:id/content uz permisiju + potpisani URL.
+  // Pohrana: host bind-mount /data/vfm/attachments (odluka vlasnika).
 
   @@unique([ownerType, ownerId, sha256])
   @@index([sha256])
   @@index([uploadedById, createdAt])
   @@index([deletedAt])
   @@map("Attachment")
-  // B-15: fajl se NIKAD ne servira direktno s diska — isključivo
-  //   GET /attachments/:id/content uz permisiju + potpisani URL.
-  // Pohrana: host bind-mount /data/vfm/attachments (odluka vlasnika).
 }
 
 // -----------------------------------------------------------------------------
@@ -1472,14 +1473,14 @@ model AuditLog {
   metadata      Json?
   createdAt     DateTime      @default(now()) @db.Timestamptz(6)
 
-  actor         User?         @relation(fields: [actorId], references: [id])
+  actor User? @relation(fields: [actorId], references: [id])
+  // IMMUTABILAN: DB trigger odbija UPDATE/DELETE. Retencija: AUDIT_RETENTION_DAYS.
 
   @@index([entityType, entityId, createdAt(sort: Desc)])
   @@index([actorId, createdAt(sort: Desc)])
   @@index([action, createdAt(sort: Desc)])
   @@index([severity, createdAt(sort: Desc)])
   @@map("AuditLog")
-  // IMMUTABILAN: DB trigger odbija UPDATE/DELETE. Retencija: AUDIT_RETENTION_DAYS.
 }
 
 model Setting {
@@ -1487,7 +1488,7 @@ model Setting {
   key         String      @unique
   value       Json
   type        SettingType
-  valueSchema Json?     @map("schema")
+  valueSchema Json?       @map("schema")
   category    String?
   isSecret    Boolean     @default(false)
   isPublic    Boolean     @default(false)
@@ -1501,16 +1502,16 @@ model Setting {
 }
 
 model List {
-  id          String     @id @db.Uuid
-  code        String     @unique
+  id          String   @id @db.Uuid
+  code        String   @unique
   name        String
   description String?
-  isSystem    Boolean    @default(false)
-  sortOrder   Int        @default(100)
-  createdAt   DateTime   @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime   @updatedAt @db.Timestamptz(6)
+  isSystem    Boolean  @default(false)
+  sortOrder   Int      @default(100)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
 
-  items       ListItem[]
+  items ListItem[]
 
   @@map("List")
 }
@@ -1528,9 +1529,9 @@ model ListItem {
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
   deletedAt DateTime? @db.Timestamptz(6)
 
-  list      List      @relation(fields: [listId], references: [id], onDelete: Cascade)
-  parent    ListItem? @relation("ListItemHierarchy", fields: [parentId], references: [id])
-  children  ListItem[] @relation("ListItemHierarchy")
+  list           List            @relation(fields: [listId], references: [id], onDelete: Cascade)
+  parent         ListItem?       @relation("ListItemHierarchy", fields: [parentId], references: [id])
+  children       ListItem[]      @relation("ListItemHierarchy")
   serviceRecords ServiceRecord[]
 
   @@unique([listId, code])
@@ -1539,7 +1540,7 @@ model ListItem {
 }
 
 model IdempotencyKey {
-  id             String    @id @db.Uuid
+  id             String   @id @db.Uuid
   key            String
   userId         String
   method         String?
@@ -1547,15 +1548,15 @@ model IdempotencyKey {
   requestHash    String
   responseStatus Int?
   responseBody   Json?
-  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
-  expiresAt      DateTime  @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  expiresAt      DateTime @db.Timestamptz(6)
 
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // P-06: TTL 24 h (IDEMPOTENCY_TTL_HOURS); maintenance job čisti istekle.
 
   @@unique([userId, key])
   @@index([expiresAt])
   @@map("IdempotencyKey")
-  // P-06: TTL 24 h (IDEMPOTENCY_TTL_HOURS); maintenance job čisti istekle.
 }
 
 model ReportDefinition {
@@ -1572,11 +1573,11 @@ model ReportDefinition {
   createdAt          DateTime @default(now()) @db.Timestamptz(6)
   updatedAt          DateTime @updatedAt @db.Timestamptz(6)
 
-  exportJobs         ExportJob[]
-
-  @@map("ReportDefinition")
+  exportJobs ExportJob[]
   // sourceView: jedan od `vfm_v_*` view-ova (docs/03 §4) — čitaju samo
   //   normalizovane kolone, nikad formData JSONB (U-03).
+
+  @@map("ReportDefinition")
 }
 
 model ExportJob {
@@ -1594,12 +1595,12 @@ model ExportJob {
   expiresAt          DateTime?    @db.Timestamptz(6)
   createdAt          DateTime     @default(now()) @db.Timestamptz(6)
 
-  reportDefinition   ReportDefinition @relation(fields: [reportDefinitionId], references: [id])
-  requestedBy        User?        @relation(fields: [requestedById], references: [id])
-  attachment         Attachment?  @relation(fields: [attachmentId], references: [id])
+  reportDefinition ReportDefinition @relation(fields: [reportDefinitionId], references: [id])
+  requestedBy      User?            @relation(fields: [requestedById], references: [id])
+  attachment       Attachment?      @relation(fields: [attachmentId], references: [id])
+  // P-13: PDF/XLSX/CSV kroz red `vfm-queue-reports`; Download centar u web UI-u.
 
   @@index([requestedById, createdAt(sort: Desc)])
   @@index([status])
   @@map("ExportJob")
-  // P-13: PDF/XLSX/CSV kroz red `vfm-queue-reports`; Download centar u web UI-u.
 }
