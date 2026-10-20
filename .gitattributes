@@ -1,0 +1,23 @@
+# Normalizacija kraja linije: SQL migracije i shell skripte MORAJU ostati LF.
+# (Repo se razvija i s Windowsa — Git je najavljivao "LF will be replaced by
+# CRLF" za prisma/migrations/*.sql; CRLF u migraciji mijenja checksum i može
+# srušiti `prisma migrate deploy` na Linux serveru.)
+* text=auto eol=lf
+
+*.sql  text eol=lf
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.md   text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.json text eol=lf
+*.mjs  text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

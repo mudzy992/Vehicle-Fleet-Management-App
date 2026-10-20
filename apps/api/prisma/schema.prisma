@@ -1423,7 +1423,7 @@ model Attachment {
   width        Int?
   height       Int?
   exifStripped Boolean             @default(true)
-  uploadedById String
+  uploadedById String              @db.Uuid
   taskId       String?             @db.Uuid
   formFieldKey String?
   createdAt    DateTime            @default(now()) @db.Timestamptz(6)
@@ -1542,7 +1542,7 @@ model ListItem {
 model IdempotencyKey {
   id             String   @id @db.Uuid
   key            String
-  userId         String
+  userId         String   @db.Uuid
   method         String?
   path           String?
   requestHash    String

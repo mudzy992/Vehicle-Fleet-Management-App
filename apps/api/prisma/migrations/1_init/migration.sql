@@ -874,7 +874,7 @@ CREATE TABLE "Attachment" (
     "width" INTEGER,
     "height" INTEGER,
     "exifStripped" BOOLEAN NOT NULL DEFAULT true,
-    "uploadedById" TEXT NOT NULL,
+    "uploadedById" UUID NOT NULL,
     "taskId" UUID,
     "formFieldKey" TEXT,
     "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -961,7 +961,7 @@ CREATE TABLE "ListItem" (
 CREATE TABLE "IdempotencyKey" (
     "id" UUID NOT NULL,
     "key" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
+    "userId" UUID NOT NULL,
     "method" TEXT,
     "path" TEXT,
     "requestHash" TEXT NOT NULL,

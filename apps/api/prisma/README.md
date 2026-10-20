@@ -79,13 +79,30 @@ direktoriji u `apps/api/prisma/migrations/` imenovani:
 | Direktorij | Sadržaj | Ko ga pravi |
 |---|---|---|
 | `0_extensions` | `pgcrypto`, `citext`, `btree_gist` (+ opciono `pg_stat_statements`) i trigger **funkcije** (`vfm_guard_last_super_admin`, `vfm_reject_write`, `vfm_guard_published_form_version`) | ✅ commit-ovano |
-| `1_init` | sav DDL iz `schema.prisma` (45 modela, enumi, FK-ovi, indeksi) | 🔴 generiše se komandom ispod |
-| `2_manual` | CHECK-ovi, `EXCLUDE USING gist`, partial unique indeksi, `AuditLog.id` kao IDENTITY i **vezivanje triggera** na tabele (19 `// SQL:` markera) | ⏳ nakon što `1_init` postoji (imena indeksa/ograničenja moraju odgovarati generisanom DDL-u) |
+| `1_init` | sav DDL iz `schema.prisma` (45 modela, 30 enuma, 76 FK-ova, 36 unique indeksa) | ✅ commit-ovano (generisano s `migrate diff --from-empty`) |
+| `2_manual` | 18 CHECK-ova, 2 `EXCLUDE USING gist`, 9 partial unique indeksa, `AuditLog.id` kao IDENTITY, **popravljene trigger funkcije** i vezivanje 6 triggera na tabele (19 `// SQL:` markera iz `schema.prisma`) | ✅ commit-ovano |
 
 `migration_lock.toml` (`provider = "postgresql"`) je commit-ovan — bez njega
 `prisma migrate deploy` odbija rad.
 
-### A) Inicijalna migracija BEZ Docker-a i BEZ baze (preporučeno)
+### A) Stanje migracija (važi od ovog commit-a)
+
+`1_init` i `2_manual` **postoje i provjerene su primjenom na pravom
+PostgreSQL-u** (`scripts/db-verify/`, 95 asertacija — vidi odjeljak D).
+
+> ⚠️ **Popravka u `1_init`:** `Attachment."uploadedById"` i
+> `IdempotencyKey."userId"` generisali su se kao `TEXT`, a FK cilja
+> `User."id"` koji je `UUID` → `prisma migrate deploy` padao je s
+> `foreign key constraint "Attachment_uploadedById_fkey" cannot be implemented
+> ... incompatible types: text and uuid`. `migrate diff` **ne provjerava**
+> tipove pri generisanju, pa je greška prošla. Ispravljeno na dva mjesta:
+> `@db.Uuid` na oba polja u `schema.prisma` **i** `UUID` umjesto `TEXT` u
+> `1_init/migration.sql` (sadržaj ostaje jednak onome što bi Prisma generisao).
+
+Ako `1_init` ponovo generišeš (npr. nakon izmjene šeme), obavezno poslije
+pokreni verifier iz odjeljka D — on hvata upravo ovakve greške.
+
+### A1) Inicijalna migracija BEZ Docker-a i BEZ baze (historijat)
 
 `prisma migrate diff --from-empty` ne spaja se ni na jednu bazu — treba samo
 native `schema-engine` (preuzima se s `binaries.prisma.sh`, pa mora imati izlaz
@@ -212,6 +229,42 @@ globalnim Postgresom (jednom, prije prve migracije) — vidi
    `WHERE` za liste — za to postoje normalizovane kolone (U-03).
 6. Novac je `Int` (feninzi), kilometraža `Int`, decimalne količine
    `Decimal(10,2)`, datum `@db.Date`, timestamp `@db.Timestamptz(6)`.
+
+---
+
+## D) Provjera migracija na stvarnom PostgreSQL-u (`scripts/db-verify/`)
+
+`prisma migrate diff` ne validira generisani DDL primjenom, pa se greške poput
+neusklađenih FK tipova vide tek na serveru. Zato postoji offline verifier koji
+se pokreće na **praznoj** bazi:
+
+```bash
+# 1) lokalna dev baza iz docker-compose.dev.yml (host port 5433)
+docker compose -f docker-compose.dev.yml up -d postgres
+docker exec vfm-postgres psql -U vfm -d postgres -c 'CREATE DATABASE vfm_verify'
+
+# 2) Python 3.9+ i psycopg
+pip install "psycopg[binary]"          # ili: pipx / venv
+
+# 3) primjena migracija + katalog provjere (0 → 2_manual, dvaput radi idempotentnosti)
+python3 scripts/db-verify/apply_migrations.py
+python3 scripts/db-verify/behavior_tests.py
+```
+
+Oba skripta primaju DSN kao prvi argument (default
+`postgresql://vfm:vfm_dev_only@127.0.0.1:5433/vfm_verify`); `apply_migrations.py`
+**dropa i ponovo kreira** tu bazu, pa nikad ne ciljaj produkcijsku.
+
+Šta verifier pokriva:
+
+| Skripta | Provjera |
+|---|---|
+| `apply_migrations.py` | `0_extensions` → `1_init` → `2_manual` prolaze; `2_manual` je idempotentan (2. primjena bez greške); broj tabela/`ux_` indeksa/`ck_` ograničenja/`EXCLUDE`/FK-ova/triggera; `AuditLog.id` = `GENERATED ALWAYS`; **svaki FK ima usklađene tipove kolona** |
+| `behavior_tests.py` | 95 asertacija: append-only `AuditLog`/`TaskEvent` (INSERT bez `id` radi, eksplicitan `id`/UPDATE/DELETE se odbijaju); `LAST_SUPER_ADMIN_PROTECTED` (deaktivacija, soft delete, hard delete, revokacija role) **i** da običan korisnik NIJE blokiran dok sistem nema Super Admina; `FORM_VERSION_IMMUTABLE` (DRAFT se mijenja, PUBLISHED ne, `RETIRED` samo s `retiredById`); partial unique na e-mail/`internalNo`/VIN/`code` seta; `ux_tire_installation_active`; `ux_task_assignment_assignee`; `ux_task_idempotency_key` (NULL se ponavlja); `EXCLUDE` preklapanje registracije (uklj. soft-deleted izuzetak); svi CHECK-ovi (vozilo, gume, zadatak, servis, forma, `NotificationDelivery.channel`) |
+
+Verifier **nije** dio `pnpm turbo run …` gate-a (treba PostgreSQL i Python),
+ali je obavezan korak prije svakog `git push`-a koji mijenja `prisma/migrations/`
+ili `schema.prisma`.
 
 ---
 
