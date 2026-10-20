@@ -31,10 +31,12 @@ COPY packages ./packages
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-# Prisma klijent (ako je CLI u dependencijama) + TypeScript build cijelog lanca.
-# Faza 0: `prisma` još nije dependencija → korak se preskače uz poruku u logu.
-# Faza 1: kada se doda `prisma`/`@prisma/client`, `prisma generate` se izvršava
-# automatski (i build PADA ako je šema neispravna — što je i željeno).
+# Prisma klijent + TypeScript build cijelog lanca.
+# `prisma generate` (Prisma 7, Rust-free generator `prisma-client`) emituje TS u
+# `apps/api/src/generated/prisma` — taj direktorij NIJE u Git-u, pa generate mora
+# proći PRIJE `tsc`. Build PADA ako je šema neispravna (što je i željeno).
+# ⚠️ Zahtijeva izlaz ka internetu (CLI provjerava/preuzima `schema-engine` s
+#    binaries.prisma.sh); bez toga generate pada.
 RUN if pnpm --filter @vfm/api exec prisma --version >/dev/null 2>&1; then \
       echo "PRISMA: CLI pronađen — generišem klijenta."; \
       pnpm --filter @vfm/api exec prisma generate; \
@@ -43,9 +45,20 @@ RUN if pnpm --filter @vfm/api exec prisma --version >/dev/null 2>&1; then \
     fi \
  && pnpm turbo run build --filter=@vfm/api...
 
-# Samostalni produkcijski paket (node_modules bez dev dependencija)
+# Samostalni produkcijski paket (node_modules bez dev dependencija).
+#
+# `prisma.config.ts` MORA u /prod/api: runtime servis `migrate` pokreće
+# `prisma migrate deploy` iz cwd=/app (WORKDIR), a Prisma 7 čita connection URL
+# za migracije ISKLJUČIVO iz tog fajla (flagovi --schema/--url više ne važe).
+#
+# Generisani klijent se NE generiše ponovo ovdje: `prisma generate` (korak gore)
+# emituje TypeScript u `apps/api/src/generated/prisma`, pa ga `tsc` sastavi u
+# `dist/` prije deploy-a. Query compiler WASM koji runtime treba
+# (`query_compiler_fast_bg.postgresql.*`) nalazi se u paketu `@prisma/client`,
+# koji je produkcijska dependencija → `pnpm deploy --prod` ga prenosi.
 RUN pnpm --filter @vfm/api deploy --prod --legacy /prod/api \
- && cp -r /app/apps/api/prisma /prod/api/prisma
+ && cp -r /app/apps/api/prisma /prod/api/prisma \
+ && cp /app/apps/api/prisma.config.ts /prod/api/prisma.config.ts
 
 # -----------------------------------------------------------------------------
 # 2) Runtime: minimalni image, non-root, tini kao PID 1

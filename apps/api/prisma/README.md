@@ -4,87 +4,148 @@
 
 ---
 
-## 🔴 Status u Fazi 0 — zašto Prisma još nije u `package.json`
+## ✅ Status — Prisma 7.10.1 je aktivirana u `package.json`
 
-`prisma generate`, `prisma validate`, `prisma format` i `prisma migrate`
-preuzimaju **engine binarne fajlove** (`schema-engine`, `query-engine`) s
-`https://binaries.prisma.sh/all_commits/<hash>/<platform>/…`.
+| Paket | Verzija | Uloga |
+|---|---|---|
+| `prisma` | 7.10.1 | CLI (`generate`, `migrate`, `validate`, `format`). **`dependencies`**, ne devDependencies: runtime servis `migrate` (`dist/tools/migrate.js`) spawn-uje `prisma migrate deploy`, a `pnpm deploy --prod` reže dev dependencije. |
+| `@prisma/client` | 7.10.1 | Runtime klijent; nosi i query compiler WASM (`runtime/query_compiler_fast_bg.postgresql.*`) koji generisani kod dinamički importuje. |
+| `dotenv` | 18.0.8 | Prisma 7 **ne** učitava `.env` automatski → `prisma.config.ts` počinje s `import 'dotenv/config'`. |
 
-Okruženje u kojem je ovaj kod napisan ima izlazni pristup **samo** ka
-`github.com`, `registry.npmjs.org` i `pypi.org`, pa:
+Generator je **`prisma-client`** (Rust-free, Prisma 7 default) s izlazom u
+`apps/api/src/generated/prisma`:
 
-- `binaries.prisma.sh` **nije dostupan** → `prisma generate` pada s
-  `Client network socket disconnected before secure TLS connection was established`,
-- platformski npm paketi (`@prisma/query-engine-linux-openssl-3.0.x` i dr.)
-  **ne postoje** na `registry.npmjs.org` (404) — engine se distribuira samo
-  preko `binaries.prisma.sh`.
+- izlaz je **TypeScript** (fajlovi nose `/* eslint-disable */` i `// @ts-nocheck`),
+  pa ga naš `tsc` sastavlja u `dist/generated/prisma` — importi ostaju
+  relativni i rade u CommonJS build-u (`tsconfig` je i dalje `module: commonjs`,
+  `"type": "module"` **nije** potreban),
+- direktorij je u `.gitignore`-u (`apps/api/src/generated/`) → generiše se u
+  svakom okruženju (Docker builder to radi **prije** `tsc`),
+- ESLint ga preskače (`src/generated/**` u `apps/api/eslint.config.mjs`).
 
-Zato su `prisma` i `@prisma/client` **namjerno izostavljeni** iz
-`apps/api/package.json`, a `src/prisma/**` je izuzet iz sandbox build-a
-(`tsconfig.build.json`). Sve ostalo (ENV validacija, Redis, redovi, health,
-error katalog) radi bez toga.
+Zastarjeli `prisma-client-js` generator nije korišten (u Prisma 7 je deprecated
+i traži native engine).
 
-> Ovo **nije** arhitekturna promjena: Prisma ostaje ORM po planu
-> (`docs/PLAN_IMPLEMENTACIJE.md`, ADR-03). Riječ je samo o ograničenju mreže u
-> jednom okruženju.
+### Connection URL — gdje živi (Prisma 7 breaking change)
+
+| Šta | Gdje | Ko čita |
+|---|---|---|
+| `url` u `datasource` bloku `schema.prisma` | ❌ **uklonjeno** — vraća grešku `P1012` | — |
+| `apps/api/prisma.config.ts` → `datasource.url` | ✅ izvor istine za CLI | `generate`, `migrate dev|deploy`, `db seed`, `studio` |
+| Konstruktor klijenta (runtime) | ✅ driver adapter (`PrismaPg({ connectionString })`) | API/worker proces |
+
+`prisma.config.ts` namjerno čita `process.env.DATABASE_URL`, a ne `env()` helper
+iz `prisma/config`: `env()` **baca** ako varijabla nije postavljena, a
+`prisma generate` se pokreće u Docker build-u i na čistom clone-u bez baze.
+
+### Šta radi bez interneta (sandbox), a šta ne — verificirano
+
+Prisma 7 nosi WASM u samom CLI paketu (`prisma/build/prisma_schema_build_bg.wasm`,
+`query_compiler_*_<db>.wasm`, `schema_engine_bg.wasm`), pa:
+
+| Komanda | Bez `binaries.prisma.sh` | Napomena |
+|---|---|---|
+| `prisma generate` | ✅ radi | validira šemu preko `getDmmf` WASM-a i generiše klijent (~0,55 s) |
+| `prisma format` | ✅ radi | WASM |
+| `prisma validate` | ❌ pada | traži native `schema-engine` |
+| `prisma migrate dev|deploy|diff` | ❌ pada | traži native `schema-engine` |
+
+> ⚠️ `migrate diff` uz `PRISMA_SCHEMA_ENGINE_BINARY=/bin/true` vrati **prazan**
+> SQL i exit 0 — lažni uspjeh. Taj trik smije se koristiti samo da bi
+> `generate`/`format` prošli u sandboxu, **nikad** za generisanje migracija.
+> (Ispravno: `PRISMA_SCHEMA_ENGINE_BINARY=/bin/true` + `prisma generate`.)
+
+### Ispravke šeme koje je Prisma 7 validacija otkrila (13 grešaka → 0)
+
+Šema iz Faze 0 nikad nije bila validirana (CLI nije bio instaliran). Ove
+ispravke su **verificirane** (`prisma generate` prolazi):
+
+| Greška | Ispravka |
+|---|---|
+| `TaskType.formSchema` i `TaskType.formSchemas` se obje odnose na `FormSchema` bez imena → *ambiguous relation* | relacije imenovane: `TaskTypeDefaultFormSchema` (zadana forma tipa zadatka) i `TaskTypeFormSchemas` (forme čiji je `taskTypeId` ovaj tip); na `FormSchema` dodano `defaultForTaskTypes TaskType[]` |
+| `formSchemaVersion` na 8 modela (`Vehicle`, `RegistrationRecord`, `InsuranceRecord`, `ServiceRecord`, `Driver`, `TireSet`, `TireInstallation`, `Task`) nema suprotnu stranu | dodane liste na `FormSchemaVersion` (U-02: svaki zapis pamti tačnu objavljenu verziju forme) |
+| `Attachment.uploadedBy` → `User` nema suprotnu stranu | `User.attachments Attachment[]` |
+| `Vehicle.photoAttachment` / `Driver.photoAttachment` (1:1) nemaju suprotnu stranu | `Attachment.vehiclePhotoOf` / `Attachment.driverPhotoOf` |
+| 1:1 relacija bez UNIQUE na FK strani (`P1012`) | `photoAttachmentId @unique` na `Vehicle` i `Driver` (NULL se smije ponavljati) — `docs/03-MODEL_PODATAKA.md` usklađen |
+| `quietHoursStart/End String? @db.Time` → native tip `Time` traži `DateTime` | `DateTime? @db.Time` (kolona ostaje PostgreSQL `time` po docs/03; Prisma vraća `Date` s datumom 1970-01-01, značajan je samo `HH:MM:SS`) |
 
 ---
 
-## Aktivacija (jednom, ~5 minuta)
+## Aktivacija na mašini / build serveru (~5 minuta)
 
-Pokrenuti na mašini/build serveru koji ima otvoren izlaz ka internetu — npr.
-Coolify build, GitHub Actions runner ili lokalna mašina vlasnika.
-
-```bash
-# 1) Dodaj Prisma dependencije (verzije su pinovane u docs/PLAN_IMPLEMENTACIJE.md)
-pnpm --filter @vfm/api add prisma@7.10.1
-pnpm --filter @vfm/api add @prisma/client@7.10.1
-
-> ⚠️ Sve komande se pokreću s **root-a monorepo-a**. Skripta `prisma:generate`
-> definisana je samo u `apps/api/package.json`, pa se poziva preko
-> `pnpm --filter @vfm/api …` (poziv `pnpm prisma:generate` s root-a pada).
+Dependencije su već u `apps/api/package.json` — **korak 1 iz starije verzije ovog
+README-a (`pnpm add …`) više nije potreban.**
 
 ```bash
-# 2) Generiši client
+git checkout main && git pull origin main
+pnpm install --frozen-lockfile
+
+# 1) Generiši klijent (pnpm --filter postavlja cwd na apps/api, gdje je prisma.config.ts)
 pnpm --filter @vfm/api prisma:generate
 
-# 3) Validiraj šemu i provjeri da li se nešto razlikuje od očekivanog
-pnpm --filter @vfm/api exec prisma validate --schema prisma/schema.prisma
-pnpm --filter @vfm/api exec prisma format   --schema prisma/schema.prisma
+# 2) Validacija + format (ova dva koraka skidaju schema-engine s binaries.prisma.sh)
+pnpm --filter @vfm/api prisma:validate
+pnpm --filter @vfm/api prisma:format
 
-# 4) Kreiraj inicijalnu migraciju nad dev bazom (docker-compose.dev.yml)
+# 3) Dev infrastruktura (docker-compose.dev.yml: vfm-postgres na 127.0.0.1:5433)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d vfm-postgres vfm-redis
-#    korisnik/lozinka/port su defaulti iz docker-compose.dev.yml:
-#    POSTGRES_USER=vfm, POSTGRES_PASSWORD=${DEV_DB_PASSWORD:-vfm_dev_only}, port 5433
+#    defaulti iz compose-a: POSTGRES_USER=vfm, POSTGRES_PASSWORD=${DEV_DB_PASSWORD:-vfm_dev_only}
 export DATABASE_URL="postgresql://vfm:vfm_dev_only@localhost:5433/vfm?schema=public"
-pnpm --filter @vfm/api exec prisma migrate dev --name init --schema prisma/schema.prisma
 
-# 5) Dodaj ručne SQL dijelove u generisanu migraciju (vidi sekciju ispod)
-#    i ponovo primijeni:
-#    5a) prvo ispiši svih 19 mjesta označenih komentarom `// SQL:`
-grep -n "// SQL:" apps/api/prisma/schema.prisma
-#    5b) sadržaj tih markera + apps/api/prisma/sql/0000_bootstrap_extensions.sql
-#        zalijepi u apps/api/prisma/migrations/<timestamp>_init/migration.sql
-#        (mora biti idempotentno: IF NOT EXISTS / CREATE OR REPLACE)
-pnpm --filter @vfm/api exec prisma migrate dev --schema prisma/schema.prisma
+# 4) Inicijalna migracija (Prisma 7 NE pokreće generate ni seed automatski)
+pnpm --filter @vfm/api exec prisma migrate dev --name init
+
+# 5) Ručni SQL koji Prisma ne može izraziti (sekcija ispod)
+grep -n "SQL:" apps/api/prisma/schema.prisma      # 19 markera
+#    + apps/api/prisma/sql/0000_bootstrap_extensions.sql
+#    → zalijepiti u apps/api/prisma/migrations/<timestamp>_init/migration.sql
+#      (idempotentno: IF NOT EXISTS / CREATE OR REPLACE)
+pnpm --filter @vfm/api exec prisma migrate dev
 
 # 6) Build s Prisma modulom uključenim
 pnpm --filter @vfm/api build:full
 
-# 7) Commit generisanih migracija (obavezno u Git — pravilo 2 ispod)
-git add apps/api/prisma/migrations apps/api/package.json pnpm-lock.yaml
-git commit -m "chore(prisma): aktivacija — deps 7.10.1, generate i inicijalna migracija init"
+# 7) Commit (migracije MORAJU u Git — pravilo 2 ispod)
+git add apps/api/prisma/migrations pnpm-lock.yaml
+git commit -m "chore(prisma): inicijalna migracija init + ručni SQL (ekstenzije, triggeri, CHECK-ovi)"
 git push origin main
 ```
 
-Nakon toga:
+Bez Docker-a na lokalnoj mašini: umjesto koraka 3–4 može se privremeno
+`DATABASE_URL` usmjeriti na praznu šemu na serveru, ali **nikad** na
+produkcijsku bazu (`migrate dev` briše i ponovo kreira shadow bazu).
 
-- uključiti `PrismaService` u `src/infra/database/database.module.ts`
-  (zamijeniti `DatabaseAvailabilityService` kao izvor `/health/ready` provjere),
-- u `src/health/database.health-indicator.ts` postaviti
-  `DATABASE_CHECK_NON_CRITICAL = false` i koristiti `prisma.$queryRaw\`SELECT 1\``,
-- skinuti `prisma` s `ignoredBuiltDependencies` u `pnpm-workspace.yaml`
-  **samo ako** build okruženje ima pristup `binaries.prisma.sh`.
+---
+
+## Prisma 7 — otvorene stavke
+
+1. **Driver adapter za runtime** (obavezno u Prisma 7): `PrismaService` mora
+   konstruisati klijent kao
+   `new PrismaClient({ adapter: new PrismaPg({ connectionString }) })` → dodati
+   `@prisma/adapter-pg@7.10.1` i `pg` u `dependencies` kad `PrismaService` bude
+   implementiran. ⚠️ Pool defaulti se razlikuju od Prisme 6 (`pg` nema
+   connection timeout → eksplicitno postaviti `connectionTimeoutMillis`).
+2. **`MIGRATIONS_STRICT`** je u `docker-compose.yml` još `false` (Faza 0 default).
+   Nakon prve commit-ovane migracije prebaciti na `true`, da deploy **pada** ako
+   migracije ne prolaze, umjesto da tiho nastavi.
+3. **CI** (`.github/workflows/ci.yml`): poslovi `quality` i `build` ne pokreću
+   `prisma generate`. Dok nijedan izvorni fajl ne importuje generisani klijent to
+   je ispravno; čim `PrismaService` uđe u `src/`, dodati korak
+   `pnpm --filter @vfm/api prisma:generate` **prije** lint/typecheck/build.
+4. **Seed**: u Prisma 7 `migrate dev` ne pokreće seed. Kad `prisma/seed.ts` bude
+   napisan (3 role, demo korisnici s generisanim lozinkama, 10 fiktivnih vozila),
+   dodati `migrations.seed` u `prisma.config.ts` i zvati `prisma db seed`
+   (compose već ima `RUN_DB_SEED` / `SEED_DEMO_DATA`).
+5. **Runtime engine za `migrate deploy`** — *assumed, treba provjeriti pri prvom
+   Coolify deploy-u*: `prisma migrate deploy` koristi native `schema-engine`, pa
+   ga runtime kontejner preuzima s `binaries.prisma.sh` pri prvom pokretanju
+   (ili ga nađe u `node_modules/@prisma/engines` ako je preuzet u builderu).
+   Ako deploy padne zbog mreže/kesh-a (`HOME` korisnika `vfm` nije upisiv),
+   rješenje je preuzeti engine u builder fazi i kopirati ga u `/prod/api`, ili
+   pokrenuti migracije iz jednokratnog kontejnera s mrežom.
+6. **SSL**: Prisma 7 koristi `node-pg`, pa se neispravni certifikati više ne
+   ignorišu (`P1010`). Za globalni Postgres s validnim certifikatom nije potreban
+   `ssl: { rejectUnauthorized: false }` — ne dodavati ga bez potrebe.
 
 ---
 

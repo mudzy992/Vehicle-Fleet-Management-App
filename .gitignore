@@ -157,6 +157,10 @@ infra/postgres/data/
 **/google-services.json
 **/*service-account*.json
 !*.example
+# Prisma — generisani klijent (Prisma 7 generator `prisma-client` emituje TS).
+# Regeneriše se sa `pnpm --filter @vfm/api prisma:generate` (Docker builder to
+# radi prije `tsc`); u Git idu samo `prisma/schema.prisma` i `prisma/migrations/`.
+apps/api/src/generated/
 # EAS / Expo
 apps/mobile/.expo/
 apps/mobile/dist/

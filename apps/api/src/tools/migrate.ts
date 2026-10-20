@@ -105,19 +105,20 @@ async function main(): Promise<number> {
     const prismaAvailable = await isPrismaAvailable();
     if (!prismaAvailable) {
       const message = [
-        'Prisma CLI nije instaliran u apps/api, pa migracije nisu pokrenute.',
+        'Prisma CLI nije pronađen, pa migracije nisu pokrenute.',
         '',
-        'Razlog: `prisma generate`/`migrate` preuzimaju engine binarne fajlove s',
-        'https://binaries.prisma.sh. U okruženju gdje je ovaj kod nastao taj host',
-        'nije dostupan, pa Prisma nije dodata u dependencije (vidi apps/api/prisma/README.md).',
+        'Prisma 7.10.1 JESTE deklarirana u apps/api/package.json (`prisma`,',
+        '`@prisma/client`, `dotenv`). Ako ovaj tool ipak ne vidi CLI, uzrok je',
+        'najvjerovatnije pakovanje: runtime image nastaje iz `pnpm deploy --prod`,',
+        'pa `prisma` mora biti u `dependencies` (ne devDependencies), a',
+        '`prisma.config.ts` i `prisma/migrations/` moraju biti kopirani u /prod/api',
+        '(vidi apps/api/Dockerfile).',
         '',
-        'Aktivacija (jednom, na mašini/build serveru s internetom):',
-        '  pnpm --filter @vfm/api add prisma@7.10.1 @prisma/client@7.10.1',
-        '  pnpm prisma:generate',
-        '  pnpm --filter @vfm/api exec prisma migrate dev --name init',
+        'Provjera: ls node_modules/prisma/build/index.js && cat prisma.config.ts',
         '',
-        'Schema je kompletna i spremna: apps/api/prisma/schema.prisma',
-        'Ekstenzije se mogu postaviti ručno: apps/api/prisma/sql/0000_bootstrap_extensions.sql',
+        'Migracije se primjenjuju ISKLJUČIVO sa `prisma migrate deploy` (pravilo 1',
+        'u apps/api/prisma/README.md) — connection URL čita se iz prisma.config.ts,',
+        'jer Prisma 7 više ne podržava `url` u schema.prisma ni flag --url.',
         '',
         env.MIGRATIONS_STRICT
           ? 'MIGRATIONS_STRICT=true → deploy se prekida (exit 1).'

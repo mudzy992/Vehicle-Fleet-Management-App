@@ -10,7 +10,17 @@ import { vfmBase } from '@vfm/config/eslint/base';
  * provjere (unused vars, no-explicit-any, prettier…) ostaju aktivne.
  */
 export default [
-  ...vfmBase({ ignore: ['dist/**', 'coverage/**', 'prisma/**', 'node_modules/**'] }),
+  ...vfmBase({
+    ignore: [
+      'dist/**',
+      'coverage/**',
+      'prisma/**',
+      // Prisma 7 generiše TypeScript klijent (fajlovi već nose `/* eslint-disable */`
+      // i `// @ts-nocheck`), ali ga ne treba ni parsirati pri svakom lintu (5 MB).
+      'src/generated/**',
+      'node_modules/**',
+    ],
+  }),
   {
     files: ['src/**/*.ts', 'test/**/*.ts'],
     rules: {

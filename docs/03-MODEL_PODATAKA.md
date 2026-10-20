@@ -236,7 +236,7 @@ END $$ LANGUAGE plpgsql;
 | insuranceExpiresAt | date | IDX (denormalizovano) |
 | nextServiceDueDate | date | IDX |
 | nextServiceDueKm | int | IDX |
-| photoAttachmentId | uuid | FK Attachment |
+| photoAttachmentId | uuid **UQ** | FK Attachment — 1:1 (`VehiclePhoto`); Prisma zahtijeva UNIQUE na FK strani |
 | notes | text | |
 | formSchemaId / formSchemaVersionId | uuid | FK; **obavezno** pri kreiranju |
 | formData | jsonb | NOT NULL default `{}` |
@@ -272,7 +272,7 @@ uključena) · **IDX:** `(vehicleId, serviceDate DESC)`, `(nextServiceDueDate)`,
 **IDX:** `(serviceRecordId)`
 
 #### `Driver`
-| id, firstName, lastName, phone, email, dateOfBirth date, address text, employeeNumber text, employmentStatus text, licenseNumber text (**PII**), licenseIssuedAt date, licenseExpiresAt date IDX, licenseIssuingAuthority text, restrictions text, notes text, status text default `ACTIVE`, photoAttachmentId uuid, formSchema*, formData jsonb, version int, createdById, createdAt, updatedAt, deletedAt |
+| id, firstName, lastName, phone, email, dateOfBirth date, address text, employeeNumber text, employmentStatus text, licenseNumber text (**PII**), licenseIssuedAt date, licenseExpiresAt date IDX, licenseIssuingAuthority text, restrictions text, notes text, status text default `ACTIVE`, photoAttachmentId uuid **UQ** (1:1 `DriverPhoto`), formSchema*, formData jsonb, version int, createdById, createdAt, updatedAt, deletedAt |
 **IDX:** `(lastName, firstName)`, `(licenseExpiresAt)` · **PII:** `licenseNumber`, `dateOfBirth`,
 `address`, `phone`, `email` se vraćaju samo uz `driver:view_pii` (**B-20**), inače redigovano.
 

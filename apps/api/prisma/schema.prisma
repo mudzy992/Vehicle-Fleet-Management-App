@@ -6,14 +6,16 @@
 //  Baza:          PostgreSQL 17 (globalni Postgres na mreži `db_net`)
 //  ORM:           Prisma 7.10
 //
-//  🔴 STATUS (Faza 0): `prisma generate` / `migrate` preuzimaju engine binarne
-//     fajlove s https://binaries.prisma.sh. U sandboxu u kojem je ovaj kod
-//     nastao taj host NIJE dostupan, pa:
-//       - `prisma` / `@prisma/client` još nisu u `apps/api/package.json`,
-//       - ovaj fajl se NE kompajlira i NE validira u tom okruženju.
-//     Aktivacija (jednom, na mašini/build serveru s internetom):
-//       pnpm --filter @vfm/api add prisma@7.10.1 @prisma/client@7.10.1
-//       pnpm prisma:generate
+//  🔴 PRISMA 7 (7.10.1) — breaking changes koji se tiču ovog fajla:
+//       - `url` NIJE dozvoljen u `datasource` bloku (greška P1012); connection
+//         URL za CLI živi u `apps/api/prisma.config.ts`,
+//       - Prisma 7 NE učitava `.env` sama (config radi `import 'dotenv/config'`),
+//       - `migrate dev` više NE pokreće `prisma generate` ni seed automatski.
+//     `prisma`, `@prisma/client` i `dotenv` JESU u `apps/api/package.json`.
+//     U sandboxu u kojem je ovaj kod nastao `binaries.prisma.sh` nije dostupan,
+//     pa tamo rade samo `prisma validate` i `prisma format` (WASM, bez enginea);
+//     `generate` i `migrate` pokreću se na mašini/build serveru s internetom:
+//       pnpm --filter @vfm/api prisma:generate
 //       pnpm --filter @vfm/api exec prisma migrate dev --name init
 //     Detalji: apps/api/prisma/README.md
 //
@@ -25,12 +27,19 @@
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Prisma 7: bez `url` (P1012). Connection URL čita CLI iz
+  // `apps/api/prisma.config.ts` → `datasource.url` (process.env.DATABASE_URL).
+  // Runtime (PrismaClient) URL se postavlja pri konstrukciji klijenta.
 }
 
 generator client {
-  provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/client"
+  // ⚠️ `prisma-client-js` je u Prisma 7 deprecated (i dalje radi, ali će biti
+  //    uklonjen u nekoj od sljedećih verzija). Prelazak na Rust-free generator
+  //    `prisma-client` (TS output u repo + driver adapter `@prisma/adapter-pg`)
+  //    zaseban je korak i radi se kad `PrismaService` bude implementiran —
+  //    vidi apps/api/prisma/README.md §"Prisma 7 — otvorene stavke".
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 // -----------------------------------------------------------------------------
@@ -352,6 +361,7 @@ model User {
   grantedUserRole      UserRole[]      @relation("UserRoleAssignedBy")
   idempotencyKeys      IdempotencyKey[]
   exportJobs           ExportJob[]
+  attachments          Attachment[]
   scheduledReminderAcks ScheduledReminder[] @relation("ReminderAcknowledgedBy")
 
   @@unique([email])
@@ -538,7 +548,7 @@ model Vehicle {
   insuranceExpiresAt    DateTime?     @db.Date
   nextServiceDueDate    DateTime?     @db.Date
   nextServiceDueKm      Int?
-  photoAttachmentId     String?       @db.Uuid
+  photoAttachmentId     String?       @unique @db.Uuid
   notes                 String?
   formSchemaId          String        @db.Uuid
   formSchemaVersionId   String        @db.Uuid
@@ -552,6 +562,8 @@ model Vehicle {
 
   formSchema            FormSchema        @relation(fields: [formSchemaId], references: [id])
   formSchemaVersion     FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
+  // 1:1 → `photoAttachmentId` mora biti UNIQUE (isti attachment ne može biti
+  // naslovna fotografija dva vozila; NULL je dozvoljen više puta).
   photoAttachment       Attachment?       @relation("VehiclePhoto", fields: [photoAttachmentId], references: [id])
   odometerReadings      OdometerReading[]
   registrations         RegistrationRecord[]
@@ -744,7 +756,7 @@ model Driver {
   restrictions          String?
   notes                 String?
   status                String    @default("ACTIVE")
-  photoAttachmentId     String?   @db.Uuid
+  photoAttachmentId     String?   @unique @db.Uuid
   formSchemaId          String?   @db.Uuid
   formSchemaVersionId   String?   @db.Uuid
   formData              Json      @default("{}")
@@ -909,7 +921,8 @@ model FormSchema {
   updatedAt                DateTime     @updatedAt @db.Timestamptz(6)
   deletedAt                DateTime?    @db.Timestamptz(6)
 
-  taskType                 TaskType?    @relation(fields: [taskTypeId], references: [id])
+  taskType                 TaskType?    @relation("TaskTypeFormSchemas", fields: [taskTypeId], references: [id])
+  defaultForTaskTypes      TaskType[]   @relation("TaskTypeDefaultFormSchema")
   versions                 FormSchemaVersion[]
   currentPublishedVersion  FormSchemaVersion? @relation("CurrentPublishedVersion", fields: [currentPublishedVersionId], references: [id])
   migrationJobs            FormMigrationJob[]
@@ -949,6 +962,17 @@ model FormSchemaVersion {
   publishedVersionOf FormSchema[]   @relation("CurrentPublishedVersion")
   migrationJobsFrom FormMigrationJob[] @relation("MigrationFromVersion")
   migrationJobsTo   FormMigrationJob[] @relation("MigrationToVersion")
+
+  // Zapisi koji nose `formSchemaVersionId` (U-02: svaki zapis pamti tačnu
+  // objavljenu verziju forme kojom je unesen — verzija je immutable, P-10).
+  vehicles             Vehicle[]
+  registrationRecords  RegistrationRecord[]
+  insuranceRecords     InsuranceRecord[]
+  serviceRecords       ServiceRecord[]
+  drivers              Driver[]
+  tireSets             TireSet[]
+  tireInstallations    TireInstallation[]
+  tasks                Task[]
 
   @@unique([formSchemaId, version])
   @@index([formSchemaId, status, publishedAt(sort: Desc)])
@@ -1041,8 +1065,11 @@ model TaskType {
   updatedAt             DateTime        @updatedAt @db.Timestamptz(6)
   deletedAt             DateTime?       @db.Timestamptz(6)
 
-  formSchema            FormSchema?     @relation(fields: [formSchemaId], references: [id])
-  formSchemas           FormSchema[]
+  // Dvije NEZAVISNE relacije između TaskType i FormSchema (Prisma traži imena):
+  //  - formSchema  = zadana/aktivna forma za ovaj tip zadatka (FK na TaskType strani)
+  //  - formSchemas = sve forme čiji je `taskTypeId` ovaj tip (FK na FormSchema strani)
+  formSchema            FormSchema?     @relation("TaskTypeDefaultFormSchema", fields: [formSchemaId], references: [id])
+  formSchemas           FormSchema[]    @relation("TaskTypeFormSchemas")
   tasks                 Task[]
   completionRequirements TaskCompletionRequirement[]
 
@@ -1311,8 +1338,11 @@ model NotificationPreference {
   channelFcm        Boolean  @default(true)
   channelInApp      Boolean  @default(true)
   channelEmail      Boolean  @default(false)
-  quietHoursStart   String?  @db.Time
-  quietHoursEnd     String?  @db.Time
+  // docs/03: PostgreSQL TIME. Prisma uz `@db.Time` dozvoljava SAMO `DateTime`,
+  // pa se vraća Date s datumom 1970-01-01 — značajan je samo HH:MM:SS dio
+  // (lokalno vrijeme Europe/Sarajevo, ne UTC instanta).
+  quietHoursStart   DateTime? @db.Time
+  quietHoursEnd     DateTime? @db.Time
   createdAt         DateTime @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime @updatedAt @db.Timestamptz(6)
 
@@ -1401,6 +1431,11 @@ model Attachment {
   uploadedBy     User                @relation(fields: [uploadedById], references: [id])
   task           Task?               @relation("TaskAttachments", fields: [taskId], references: [id])
   exportJobs     ExportJob[]
+  // 1:1 "glavna fotografija" — FK je na strani Vehicle/Driver (`photoAttachmentId`),
+  // pa suprotna strana ovdje nema polja s FK-om (B-15: attachment je vlasništvo
+  // entiteta preko `ownerType`/`ownerId`, ovo su samo pokazivači na naslovnicu).
+  vehiclePhotoOf Vehicle?            @relation("VehiclePhoto")
+  driverPhotoOf  Driver?             @relation("DriverPhoto")
 
   @@unique([ownerType, ownerId, sha256])
   @@index([sha256])

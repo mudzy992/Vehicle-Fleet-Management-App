@@ -104,7 +104,18 @@ for (const [name, meta] of [...referenced.entries()].sort()) {
 const SOURCE_EXT = new Set([
   '.ts', '.tsx', '.js', '.mjs', '.cjs', '.json', '.yml', '.yaml', '.prisma', '.conf', '.template', '.sh', '.env',
 ]);
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.turbo', 'coverage', '.data', '.expo']);
+// 'generated' = Prisma 7 klijent (apps/api/src/generated/prisma, ~100 fajlova, gitignored).
+const SKIP_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.turbo',
+  'coverage',
+  '.data',
+  '.expo',
+  'generated',
+]);
 
 /** @returns {Set<string>} */
 function collectCorpus(dir, acc = new Set()) {

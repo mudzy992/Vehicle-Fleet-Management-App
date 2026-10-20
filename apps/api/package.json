@@ -17,9 +17,12 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "clean": "rm -rf dist coverage .turbo",
-    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
-    "prisma:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
-    "prisma:migrate:diff": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script"
+    "prisma:validate": "prisma validate",
+    "prisma:format": "prisma format",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:diff": "prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script"
   },
   "dependencies": {
     "@nestjs/common": "12.2.0",
@@ -29,10 +32,13 @@
     "@nestjs/platform-express": "12.2.0",
     "@nestjs/terminus": "12.1.0",
     "@node-rs/argon2": "2.2.2",
+    "@prisma/client": "7.10.1",
     "@vfm/shared": "workspace:*",
     "bullmq": "6.3.17",
+    "dotenv": "18.0.8",
     "ioredis": "6.0.0",
     "pino": "10.4.0",
+    "prisma": "7.10.1",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "zod": "4.6.7"
