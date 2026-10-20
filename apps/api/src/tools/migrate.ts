@@ -24,12 +24,20 @@
  */
 import { spawn } from 'node:child_process';
 import { connect } from 'node:net';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { redisConfig } from '@vfm/shared/env';
 import type { BaseEnv } from '@vfm/shared/env';
 import { inspectEnv } from '../config/env.js';
 import { setupLogger } from '../config/logger.js';
+import {
+  findSchemaEngineBinary,
+  listMigrationNames,
+  parsePendingMigrations,
+  reportFailure,
+  type PrismaRun,
+  type ToolLogger,
+} from './migrate-diagnostics.js';
 
 const LOCK_KEY = 'vfm:lock:migrate';
 const LOCK_TTL_MS = 5 * 60 * 1000;
@@ -149,6 +157,19 @@ async function main(): Promise<number> {
           'treba izlaz ka internetu. Ispravka je u apps/api/Dockerfile (korak 1b).',
       );
     }
+
+    // 3c) Oporavak historije migracija (P3005 / pali red) — ISKLJUČIVO na izričit
+    //     zahtjev operatora kroz ENV (MIGRATIONS_BASELINE / MIGRATIONS_ROLLED_BACK),
+    //     nikad automatski: baseline označi migraciju primijenjenom BEZ izvršavanja
+    //     DDL-a, pa bi pogrešna upotreba tiho preskočila stvarne izmjene šeme.
+    const repairCode = await repairMigrationHistory(
+      env.MIGRATIONS_BASELINE,
+      env.MIGRATIONS_ROLLED_BACK,
+      env.DATABASE_URL,
+      logger,
+      engineBinary,
+    );
+    if (repairCode !== null) return repairCode;
 
     // 4) migrate deploy
     logger.log('Pokrećem `prisma migrate deploy`…');
@@ -321,18 +342,6 @@ async function isPrismaAvailable(): Promise<boolean> {
   }
 }
 
-/** Rezultat jednog poziva prisma CLI-ja (exit code + sav izlaz). */
-interface PrismaRun {
-  readonly code: number;
-  readonly output: string;
-}
-
-interface ToolLogger {
-  log: (msg: string) => void;
-  warn: (msg: string) => void;
-  error: (msg: string) => void;
-}
-
 /**
  * Pokreće prisma CLI kao child proces.
  *
@@ -385,172 +394,87 @@ function runPrisma(
 }
 
 /**
- * Traži nativni `schema-engine` binarni fajl.
+ * Oporavak `_prisma_migrations` bez diranja podataka. Vraća `null` kada nema
+ * ničega za raditi ILI kada je oporavak uspio (tada main() nastavlja s deploy);
+ * vraća exit code samo pri grešci.
  *
- * Builder ga preuzima u `node_modules/@prisma/engines/` (Dockerfile korak 1b), a
- * `pnpm deploy --prod` ga preslikava u `/prod/api/node_modules/…`. Provjeravaju
- * se i pnpm `.pnpm` putanje (dev mašina) da bi alat radio i lokalno.
+ * - `MIGRATIONS_BASELINE=0_extensions,1_init` → `prisma migrate resolve --applied`
+ *   za svaku navedenu migraciju koja JE na Prisma-inoj listi neprimijenjenih.
+ *   Rješava **P3005** ("database schema is not empty"): objekti su u bazi, a
+ *   historija je obrisana (npr. ručni `DROP TABLE _prisma_migrations`).
+ * - `MIGRATIONS_ROLLED_BACK=1_init` → `prisma migrate resolve --rolled-back`,
+ *   rješava red s `finished_at IS NULL` nakon palog pokušaja.
+ *
+ * Nazivi se provjeravaju i protiv stvarnih direktorija u `prisma/migrations`, pa
+ * greška u kucanju ne prolazi tiho.
  */
-function findSchemaEngineBinary(): string | null {
-  const prefix = 'schema-engine-';
-  const roots = [
-    resolve(process.cwd(), 'node_modules', '@prisma', 'engines'),
-    resolve(process.cwd(), 'node_modules', '.pnpm'),
-    resolve(__dirname, '..', '..', 'node_modules', '@prisma', 'engines'),
-    '/prod/api/node_modules/@prisma/engines',
-  ];
+async function repairMigrationHistory(
+  baseline: readonly string[],
+  rolledBack: readonly string[],
+  databaseUrl: string | undefined,
+  logger: ToolLogger,
+  engineBinary: string | null,
+): Promise<number | null> {
+  const baselineNames = baseline.map((name) => name.trim()).filter((name) => name.length > 0);
+  const rolledBackNames = rolledBack.map((name) => name.trim()).filter((name) => name.length > 0);
+  if (baselineNames.length === 0 && rolledBackNames.length === 0) return null;
 
-  const matches: string[] = [];
-  const walk = (dir: string, depth: number): void => {
-    if (depth > 5) return;
-    let entries: readonly string[];
-    try {
-      entries = readdirSync(dir);
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const full = resolve(dir, entry);
-      if (entry.startsWith(prefix) && existsSync(full)) {
-        matches.push(full);
-        continue;
-      }
-      if (entry.startsWith('@prisma+engines@') || entry === '@prisma' || entry === 'node_modules') {
-        walk(full, depth + 1);
-      }
-    }
-  };
-
-  for (const root of roots) walk(root, 0);
-  return matches.length > 0 ? (matches[0] ?? null) : null;
-}
-
-/**
- * Prepoznaje uobičajene uzroke pada i ispisuje konkretan sljedeći korak.
- * Bez ovoga deploy padne s `exit 1` i bez objašnjenja (što se i desilo).
- */
-function diagnosePrismaFailure(output: string): string[] {
-  const text = output.toLowerCase();
-  const hints: string[] = [];
-
-  if (
-    text.includes('permission denied to create extension') ||
-    text.includes('must be superuser') ||
-    text.includes('must be owner of database')
-  ) {
-    hints.push(
-      'UZROK: korisnik baze nema pravo CREATE EXTENSION (pgcrypto/citext/btree_gist).\n' +
-        'RJEŠENJE: u pgAdmin-u, kao VLASNIK baze, pokreni\n' +
-        '  apps/api/prisma/sql/0000_bootstrap_extensions.sql\n' +
-        'zatim označi migraciju primijenjenom:\n' +
-        '  pnpm --filter @vfm/api exec prisma migrate resolve --applied 0_extensions',
-    );
-  }
-
-  if (
-    text.includes('binaries.prisma.sh') ||
-    text.includes('failed to fetch') ||
-    text.includes('could not download') ||
-    text.includes('getaddrinfo') ||
-    text.includes('enotfound') ||
-    text.includes('econnreset') ||
-    text.includes('unable to fetch')
-  ) {
-    hints.push(
-      'UZROK: CLI pokušava preuzeti `schema-engine` s binaries.prisma.sh i ne uspijeva\n' +
-        '  (runtime kontejner nema izlaz ka internetu, ili engine nije zapečen u image).\n' +
-        'RJEŠENJE: rebuilduj image — apps/api/Dockerfile korak 1b preuzima engine pri\n' +
-        '  buildu. Provjera u builder logu: "PRISMA: schema-engine je preuzet".',
-    );
-  }
-
-  if (text.includes('incompatible types') || text.includes('cannot be implemented')) {
-    hints.push(
-      'UZROK: FK između kolona različitih tipova (npr. TEXT → UUID).\n' +
-        'RJEŠENJE: u schema.prisma dodaj @db.Uuid na to polje i regeneriši 1_init:\n' +
-        '  pnpm --filter @vfm/api exec prisma migrate diff --from-empty \\\n' +
-        '    --to-schema prisma/schema.prisma --script > prisma/migrations/1_init/migration.sql\n' +
-        'Zatim provjeri skriptom scripts/db-verify/apply_migrations.py.',
-    );
-  }
-
-  if (text.includes('p3005') || text.includes('database schema is not empty')) {
-    hints.push(
-      'UZROK: baza NIJE prazna, a nema zapisa u `_prisma_migrations` (P3005).\n' +
-        'RJEŠENJE: ako je šema već ispravna → `prisma migrate resolve --applied <naziv>`\n' +
-        '  za svaku postojeću migraciju; ako je baza testna → isprazni je i redeployaj.',
-    );
-  }
-
-  if (text.includes('checksum')) {
-    hints.push(
-      'UZROK: checksum migracije se ne poklapa — već primijenjena migracija je izmijenjena.\n' +
-        'RJEŠENJE: vraćeni sadržaj te migracije (git) ili `prisma migrate resolve` uz\n' +
-        '  svjesnu odluku; izmjene idu u NOVU migraciju, nikad u postojeću.',
-    );
-  }
-
-  if (
-    text.includes("relation \"_prisma_migrations\" does not exist") ||
-    text.includes('an earlier migration failed') ||
-    text.includes('failed to apply')
-  ) {
-    hints.push(
-      'UZROK: u `_prisma_migrations` postoji red s `finished_at IS NULL` (pali pokušaj).\n' +
-        'RJEŠENJE: otkloni uzrok pada, zatim\n' +
-        '  prisma migrate resolve --rolled-back <naziv_migracije>\n' +
-        'i ponovi deploy. Ako je baza prazna, dovoljno je: DROP TABLE _prisma_migrations.',
-    );
-  }
-
-  if (
-    text.includes('password authentication failed') ||
-    text.includes('p1010') ||
-    text.includes('p1001') ||
-    text.includes("can't reach database server")
-  ) {
-    hints.push(
-      'UZROK: DATABASE_URL/kredencijali/mreža — kontejner ne može otvoriti sesiju prema bazi.\n' +
-        'RJEŠENJE: provjeri da je servis na mreži `db_net` i da DATABASE_URL odgovara\n' +
-        '  korisniku baze (Prisma 7: SSL greške se javljaju kao P1010).',
-    );
-  }
-
-  if (text.includes('does not exist') && text.includes('citext')) {
-    hints.push(
-      'UZROK: ekstenzija `citext` nije kreirana, a kolone je koriste.\n' +
-        'RJEŠENJE: migracija 0_extensions mora proći PRIJE 1_init — vidi hint za CREATE EXTENSION.',
-    );
-  }
-
-  if (output.trim().length === 0) {
-    hints.push(
-      'UZROK: prisma CLI nije ispisao NIŠTA — najvjerovatnije `npx --no-install prisma`\n' +
-        '  nije našao CLI u node_modules (runtime image bez `prisma` u dependencies).\n' +
-        'PROVJERA: docker run --rm <image> ls node_modules/prisma/build/index.js',
-    );
-  }
-
-  return hints;
-}
-
-/** Prijavljuje neuspjeh: exit code, posljednje linije izlaza i konkretne hintove. */
-function reportFailure(message: string, run: PrismaRun, logger: ToolLogger): void {
-  const lines = run.output.split('\n').filter((line) => line.trim().length > 0);
-  const tail = lines.slice(-40).join('\n');
-  const hints = diagnosePrismaFailure(run.output);
-
-  logger.error(`${message} (exit ${run.code}).`);
-  if (tail.length > 0) {
-    logger.error(`Zadnji izlaz prisma CLI-ja (${lines.length} linija ukupno):\n${tail}`);
-  }
-  for (const hint of hints) logger.error(hint);
-  if (hints.length === 0) {
+  const migrationsDir = resolve(process.cwd(), 'prisma', 'migrations');
+  const known = listMigrationNames(migrationsDir);
+  const knownSet = new Set(known);
+  const unknown = [...baselineNames, ...rolledBackNames].filter((name) => !knownSet.has(name));
+  if (unknown.length > 0) {
     logger.error(
-      'Nije prepoznat poznati uzrok — pošalji CIJELI log ovog kontejnera ' +
-        '(`docker logs <migrate kontejner>`) uz poruku o grešci.',
+      `Nepoznate migracije u MIGRATIONS_BASELINE/MIGRATIONS_ROLLED_BACK: ${unknown.join(', ')}. ` +
+        `Postojeće migracije: ${known.join(', ') || '(nijedna)'}`,
     );
+    return 1;
   }
+
+  const status = await runPrisma(['migrate', 'status'], databaseUrl, logger, engineBinary);
+  const pending = parsePendingMigrations(status.output);
+  logger.log(`Neprimijenjene migracije prema 'migrate status': ${pending.join(', ') || '(nijedna)'}`);
+
+  for (const name of rolledBackNames) {
+    logger.warn(
+      `MIGRATIONS_ROLLED_BACK: '${name}' označavam kao vraćenu — može se ponovo primijeniti.`,
+    );
+    const run = await runPrisma(
+      ['migrate', 'resolve', '--rolled-back', name],
+      databaseUrl,
+      logger,
+      engineBinary,
+    );
+    if (run.code !== 0) {
+      reportFailure(`'migrate resolve --rolled-back ${name}' nije uspio`, run, logger);
+      return run.code;
+    }
+  }
+
+  for (const name of baselineNames) {
+    if (!pending.includes(name)) {
+      logger.warn(`MIGRATIONS_BASELINE: '${name}' nije na listi neprimijenjenih — preskačem.`);
+      continue;
+    }
+    logger.warn(
+      `MIGRATIONS_BASELINE: '${name}' označavam kao PRIMIJENJENU bez izvršavanja DDL-a. ` +
+        'Ispravno je SAMO ako objekti te migracije zaista postoje u bazi — provjera: ' +
+        'apps/api/prisma/sql/9000_dijagnostika_stanja_baze.sql',
+    );
+    const run = await runPrisma(
+      ['migrate', 'resolve', '--applied', name],
+      databaseUrl,
+      logger,
+      engineBinary,
+    );
+    if (run.code !== 0) {
+      reportFailure(`'migrate resolve --applied ${name}' nije uspio`, run, logger);
+      return run.code;
+    }
+  }
+
+  logger.log('Historija migracija usklađena — nastavljam s `migrate deploy`.');
+  return null;
 }
 
 function sleep(ms: number): Promise<void> {

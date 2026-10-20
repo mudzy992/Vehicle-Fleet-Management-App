@@ -137,6 +137,22 @@ describe('parseEnv — defaulti i normalizacija', () => {
     ]);
   });
 
+  it('MIGRATIONS_BASELINE / MIGRATIONS_ROLLED_BACK: prazno = [] (normalan rad)', () => {
+    // Coolify šalje prazan string kada varijabla postoji ali nije popunjena —
+    // tad se historija migracija NE dira (migrate ide kroz običan `migrate deploy`).
+    expect(parseEnv({}).MIGRATIONS_BASELINE).toEqual([]);
+    expect(parseEnv({ MIGRATIONS_BASELINE: '' }).MIGRATIONS_BASELINE).toEqual([]);
+    expect(parseEnv({ MIGRATIONS_ROLLED_BACK: '' }).MIGRATIONS_ROLLED_BACK).toEqual([]);
+  });
+
+  it('MIGRATIONS_BASELINE se parsira kao lista naziva migracija (oporavak od P3005)', () => {
+    const env = parseEnv({ MIGRATIONS_BASELINE: '0_extensions, 1_init ,, 2_manual' });
+    expect(env.MIGRATIONS_BASELINE).toEqual(['0_extensions', '1_init', '2_manual']);
+    expect(parseEnv({ MIGRATIONS_ROLLED_BACK: '1_init' }).MIGRATIONS_ROLLED_BACK).toEqual([
+      '1_init',
+    ]);
+  });
+
   it('boolean-like vrijednosti (Coolify često šalje string)', () => {
     expect(parseEnv({ COOKIE_SECURE: 'true' }).COOKIE_SECURE).toBe(true);
     expect(parseEnv({ COOKIE_SECURE: '1' }).COOKIE_SECURE).toBe(true);

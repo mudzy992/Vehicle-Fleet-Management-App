@@ -268,6 +268,79 @@ ili `schema.prisma`.
 
 ---
 
+## E) Oporavak: P3005 i pali deploy (baseline historije migracija)
+
+### E1) `P3005 — The database schema is not empty`
+
+Značenje: u bazi **postoje objekti** (tabele/funkcije/…), a `_prisma_migrations`
+**nema redova**. Prisma tad odbija `migrate deploy`, jer ne zna je li šema
+"nečija tuđa" ili rezultat migracija koje su izgubile historiju.
+
+Tipičan uzrok: ručni `DROP TABLE _prisma_migrations` nakon palog deploya, dok su
+objekti prethodne (uspješne) migracije ostali u bazi.
+
+Postupak (2 koraka, bez ručnog upisivanja u `_prisma_migrations`):
+
+1. **Utvrdi šta je stvarno primijenjeno** — u pgAdmin-u izvrši sekciju A fajla
+   `apps/api/prisma/sql/9000_dijagnostika_stanja_baze.sql` (read-only) i uporedi
+   s očekivanim brojkama:
+
+   | Provjera | Očekivano | Ako se poklapa |
+   |---|---|---|
+   | `pg_extension` | pgcrypto, citext, btree_gist | `0_extensions` je primijenjena |
+   | tabela u `public` | 45 | `1_init` je primijenjena |
+   | `ux_` indeksi / `ck_` ograničenja / EXCLUDE / triggeri | 9 / 18 / 2 / 6 | `2_manual` je primijenjena |
+   | `AuditLog.id` identity | `a` | `2_manual` §1 je primijenjen |
+   | FK-ovi s različitim tipovima | 0 redova | šema je ispravna |
+
+2. **Označi primijenjeno bez izvršavanja DDL-a** — u Coolify (Environment
+   Variables) postavi i redeployaj:
+
+   ```bash
+   # sve tri migracije postoje u bazi:
+   MIGRATIONS_BASELINE=0_extensions,1_init,2_manual
+   # samo ekstenzije i tabele (2_manual će se STVARNO primijeniti):
+   MIGRATIONS_BASELINE=0_extensions,1_init
+   ```
+
+   Servis `migrate` tada za svaku navedenu migraciju pokrene
+   `prisma migrate resolve --applied <naziv>` — i to **samo** ako je Prisma
+   stvarno vodi kao neprimijenjenu (uporedi s izlazom `migrate status`) i ako
+   naziv postoji u `prisma/migrations/`. Nepoznat naziv → exit 1 s jasnom porukom.
+
+   🔴 Baseline **preskače DDL**: nikad ne navodi migraciju čiji objekti nisu u
+   bazi, jer bi CHECK-ovi/triggeri/indeksi zauvijek nedostajali.
+
+   ✅ Nakon uspješnog deploya **vrati varijablu na prazno**
+   (`MIGRATIONS_BASELINE=`), da se ne bi ponavljala pri svakom deployu.
+
+### E2) Pao pokušaj migracije (red s `finished_at IS NULL`)
+
+`migrate deploy` odbija nastaviti dok se taj red ne razriješi. U Coolify:
+
+```bash
+MIGRATIONS_ROLLED_BACK=1_init      # naziv iz `_prisma_migrations`
+```
+
+Servis pokrene `prisma migrate resolve --rolled-back <naziv>` i zatim normalno
+`migrate deploy` (migracija se pokušava ponovo). Isto važi: nakon uspjeha vratiti
+na prazno. Ako je baza **potpuno prazna**, jednostavnije je
+`DROP TABLE _prisma_migrations` pa redeploy bez ikakvih varijabli.
+
+### E3) Ako šema NIJE kompletna, a baza nema podataka
+
+Sekcija B istog SQL fajla (zakomentarisana — pokreće se namjernim copy/paste-om)
+briše tabele, view-ove, sekvence i funkcije iz `public`, **ali ne i objekte u
+vlasništvu ekstenzija** (`pg_depend.deptype = 'e'`), pa `0_extensions` na
+sljedećem deployu prolazi kao no-op. Nakon čišćenja: `MIGRATIONS_BASELINE` ostavi
+prazno i redeployaj.
+
+> ⚠️ Sekcija B je destruktivna. Prije nje obavezno provjeri da nema poslovnih
+> podataka (`SELECT count(*) FROM "User";`) i po mogućnosti je prvo isprobaj na
+> dev bazi (`docker-compose.dev.yml`, port 5433).
+
+---
+
 ## Sinhronizacija dokumentacije
 
 Promjena `schema.prisma` **obavezno** povlači:

@@ -133,6 +133,11 @@ services:
       # Faza 0: Prisma CLI još nije u dependencijama. false → migracije se preskaču
       # uz upozorenje (deploy prolazi); Faza 1: postaviti na true.
       MIGRATIONS_STRICT: ${MIGRATIONS_STRICT:-false}
+      # Oporavak historije migracija — PRAZNO u normalnom radu (README §E u
+      # apps/api/prisma/). BASELINE = `migrate resolve --applied` (P3005),
+      # ROLLED_BACK = `migrate resolve --rolled-back` (red s finished_at IS NULL).
+      MIGRATIONS_BASELINE: ${MIGRATIONS_BASELINE:-}
+      MIGRATIONS_ROLLED_BACK: ${MIGRATIONS_ROLLED_BACK:-}
       BOOTSTRAP_SUPER_ADMIN_ENABLED: ${BOOTSTRAP_SUPER_ADMIN_ENABLED:-false}
       BOOTSTRAP_SUPER_ADMIN_EMAIL: ${BOOTSTRAP_SUPER_ADMIN_EMAIL:-}
       BOOTSTRAP_SUPER_ADMIN_FIRST_NAME: ${BOOTSTRAP_SUPER_ADMIN_FIRST_NAME:-}
