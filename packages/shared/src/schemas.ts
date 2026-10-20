@@ -17,7 +17,7 @@
  */
 import { z } from 'zod';
 import { MAX_PAGE_SIZE } from './constants.js';
-import { CLIENT_TYPES } from './enums.js';
+import { CLIENT_TYPES, USER_STATUSES } from './enums.js';
 import type { ClientType } from './enums.js';
 
 // -----------------------------------------------------------------------------
@@ -492,3 +492,76 @@ export function isClientTypeAllowed(
 ): boolean {
   return allowedClientTypes.some((allowed) => allowed === clientType);
 }
+
+// -----------------------------------------------------------------------------
+//  Odgovori /auth (login, refresh, me) — docs/07 §7
+// -----------------------------------------------------------------------------
+
+/**
+ * Uloga korisnika u odgovoru `/auth/*` (bez internih detalja dozvola).
+ *
+ * Zašto zaseban tip (a ne puni `Role`): klijentu trebaju samo identifikatori
+ * i čitljivo ime za prikaz u zaglavlju; dozvole idu kao lista kodova.
+ */
+export const authRoleSchema = z
+  .object({
+    id: uuidSchema,
+    code: z.string().min(1),
+    name: z.string().min(1),
+  })
+  .strict();
+
+export type AuthRole = z.output<typeof authRoleSchema>;
+
+/**
+ * Profil + efektivna prava trenutno prijavljenog korisnika.
+ *
+ * `permissions` je **izračunata lista kodova** (union svih grantova važećih
+ * uloga) — web je koristi u `usePermission()` da ne bi pogodio pravo iz koda
+ * role. `permissionsVersion`/`tokenVersion` služe za P3 (revokacija ≤ 5 s).
+ */
+export const authUserSchema = z
+  .object({
+    id: uuidSchema,
+    email: emailSchema,
+    firstName: z.string(),
+    lastName: z.string(),
+    displayName: z.string().nullable(),
+    status: z.enum(USER_STATUSES),
+    roles: z.array(authRoleSchema),
+    permissions: z.array(z.string()),
+    permissionsVersion: z.number().int().nonnegative(),
+    tokenVersion: z.number().int().nonnegative(),
+    mustChangePassword: z.boolean(),
+    isSuperAdmin: z.boolean(),
+    allowedClientTypes: z.array(clientTypeSchema),
+    /** Korisničke postavke prikaza (R-08: UTC u bazi, `Europe/Sarajevo` u UI). */
+    timezone: z.string().min(1),
+    locale: z.string().min(2),
+    lastLoginAt: z.iso.datetime().nullable(),
+  })
+  .strict();
+
+export type AuthUser = z.output<typeof authUserSchema>;
+
+/**
+ * Odgovor `POST /auth/login` i `POST /auth/refresh`.
+ *
+ * 🔴 `refreshToken` je u tijelu **samo za mobilne klijente** (`MOBILE_ANDROID`/
+ * `MOBILE_IOS`), jer oni ne mogu čuvati httpOnly cookie. Za web se token vraća
+ * isključivo kroz `Set-Cookie` (httpOnly + Secure + SameSite) i polja nema u
+ * tijelu — tako XSS ne može doći do refresh tokena (docs/05 §5.2).
+ */
+export const authTokenResponseSchema = z
+  .object({
+    accessToken: z.string().min(1),
+    tokenType: z.literal('Bearer'),
+    expiresIn: z.number().int().positive(),
+    refreshExpiresIn: z.number().int().positive(),
+    sessionId: uuidSchema,
+    refreshToken: z.string().min(1).optional(),
+    user: authUserSchema,
+  })
+  .strict();
+
+export type AuthTokenResponse = z.output<typeof authTokenResponseSchema>;

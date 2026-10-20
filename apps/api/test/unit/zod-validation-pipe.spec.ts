@@ -10,6 +10,7 @@ import {
   CHANGE_PASSWORD_MIN_DIFFERENCE_MESSAGE,
   changePasswordSchema,
   loginSchema,
+  logoutSchema,
   paginationQuerySchema,
   type ChangePasswordInput,
   type LoginInput,
@@ -258,5 +259,34 @@ describe('ZodValidationPipe — tryParse (bez bacanja)', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe('UNKNOWN_FIELD');
+  });
+});
+
+describe('ZodValidationPipe — allowEmpty (opciono tijelo)', () => {
+  it('undefined/null/prazan string → {} (POST /auth/logout bez Content-Type)', () => {
+    const pipe = new ZodValidationPipe(logoutSchema, 'body', { allowEmpty: true });
+
+    expect(pipe.transform(undefined)).toEqual({});
+    expect(pipe.transform(null)).toEqual({});
+    expect(pipe.transform('')).toEqual({});
+  });
+
+  it('bez allowEmpty: izostavljeno tijelo → 400 VALIDATION_ERROR (stroge rute)', () => {
+    const pipe = new ZodValidationPipe(loginSchema, 'body');
+
+    expect(capture(pipe, undefined).code).toBe('VALIDATION_ERROR');
+  });
+
+  it('allowEmpty ne maskira stvarno neispravno tijelo', () => {
+    const pipe = new ZodValidationPipe(logoutSchema, 'body', { allowEmpty: true });
+
+    expect(capture(pipe, { refreshToken: 42 }).code).toBe('VALIDATION_ERROR');
+    expect(capture(pipe, { nepoznatoPolje: 'x' }).code).toBe('UNKNOWN_FIELD');
+  });
+
+  it('tryParse poštuje allowEmpty', () => {
+    const pipe = new ZodValidationPipe(logoutSchema, 'body', { allowEmpty: true });
+
+    expect(pipe.tryParse(undefined)).toEqual({ ok: true, data: {} });
   });
 });

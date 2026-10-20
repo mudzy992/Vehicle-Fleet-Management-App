@@ -81,14 +81,16 @@ export class ZodValidationPipe<T> implements PipeTransform<unknown, T> {
   /**
    * @param schema Zod šema iz `@vfm/shared/schemas` (nema inline šema u API-ju).
    * @param label Naziv izvora za jasniju poruku u logu (`body`, `query`, `params`).
+   * @param options `allowEmpty: true` — prazno/izostavljeno tijelo se parsira kao `{}`.
    */
   constructor(
     private readonly schema: ZodType<T>,
     private readonly label?: string,
+    private readonly options: { readonly allowEmpty?: boolean } = {},
   ) {}
 
   transform(value: unknown, _metadata?: ArgumentMetadata): T {
-    const result = this.schema.safeParse(value);
+    const result = this.schema.safeParse(this.normalize(value));
     if (result.success) return result.data;
 
     const details = zodIssuesToDetails(result.error);
@@ -102,7 +104,7 @@ export class ZodValidationPipe<T> implements PipeTransform<unknown, T> {
    * ili iz outbox-a i žele nastaviti s radom (graceful degradation).
    */
   tryParse(value: unknown): { ok: true; data: T } | { ok: false; error: VfmException } {
-    const result = this.schema.safeParse(value);
+    const result = this.schema.safeParse(this.normalize(value));
     if (result.success) return { ok: true, data: result.data };
     const details = zodIssuesToDetails(result.error);
     return {
@@ -111,6 +113,17 @@ export class ZodValidationPipe<T> implements PipeTransform<unknown, T> {
         ? VfmErrors.unknownField(details)
         : VfmErrors.validationError(details),
     };
+  }
+
+  /**
+   * Rute s **opcionim** tijelom (`POST /auth/logout`) mogu doći bez
+   * `Content-Type`, pa Express ostavlja `req.body === undefined`. Bez ove
+   * normalizacije klijent bi dobio `400 VALIDATION_ERROR` iako je zahtjev
+   * ispravan — zato se prazna vrijednost tretira kao prazan objekat.
+   */
+  private normalize(value: unknown): unknown {
+    if (!this.options.allowEmpty) return value;
+    return value === undefined || value === null || value === '' ? {} : value;
   }
 
   /** Naziv izvora (za log/dijagnostiku). */

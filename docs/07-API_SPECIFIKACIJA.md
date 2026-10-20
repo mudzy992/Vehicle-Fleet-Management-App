@@ -88,16 +88,21 @@ Legenda: 🔒 = autorizovano; **P** = potrebna permisija; `Idem` = podržava `Id
 
 | Metoda | Put | P | Opis |
 |---|---|---|---|
-| POST | `/auth/login` | javno | `{email, password, clientType, deviceInfo?}` → `{accessToken, expiresIn, user, permissions}` + refresh cookie |
-| POST | `/auth/refresh` | javno (cookie/Bearer refresh) | rotacija; reuse detection |
-| POST | `/auth/logout` | 🔒 | ukida trenutnu sesiju |
-| POST | `/auth/logout-all` | 🔒 `auth:manage_sessions` | `tokenVersion++` |
-| GET | `/auth/me` | 🔒 | profil + role + efektivne permisije + `pv`/`tv` + postavke |
-| POST | `/auth/change-password` | 🔒 `auth:change_password` | |
-| POST | `/auth/forgot-password` | javno | uvijek 200 (bez enumeracije) |
-| POST | `/auth/reset-password` | javno (token) | |
-| GET | `/auth/sessions` | 🔒 | lista aktivnih sesija/uređaja |
-| DELETE | `/auth/sessions/:id` | 🔒 | revokacija jedne sesije |
+| POST | `/auth/login` | javno + limiter `login` (5/15 min po IP-u) | `{email, password, clientType, deviceInfo?}` → `{accessToken, tokenType, expiresIn, refreshExpiresIn, sessionId, user}`; web dobija refresh u httpOnly cookie, mobilni u `refreshToken` (tijelo) |
+| POST | `/auth/refresh` | javno (cookie **ili** `refreshToken` u tijelu) | rotacija (`replacedById`); reuse detection → revoke **svih** sesija + `tokenVersion++`; `ct` je vezan za sesiju (docs/05 §6.2) |
+| POST | `/auth/logout` | 🔒 | ukida **trenutnu** sesiju (prema refresh tokenu ili `sid`); ostali uređaji rade dalje |
+| POST | `/auth/logout-all` | 🔒 `auth:manage_sessions` | revoke svih sesija + `User.tokenVersion++` → postojeći access tokeni padaju odmah |
+| GET | `/auth/me` | 🔒 | profil + role + efektivne permisije + `pv`/`tv` + postavke (`timezone`, `locale`) |
+| POST | `/auth/change-password` | 🔒 `auth:change_password` | provjera stare lozinke + politika; `mustChangePassword=false`; revoke svih sesija + `tokenVersion++` |
+| POST | `/auth/forgot-password` | javno | uvijek 200 (bez enumeracije) — ⏳ s Users modulom (treba Outbox/e-mail) |
+| POST | `/auth/reset-password` | javno (token) | ⏳ s Users modulom |
+| GET | `/auth/sessions` | 🔒 `auth:manage_sessions` | lista aktivnih sesija/uređaja (ISO datumi, IP, UA, `deviceInfo`) |
+| DELETE | `/auth/sessions/:id` | 🔒 `auth:manage_sessions` | revokacija jedne sesije + `tokenVersion++`; tuđa sesija → `404 NOT_FOUND` |
+
+**Stanje (Faza 1, chunk G):** implementirano `login`, `refresh`, `logout`, `logout-all`, `me`,
+`change-password`, `GET/DELETE /sessions`. Sve rute osim `login`/`refresh` prolaze lanac
+guard-ova `RateLimit → Jwt → ClientType → Permissions` (docs/05 §5–§6), a svaki pokušaj prijave
+piše se u `AuthAttempt` (retencija 180 dana) i — kod odbijanja — u `AuditLog` (severity `SECURITY`).
 | ~~`/auth/2fa/*`~~ | — | **uklonjeno** | 2FA se NE implementira (R-05) |
 
 ### 2.2 Korisnici (`/users`)
@@ -278,9 +283,29 @@ POST /api/v1/auth/login
 { "email": "damir@example.ba", "password": "…", "clientType": "MOBILE_ANDROID",
   "deviceInfo": { "model": "Pixel 7", "osVersion": "15", "appVersion": "1.0.0" } }
 ```
-`200` → `{ "data": { "accessToken": "…", "expiresIn": 600, "refreshToken": "…",
-"user": {…}, "permissions": ["task:view","task:create",…] } }`
-Super Admin → `403 MOBILE_ACCESS_FORBIDDEN`.
+`200` →
+```json
+{ "data": {
+    "accessToken": "eyJhbGciOi…", "tokenType": "Bearer",
+    "expiresIn": 600, "refreshExpiresIn": 2592000, "sessionId": "…",
+    "refreshToken": "RT-…",
+    "user": {
+      "id": "…", "email": "damir@example.ba", "firstName": "Damir", "lastName": "…",
+      "displayName": null, "status": "ACTIVE",
+      "roles": [{ "id": "…", "code": "ADMINISTRATOR", "name": "Administrator" }],
+      "permissions": ["task:view", "task:create", "vehicle:view"],
+      "permissionsVersion": 1, "tokenVersion": 4,
+      "mustChangePassword": false, "isSuperAdmin": false,
+      "allowedClientTypes": ["WEB", "MOBILE_ANDROID"],
+      "timezone": "Europe/Sarajevo", "locale": "bs", "lastLoginAt": "2026-10-20T06:12:33.412Z"
+    } } }
+```
+`refreshToken` je u tijelu **samo** za `MOBILE_ANDROID`/`MOBILE_IOS`; web ga dobija kroz
+`Set-Cookie: vfm_refresh=…; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth` i polja nema u
+odgovoru (XSS ne smije doći do refresh tokena — docs/05 §5.2).
+Super Admin → `403 MOBILE_ACCESS_FORBIDDEN` (+ `AuditLog` severity `SECURITY`).
+Nedozvoljeni tip klijenta za rolu → `403 MOBILE_SCOPE_NOT_ALLOWED`.
+Treća pogrešna lozinka (default `AUTH_MAX_FAILED_ATTEMPTS=5`) → `423 ACCOUNT_LOCKED` + `Retry-After`.
 
 ### 3.2 Kreiranje zadatka
 ```http
@@ -344,7 +369,7 @@ kanale svojih povezanih klijenata. Reconnect: `Last-Event-ID` = `notification.id
 | Profil | Limit | Primjena |
 |---|---|---|
 | `global` | `THROTTLE_GLOBAL_LIMIT` / `THROTTLE_GLOBAL_TTL_SECONDS` po korisniku | svi endpointi |
-| `login` | 5 / 15 min po (IP + email) | `/auth/login`, `/auth/forgot-password` |
+| `login` | 5 / 15 min po **IP-u** (`vfm:rl:login:ip-…`) | `/auth/login` (i `/auth/forgot-password` kad bude implementiran) |
 | `upload` | 30 / min po korisniku | `/attachments` |
 | `export` | 5 / 15 min po korisniku | `/reports/*/export`, `/audit-logs/export` |
 | `claim` | 60 / min po korisniku | `/tasks/*/claim` (zaštita od skripti) |

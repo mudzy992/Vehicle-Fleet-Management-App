@@ -335,14 +335,30 @@ export class PermissionsService {
   /**
    * Povećava `tokenVersion` → **svi** postojeći access tokeni korisnika postaju
    * nevažeći na sljedećem zahtjevu (guard poredi claim `tv`).
+   *
+   * @param dbVersion `User.tokenVersion` **nakon** upisa u bazu. Kada se preda,
+   *   Redis brojač se preslikava (`SET`) umjesto `INCR` — tako Redis i baza dijele
+   *   isti numerički prostor (isto pravilo kao `invalidateRole`). Bez toga bi
+   *   `INCR` od nule ostao **ispod** DB verzije, pa guard ne bi poništio token
+   *   nakon odjave/promjene lozinke (P1/P3 bi pali u produkciji).
    */
-  async bumpTokenVersion(userId: string): Promise<number> {
+  async bumpTokenVersion(userId: string, dbVersion?: number): Promise<number> {
     const client = this.client();
     const key = this.redis.key('tokenVersion', userId);
 
     if (client) {
       try {
-        const next = await client.incr(key);
+        let next: number;
+        if (dbVersion === undefined) {
+          next = await client.incr(key);
+        } else {
+          // Monotonost: Redis nikad ne smije pasti ispod vrijednosti koju već
+          // ima (stari tokeni s višim `tv` bi tada ponovo postali važeći).
+          const raw = await client.get(key);
+          const current = raw === null ? Number.NaN : Number.parseInt(raw, 10);
+          next = Number.isNaN(current) ? dbVersion : Math.max(dbVersion, current);
+          if (String(next) !== raw) await client.set(key, String(next));
+        }
         await this.invalidateUser(userId);
         return next;
       } catch (error) {
@@ -351,6 +367,7 @@ export class PermissionsService {
     }
 
     // Bez Redis-a verziju vodi baza (`User.tokenVersion`) — caller je mora upisati.
+    if (dbVersion !== undefined) return dbVersion;
     const data = await this.loadFromSource(userId);
     return (data?.tokenVersion ?? 0) + 1;
   }
