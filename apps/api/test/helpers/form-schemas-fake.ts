@@ -57,19 +57,76 @@ export interface FakeFieldKeyRow {
   updatedAt: Date;
 }
 
-/** Delegate za modele zapisa: test samo režira broj zapisa po verziji. */
+/** Delegate za modele zapisa: broj zapisa po verziji + čitanje/izmjena zapisa. */
 interface RecordDelegate {
   groupBy: (args: {
     by: readonly string[];
     where: { formSchemaVersionId: { in: readonly string[] } };
   }) => Promise<Record<string, unknown>[]>;
+  findMany: (args: {
+    where: Record<string, unknown>;
+    orderBy?: Record<string, 'asc' | 'desc'>;
+    select?: Record<string, boolean>;
+    take?: number;
+    skip?: number;
+  }) => Promise<FakeRecordRow[]>;
+  update: (args: { where: { id: string }; data: Record<string, unknown> }) => Promise<FakeRecordRow>;
+}
+
+export interface FakeMigrationJobRow {
+  id: string;
+  formSchemaId: string;
+  fromVersionId: string;
+  toVersionId: string;
+  targetEntityType: string;
+  targetEntityIds: string[];
+  filter: unknown;
+  status: string;
+  previewResult: unknown;
+  summary: unknown;
+  notes: string | null;
+  requestedById: string | null;
+  createdAt: Date;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+}
+
+export interface FakeMigrationItemRow {
+  id: string;
+  jobId: string;
+  entityId: string;
+  before: unknown;
+  after: unknown;
+  status: string;
+  error: string | null;
+  processedAt: Date | null;
+}
+
+export interface FakeRecordRow {
+  id: string;
+  formSchemaId: string;
+  formSchemaVersionId: string | null;
+  formData: Record<string, unknown>;
+  createdAt: Date;
+  [column: string]: unknown;
 }
 
 export class FakeFormPrisma {
   readonly schemas = new Map<string, FakeSchemaRow>();
   readonly versions = new Map<string, FakeVersionRow>();
   readonly fieldKeys = new Map<string, FakeFieldKeyRow>();
+  readonly migrationJobs = new Map<string, FakeMigrationJobRow>();
+  readonly migrationItems = new Map<string, FakeMigrationItemRow>();
+  /** Zapisi po modelu (`task`, `vehicle`, …) — migracija ih čita i mijenja. */
+  readonly records = new Map<string, FakeRecordRow[]>();
   private readonly recordCounts = new Map<string, number>();
+
+  /** Ubacuje zapis (npr. `task`) u store. */
+  addRecord(model: string, row: FakeRecordRow): void {
+    const rows = this.records.get(model) ?? [];
+    rows.push(row);
+    this.records.set(model, rows);
+  }
 
   /** Broj zapisa koji koriste datu verziju (za `recordCount` u odgovoru). */
   setRecordCount(versionId: string, count: number): void {
@@ -272,27 +329,152 @@ export class FakeFormPrisma {
     },
   };
 
-  /** Modeli zapisa: samo `groupBy` po `formSchemaVersionId`. */
-  private readonly recordDelegate: RecordDelegate = {
-    groupBy: async (args) => {
-      const rows: Record<string, unknown>[] = [];
-      for (const versionId of args.where.formSchemaVersionId.in) {
-        const count = this.recordCounts.get(versionId);
-        if (!count) continue;
-        rows.push({ formSchemaVersionId: versionId, _count: { _all: Math.round(count) } });
-      }
-      return rows;
+  /**
+   * Modeli zapisa: `groupBy` (broj zapisa po verziji) + ono što migracija treba
+   * (`findMany` po formi/verziji, `update` zapisa).
+   */
+  private recordDelegateFor(model: string): RecordDelegate {
+    return {
+      groupBy: async (args) => {
+        const rows: Record<string, unknown>[] = [];
+        for (const versionId of args.where.formSchemaVersionId.in) {
+          const count = this.recordCounts.get(versionId);
+          if (!count) continue;
+          rows.push({ formSchemaVersionId: versionId, _count: { _all: Math.round(count) } });
+        }
+        return rows;
+      },
+
+      findMany: async (args) => {
+        const rows = this.records.get(model) ?? [];
+        return rows
+          .filter((row) => {
+            if (args.where['formSchemaId'] && row.formSchemaId !== args.where['formSchemaId']) return false;
+            if (
+              args.where['formSchemaVersionId'] &&
+              row.formSchemaVersionId !== args.where['formSchemaVersionId']
+            ) {
+              return false;
+            }
+            const idFilter = args.where['id'] as { in?: readonly string[] } | undefined;
+            if (idFilter?.in && !idFilter.in.includes(row.id)) return false;
+            return true;
+          })
+          .sort((a, b) => a.id.localeCompare(b.id))
+          .map((row) => ({ ...row }));
+      },
+
+      update: async (args) => {
+        const rows = this.records.get(model) ?? [];
+        const row = rows.find((candidate) => candidate.id === args.where.id);
+        if (!row) throw new Error(`FakePrisma: zapis ${args.where.id} (${model}) ne postoji.`);
+        Object.assign(row, args.data);
+        return { ...row };
+      },
+    };
+  }
+
+  readonly task = this.recordDelegateFor('task');
+  readonly vehicle = this.recordDelegateFor('vehicle');
+  readonly registrationRecord = this.recordDelegateFor('registrationRecord');
+  readonly insuranceRecord = this.recordDelegateFor('insuranceRecord');
+  readonly serviceRecord = this.recordDelegateFor('serviceRecord');
+  readonly driver = this.recordDelegateFor('driver');
+  readonly tireSet = this.recordDelegateFor('tireSet');
+  readonly tireInstallation = this.recordDelegateFor('tireInstallation');
+
+  readonly formMigrationJob = {
+    create: async (args: { data: Record<string, unknown> }) => {
+      const now = new Date('2026-10-20T11:00:00.000Z');
+      const row: FakeMigrationJobRow = {
+        id: String(args.data['id']),
+        formSchemaId: String(args.data['formSchemaId']),
+        fromVersionId: String(args.data['fromVersionId']),
+        toVersionId: String(args.data['toVersionId']),
+        targetEntityType: String(args.data['targetEntityType']),
+        targetEntityIds: (args.data['targetEntityIds'] as string[] | undefined) ?? [],
+        filter: args.data['filter'] ?? null,
+        status: 'PENDING',
+        previewResult: null,
+        summary: null,
+        notes: (args.data['notes'] as string | null) ?? null,
+        requestedById: (args.data['requestedById'] as string | null) ?? null,
+        createdAt: now,
+        startedAt: null,
+        finishedAt: null,
+      };
+      this.migrationJobs.set(row.id, row);
+      return { ...row };
+    },
+
+    update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.migrationJobs.get(args.where.id);
+      if (!row) throw new Error(`FakePrisma: migracija ${args.where.id} ne postoji.`);
+      const data = { ...args.data };
+      if (data['filter'] === undefined) delete data['filter'];
+      if (data['previewResult'] === undefined) delete data['previewResult'];
+      Object.assign(row, data);
+      return { ...row };
+    },
+
+    findUnique: async (args: { where: { id: string } }) => {
+      const row = this.migrationJobs.get(args.where.id);
+      return row ? { ...row } : null;
+    },
+
+    findMany: async (args?: { where?: { formSchemaId?: string } }) => {
+      return [...this.migrationJobs.values()]
+        .filter((row) => !args?.where?.formSchemaId || row.formSchemaId === args.where.formSchemaId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .map((row) => ({ ...row }));
     },
   };
 
-  readonly task = this.recordDelegate;
-  readonly vehicle = this.recordDelegate;
-  readonly registrationRecord = this.recordDelegate;
-  readonly insuranceRecord = this.recordDelegate;
-  readonly serviceRecord = this.recordDelegate;
-  readonly driver = this.recordDelegate;
-  readonly tireSet = this.recordDelegate;
-  readonly tireInstallation = this.recordDelegate;
+  readonly formMigrationItem = {
+    upsert: async (args: {
+      where: { jobId_entityId: { jobId: string; entityId: string } };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) => {
+      const key = `${args.where.jobId_entityId.jobId}:${args.where.jobId_entityId.entityId}`;
+      const existing = this.migrationItems.get(key);
+      if (existing) {
+        Object.assign(existing, args.update);
+        return { ...existing };
+      }
+      const row: FakeMigrationItemRow = {
+        id: String(args.create['id']),
+        jobId: String(args.create['jobId']),
+        entityId: String(args.create['entityId']),
+        before: args.create['before'] ?? null,
+        after: args.create['after'] ?? null,
+        status: String(args.create['status'] ?? 'PENDING'),
+        error: (args.create['error'] as string | null) ?? null,
+        processedAt: (args.create['processedAt'] as Date | null) ?? null,
+      };
+      this.migrationItems.set(key, row);
+      return { ...row };
+    },
+
+    update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = [...this.migrationItems.values()].find((item) => item.id === args.where.id);
+      if (!row) throw new Error(`FakePrisma: stavka migracije ${args.where.id} ne postoji.`);
+      Object.assign(row, args.data);
+      return { ...row };
+    },
+
+    findMany: async (args: {
+      where: { jobId: string; status?: string; entityId?: { in: readonly string[] } };
+      take?: number;
+    }) => {
+      return [...this.migrationItems.values()]
+        .filter((row) => row.jobId === args.where.jobId)
+        .filter((row) => !args.where.status || row.status === args.where.status)
+        .filter((row) => !args.where.entityId?.in || args.where.entityId.in.includes(row.entityId))
+        .slice(0, args.take ?? undefined)
+        .map((row) => ({ ...row }));
+    },
+  };
 
   readonly $transaction = async <T>(fn: (tx: FakeFormPrisma) => Promise<T>): Promise<T> => fn(this);
 }

@@ -23,6 +23,8 @@ import {
   CLIENT_TYPES,
   FORM_SCHEMA_STATUSES,
   FORM_SUBJECTS,
+  MIGRATION_JOB_STATUSES,
+  MIGRATION_TARGET_ENTITIES,
   PERMISSION_SCOPES,
   USER_STATUSES,
 } from './enums.js';
@@ -602,12 +604,9 @@ export const roleCodeSchema = z
  * (`evaluateEffectivePermissions`), pa permisija koje nema u katalogu ne bi
  * imala nikakav efekat — greška bi bila tiha.
  */
-export const permissionCodeSchema = z
-  .string()
-  .trim()
-  .refine(isKnownPermission, {
-    message: 'Permisija nije u katalogu (packages/shared → PERMISSION_CATALOG).',
-  });
+export const permissionCodeSchema = z.string().trim().refine(isKnownPermission, {
+  message: 'Permisija nije u katalogu (packages/shared → PERMISSION_CATALOG).',
+});
 
 export const permissionScopeSchema = z.enum(PERMISSION_SCOPES);
 
@@ -1357,3 +1356,89 @@ export const activeFormSchemaSchema = z
   })
   .strict();
 export type ActiveFormSchema = z.output<typeof activeFormSchemaSchema>;
+
+// --- Migracija zapisa (P12, docs/04 §10) -------------------------------------
+
+export const createFormMigrationSchema = z
+  .object({
+    formSchemaId: uuidSchema,
+    fromVersionId: uuidSchema,
+    toVersionId: uuidSchema,
+    targetEntityType: z.enum(MIGRATION_TARGET_ENTITIES),
+    /** Eksplicitan izbor zapisa; prazno = svi zapisi na `fromVersionId`. */
+    entityIds: z.array(uuidSchema).max(10_000).optional(),
+    /** Dodatni filter (samo `createdFrom`/`createdTo`, ISO datum). */
+    filter: z
+      .object({
+        createdFrom: z.iso.datetime().optional(),
+        createdTo: z.iso.datetime().optional(),
+      })
+      .strict()
+      .optional(),
+    notes: z.string().trim().max(500).optional(),
+  })
+  .strict()
+  .refine((value) => value.fromVersionId !== value.toVersionId, {
+    message: 'Verzija izvora i cilja ne mogu biti iste.',
+  });
+export type CreateFormMigrationInput = z.output<typeof createFormMigrationSchema>;
+
+export const runFormMigrationSchema = z.object({ changeNote: changeNoteSchema }).strict();
+export type RunFormMigrationInput = z.output<typeof runFormMigrationSchema>;
+
+export const rollbackFormMigrationSchema = z
+  .object({
+    changeNote: changeNoteSchema,
+    /** Rollback samo označenih zapisa; prazno = svi primijenjeni. */
+    entityIds: z.array(uuidSchema).max(10_000).optional(),
+  })
+  .strict();
+export type RollbackFormMigrationInput = z.output<typeof rollbackFormMigrationSchema>;
+
+export const migrationSummarySchema = z
+  .object({
+    total: z.number().int().nonnegative(),
+    ok: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    skipped: z.number().int().nonnegative(),
+  })
+  .strict();
+export type MigrationSummary = z.output<typeof migrationSummarySchema>;
+
+export const migrationItemPreviewSchema = z
+  .object({
+    entityId: uuidSchema,
+    before: z.record(z.string(), z.unknown()).nullable(),
+    after: z.record(z.string(), z.unknown()).nullable(),
+    status: z.string(),
+    errors: z.array(formFieldErrorSchema),
+  })
+  .strict();
+export type MigrationItemPreview = z.output<typeof migrationItemPreviewSchema>;
+
+export const formMigrationJobSchema = z
+  .object({
+    id: uuidSchema,
+    formSchemaId: uuidSchema,
+    fromVersionId: uuidSchema,
+    toVersionId: uuidSchema,
+    targetEntityType: z.enum(MIGRATION_TARGET_ENTITIES),
+    status: z.enum(MIGRATION_JOB_STATUSES),
+    summary: migrationSummarySchema.nullable(),
+    notes: z.string().nullable(),
+    requestedById: uuidSchema.nullable(),
+    createdAt: z.iso.datetime(),
+    startedAt: z.iso.datetime().nullable(),
+    finishedAt: z.iso.datetime().nullable(),
+  })
+  .strict();
+export type FormMigrationJob = z.output<typeof formMigrationJobSchema>;
+
+export const formMigrationPreviewSchema = formMigrationJobSchema
+  .extend({
+    summary: migrationSummarySchema,
+    /** Uzorak prvih 50 zapisa (diff po polju). */
+    items: z.array(migrationItemPreviewSchema),
+  })
+  .strict();
+export type FormMigrationPreview = z.output<typeof formMigrationPreviewSchema>;

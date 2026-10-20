@@ -18,12 +18,7 @@
 // -----------------------------------------------------------------------------
 
 /** Status korisničkog naloga. */
-export const USER_STATUSES = [
-  'ACTIVE',
-  'SUSPENDED',
-  'DEACTIVATED',
-  'PENDING_PASSWORD_CHANGE',
-] as const;
+export const USER_STATUSES = ['ACTIVE', 'SUSPENDED', 'DEACTIVATED', 'PENDING_PASSWORD_CHANGE'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
 /** Tip klijenta — server-side provjera (Super Admin je web-only, N-05). */
@@ -110,6 +105,24 @@ export const FIELD_TYPES = [
   'COMPUTED',
 ] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
+
+/**
+ * Entiteti na koje se može primijeniti migracija zapisa (P12).
+ *
+ * Whitelist je namjeran: migracija mijenja `formData`, `formSchemaVersionId` i
+ * normalizovane kolone, pa se smije pokrenuti samo nad modelima koji ih imaju.
+ */
+export const MIGRATION_TARGET_ENTITIES = [
+  'TASK',
+  'VEHICLE',
+  'SERVICE',
+  'REGISTRATION',
+  'INSURANCE',
+  'TIRE_INSTALLATION',
+  'DRIVER',
+  'TIRE_SET',
+] as const;
+export type MigrationTargetEntity = (typeof MIGRATION_TARGET_ENTITIES)[number];
 
 /** Status migracije zapisa između verzija forme. */
 export const MIGRATION_JOB_STATUSES = [

@@ -425,6 +425,18 @@ Eksplicitan, auditovan, povrativ proces. **Nikad automatski.**
 **Pravila:** zapisi koji ne prolaze validaciju nove verzije se **preskaču** (`skipped`) i ostaju na
 staroj verziji — nikad se ne gube podaci. Job je idempotentan (unique `(jobId, entityId)`).
 
+**Implementacija (`FormMigrationsService`, chunk E):**
+
+| Detalj | Ponašanje |
+| --- | --- |
+| Ciljevi | whitelist `MIGRATION_TARGET_ENTITIES` (`TASK`, `VEHICLE`, `SERVICE`, `REGISTRATION`, `INSURANCE`, `TIRE_INSTALLATION`, `DRIVER`, `TIRE_SET`) — samo modeli s `formData` i `formSchemaVersionId` |
+| Validacija | ista `validateRecord()` kao P11, s `isNew: false` (dozvoljen `RETIRED` izvor); `DRAFT` cilj se odbija |
+| Preview | `summary {total, ok, failed, skipped}` + uzorak prvih 50 zapisa (`before`/`after`/`errors`); status `PREVIEW` |
+| Izbor zapisa | `entityIds[]` ili filter `{createdFrom, createdTo}`; prazno = svi zapisi na izvornoj verziji |
+| Apply | batch 500 u transakciji; `FormMigrationItem` (`before` snapshot, `status=APPLIED/SKIPPED`); upis `formData`, `formSchemaVersionId`, samo whitelistovane normalizovane kolone |
+| Rollback | samo `COMPLETED`; vraća `formData` i verziju iz `before`, stavke → `ROLLED_BACK` |
+| Idempotentnost | `upsert` po `(jobId, entityId)` — ponovni `apply` ne duplira stavke |
+
 ---
 
 ## 11. Mobilna kompatibilnost (§5.6 zadatka)
@@ -522,7 +534,7 @@ Zahtjev koji prelazi ove granice ide kroz **change request** i procjenu, ne kroz
 | Provjere pri objavi (§8) + strukturni diff (§12)  | `packages/form-engine/src/publish-checks.ts`, `diff.ts`              | ✅ Faza 2 (chunk D) |
 | Form Builder API (§12)                            | `apps/api/src/modules/form-schemas/`                                 | ✅ Faza 2 (chunk D) |
 | Form Builder UI (§12)                             | `apps/web/src/features/forms/`                                       | ⏳ Faza 2           |
-| Migracija zapisa (§10, P12)                       | —                                                                    | ⏳ Faza 2           |
+| Migracija zapisa (§10, P12)                       | `apps/api/src/modules/form-migrations/`                              | ✅ Faza 2 (chunk E) |
 
 Napomene uz implementaciju (odstupanja i pojašnjenja):
 
