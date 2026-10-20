@@ -21,6 +21,7 @@ import {
   AUDIT_ACTIONS,
   AUDIT_SEVERITIES,
   CLIENT_TYPES,
+  DRIVER_STATUSES,
   FORM_SCHEMA_STATUSES,
   FORM_SUBJECTS,
   MIGRATION_JOB_STATUSES,
@@ -1644,3 +1645,194 @@ export const odometerListResponseSchema = z
   })
   .strict();
 export type OdometerListResponse = z.output<typeof odometerListResponseSchema>;
+
+// -----------------------------------------------------------------------------
+//  Vozači (docs/07 §2.4, docs/03 §3.3)
+// -----------------------------------------------------------------------------
+
+export const driverStatusSchema = z.enum(DRIVER_STATUSES);
+
+/**
+ * Strukturirani dio vozača — **ne** dolazi iz forme.
+ *
+ * Forma (`DRIVER`) nosi dodatna polja (napomene, dokumenti…), ali identitet i
+ * PII su kolone tabele: bez njih lista, pretraga i rokovi dozvole ne rade, a
+ * `NORMALIZATION_COLUMNS.DRIVER` ne postoji (docs/04 §7) — forma ne smije
+ * puniti kolone vozača.
+ */
+const driverCoreShape = {
+  firstName: z.string().trim().min(1).max(60),
+  lastName: z.string().trim().min(1).max(60),
+  employeeNumber: z.string().trim().max(40).nullable().optional(),
+  /** Šifra iz šifarnika `DRIVER_EMPLOYMENT_STATUS` (U-21). */
+  employmentStatus: z.string().trim().max(60).nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+};
+
+/** PII polja (B-20) — vraćaju se samo uz `driver:view_pii`; upis traži `driver:update`. */
+const driverPiiShape = {
+  phone: z.string().trim().max(40).nullable().optional(),
+  email: z.email().max(200).nullable().optional(),
+  dateOfBirth: z.iso.date().nullable().optional(),
+  address: z.string().trim().max(300).nullable().optional(),
+  licenseNumber: z.string().trim().max(40).nullable().optional(),
+};
+
+const driverLicenseShape = {
+  licenseIssuedAt: z.iso.date().nullable().optional(),
+  licenseExpiresAt: z.iso.date().nullable().optional(),
+  licenseIssuingAuthority: z.string().trim().max(120).nullable().optional(),
+  restrictions: z.string().trim().max(500).nullable().optional(),
+};
+
+export const createDriverSchema = z
+  .object({
+    ...driverCoreShape,
+    ...driverPiiShape,
+    ...driverLicenseShape,
+    /** Vrijednosti dinamičke forme — validiraju se prema tačnoj verziji (P11). */
+    formData: z.record(z.string(), z.unknown()).default({}),
+    /** Bez ovoga se koristi aktivna objavljena `DRIVER` forma. */
+    formSchemaVersionId: uuidSchema.optional(),
+  })
+  .strict();
+export type CreateDriverInput = z.output<typeof createDriverSchema>;
+
+export const updateDriverSchema = z
+  .object({
+    /** Optimističko zaključavanje (`Driver.version`). */
+    version: z.number().int().nonnegative(),
+    firstName: driverCoreShape.firstName.optional(),
+    lastName: driverCoreShape.lastName.optional(),
+    employeeNumber: driverCoreShape.employeeNumber,
+    employmentStatus: driverCoreShape.employmentStatus,
+    notes: driverCoreShape.notes,
+    phone: driverPiiShape.phone,
+    email: driverPiiShape.email,
+    dateOfBirth: driverPiiShape.dateOfBirth,
+    address: driverPiiShape.address,
+    licenseNumber: driverPiiShape.licenseNumber,
+    licenseIssuedAt: driverLicenseShape.licenseIssuedAt,
+    licenseExpiresAt: driverLicenseShape.licenseExpiresAt,
+    licenseIssuingAuthority: driverLicenseShape.licenseIssuingAuthority,
+    restrictions: driverLicenseShape.restrictions,
+    formData: z.record(z.string(), z.unknown()).optional(),
+    status: driverStatusSchema.optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 1, { message: 'Nema šta mijenjati.' });
+export type UpdateDriverInput = z.output<typeof updateDriverSchema>;
+
+export const archiveDriverSchema = z.object({ reason: z.string().trim().max(500).optional() }).strict();
+export type ArchiveDriverInput = z.output<typeof archiveDriverSchema>;
+
+export const driverListQuerySchema = paginationQuerySchema
+  .extend({
+    status: driverStatusSchema.optional(),
+    /** Arhivirani vozači se ne prikazuju osim kad se izričito traže. */
+    includeArchived: queryBoolean.default(false),
+    /** Vozači kojima vozačka dozvola ističe u narednih N dana. */
+    expiringInDays: z.coerce.number().int().min(0).max(365).optional(),
+    /** Vozači s datom kategorijom (npr. `C`, `CE`). */
+    licenseCategory: z.string().trim().min(1).max(5).optional(),
+  })
+  .strict();
+export type DriverListQuery = z.output<typeof driverListQuerySchema>;
+
+export const driverLicenseCategorySchema = z
+  .object({
+    id: uuidSchema,
+    category: z.string(),
+    issuedAt: z.iso.date().nullable(),
+    expiresAt: z.iso.date().nullable(),
+    restrictions: z.string().nullable(),
+    notes: z.string().nullable(),
+  })
+  .strict();
+export type DriverLicenseCategory = z.output<typeof driverLicenseCategorySchema>;
+
+/** `GET /drivers/:id/license-categories` — kratka lista, bez paginacije. */
+export const driverLicenseCategoryListSchema = z
+  .object({ items: z.array(driverLicenseCategorySchema) })
+  .strict();
+export type DriverLicenseCategoryList = z.output<typeof driverLicenseCategoryListSchema>;
+
+/** Vozač u listi — PII redigovan ako akter nema `driver:view_pii` (docs/05 §8.2). */
+export const driverSummarySchema = z
+  .object({
+    id: uuidSchema,
+    firstName: z.string(),
+    lastName: z.string(),
+    employeeNumber: z.string().nullable(),
+    employmentStatus: z.string().nullable(),
+    status: driverStatusSchema,
+    /** Datum isteka dozvole **nije** PII — nosi ga rok/podsjetnik. */
+    licenseExpiresAt: z.iso.date().nullable(),
+    categories: z.array(z.string()),
+    /** Broj dana do isteka dozvole; negativan = istekla (računa server). */
+    licenseDaysLeft: z.number().int().nullable(),
+    version: z.number().int().nonnegative(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export type DriverSummary = z.output<typeof driverSummarySchema>;
+
+export const driverDetailSchema = driverSummarySchema
+  .extend({
+    phone: z.string().nullable(),
+    email: z.string().nullable(),
+    dateOfBirth: z.iso.date().nullable(),
+    address: z.string().nullable(),
+    licenseNumber: z.string().nullable(),
+    licenseIssuedAt: z.iso.date().nullable(),
+    licenseIssuingAuthority: z.string().nullable(),
+    restrictions: z.string().nullable(),
+    notes: z.string().nullable(),
+    photoAttachmentId: uuidSchema.nullable(),
+    formSchemaId: uuidSchema,
+    formSchemaVersionId: uuidSchema,
+    formData: z.record(z.string(), z.unknown()),
+    /** `true` kad su PII polja maskirana/izostavljena (nema `driver:view_pii`). */
+    piiRedacted: z.boolean(),
+    createdAt: z.iso.datetime(),
+  })
+  .strict();
+export type DriverDetail = z.output<typeof driverDetailSchema>;
+
+export const driverListResponseSchema = z
+  .object({
+    items: z.array(driverSummarySchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type DriverListResponse = z.output<typeof driverListResponseSchema>;
+
+/** `POST /drivers/:id/license-categories`. */
+export const createDriverLicenseCategorySchema = z
+  .object({
+    category: z.string().trim().min(1).max(5),
+    issuedAt: z.iso.date().nullable().optional(),
+    expiresAt: z.iso.date().nullable().optional(),
+    restrictions: z.string().trim().max(500).nullable().optional(),
+    notes: z.string().trim().max(1000).nullable().optional(),
+  })
+  .strict()
+  .refine((value) => !value.issuedAt || !value.expiresAt || value.expiresAt >= value.issuedAt, {
+    message: 'Datum isteka ne može biti prije datuma izdavanja.',
+    path: ['expiresAt'],
+  });
+export type CreateDriverLicenseCategoryInput = z.output<typeof createDriverLicenseCategorySchema>;
+
+/** `PATCH /drivers/:id/license-categories/:catId` — kategorija se ne mijenja (briše se i dodaje). */
+export const updateDriverLicenseCategorySchema = z
+  .object({
+    issuedAt: z.iso.date().nullable().optional(),
+    expiresAt: z.iso.date().nullable().optional(),
+    restrictions: z.string().trim().max(500).nullable().optional(),
+    notes: z.string().trim().max(1000).nullable().optional(),
+  })
+  .strict();
+export type UpdateDriverLicenseCategoryInput = z.output<typeof updateDriverLicenseCategorySchema>;

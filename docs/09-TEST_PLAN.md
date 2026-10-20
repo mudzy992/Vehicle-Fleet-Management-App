@@ -74,6 +74,7 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | Audit log API (P14: SECURITY redovi samo uz `audit:view_security`, filteri/paginacija u bazi, BIGINT → string) | `test/unit/audit-log-service.spec.ts` | 10 | `src/modules/audit-logs` 78 % / 88 % |
 | Vozila (P10/P11: `formData` prema tačnoj verziji, normalizovane kolone iz whitelist-a, `DUPLICATE_ENTRY`, `VERSION_CONFLICT`, status mašina, meka arhiva/brisanje) | `test/unit/vehicles-service.spec.ts` | 19 | `src/modules/vehicles` |
 | Kilometraža (`ODOMETER_REGRESSION`, ispravka s razlogom, denormalizovani `odometerKm` u istoj transakciji, buduće očitanje, paginacija) | `test/unit/odometer-service.spec.ts` | 11 | `src/modules/vehicles` |
+| Vozači (P11 forma `DRIVER`, PII redakcija bez `driver:view_pii`, `VERSION_CONFLICT`, status mašina, meka arhiva, kategorije dozvole s `DUPLICATE_ENTRY`, filteri `q`/`licenseCategory`/`expiringInDays`) | `test/unit/drivers-service.spec.ts` | 29 | `src/modules/drivers` |
 
 | Web — API klijent (single-flight refresh, retry na 401, istekla sesija, 204) | `apps/web/src/lib/api.test.ts` | 6 | — |
 | Web — sesija (bootstrap anonymous/authenticated, `hasPermission`, R-07, istek sesije) | `apps/web/src/features/auth/session.test.tsx` | 4 | — |

@@ -252,6 +252,58 @@ function registrationForm(): Record<string, unknown> {
   };
 }
 
+/**
+ * Forma vozača (Faza 3).
+ *
+ * Identitet i PII (`firstName`, `lastName`, `phone`, `licenseNumber`, …) su
+ * kolone tabele i **ne** dolaze iz forme (`NORMALIZATION_COLUMNS.DRIVER` ne
+ * postoji), pa `normalizedName` ostaje prazan — forma nosi samo dodatna polja.
+ */
+function driverForm(): Record<string, unknown> {
+  return {
+    $schema: 'vfm-form/1',
+    meta: {
+      title: 'Vozač',
+      description: 'Dodatni podaci o vozaču',
+      subject: 'DRIVER',
+      language: 'bs',
+      estimatedMinutes: 2,
+    },
+    layout: { columns: 1, sectionsCollapsible: true, stickySubmit: true },
+    sections: [
+      {
+        key: 'dodatno',
+        title: 'Dodatni podaci',
+        order: 1,
+        fields: [
+          {
+            key: 'emergencyContact',
+            type: 'TEXT',
+            label: 'Kontakt u nuždi',
+            order: 1,
+            validation: { maxLength: 120 },
+          },
+          {
+            key: 'uniformSize',
+            type: 'TEXT',
+            label: 'Veličina uniforme',
+            order: 2,
+            validation: { maxLength: 10 },
+          },
+          {
+            key: 'napomena',
+            type: 'TEXTAREA',
+            label: 'Napomena',
+            order: 3,
+            validation: { maxLength: 500 },
+          },
+        ],
+      },
+    ],
+    normalizedName: [],
+  };
+}
+
 /** Redoslijed je bitan samo za log; sve forme su nezavisne. */
 export const SEED_FORMS: readonly SeedForm[] = [
   {
@@ -261,6 +313,14 @@ export const SEED_FORMS: readonly SeedForm[] = [
     description: 'Osnovni podaci o vozilu.',
     ownerModule: 'vehicles',
     definition: vehicleForm(),
+  },
+  {
+    key: 'vozac',
+    name: 'Vozač',
+    subject: 'DRIVER',
+    description: 'Dodatni podaci o vozaču (bez identiteta i PII).',
+    ownerModule: 'drivers',
+    definition: driverForm(),
   },
   {
     key: 'pranje_vozila',

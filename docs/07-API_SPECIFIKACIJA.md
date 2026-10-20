@@ -193,9 +193,24 @@ Primjer `PUT /api/v1/roles/matrix`:
 
 ### 2.4 Vozači (`/drivers`)
 
-`GET/POST /drivers`, `GET/PATCH /drivers/:id`, `POST /drivers/:id/archive`, `DELETE /drivers/:id`,
-`GET/POST/PATCH/DELETE /drivers/:id/license-categories[/:catId]`, `GET /drivers/:id/tasks`.
-Permisije: `driver:*`; PII polja zahtijevaju `driver:view_pii`.
+| Metoda | Put | P |
+|---|---|---|
+| GET | `/drivers` | `driver:view` — `?page&pageSize&q&status&includeArchived&expiringInDays&licenseCategory` |
+| POST | `/drivers` | `driver:create` — `formData` prema objavljenoj `DRIVER` verziji |
+| GET | `/drivers/:id` | `driver:view` — PII uz `driver:view_pii` |
+| PATCH | `/drivers/:id` | `driver:update` — nosi `version` (optimističko zaključavanje) |
+| POST | `/drivers/:id/archive` · `/restore` | `driver:archive` — `ARCHIVED` samo ovdje |
+| DELETE | `/drivers/:id` | `driver:delete` — soft-delete (`deletedAt`) |
+| GET | `/drivers/:id/license-categories` | `driver:view` |
+| POST | `/drivers/:id/license-categories` | `driver:update` — `409 DUPLICATE_ENTRY` za istu kategoriju |
+| PATCH | `/drivers/:id/license-categories/:catId` | `driver:update` |
+| DELETE | `/drivers/:id/license-categories/:catId` | `driver:update` |
+| GET | `/drivers/:id/tasks` | `task:view` — Faza 4 |
+
+**PII (B-20, R-07):** `phone`, `email`, `dateOfBirth`, `address` i `licenseNumber` vraćaju se
+samo uz `driver:view_pii` (Super Admin uvijek). Bez prava: e-mail `A***@example.ba`, telefon i
+broj dozvole `•••••123`, datum rođenja i adresa `null`, uz `piiRedacted: true`. Datum isteka
+dozvole **nije** PII — nosi ga rok i podsjetnik.
 
 ### 2.5 Vozila (`/vehicles`)
 

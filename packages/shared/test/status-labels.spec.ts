@@ -5,6 +5,7 @@ import {
   CLIENT_TYPES,
   DELIVERY_STATUSES,
   DEVICE_TOKEN_STATUSES,
+  DRIVER_STATUSES,
   EXPORT_STATUSES,
   FIELD_TYPES,
   findMissingLabels,
@@ -48,6 +49,7 @@ import {
 const COMPLETENESS: readonly [string, readonly string[], Record<string, unknown>][] = [
   ['USER_STATUS', USER_STATUSES, LABEL_MAPS.user],
   ['VEHICLE_STATUS', VEHICLE_STATUSES, LABEL_MAPS.vehicle],
+  ['DRIVER_STATUS', DRIVER_STATUSES, LABEL_MAPS.driver],
   ['RECORD_STATUS', RECORD_STATUSES, LABEL_MAPS.record],
   ['TASK_STATUS', TASK_STATUSES, LABEL_MAPS.taskStatus],
   ['TASK_PRIORITY', TASK_PRIORITIES, LABEL_MAPS.taskPriority],

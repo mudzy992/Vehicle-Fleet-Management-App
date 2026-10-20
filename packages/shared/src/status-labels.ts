@@ -18,6 +18,7 @@ import type {
   CLIENT_TYPES,
   DELIVERY_STATUSES,
   DEVICE_TOKEN_STATUSES,
+  DRIVER_STATUSES,
   EXPORT_STATUSES,
   FIELD_TYPES,
   FORM_SCHEMA_STATUSES,
@@ -98,6 +99,12 @@ export const VEHICLE_STATUS_LABELS: Readonly<Record<(typeof VEHICLE_STATUSES)[nu
   INACTIVE: { label: 'Neaktivno', level: 'neutral', description: 'Privremeno van upotrebe' },
   DAMAGED: { label: 'Oštećeno', level: 'danger' },
   ARCHIVED: { label: 'Arhivirano', level: 'neutral', description: 'Otpisano iz voznog parka' },
+} as const;
+
+export const DRIVER_STATUS_LABELS: Readonly<Record<(typeof DRIVER_STATUSES)[number], Meta>> = {
+  ACTIVE: { label: 'Aktivan', level: 'success' },
+  INACTIVE: { label: 'Neaktivan', level: 'neutral', description: 'Ne dodjeljuje se na zadatke' },
+  ARCHIVED: { label: 'Arhiviran', level: 'neutral', description: 'Evidencije ostaju' },
 } as const;
 
 export const FUEL_TYPE_LABELS: Readonly<Record<(typeof FUEL_TYPES)[number], string>> = {
@@ -402,6 +409,7 @@ export type LabelDomain =
   | 'clientType'
   | 'user'
   | 'vehicle'
+  | 'driver'
   | 'record'
   | 'taskStatus'
   | 'taskPriority'
@@ -439,6 +447,7 @@ export const LABEL_MAPS: Readonly<Record<LabelDomain, LabelMap>> = {
   clientType: CLIENT_TYPE_LABELS,
   user: USER_STATUS_LABELS,
   vehicle: VEHICLE_STATUS_LABELS,
+  driver: DRIVER_STATUS_LABELS,
   record: RECORD_STATUS_LABELS,
   taskStatus: TASK_STATUS_LABELS,
   taskPriority: TASK_PRIORITY_LABELS,
@@ -485,6 +494,7 @@ const ALL_LABEL_MAPS: readonly LabelMap[] = [
   TASK_PRIORITY_LABELS,
   USER_STATUS_LABELS,
   VEHICLE_STATUS_LABELS,
+  DRIVER_STATUS_LABELS,
   RECORD_STATUS_LABELS,
   FORM_SCHEMA_STATUS_LABELS,
   OUTBOX_STATUS_LABELS,

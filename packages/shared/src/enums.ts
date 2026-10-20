@@ -147,6 +147,15 @@ export type VehicleStatus = (typeof VEHICLE_STATUSES)[number];
 export const FUEL_TYPES = ['DIESEL', 'PETROL', 'LPG', 'CNG', 'HYBRID', 'ELECTRIC'] as const;
 export type FuelType = (typeof FUEL_TYPES)[number];
 
+/**
+ * Status vozača (docs/03 §3.3).
+ *
+ * `ARCHIVED` se postavlja isključivo kroz `POST /drivers/:id/archive` — vozač u
+ * arhivi zadržava sve evidencije (zadaci, primopredaje), ali se ne nudi za nove.
+ */
+export const DRIVER_STATUSES = ['ACTIVE', 'INACTIVE', 'ARCHIVED'] as const;
+export type DriverStatus = (typeof DRIVER_STATUSES)[number];
+
 /** Status dokumenta/evidencije (registracija, osiguranje, servis…). */
 export const RECORD_STATUSES = ['DRAFT', 'ACTIVE', 'EXPIRED', 'CANCELLED', 'ARCHIVED'] as const;
 export type RecordStatus = (typeof RECORD_STATUSES)[number];
