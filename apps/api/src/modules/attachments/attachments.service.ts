@@ -23,7 +23,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { ApiErrorDetail } from '@vfm/shared';
 import { hasPermission } from '@vfm/shared';
 import { maxFileSizeBytes } from '@vfm/shared/env';
@@ -55,6 +55,15 @@ export interface UploadedFileLike {
   readonly mimetype: string;
   readonly size: number;
 }
+
+/**
+ * DI token za opcije pohrane.
+ *
+ * Zašto token, a ne goli parametar: Nest injektira samo klase ili tokene s
+ * `@Inject`. Interfejs `AttachmentStorageOptions` ne postoji u runtime-u, pa je
+ * aplikacija padala na startu („can't resolve dependencies … index [1]").
+ */
+export const ATTACHMENT_STORAGE_OPTIONS = 'VFM_ATTACHMENT_STORAGE_OPTIONS';
 
 /** Konfiguracija pohrane — u testovima se zadaje eksplicitno. */
 export interface AttachmentStorageOptions {
@@ -146,13 +155,26 @@ interface AttachmentRow {
 
 @Injectable()
 export class AttachmentsService {
-  private readonly options: AttachmentStorageOptions;
+  private readonly overrides?: Partial<AttachmentStorageOptions>;
+  private resolved?: AttachmentStorageOptions;
 
   constructor(
     private readonly prisma: PrismaService,
-    options?: Partial<AttachmentStorageOptions>,
+    /** Opcione izmjene konfiguracije; bez njih se čita ENV (`@Optional`). */
+    @Optional() @Inject(ATTACHMENT_STORAGE_OPTIONS) overrides?: Partial<AttachmentStorageOptions>,
   ) {
-    this.options = { ...attachmentOptionsFromEnv(), ...options };
+    this.overrides = overrides ?? undefined;
+  }
+
+  /**
+   * Efektivne opcije — ENV se čita **lijeno** (pri prvom uploadu), ne u
+   * konstruktoru: time DI ne zavisi od ENV-a, a testovi mogu dati svoje putanje.
+   */
+  private get options(): AttachmentStorageOptions {
+    if (!this.resolved) {
+      this.resolved = { ...attachmentOptionsFromEnv(), ...this.overrides };
+    }
+    return this.resolved;
   }
 
   /** Efektivne opcije (testovi provjeravaju limit veličine). */
