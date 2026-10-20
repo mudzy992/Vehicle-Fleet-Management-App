@@ -22,6 +22,9 @@ import { ProfilePage } from '../features/profile/profile-page.js';
 import { FormsPage } from '../features/forms/forms-page.js';
 import { VehiclesPage } from '../features/vehicles/vehicles-page.js';
 import { VehicleCreatePage } from '../features/vehicles/vehicle-create-page.js';
+import { DriversPage } from '../features/drivers/drivers-page.js';
+import { DriverCreatePage } from '../features/drivers/driver-create-page.js';
+import { DriverDetailPage } from '../features/drivers/driver-detail-page.js';
 import { VehicleDetailPage } from '../features/vehicles/vehicle-detail-page.js';
 import { NAV_ITEMS } from './nav.js';
 
@@ -79,6 +82,34 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission="vehicle:view">
             <VehicleDetailPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        // W10 — registar vozača. PII se ne prikazuje u listi; rok dozvole jest
+        // javni dio zapisa (docs/05 §8.2).
+        path: 'vozaci',
+        element: (
+          <RequirePermission permission="driver:view">
+            <DriversPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        // W12 — novi vozač: strukturirane kolone + dinamička `DRIVER` forma.
+        path: 'vozaci/novi',
+        element: (
+          <RequirePermission permission="driver:create">
+            <DriverCreatePage />
+          </RequirePermission>
+        ),
+      },
+      {
+        // W11 — profil vozača; PII sekcija zavisi od `driver:view_pii`.
+        path: 'vozaci/:driverId',
+        element: (
+          <RequirePermission permission="driver:view">
+            <DriverDetailPage />
           </RequirePermission>
         ),
       },

@@ -21,13 +21,27 @@ export const NAV_GROUPS: readonly NavGroup[] = ['Operativa', 'Vozni park', 'Konf
 export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/nadzorna-tabla', label: 'Nadzorna tabla', group: 'Operativa', phase: 'Faza 3' },
   { to: '/zadaci', label: 'Zadaci', group: 'Operativa', permission: 'task:view', phase: 'Faza 5' },
-  { to: '/obavijesti', label: 'Obavijesti', group: 'Operativa', permission: 'notification:view', phase: 'Faza 5' },
+  {
+    to: '/obavijesti',
+    label: 'Obavijesti',
+    group: 'Operativa',
+    permission: 'notification:view',
+    phase: 'Faza 5',
+  },
 
   { to: '/vozila', label: 'Vozila', group: 'Vozni park', permission: 'vehicle:view', phase: 'Faza 3' },
+  { to: '/vozaci', label: 'Vozači', group: 'Vozni park', permission: 'driver:view', phase: 'Faza 3' },
   { to: '/gume', label: 'Gume', group: 'Vozni park', permission: 'tire:view', phase: 'Faza 4' },
   { to: '/izvjestaji', label: 'Izvještaji', group: 'Vozni park', permission: 'report:view', phase: 'Faza 7' },
 
-  { to: '/forme', label: 'Forme', group: 'Konfiguracija', permission: 'form:view', phase: 'Faza 2', superAdminOnly: true },
+  {
+    to: '/forme',
+    label: 'Forme',
+    group: 'Konfiguracija',
+    permission: 'form:view',
+    phase: 'Faza 2',
+    superAdminOnly: true,
+  },
   {
     to: '/administracija/korisnici',
     label: 'Korisnici',
@@ -54,7 +68,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     phase: 'Faza 1',
   },
   { to: '/profil', label: 'Profil', group: 'Sistem', permission: 'auth:login', phase: 'Faza 1' },
-  { to: '/zdravlje', label: 'Zdravlje sistema', group: 'Sistem', permission: 'system:view_health', phase: 'Faza 0' },
+  {
+    to: '/zdravlje',
+    label: 'Zdravlje sistema',
+    group: 'Sistem',
+    permission: 'system:view_health',
+    phase: 'Faza 0',
+  },
   { to: '/dizajn-sistem', label: 'Dizajn sistem', group: 'Sistem', phase: 'Faza 0' },
 ];
 

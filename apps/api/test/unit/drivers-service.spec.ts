@@ -313,6 +313,16 @@ describe('DriversService — lista i filteri', () => {
     expect(list.items.map((item) => item.lastName).sort()).toEqual(['Dozvola', 'Kategorija']);
   });
 
+  it('dozvola koja ističe **danas** ulazi u `expiringInDays: 0` (granica je početak dana)', async () => {
+    const { fake, svc } = service();
+    fake.addDriver({ lastName: 'Danas', licenseExpiresAt: inDays(0) });
+    fake.addDriver({ lastName: 'Sutra', licenseExpiresAt: inDays(1) });
+
+    const list = await svc.list(query({ expiringInDays: 0 }));
+
+    expect(list.items.map((item) => item.lastName)).toEqual(['Danas']);
+  });
+
   it('`licenseDaysLeft` je negativan za isteklu dozvolu', async () => {
     const { fake, svc } = service();
     fake.addDriver({ licenseExpiresAt: inDays(-2) });

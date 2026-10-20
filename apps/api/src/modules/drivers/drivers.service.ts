@@ -678,7 +678,9 @@ export class DriversService {
     }
 
     if (query.expiringInDays !== undefined) {
-      const today = new Date();
+      // `@db.Date` ne nosi vrijeme: granica je početak **lokalnog** dana
+      // (`Europe/Sarajevo`), inače vozač kojem dozvola ističe danas ispadne.
+      const today = toDatabaseDate(toLocalDateString(new Date()))!;
       const until = new Date(today.getTime() + query.expiringInDays * 24 * 60 * 60 * 1000);
       where.AND = [
         {

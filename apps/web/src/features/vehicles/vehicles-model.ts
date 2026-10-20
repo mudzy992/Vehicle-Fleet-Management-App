@@ -7,40 +7,36 @@
  */
 import { toLocalDateString } from '@vfm/shared';
 import type { VehicleListQuery, VehicleSummary } from '@vfm/shared/schemas';
+import {
+  DEADLINE_THRESHOLDS as THRESHOLDS,
+  daysBetween as days,
+  deadlineTone as tone,
+  type DeadlineTone as Tone,
+} from '../../lib/deadlines.js';
 
-/** Pragovi rokova u danima (zeleno/žuto/narandžasto/crveno). */
-export const DEADLINE_THRESHOLDS = { warn: 30, soon: 7 } as const;
+export { DEADLINE_THRESHOLDS, daysBetween } from '../../lib/deadlines.js';
+export type { DeadlineTone } from '../../lib/deadlines.js';
 
-export type DeadlineTone = 'none' | 'ok' | 'warn' | 'soon' | 'overdue';
-
-/** Broj dana između dva `yyyy-MM-dd` datuma (b − a), bez vremenske zone. */
-export function daysBetween(a: string, b: string): number {
-  const start = Date.parse(`${a}T00:00:00.000Z`);
-  const end = Date.parse(`${b}T00:00:00.000Z`);
-  return Math.round((end - start) / 86_400_000);
+/** Današnji datum u `Europe/Sarajevo` (`yyyy-MM-dd`). */
+function today(): string {
+  return toLocalDateString(new Date());
 }
 
 /**
- * Boja roka: `overdue` (crveno), `soon` ≤ 7 dana (narandžasto), `warn` ≤ 30
- * (žuto), `ok` (zeleno). `none` kad rok nije upisan — polje tada ne postoji, ne
- * prikazujemo „isteklo".
+ * Lokalni omotači: ekran ne mora svaki put računati „danas", ali testovi mogu
+ * dati fiksan datum (inače bi test zavisio od sistemskog sata).
  */
-export function deadlineTone(dateIso: string | null, todayIso = toLocalDateString(new Date())): DeadlineTone {
-  if (!dateIso) return 'none';
-  const days = daysBetween(todayIso, dateIso);
-  if (days < 0) return 'overdue';
-  if (days <= DEADLINE_THRESHOLDS.soon) return 'soon';
-  if (days <= DEADLINE_THRESHOLDS.warn) return 'warn';
-  return 'ok';
+export function deadlineTone(dateIso: string | null, todayIso: string = today()): Tone {
+  return tone(dateIso, todayIso);
 }
 
-/** Tekst roka u tabeli — „isteklo prije N dana", „za N dana", „danas". */
-export function deadlineLabel(dateIso: string | null, todayIso = toLocalDateString(new Date())): string {
+export function deadlineLabel(dateIso: string | null, todayIso: string = today()): string {
+  const day = todayIso;
   if (!dateIso) return '—';
-  const days = daysBetween(todayIso, dateIso);
-  if (days === 0) return 'danas';
-  if (days < 0) return `isteklo prije ${Math.abs(days)} d`;
-  return `za ${days} d`;
+  const diff = days(day, dateIso);
+  if (diff === 0) return 'danas';
+  if (diff < 0) return `isteklo prije ${Math.abs(diff)} d`;
+  return `za ${diff} d`;
 }
 
 /** Jedan red „rokova" widgeta (registracija ili osiguranje). */
@@ -50,7 +46,7 @@ export interface DeadlineEntry {
   readonly label: 'Registracija' | 'Osiguranje';
   readonly date: string;
   readonly days: number;
-  readonly tone: DeadlineTone;
+  readonly tone: Tone;
 }
 
 /**
@@ -62,9 +58,9 @@ export function collectDeadlines(
   vehicles: readonly VehicleSummary[],
   options: { todayIso?: string; limit?: number; withinDays?: number } = {},
 ): readonly DeadlineEntry[] {
-  const todayIso = options.todayIso ?? toLocalDateString(new Date());
+  const todayIso = options.todayIso ?? today();
   const limit = options.limit ?? 6;
-  const withinDays = options.withinDays ?? DEADLINE_THRESHOLDS.warn;
+  const withinDays = options.withinDays ?? THRESHOLDS.warn;
   const entries: DeadlineEntry[] = [];
 
   for (const vehicle of vehicles) {
@@ -75,15 +71,15 @@ export function collectDeadlines(
     ];
     for (const [label, date] of pairs) {
       if (!date) continue;
-      const days = daysBetween(todayIso, date);
-      if (days > withinDays) continue;
+      const remaining = days(todayIso, date);
+      if (remaining > withinDays) continue;
       entries.push({
         vehicleId: vehicle.id,
         internalNo: vehicle.internalNo,
         label,
         date,
-        days,
-        tone: deadlineTone(date, todayIso),
+        days: remaining,
+        tone: tone(date, todayIso),
       });
     }
   }
