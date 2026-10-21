@@ -297,3 +297,8 @@ zapisna RETIRED forma i usklađivanje `formData.totalCost`, konflikt prije
 brisanja, 404, blokada neaktivne evidencije/arhive, greška upisa, pretvaranje
 Decimal količine pri čitanju i permisije kontrolera. Nest DI test dopunjen
 servisom/kontrolerom stavki (+2). Fake transakcija ne dokazuje stvarni DB rollback.
+
+`apps/web/src/features/services/service-items-display.test.ts` — 3 testa
+lokalizovanog prikaza novca i količina: feninzi → KM, decimalni zarez, dvije
+decimale cijene, razdvajanje hiljada i izostavljanje suvišnih nula količine.
+Vizuelna provjera na korisničkom deployu ostaje potrebna; testovi ne porede screenshotove.

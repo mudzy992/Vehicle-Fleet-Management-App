@@ -1,8 +1,24 @@
+import { formatServiceMoney, formatServiceQuantity } from './service-items-display.js';
 /** Stavke se snimaju kao cijela verzionisana cjelina; server računa zbir. */
 import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import type { ServiceItemInput, ServiceItemsResponse } from '@vfm/shared/schemas';
-import { Button, Field, inputClassName } from '../../components/ui/index.js';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  EmptyState,
+  Field,
+  Table,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  inputClassName,
+} from '../../components/ui/index.js';
 import { api, ApiError } from '../../lib/api.js';
 import { useSession } from '../auth/session.js';
 import { moneyToFeninzi, feninziToInput } from '../vehicles/records-model.js';
@@ -98,122 +114,186 @@ function ItemsEditor({
     setItems((current) => current.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
   }
   return (
-    <section className="space-y-4">
-      <h3 className="font-semibold">Stavke računa · verzija {initial.version}</h3>
-      <p>Ukupni trošak: {feninziToInput(initial.totalCost)} KM</p>
-      {!editing ? (
-        <>
-          <ul className="space-y-2">
-            {initial.items.map((item) => (
-              <li key={item.id}>
-                {LABELS[item.kind]} · {item.name} · {item.quantityHundredths / 100} ×{' '}
-                {feninziToInput(item.unitPrice)} KM = {feninziToInput(item.totalPrice)} KM
-                {item.partNumber && <p>Šifra: {item.partNumber}</p>}
-                {item.notes && <p>{item.notes}</p>}
-              </li>
-            ))}
-          </ul>
-          {!initial.items.length && <p>Nema stavki. Ukupni trošak je do sada unesen ručno.</p>}
-          {canEdit && (
-            <Button size="sm" onClick={() => setEditing(true)}>
-              Uredi stavke
-            </Button>
-          )}
-        </>
-      ) : (
-        <form
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (
-              window.confirm(
-                'Zamijeniti sve stavke i ukupni trošak njihovim zbirom? Prazna lista postavlja trošak na 0 KM.',
-              )
-            ) {
-              setMessage('');
-              save.mutate();
-            }
-          }}
-        >
-          <p className="text-sm">
-            Zbir stavki zamjenjuje prethodni ukupni trošak. Svaka stavka se zaokružuje na fening.
-          </p>
-          {items.map((item, index) => (
-            <fieldset
-              key={index}
-              disabled={save.isPending}
-              className="grid gap-2 rounded border p-3 sm:grid-cols-2"
-            >
-              <legend>Stavka {index + 1}</legend>
-              <Field label="Vrsta" htmlFor={`stavka-${index}-kind`}>
-                <select
-                  id={`stavka-${index}-kind`}
-                  className={inputClassName}
-                  value={item.kind}
-                  onChange={(e) => change(index, 'kind', e.target.value)}
-                >
-                  {Object.entries(LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {(
-                [
-                  ['name', 'Naziv'],
-                  ['quantity', 'Količina'],
-                  ['price', 'Jedinična cijena (KM)'],
-                  ['partNumber', 'Šifra dijela'],
-                  ['notes', 'Napomena'],
-                ] as const
-              ).map(([key, label]) => (
-                <Field key={key} label={label} htmlFor={`stavka-${index}-${key}`}>
-                  <input
-                    id={`stavka-${index}-${key}`}
-                    className={inputClassName}
-                    value={item[key]}
-                    required={key === 'name' || key === 'quantity' || key === 'price'}
-                    onChange={(e) => change(index, key, e.target.value)}
-                  />
-                </Field>
-              ))}
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
-              >
-                Ukloni stavku
-              </Button>
-            </fieldset>
-          ))}
-          {message && (
-            <p role="alert" className="text-[var(--danger)]">
-              {message} Unos nije obrisan. Ako je verzija zastarjela, zatvorite i ponovo otvorite stavke.
+    <Card>
+      <CardHeader
+        title="Stavke računa"
+        description={`Verzija zapisa ${initial.version} · ${initial.items.length} stavki`}
+        actions={
+          <Button size="sm" variant="ghost" disabled={save.isPending} onClick={onClose}>
+            Nazad na servise
+          </Button>
+        }
+      />
+      <CardContent>
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--hover)] p-4">
+            <div>
+              <p className="text-xs text-[var(--fg-muted)]">Sačuvani ukupni trošak</p>
+              <p className="text-xl font-semibold tabular-nums">{formatServiceMoney(initial.totalCost)}</p>
+            </div>
+            <p className="max-w-sm text-sm text-[var(--fg-muted)]">
+              {editing
+                ? 'Nove vrijednosti se primjenjuju tek nakon potvrde snimanja.'
+                : 'Iznosi stavki su zaokruženi na fening.'}
             </p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              disabled={items.length >= 100 || save.isPending}
-              onClick={() =>
-                setItems((current) => [
-                  ...current,
-                  { kind: 'PART', name: '', quantity: '1', price: '', partNumber: '', notes: '' },
-                ])
-              }
-            >
-              Dodaj stavku
-            </Button>
-            <Button type="submit" loading={save.isPending}>
-              Sačuvaj stavke
-            </Button>
           </div>
-        </form>
-      )}
-      <Button variant="ghost" disabled={save.isPending} onClick={onClose}>
-        Zatvori
-      </Button>
-    </section>
+          {!editing ? (
+            <>
+              {initial.items.length ? (
+                <Table>
+                  <THead>
+                    <TR>
+                      <TH>Stavka</TH>
+                      <TH>Vrsta</TH>
+                      <TH align="right">Količina</TH>
+                      <TH align="right">Jedinična cijena</TH>
+                      <TH align="right">Iznos</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {initial.items.map((item) => (
+                      <TR key={item.id}>
+                        <TD>
+                          <p className="font-medium break-words">{item.name}</p>
+                          {item.partNumber && (
+                            <p className="text-xs text-[var(--fg-muted)]">Šifra: {item.partNumber}</p>
+                          )}
+                          {item.notes && (
+                            <p className="max-w-md whitespace-pre-wrap break-words text-sm text-[var(--fg-muted)]">
+                              {item.notes}
+                            </p>
+                          )}
+                        </TD>
+                        <TD>
+                          <Badge level="neutral">{LABELS[item.kind]}</Badge>
+                        </TD>
+                        <TD align="right" className="whitespace-nowrap tabular-nums">
+                          {formatServiceQuantity(item.quantityHundredths)}
+                        </TD>
+                        <TD align="right" className="whitespace-nowrap tabular-nums">
+                          {formatServiceMoney(item.unitPrice)}
+                        </TD>
+                        <TD align="right" className="whitespace-nowrap font-semibold tabular-nums">
+                          {formatServiceMoney(item.totalPrice)}
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              ) : (
+                <EmptyState
+                  title="Nema stavki računa"
+                  description="Ukupni trošak je unesen ručno. Dodavanjem stavki njihov zbir zamjenjuje taj iznos."
+                />
+              )}
+              {canEdit && (
+                <Button size="sm" onClick={() => setEditing(true)}>
+                  Uredi stavke
+                </Button>
+              )}
+            </>
+          ) : (
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (
+                  window.confirm(
+                    'Zamijeniti sve stavke i ukupni trošak njihovim zbirom? Prazna lista postavlja trošak na 0 KM.',
+                  )
+                ) {
+                  setMessage('');
+                  save.mutate();
+                }
+              }}
+            >
+              <p className="text-sm">
+                Zbir stavki zamjenjuje prethodni ukupni trošak. Svaka stavka se zaokružuje na fening.
+              </p>
+              {items.map((item, index) => (
+                <fieldset
+                  key={index}
+                  disabled={save.isPending}
+                  className="min-w-0 rounded-lg border border-[var(--border)] p-4"
+                >
+                  <legend className="px-2 text-sm font-semibold">Stavka {index + 1}</legend>
+                  <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <Field label="Vrsta" htmlFor={`stavka-${index}-kind`}>
+                      <select
+                        id={`stavka-${index}-kind`}
+                        className={inputClassName}
+                        value={item.kind}
+                        onChange={(e) => change(index, 'kind', e.target.value)}
+                      >
+                        {Object.entries(LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    {(
+                      [
+                        ['name', 'Naziv'],
+                        ['quantity', 'Količina'],
+                        ['price', 'Jedinična cijena (KM)'],
+                        ['partNumber', 'Šifra dijela'],
+                        ['notes', 'Napomena'],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <Field key={key} label={label} htmlFor={`stavka-${index}-${key}`}>
+                        <input
+                          id={`stavka-${index}-${key}`}
+                          className={inputClassName}
+                          value={item[key]}
+                          inputMode={key === 'quantity' || key === 'price' ? 'decimal' : undefined}
+                          maxLength={
+                            key === 'notes' ? 2000 : key === 'name' ? 200 : key === 'partNumber' ? 120 : 30
+                          }
+                          required={key === 'name' || key === 'quantity' || key === 'price'}
+                          onChange={(e) => change(index, key, e.target.value)}
+                        />
+                      </Field>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
+                    >
+                      Ukloni stavku
+                    </Button>
+                  </div>
+                </fieldset>
+              ))}
+              {message && (
+                <p role="alert" className="text-[var(--danger)]">
+                  {message} Unos nije obrisan. Ako je verzija zastarjela, zatvorite i ponovo otvorite stavke.
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  disabled={items.length >= 100 || save.isPending}
+                  onClick={() =>
+                    setItems((current) => [
+                      ...current,
+                      { kind: 'PART', name: '', quantity: '1', price: '', partNumber: '', notes: '' },
+                    ])
+                  }
+                >
+                  Dodaj stavku
+                </Button>
+                <Button type="submit" loading={save.isPending}>
+                  Sačuvaj stavke
+                </Button>
+              </div>
+            </form>
+          )}
+          <Button variant="ghost" disabled={save.isPending} onClick={onClose}>
+            Zatvori
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

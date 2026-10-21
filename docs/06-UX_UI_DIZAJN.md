@@ -819,3 +819,12 @@ Potvrda prije snimanja jasno kaže da zbir zamjenjuje prethodni ukupni trošak,
 a prazna lista postavlja nulu. Verzijski konflikt ne briše unos; zatvaranje i
 ponovno otvaranje učitava novu verziju. Nakon uspjeha osvježavaju se stavke i
 servisna lista. Izmjena osnovnih podataka servisa još nije implementirana.
+
+### Prikaz servisnog računa — vizuelna dorada
+
+Stavke su prikazane u tabeli unutar kartice: naziv/šifra/napomena, vrsta,
+količina, jedinična cijena i iznos. Brojevi su desno poravnati, cijene imaju
+decimalni zarez i dvije decimale, ukupni sačuvani trošak je izdvojen u zaglavlju.
+Na uskom ekranu tabela ima horizontalno pomjeranje umjesto prelamanja iznosa.
+Forma koristi zasebne blokove po stavci i prilagodljivi raspored 1/2/3 kolone;
+količina/cijena otvaraju decimalnu tastaturu. API ugovor se ne mijenja.
