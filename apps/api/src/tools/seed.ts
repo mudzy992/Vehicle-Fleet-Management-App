@@ -15,6 +15,8 @@
  *    `TASK`) i `registracija_vozila`; svaka dobija objavljenu verziju 1 s
  *    `contentHash` iz kanonizacije, prolazi sve provjere pri objavi i puni
  *    `FieldKeyRegistry` (U-16). Postojeća objavljena verzija se **ne dira**.
+ * 6. **Početne vrste zadataka** (`SEED_TASK_TYPES`) — 8 konfiguracijskih vrsta;
+ *    postojeći kod se ne prepisuje ni ne vraća iz arhive.
  *
  * Pravila:
  * - skripta je **idempotentna** (upsert po prirodnim ključevima: `Permission.code`,
@@ -46,6 +48,7 @@ import { PasswordService } from '../modules/auth/services/password.service.js';
 import { prismaConnectionOptions } from '../prisma/prisma.service.js';
 import { syncFieldKeys, type FieldKeyRegistryClient } from '../modules/form-schemas/field-key-registry.js';
 import { SEED_FORMS } from './seed-forms.js';
+import { SEED_TASK_TYPES } from './seed-task-types.js';
 
 /** Sistemske role koje seed uvijek postavlja (P-01: tri role). */
 const SEED_ROLES: readonly Exclude<RoleCode, 'CUSTOM'>[] = [
@@ -251,6 +254,7 @@ interface SeedSummary {
   readonly formSchemaCreated: boolean;
   /** Koje su forme kreirane, a koje su već imale objavljenu verziju. */
   readonly forms: { created: string[]; existing: string[] };
+  readonly taskTypesCreated: number;
 }
 
 function log(message: string): void {
@@ -466,6 +470,49 @@ async function seedForms(prisma: PrismaClient): Promise<{
   }
 
   return { created, existing, byKey };
+}
+
+/**
+ * Početne vrste zadataka su konfiguracija, pa se seeduju i u produkciji.
+ * Postojeći kod — uključujući arhiviranu vrstu — ostavlja se netaknutim.
+ */
+async function seedTaskTypes(
+  prisma: PrismaClient,
+  formsByKey: ReadonlyMap<string, { formSchemaId: string; versionId: string }>,
+): Promise<number> {
+  let created = 0;
+
+  for (const taskType of SEED_TASK_TYPES) {
+    const existing = await prisma.taskType.findUnique({
+      where: { code: taskType.code },
+      select: { id: true },
+    });
+    if (existing) continue;
+
+    await prisma.taskType.create({
+      data: {
+        id: randomUUID(),
+        code: taskType.code,
+        name: taskType.name,
+        description: taskType.description,
+        iconName: taskType.iconName,
+        colorHex: taskType.colorHex,
+        requiresVehicle: taskType.requiresVehicle,
+        requiresOdometer: taskType.requiresOdometer,
+        requiresPhotos: taskType.requiresPhotos,
+        defaultPriority: taskType.defaultPriority,
+        defaultAssignMode: taskType.defaultAssignMode,
+        allowMultipleClaimants: false,
+        dueOffsetHours: taskType.dueOffsetHours,
+        formSchemaId: taskType.formKey ? (formsByKey.get(taskType.formKey)?.formSchemaId ?? null) : null,
+        active: true,
+        sortOrder: taskType.sortOrder,
+      },
+    });
+    created += 1;
+  }
+
+  return created;
 }
 
 async function seedDemoUsers(
@@ -691,6 +738,7 @@ export async function runSeed(prisma: PrismaClient, env: { NODE_ENV: string }): 
   const roles = await seedRoles(prisma);
   const grantsAdded = await seedGrants(prisma);
   const forms = await seedForms(prisma);
+  const taskTypesCreated = await seedTaskTypes(prisma, forms.byKey);
   const vehicleForm = forms.byKey.get('vehicle');
   if (!vehicleForm) {
     throw new Error('Seed: forma "vehicle" nije dostupna — vozila se ne mogu vezati na formu.');
@@ -729,6 +777,7 @@ export async function runSeed(prisma: PrismaClient, env: { NODE_ENV: string }): 
     reminderPoliciesCreated,
     formSchemaCreated: forms.created.includes('vehicle'),
     forms: { created: forms.created, existing: forms.existing },
+    taskTypesCreated,
   };
 }
 
@@ -755,6 +804,7 @@ async function main(): Promise<void> {
       `Forme: ${summary.forms.created.length} novih (${summary.forms.created.join(', ') || '—'}), ` +
         `${summary.forms.existing.length} već objavljenih (${summary.forms.existing.join(', ') || '—'}).`,
     );
+    log(`Vrste zadataka: ${summary.taskTypesCreated} novih (od 8 početnih).`);
     log(`Vozila: ${summary.vehiclesCreated} novih (od 10 fiktivnih).`);
     log(`Vozači: ${summary.driversCreated} novih (od 5 fiktivnih).`);
     log(`Registracije (demo): ${summary.registrationsCreated} novih.`);

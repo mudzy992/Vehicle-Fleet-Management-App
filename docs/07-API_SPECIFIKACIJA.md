@@ -337,8 +337,17 @@ na novu verziju, registar ključeva (`FieldKeyRegistry`, U-16) se dopunjava.
 
 ### 2.10 Vrste zadataka (`/task-types`)
 
-`GET/POST /task-types`, `GET/PATCH /task-types/:id`, `POST /task-types/:id/archive`,
-`GET/PUT /task-types/:id/completion-requirements`.
+| Metoda | Put | P | Napomena |
+|---|---|---|---|
+| GET | `/task-types` | `task_type:view` | paginirana konfiguracija; arhivirane vrste se ne vraćaju |
+| POST | `/task-types` | `task_type:create` | nova vrsta; kod je trajno jedinstven |
+| GET | `/task-types/:id` | `task_type:view` | detalj sa zahtjevima završetka |
+| PATCH | `/task-types/:id` | `task_type:update` | djelimična izmjena bez `code` i statusa arhive |
+| POST | `/task-types/:id/archive` | `task_type:archive` | soft-delete; `204` |
+| GET | `/task-types/:id/completion-requirements` | `task_type:view` | trenutni zahtjevi |
+| PUT | `/task-types/:id/completion-requirements` | `task_type:update` | atomska zamjena cijelog skupa |
+
+Detaljan implementirani ugovor je u §7.6.
 
 ### 2.11 Zadaci (`/tasks`) — najkritičniji modul
 
@@ -884,3 +893,75 @@ pojedinačnih guma i usage pregled iz §2.8 su implementirani; `PATCH`/`DELETE`
 pojedinačne gume nisu dio ugovora. Globalni
 auth/RBAC ostaje obavezan; produkcijski HTTP test i stvarna konkurencija nad
 PostgreSQL-om nisu izvršeni u sandboxu.
+
+### 7.6 Vrste zadataka i zahtjevi završetka — prva cjelina Faze 5
+
+Implementirani su:
+
+| Metoda i ruta | Permisija | Odgovor i audit |
+|---|---|---|
+| `GET /task-types` | `task_type:view` | `{items,total,page,pageSize,totalPages}`; bez audita |
+| `POST /task-types` | `task_type:create` | `201 TaskTypeDetail`; audit `CREATE`/`INFO` na `TaskType` |
+| `GET /task-types/:id` | `task_type:view` | detalj s `completionRequirements`; bez audita |
+| `PATCH /task-types/:id` | `task_type:update` | ažurirani detalj; audit `UPDATE`/`INFO` prije/poslije |
+| `POST /task-types/:id/archive` | `task_type:archive` | `204`; audit `ARCHIVE`/`WARN`, opcionalni `reason` samo u auditu |
+| `GET /task-types/:id/completion-requirements` | `task_type:view` | `{taskTypeId,requirements}`; bez audita |
+| `PUT /task-types/:id/completion-requirements` | `task_type:update` | novi skup; audit `UPDATE`/`INFO` prije/poslije |
+
+Lista uvijek isključuje `deletedAt`, prihvata standardnu paginaciju te `q`
+(kod/naziv/opis), `activeOnly` i `requiresVehicle`. Sort whitelist je
+`sortOrder`, `name`, `code`, `createdAt`, `updatedAt`; nepoznat ključ pada na
+redoslijed prikaza, a redoslijed prikaza/naziv/ID su stabilni sekundarni
+ključevi. Pogled izlaže samo javna polja vrste, ključ/naziv i trenutno
+objavljenu verziju povezane forme te broj zahtjeva.
+
+Kreiranje ima strict DTO: `code` je 2–50 znakova po obrascu
+`^[A-Z][A-Z0-9_]*$`, `name` 2–100; opcionalni su opis, ikona i boja
+`#RRGGBB` (normalizuje se na velika slova). Zastavice `requiresVehicle`,
+`requiresOdometer`, `requiresPhotos` i `allowMultipleClaimants`, zadani
+prioritet/način dodjele, `dueOffsetHours` 1–8760 ili `null`, `formSchemaId`
+i `sortOrder` imaju DTO defaultove (`NORMAL`, `OPEN_CLAIM`, vozilo obavezno,
+sort 100). `requiresOdometer=true` bez vozila je `400 VALIDATION_ERROR`.
+Kod je globalno jedinstven i nakon arhiviranja; predprovjera i konkurentni
+Prisma `P2002` vraćaju `409 DUPLICATE_ENTRY`.
+
+Eksplicitna `formSchemaId` mora biti neobrisana `TASK` forma s trenutno
+objavljenom verzijom. Njeno `taskTypeId` smije biti `null` (generička) ili ID
+iste vrste; forma druge vrste, pogrešan subject ili nepostojeći ID su
+validacijska greška, a neobjavljena forma `409 FORM_VERSION_NOT_PUBLISHED`.
+Odgovor kreiranja je detalj s praznom listom zahtjeva; vrsta uvijek nastaje
+aktivna i klijent ne može zadati `active`, serverske datume ni arhivu.
+
+`PATCH` nema `code`, `active` ni `version`: `TaskType` u šemi nema
+optimističku verziju. Transakcija zaključava red `FOR UPDATE`, ponovo čita
+trenutno stanje i primjenjuje samo poslana polja; prazan DTO se odbija, a
+opis/ikona/boja/rok/forma se brišu eksplicitnim `null`. Efektivni odnos
+vozilo/kilometraža se provjerava i kad PATCH mijenja samo jednu zastavicu.
+Promjena forme prvo provjerava postojeće zahtjeve prema novoj efektivnoj
+objavljenoj definiciji; nekompatibilan skup blokira promjenu, pa se zahtjevi
+prvo uklanjaju/zamjenjuju zasebnim PUT-om.
+
+Arhiviranje u zaključanoj transakciji postavlja `active=false` i
+`deletedAt`; nepostojeća ili već arhivirana vrsta je `404 NOT_FOUND`.
+Arhiva ne dira postojeće zadatke, zahtjeve ni historiju i ne oslobađa kod za
+ponovnu upotrebu.
+
+Zahtjev završetka je `{fieldKey,required,stage,minPhotos}`. `fieldKey` prati
+form-engine obrazac, `required` ima default `true`, `stage` default
+`ON_COMPLETE`, a `minPhotos` je 0–20; iznos veći od 0 traži obavezan
+zahtjev. PUT prima najviše 50 zapisa, odbija duplikat `fieldKey` i u istoj
+zaključanoj transakciji briše pa upisuje cijeli skup; prazna lista briše sve
+zahtjeve. Efektivna forma je prvo `TaskType.formSchemaId`, a bez nje
+objavljena TASK forma vezana za tu vrstu. Kad efektivna forma postoji, ključ
+mora postojati u trenutno objavljenoj definiciji i `minPhotos > 0` mora
+pokazivati na `PHOTO` polje. Bez efektivne forme ključevi se zasad smiju
+konfigurisati unaprijed; kreiranje/završetak zadatka u sljedećoj cjelini
+mora ih ponovo provjeriti prema snapshotovanoj verziji forme.
+
+Idempotentni seed dodaje `WASH`, `INTERIOR_CLEANING`, `FUEL_REFILL`,
+`SERVICE_VISIT`, `TIRE_CHANGE`, `TECHNICAL_INSPECTION`, `REGISTRATION` i
+`CUSTOM`. Postojeći kod se ne prepisuje niti vraća iz arhive; zasad se samo
+`WASH` veže za seedovanu objavljenu formu `pranje_vozila`, ostale vrste imaju
+`formSchemaId=null`. Nema novih ENV varijabli, Redis ključeva/redova,
+migracija ni outbox događaja u ovoj cjelini. Jedinice s lažnim klijentom ne
+dokazuju stvarni PostgreSQL `FOR UPDATE`, rollback ni produkcijski HTTP tok.

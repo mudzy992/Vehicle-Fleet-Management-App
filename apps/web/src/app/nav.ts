@@ -50,6 +50,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/izvjestaji', label: 'Izvještaji', group: 'Vozni park', permission: 'report:view', phase: 'Faza 7' },
 
   {
+    to: '/vrste-zadataka',
+    label: 'Vrste zadataka',
+    group: 'Konfiguracija',
+    permission: 'task_type:view',
+    phase: 'Faza 5',
+  },
+  {
     to: '/forme',
     label: 'Forme',
     group: 'Konfiguracija',

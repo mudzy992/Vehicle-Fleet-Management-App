@@ -261,6 +261,7 @@ export class FakePrismaClient {
   readonly formSchemas = new Map<string, FakeFormSchemaRow>();
   readonly fieldKeys = new Map<string, FakeFieldKeyRow>();
   readonly formSchemaVersions: FakeFormSchemaVersionRow[] = [];
+  readonly taskTypes = new Map<string, Record<string, unknown>>();
   readonly vehicles = new Map<string, FakeVehicleRow>();
   readonly authAttempts: FakeAuthAttemptRow[] = [];
   readonly auditLogs: FakeAuditLogRow[] = [];
@@ -671,6 +672,25 @@ export class FakePrismaClient {
     create: async (args: { data: Record<string, unknown> }) => {
       const data = args.data as unknown as FakeFormSchemaVersionRow;
       this.formSchemaVersions.push(data);
+      return clone(data);
+    },
+  };
+
+  readonly taskType = {
+    findUnique: async (args: { where: { code?: string; id?: string } }) => {
+      for (const row of this.taskTypes.values()) {
+        if (args.where.code !== undefined && row.code !== args.where.code) continue;
+        if (args.where.id !== undefined && row.id !== args.where.id) continue;
+        return clone(row);
+      }
+      return null;
+    },
+    create: async (args: { data: Record<string, unknown> }) => {
+      const data = { ...args.data };
+      if ([...this.taskTypes.values()].some((row) => row.code === data.code)) {
+        throw new Error(`FakePrisma: vrsta zadatka ${String(data.code)} već postoji.`);
+      }
+      this.taskTypes.set(String(data.id), data);
       return clone(data);
     },
   };

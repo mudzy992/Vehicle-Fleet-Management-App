@@ -37,6 +37,8 @@ import {
   FUEL_TYPES,
   ODOMETER_SOURCES,
   OWNERSHIP_TYPES,
+  TASK_ASSIGN_MODES,
+  TASK_PRIORITIES,
   TIRE_DISMOUNT_REASONS,
   TIRE_POSITIONS,
   TIRE_SEASONS,
@@ -2707,3 +2709,216 @@ export const tireSetUsageSchema = z
   })
   .strict();
 export type TireSetUsage = z.output<typeof tireSetUsageSchema>;
+
+// -----------------------------------------------------------------------------
+//  Vrste zadataka i zahtjevi završetka (docs/07 §2.10, docs/03 §3.6)
+// -----------------------------------------------------------------------------
+
+export const taskTypeIdSchema = uuidSchema;
+export const taskPrioritySchema = z.enum(TASK_PRIORITIES);
+export const taskAssignModeSchema = z.enum(TASK_ASSIGN_MODES);
+
+/**
+ * Kod vrste zadatka je stabilan konfiguracijski identifikator (`WASH`,
+ * `FUEL_REFILL`, …). Jedinstven je u cijeloj tabeli, uključujući arhivirane
+ * vrste, i ne mijenja se kroz PATCH.
+ */
+export const taskTypeCodeSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(50)
+  .regex(/^[A-Z][A-Z0-9_]*$/u, {
+    message: 'Kod vrste zadatka mora biti VELIKA_SLOVA (npr. FUEL_REFILL).',
+  });
+
+const taskTypeColorHexSchema = z
+  .string()
+  .trim()
+  .regex(/^#[0-9A-Fa-f]{6}$/u, { message: 'Boja mora biti u formatu #RRGGBB.' })
+  .transform((value) => value.toUpperCase());
+
+const taskTypeCreateShape = {
+  name: z.string().trim().min(2).max(100),
+  description: z.string().trim().max(1000).nullable().optional(),
+  iconName: z.string().trim().min(1).max(60).nullable().optional(),
+  colorHex: taskTypeColorHexSchema.nullable().optional(),
+  requiresVehicle: z.boolean().default(true),
+  requiresOdometer: z.boolean().default(false),
+  requiresPhotos: z.boolean().default(false),
+  defaultPriority: taskPrioritySchema.default('NORMAL'),
+  defaultAssignMode: taskAssignModeSchema.default('OPEN_CLAIM'),
+  allowMultipleClaimants: z.boolean().default(false),
+  dueOffsetHours: z.number().int().min(1).max(8760).nullable().optional(),
+  formSchemaId: uuidSchema.nullable().optional(),
+  sortOrder: z.number().int().min(-10000).max(10000).default(100),
+};
+
+function requireVehicleForOdometer(
+  value: { requiresVehicle?: boolean; requiresOdometer?: boolean },
+  ctx: z.RefinementCtx,
+): void {
+  if (value.requiresOdometer === true && value.requiresVehicle === false) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['requiresOdometer'],
+      message: 'Kilometraža se može zahtijevati samo za vrstu zadatka koja zahtijeva vozilo.',
+    });
+  }
+}
+
+export const createTaskTypeSchema = z
+  .object({
+    code: taskTypeCodeSchema,
+    ...taskTypeCreateShape,
+  })
+  .strict()
+  .superRefine(requireVehicleForOdometer);
+export type CreateTaskTypeInput = z.output<typeof createTaskTypeSchema>;
+
+/** Kod je nakon kreiranja nepromjenjiv; arhiviranje je zasebna akcija. */
+export const updateTaskTypeSchema = z
+  .object({
+    name: z.string().trim().min(2).max(100).optional(),
+    description: z.string().trim().max(1000).nullable().optional(),
+    iconName: z.string().trim().min(1).max(60).nullable().optional(),
+    colorHex: taskTypeColorHexSchema.nullable().optional(),
+    requiresVehicle: z.boolean().optional(),
+    requiresOdometer: z.boolean().optional(),
+    requiresPhotos: z.boolean().optional(),
+    defaultPriority: taskPrioritySchema.optional(),
+    defaultAssignMode: taskAssignModeSchema.optional(),
+    allowMultipleClaimants: z.boolean().optional(),
+    dueOffsetHours: z.number().int().min(1).max(8760).nullable().optional(),
+    formSchemaId: uuidSchema.nullable().optional(),
+    sortOrder: z.number().int().min(-10000).max(10000).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, { message: 'Nema šta mijenjati.' })
+  .superRefine(requireVehicleForOdometer);
+export type UpdateTaskTypeInput = z.output<typeof updateTaskTypeSchema>;
+
+export const archiveTaskTypeSchema = z
+  .object({
+    reason: z.string().trim().min(3).max(300).optional(),
+  })
+  .strict();
+export type ArchiveTaskTypeInput = z.output<typeof archiveTaskTypeSchema>;
+
+export const taskTypeListQuerySchema = paginationQuerySchema
+  .extend({
+    activeOnly: queryBoolean.optional(),
+    requiresVehicle: queryBoolean.optional(),
+  })
+  .strict();
+export type TaskTypeListQuery = z.output<typeof taskTypeListQuerySchema>;
+
+export const taskCompletionRequirementViewSchema = z
+  .object({
+    id: uuidSchema,
+    taskTypeId: uuidSchema,
+    fieldKey: z.string(),
+    required: z.boolean(),
+    stage: attachmentStageSchema,
+    minPhotos: z.number().int().min(0).max(20),
+  })
+  .strict();
+export type TaskCompletionRequirementView = z.output<typeof taskCompletionRequirementViewSchema>;
+
+export const taskTypeViewSchema = z
+  .object({
+    id: uuidSchema,
+    code: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    iconName: z.string().nullable(),
+    colorHex: z.string().nullable(),
+    requiresVehicle: z.boolean(),
+    requiresOdometer: z.boolean(),
+    requiresPhotos: z.boolean(),
+    defaultPriority: taskPrioritySchema,
+    defaultAssignMode: taskAssignModeSchema,
+    allowMultipleClaimants: z.boolean(),
+    dueOffsetHours: z.number().int().min(1).max(8760).nullable(),
+    formSchemaId: uuidSchema.nullable(),
+    formSchemaKey: z.string().nullable(),
+    formSchemaName: z.string().nullable(),
+    formSchemaVersion: z.number().int().positive().nullable(),
+    active: z.boolean(),
+    sortOrder: z.number().int(),
+    completionRequirementCount: z.number().int().nonnegative(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export type TaskTypeView = z.output<typeof taskTypeViewSchema>;
+
+export const taskTypeListResponseSchema = z
+  .object({
+    items: z.array(taskTypeViewSchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type TaskTypeListResponse = z.output<typeof taskTypeListResponseSchema>;
+
+export const taskTypeDetailSchema = taskTypeViewSchema
+  .extend({
+    completionRequirements: z.array(taskCompletionRequirementViewSchema),
+  })
+  .strict();
+export type TaskTypeDetail = z.output<typeof taskTypeDetailSchema>;
+
+export const taskCompletionRequirementInputSchema = z
+  .object({
+    fieldKey: z
+      .string()
+      .trim()
+      .regex(/^[a-z][a-zA-Z0-9_]{1,48}$/u, {
+        message: 'Ključ polja mora počinjati malim slovom i sadržavati samo slova, cifre i _.',
+      }),
+    required: z.boolean().default(true),
+    stage: attachmentStageSchema.default('ON_COMPLETE'),
+    minPhotos: z.number().int().min(0).max(20).default(0),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.minPhotos > 0 && !value.required) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['required'],
+        message: 'Zahtjev s minimalnim brojem fotografija mora biti obavezan.',
+      });
+    }
+  });
+export type TaskCompletionRequirementInput = z.output<typeof taskCompletionRequirementInputSchema>;
+
+export const replaceTaskCompletionRequirementsSchema = z
+  .object({
+    requirements: z.array(taskCompletionRequirementInputSchema).max(50),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const seen = new Set<string>();
+    value.requirements.forEach((requirement, index) => {
+      if (seen.has(requirement.fieldKey)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['requirements', index, 'fieldKey'],
+          message: `Zahtjev za polje "${requirement.fieldKey}" se ponavlja.`,
+        });
+      }
+      seen.add(requirement.fieldKey);
+    });
+  });
+export type ReplaceTaskCompletionRequirementsInput = z.output<typeof replaceTaskCompletionRequirementsSchema>;
+
+export const taskCompletionRequirementsResponseSchema = z
+  .object({
+    taskTypeId: uuidSchema,
+    requirements: z.array(taskCompletionRequirementViewSchema),
+  })
+  .strict();
+export type TaskCompletionRequirementsResponse = z.output<typeof taskCompletionRequirementsResponseSchema>;

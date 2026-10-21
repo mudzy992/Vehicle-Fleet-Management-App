@@ -31,6 +31,7 @@ import { DriverCreatePage } from '../features/drivers/driver-create-page.js';
 import { DriverDetailPage } from '../features/drivers/driver-detail-page.js';
 import { VehicleDetailPage } from '../features/vehicles/vehicle-detail-page.js';
 import { TireSetsPage } from '../features/tires/tire-sets-page.js';
+import { TaskTypesPage } from '../features/task-types/task-types-page.js';
 import { NAV_ITEMS } from './nav.js';
 
 export const router = createBrowserRouter([
@@ -159,6 +160,16 @@ export const router = createBrowserRouter([
             phase="Faza 5"
             description="Kanban i lista zadataka s preuzimanjem (atomski claim)."
           />
+        ),
+      },
+      {
+        // W18 — vrste zadataka: zadane postavke, objavljena TASK forma i
+        // zahtjevi završetka; sami zadaci i claim dolaze u sljedećoj cjelini.
+        path: 'vrste-zadataka',
+        element: (
+          <RequirePermission permission="task_type:view">
+            <TaskTypesPage />
+          </RequirePermission>
         ),
       },
       {

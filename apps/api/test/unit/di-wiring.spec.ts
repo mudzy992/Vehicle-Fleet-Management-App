@@ -6,6 +6,8 @@ import { ServiceItemsService } from '../../src/modules/services/service-items.se
 import { ServiceItemsController } from '../../src/modules/services/service-items.controller.js';
 import { ServicesService } from '../../src/modules/services/services.service.js';
 import { ServicesController } from '../../src/modules/services/services.controller.js';
+import { TaskTypesService } from '../../src/modules/task-types/task-types.service.js';
+import { TaskTypesController } from '../../src/modules/task-types/task-types.controller.js';
 /**
  * DI wiring — regresija za pad u produkciji (Faza 3).
  *
@@ -48,6 +50,7 @@ const services = [
   ['TiresService', TiresService],
   ['ServiceItemsService', ServiceItemsService],
   ['ServicesService', ServicesService],
+  ['TaskTypesService', TaskTypesService],
   ['AttachmentsService', AttachmentsService],
   ['VehiclesService', VehiclesService],
   ['DriversService', DriversService],
@@ -61,6 +64,7 @@ const controllers = [
   ['TireSetsController', TireSetsController, TiresService],
   ['ServiceItemsController', ServiceItemsController, ServiceItemsService],
   ['ServicesController', ServicesController, ServicesService],
+  ['TaskTypesController', TaskTypesController, TaskTypesService],
   ['AttachmentsController', AttachmentsController, AttachmentsService],
   ['VehiclesController', VehiclesController, VehiclesService],
   ['DriversController', DriversController, DriversService],

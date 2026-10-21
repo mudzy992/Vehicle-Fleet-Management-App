@@ -734,6 +734,12 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 | Kompleti guma (W12) | `/gume` | `features/tires/tire-sets-page.tsx`, `tire-set-create-form.tsx`, `tire-set-edit-form.tsx`, `tire-set-tires-panel.tsx`, `tire-set-usage-panel.tsx` | server filteri `q`/sezona/status/dostupnost, sortiranje i paginacija; unos uz `tire:create` kroz objavljenu `TIRE_SET` formu; **Korištenje** otvara sažetak i cikluse po vozilima, **Pojedinačne** sastav kompleta i dodavanje guma uz `tire:create`; **Uredi** uz `tire:update` i zapisnu formu, **Obriši** uz `tire:delete` i potvrdu; aktivna montaža linkuje na vozilo i zaključava ručni status/brisanje |
 | Montaža i zamjena guma (W13) | `/vozila/:vehicleId` → Gume | `features/tires/vehicle-tires-tab.tsx`, `tire-mount-form.tsx`, `tire-dismount-form.tsx` | montaža uz `tire:mount`, zamjena uz `tire:swap`, demontaža uz `tire:dismount`; izbor samo dostupnih kompleta, pozicije i kilometraža; zamjena je jedna transakcijska potvrda, a konflikt verzije/pozicije/kompleta ostavlja formu otvorenom s porukom servera |
 
+**Status (Faza 5 — prva cjelina, implementirano):**
+
+| Ekran | Ruta | Fajl | Napomena |
+|---|---|---|---|
+| Vrste zadataka (W18) | `/vrste-zadataka` | `features/task-types/task-types-page.tsx`, `task-type-form.tsx`, `task-type-requirements-panel.tsx` | server pretraga, filteri aktivne/vozilo, sortiranje i paginacija; **Nova vrsta** uz `task_type:create`, **Uredi** i editor zahtjeva uz `task_type:update`, **Arhiviraj** uz `task_type:archive`; kod je pri izmjeni zaključan, zadana forma se bira među objavljenim generičkim/vlastitim TASK formama; zahtjevi se uređuju kao cijeli skup i, kad je efektivna forma dostupna, biraju iz njenih polja za unos. Sami zadaci, atomski claim i obavijesti nisu dio ove cjeline. |
+
 Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);
 sidebar filtrira stavke prema `/auth/me` (`visibleNavItems`), ali **server ostaje
 autoritet** (P14) — ručni unos URL-a bez prava prikazuje ekran „Nemate pristup"

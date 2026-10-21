@@ -447,3 +447,39 @@ lozinkom koji se ne kešira te mapiranje Redis greške u 503. DI provjera je
 dopunjena globalnim interceptorom (+1). Lažnjak ne dokazuje stvarnu Redis
 konkurenciju, TTL isteke pod satom servera ni puni Nest HTTP redoslijed
 guardova/interceptora; to ostaje integracijska/deploy provjera.
+
+### Vrste zadataka i zahtjevi završetka — prva cjelina Faze 5
+
+`apps/api/test/unit/task-types.spec.ts` — 13 testova nad stateful lažnim
+transakcijskim klijentom: lista bez arhiviranih zapisa, serverski `q`,
+`activeOnly` i `requiresVehicle`, whitelist i stabilno podrazumijevano
+sortiranje, serijalizacija povezane objavljene forme i detalja; kreiranje s
+DTO defaultima i akterom; kod arhivirane vrste i konkurentni `P2002` kao
+`DUPLICATE_ENTRY`; nepostojeća, tuđa, pogrešnog subjecta i neobjavljena
+zadana forma; PATCH efektivne veze vozilo/kilometraža, brisanje opcija kroz
+`null` i blokada nekompatibilne promjene forme; zaključano arhiviranje i
+ponovljeni pokušaj kao 404; atomska zamjena zahtjeva uz provjeru ključa i
+`PHOTO` tipa za `minPhotos`; strict DTO granice te odvojene permisije,
+audit i `201`/`204` statusi kontrolera. DI regresija je dopunjena servisom i
+kontrolerom (+2), a registar Prisma selecta za `TASK_TYPE_SELECT` i
+`COMPLETION_REQUIREMENT_SELECT`.
+
+`apps/api/test/unit/seed.spec.ts` — postojeći seed scenariji dopunjeni su
+provjerama da prvi prolaz dodaje svih 8 kodova, da se `WASH` veže za
+objavljenu formu `pranje_vozila`, da ostale početne vrste zasad nemaju
+zadanu formu, da drugi prolaz ne pravi duplikate i da se konfiguracija
+seeduje i kad demo podaci nisu uključeni.
+
+`apps/web/src/features/task-types/task-types-model.test.ts` — 10 testova:
+gradnja serverskog upita, izbor samo generičkih/vlastitih objavljenih TASK
+formi, efektivna forma istim prioritetom kao API bez generičkog fallbacka,
+normalizacija i odbijanje neispravnog kreiranja, PATCH samo sa
+stvarnim izmjenama i `null` brisanjem opcionalnih polja, očuvanje trenutne
+forme kad lista formi nije dostupna, mapiranje i stroga validacija draftova
+zahtjeva te tekst/paginacija nakon arhiviranja.
+
+Lažni Prisma klijent izvršava callback bez stvarnog rollbacka i ne dokazuje
+PostgreSQL `FOR UPDATE`, jedinstveni indeks pod konkurencijom, Nest HTTP
+guard/interceptor redoslijed ni prikaz u browseru. P4–P8 ostaju za zadatke,
+claim, završetak, outbox i obavijesti u sljedećim cjelinama; produkcijska
+provjera ide kroz Coolify deploy i seed.
