@@ -1,4 +1,4 @@
-/** Kompleti guma — evidencija, životni ciklus i pojedinačne gume (W12). */
+/** Kompleti guma — evidencija, životni ciklus, pojedinačne gume i korištenje (W12). */
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
@@ -26,6 +26,7 @@ import { toQueryString } from '../vehicles/vehicles-model.js';
 import { TireSetCreateForm } from './tire-set-create-form.js';
 import { TireSetEditPanel } from './tire-set-edit-form.js';
 import { TireSetTiresPanel } from './tire-set-tires-panel.js';
+import { TireSetUsagePanel } from './tire-set-usage-panel.js';
 import { DEFAULT_TIRE_SET_FILTERS, buildTireSetQuery, type TireSetFilters } from './tire-sets-model.js';
 
 const PAGE_SIZE = 25;
@@ -42,6 +43,7 @@ export function TireSetsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedSet, setSelectedSet] = useState<TireSetView | null>(null);
+  const [usageSet, setUsageSet] = useState<TireSetView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -60,6 +62,7 @@ export function TireSetsPage() {
     onSuccess: async (_data, row) => {
       if (editingId === row.id) setEditingId(null);
       if (selectedSet?.id === row.id) setSelectedSet(null);
+      if (usageSet?.id === row.id) setUsageSet(null);
       if ((list.data?.items.length ?? 0) <= 1 && page > 1) setPage(page - 1);
       setMessage(`Komplet ${row.code} je obrisan. Historija montaža ostaje sačuvana.`);
       setActionError(null);
@@ -68,6 +71,7 @@ export function TireSetsPage() {
         queryClient.invalidateQueries({ queryKey: ['tire-set', row.id] }),
         queryClient.invalidateQueries({ queryKey: ['tire-installations'] }),
         queryClient.invalidateQueries({ queryKey: ['tire-set-tires', row.id] }),
+        queryClient.invalidateQueries({ queryKey: ['tire-set-usage', row.id] }),
       ]);
     },
     onError: (error) =>
@@ -116,6 +120,7 @@ export function TireSetsPage() {
             onClick={() => {
               setEditingId(null);
               setSelectedSet(null);
+              setUsageSet(null);
               setActionError(null);
               setShowCreate(true);
             }}
@@ -185,12 +190,15 @@ export function TireSetsPage() {
               queryClient.invalidateQueries({ queryKey: ['tire-sets'] }),
               queryClient.invalidateQueries({ queryKey: ['tire-set', updated.id] }),
               queryClient.invalidateQueries({ queryKey: ['tire-installations'] }),
+              queryClient.invalidateQueries({ queryKey: ['tire-set-usage', updated.id] }),
             ]);
           }}
         />
       )}
 
       {selectedSet && <TireSetTiresPanel tireSet={selectedSet} onClose={() => setSelectedSet(null)} />}
+
+      {usageSet && <TireSetUsagePanel tireSet={usageSet} onClose={() => setUsageSet(null)} />}
 
       <Card>
         <CardHeader title="Filteri" description="Pretraga i paginacija rade se na serveru." />
@@ -321,10 +329,20 @@ export function TireSetsPage() {
                     canDelete={canDelete}
                     isEditing={editingId === row.id}
                     isViewingTires={selectedSet?.id === row.id}
+                    isViewingUsage={usageSet?.id === row.id}
                     isDeleting={remove.isPending && remove.variables?.id === row.id}
+                    onViewUsage={() => {
+                      setShowCreate(false);
+                      setEditingId(null);
+                      setSelectedSet(null);
+                      setMessage(null);
+                      setActionError(null);
+                      setUsageSet((current) => (current?.id === row.id ? null : row));
+                    }}
                     onViewTires={() => {
                       setShowCreate(false);
                       setEditingId(null);
+                      setUsageSet(null);
                       setMessage(null);
                       setActionError(null);
                       setSelectedSet((current) => (current?.id === row.id ? null : row));
@@ -332,6 +350,7 @@ export function TireSetsPage() {
                     onEdit={() => {
                       setShowCreate(false);
                       setSelectedSet(null);
+                      setUsageSet(null);
                       setMessage(null);
                       setActionError(null);
                       setEditingId((current) => (current === row.id ? null : row.id));
@@ -374,7 +393,9 @@ function TireSetRow({
   canDelete,
   isEditing,
   isViewingTires,
+  isViewingUsage,
   isDeleting,
+  onViewUsage,
   onViewTires,
   onEdit,
   onDelete,
@@ -384,14 +405,16 @@ function TireSetRow({
   canDelete: boolean;
   isEditing: boolean;
   isViewingTires: boolean;
+  isViewingUsage: boolean;
   isDeleting: boolean;
+  onViewUsage: () => void;
   onViewTires: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const deleteBlocked = row.status === 'MOUNTED' || row.mountedVehicleId !== null;
   return (
-    <TR className={isEditing || isViewingTires ? 'bg-[var(--hover)]' : undefined}>
+    <TR className={isEditing || isViewingTires || isViewingUsage ? 'bg-[var(--hover)]' : undefined}>
       <TD>
         <p className="font-medium">{row.code}</p>
         <p>{[row.brand, row.model].filter(Boolean).join(' ') || '—'}</p>
@@ -425,6 +448,14 @@ function TireSetRow({
       <TD>{row.notes ?? '—'}</TD>
       <TD align="right">
         <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-label={`Korištenje kompleta ${row.code}`}
+            onClick={onViewUsage}
+          >
+            {isViewingUsage ? 'Zatvori korištenje' : 'Korištenje'}
+          </Button>
           <Button
             size="sm"
             variant="secondary"

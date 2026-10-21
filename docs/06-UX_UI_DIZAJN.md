@@ -731,7 +731,7 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 
 | Ekran | Ruta | Fajl | Napomena |
 |---|---|---|---|
-| Kompleti guma (W12) | `/gume` | `features/tires/tire-sets-page.tsx`, `tire-set-create-form.tsx`, `tire-set-edit-form.tsx`, `tire-set-tires-panel.tsx` | server filteri `q`/sezona/status/dostupnost, sortiranje i paginacija; unos uz `tire:create` kroz objavljenu `TIRE_SET` formu; **Pojedinačne** otvara sastav kompleta i dodavanje guma uz `tire:create`; **Uredi** uz `tire:update` i zapisnu formu, **Obriši** uz `tire:delete` i potvrdu; aktivna montaža linkuje na vozilo i zaključava ručni status/brisanje |
+| Kompleti guma (W12) | `/gume` | `features/tires/tire-sets-page.tsx`, `tire-set-create-form.tsx`, `tire-set-edit-form.tsx`, `tire-set-tires-panel.tsx`, `tire-set-usage-panel.tsx` | server filteri `q`/sezona/status/dostupnost, sortiranje i paginacija; unos uz `tire:create` kroz objavljenu `TIRE_SET` formu; **Korištenje** otvara sažetak i cikluse po vozilima, **Pojedinačne** sastav kompleta i dodavanje guma uz `tire:create`; **Uredi** uz `tire:update` i zapisnu formu, **Obriši** uz `tire:delete` i potvrdu; aktivna montaža linkuje na vozilo i zaključava ručni status/brisanje |
 | Montaža i zamjena guma (W13) | `/vozila/:vehicleId` → Gume | `features/tires/vehicle-tires-tab.tsx`, `tire-mount-form.tsx`, `tire-dismount-form.tsx` | montaža uz `tire:mount`, zamjena uz `tire:swap`, demontaža uz `tire:dismount`; izbor samo dostupnih kompleta, pozicije i kilometraža; zamjena je jedna transakcijska potvrda, a konflikt verzije/pozicije/kompleta ostavlja formu otvorenom s porukom servera |
 
 Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);
@@ -856,7 +856,7 @@ na 1. Paginacija je serverska po 25. Posebna stanja učitavanja, greške i prazn
 liste; nepoznati brojači prikazani su crticom. Aktivni red nudi akcije
 zamjene i demontaže prema zasebnim permisijama.
 
-### Kompleti i pojedinačne gume — evidencija, unos i životni ciklus (Faza 4)
+### Kompleti, pojedinačne gume i korištenje — evidencija i životni ciklus (Faza 4)
 
 `/gume`, `features/tires/tire-sets-page.tsx`, uz `RequirePermission(tire:view)`;
 dugme **Novi komplet** vidi samo korisnik s `tire:create`, a server ponovo
@@ -898,6 +898,15 @@ nude, dubina profila se unosi u milimetrima s najviše jednom decimalom, a
 cijena u KM. Status se ne bira ručno jer ga server izvodi iz kompleta i
 aktivne montaže. Kad je deklarisani broj popunjen, forma se ne prikazuje i
 panel upućuje na izmjenu kompleta. Serverska greška ostavlja unos u formi.
+
+Akcija **Korištenje** otvara panel (`tire-set-usage-panel.tsx`) sa šest
+sažetnih pokazatelja: ciklusi, pređeni km i dani završenih ciklusa, broj
+vozila te prva i posljednja montaža. Slijede tabela agregata po vozilima i
+tabela svih ciklusa od najnovijeg, s linkovima na profile vozila, pozicijama,
+datumima/km montaže i demontaže te razlogom i skladištem. Aktivan ciklus je
+označen kao „U toku“, ali njegovi km i dani ostaju crtice dok se demontažom
+ne zaključaju; panel to izričito objašnjava, pa se ukupni brojevi ne mogu
+pogrešno pročitati kao procjena trenutnog stanja.
 
 ### Montaža, demontaža i zamjena kompleta (Faza 4)
 

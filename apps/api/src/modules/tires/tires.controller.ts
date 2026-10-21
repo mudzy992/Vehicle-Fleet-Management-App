@@ -62,6 +62,12 @@ export class TireSetsController {
     return this.tires.getSet(id);
   }
 
+  @Get(':id/usage')
+  @RequirePermissions('tire:view')
+  getSetUsage(@Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string) {
+    return this.tires.getSetUsage(id);
+  }
+
   @Get(':id/tires')
   @RequirePermissions('tire:view')
   listTires(@Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string) {

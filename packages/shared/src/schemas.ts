@@ -2607,3 +2607,85 @@ export type TireView = z.output<typeof tireViewSchema>;
 
 export const tireListResponseSchema = z.object({ items: z.array(tireViewSchema) }).strict();
 export type TireListResponse = z.output<typeof tireListResponseSchema>;
+
+/**
+ * Korištenje kompleta po ciklusima montaže.
+ *
+ * Ukupni km i dani sabiraju samo snapshot vrijednosti završenih ciklusa.
+ * Aktivni ciklus namjerno zadržava `null` brojače dok se demontažom ne
+ * zaključa stvarna završna kilometraža i datum.
+ */
+export const tireSetUsageSetSchema = z
+  .object({
+    id: uuidSchema,
+    code: z.string(),
+    brand: z.string().nullable(),
+    model: z.string().nullable(),
+    size: z.string().nullable(),
+    season: tireSeasonSchema,
+    status: tireStatusSchema,
+  })
+  .strict();
+export type TireSetUsageSet = z.output<typeof tireSetUsageSetSchema>;
+
+export const tireSetUsageSummarySchema = z
+  .object({
+    totalCycles: z.number().int().nonnegative(),
+    completedCycles: z.number().int().nonnegative(),
+    activeCycles: z.number().int().nonnegative(),
+    distinctVehicles: z.number().int().nonnegative(),
+    totalKmDriven: z.number().int().nonnegative(),
+    totalDaysInUse: z.number().int().nonnegative(),
+    firstMountedAt: z.iso.date().nullable(),
+    lastMountedAt: z.iso.date().nullable(),
+  })
+  .strict();
+export type TireSetUsageSummary = z.output<typeof tireSetUsageSummarySchema>;
+
+export const tireSetUsageVehicleSchema = z
+  .object({
+    vehicleId: uuidSchema,
+    vehicleInternalNo: z.string(),
+    vehiclePlateNumber: z.string().nullable(),
+    totalCycles: z.number().int().positive(),
+    completedCycles: z.number().int().nonnegative(),
+    activeCycles: z.number().int().nonnegative(),
+    totalKmDriven: z.number().int().nonnegative(),
+    totalDaysInUse: z.number().int().nonnegative(),
+    firstMountedAt: z.iso.date(),
+    lastMountedAt: z.iso.date(),
+    activeSince: z.iso.date().nullable(),
+    activePositions: z.array(tirePositionSchema),
+  })
+  .strict();
+export type TireSetUsageVehicle = z.output<typeof tireSetUsageVehicleSchema>;
+
+export const tireSetUsageCycleSchema = z
+  .object({
+    id: uuidSchema,
+    vehicleId: uuidSchema,
+    vehicleInternalNo: z.string(),
+    vehiclePlateNumber: z.string().nullable(),
+    mountedAt: z.iso.date(),
+    mountedOdometerKm: z.number().int().nonnegative(),
+    dismountedAt: z.iso.date().nullable(),
+    dismountedOdometerKm: z.number().int().nonnegative().nullable(),
+    positions: z.array(tirePositionSchema),
+    kmDriven: z.number().int().nonnegative().nullable(),
+    daysInUse: z.number().int().nonnegative().nullable(),
+    reason: z.string().nullable(),
+    storageLocationOnDismount: z.string().nullable(),
+    isActive: z.boolean(),
+  })
+  .strict();
+export type TireSetUsageCycle = z.output<typeof tireSetUsageCycleSchema>;
+
+export const tireSetUsageSchema = z
+  .object({
+    set: tireSetUsageSetSchema,
+    summary: tireSetUsageSummarySchema,
+    vehicles: z.array(tireSetUsageVehicleSchema),
+    cycles: z.array(tireSetUsageCycleSchema),
+  })
+  .strict();
+export type TireSetUsage = z.output<typeof tireSetUsageSchema>;

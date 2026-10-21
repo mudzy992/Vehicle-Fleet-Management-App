@@ -74,6 +74,7 @@ export function VehicleTiresTab({
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['tire-installations', vehicleId] }),
       queryClient.invalidateQueries({ queryKey: ['tire-sets'] }),
+      queryClient.invalidateQueries({ queryKey: ['tire-set-usage'] }),
       onChanged(),
     ]);
   };

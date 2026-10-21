@@ -13,6 +13,9 @@ import type {
   CreateTireSetInput,
   TireSetDetail,
   TireSetListQuery,
+  TireSetUsage,
+  TireSetUsageCycle,
+  TireSetUsageVehicle,
   TireSetView,
   TireView,
   UpdateTireSetInput,
@@ -77,6 +80,25 @@ const TIRE_SELECT = {
 } as const satisfies Prisma.TireSelect;
 
 type TireRow = Prisma.TireGetPayload<{ select: typeof TIRE_SELECT }>;
+
+const TIRE_SET_USAGE_SELECT = {
+  id: true,
+  vehicleId: true,
+  mountedAt: true,
+  mountedOdometerKm: true,
+  dismountedAt: true,
+  dismountedOdometerKm: true,
+  positions: true,
+  kmDriven: true,
+  daysInUse: true,
+  reason: true,
+  storageLocationOnDismount: true,
+  vehicle: { select: { internalNo: true, plateNumber: true } },
+} as const satisfies Prisma.TireInstallationSelect;
+
+type TireSetUsageRow = Prisma.TireInstallationGetPayload<{
+  select: typeof TIRE_SET_USAGE_SELECT;
+}>;
 type Tx = Prisma.TransactionClient;
 
 interface LockedTireSetRow {
@@ -159,6 +181,47 @@ function compareTires(left: TireRow, right: TireRow): number {
   if (leftOrder !== rightOrder) return leftOrder - rightOrder;
   const byCreatedAt = left.createdAt.getTime() - right.createdAt.getTime();
   return byCreatedAt !== 0 ? byCreatedAt : left.id.localeCompare(right.id);
+}
+
+function serializeTireSetUsageCycle(row: TireSetUsageRow): TireSetUsageCycle {
+  return {
+    id: row.id,
+    vehicleId: row.vehicleId,
+    vehicleInternalNo: row.vehicle.internalNo,
+    vehiclePlateNumber: row.vehicle.plateNumber,
+    mountedAt: toLocalDateString(row.mountedAt),
+    mountedOdometerKm: row.mountedOdometerKm,
+    dismountedAt: row.dismountedAt ? toLocalDateString(row.dismountedAt) : null,
+    dismountedOdometerKm: row.dismountedOdometerKm,
+    positions: [...row.positions],
+    kmDriven: row.kmDriven,
+    daysInUse: row.daysInUse,
+    reason: row.reason,
+    storageLocationOnDismount: row.storageLocationOnDismount,
+    isActive: row.dismountedAt === null,
+  };
+}
+
+interface MutableTireSetUsageVehicle {
+  vehicleId: string;
+  vehicleInternalNo: string;
+  vehiclePlateNumber: string | null;
+  totalCycles: number;
+  completedCycles: number;
+  activeCycles: number;
+  totalKmDriven: number;
+  totalDaysInUse: number;
+  firstMountedAt: string;
+  lastMountedAt: string;
+  activeSince: string | null;
+  activePositions: Set<TirePosition>;
+}
+
+function compareTireSetUsageVehicles(left: TireSetUsageVehicle, right: TireSetUsageVehicle): number {
+  if (right.totalKmDriven !== left.totalKmDriven) return right.totalKmDriven - left.totalKmDriven;
+  if (right.totalDaysInUse !== left.totalDaysInUse) return right.totalDaysInUse - left.totalDaysInUse;
+  const byLastMount = right.lastMountedAt.localeCompare(left.lastMountedAt);
+  return byLastMount !== 0 ? byLastMount : left.vehicleInternalNo.localeCompare(right.vehicleInternalNo);
 }
 
 function duplicateTirePosition(): VfmException {
@@ -302,6 +365,132 @@ export class TiresService {
   }
   async getSet(id: string): Promise<TireSetDetail> {
     return serializeTireSetDetail(await this.loadSetDetail(this.prisma, id));
+  }
+
+  /**
+   * Korištenje kompleta kroz sve cikluse montaže.
+   *
+   * Agregati sabiraju samo snapshot vrijednosti završenih ciklusa. Aktivni
+   * ciklus se prikazuje s početnim datumom/kilometražom, ali mu se trenutni
+   * km i dani ne procjenjuju iz današnjeg stanja vozila.
+   */
+  async getSetUsage(id: string): Promise<TireSetUsage> {
+    const set = await this.prisma.tireSet.findFirst({
+      where: { id, deletedAt: null },
+      select: {
+        id: true,
+        code: true,
+        brand: true,
+        model: true,
+        size: true,
+        season: true,
+        status: true,
+      },
+    });
+    if (!set) throw new VfmException('NOT_FOUND', 'Komplet guma nije pronađen.');
+
+    const rows = await this.prisma.tireInstallation.findMany({
+      where: { setId: id, deletedAt: null },
+      select: TIRE_SET_USAGE_SELECT,
+      orderBy: [{ mountedAt: 'desc' }, { id: 'asc' }],
+    });
+    const cycles = rows.map(serializeTireSetUsageCycle);
+    const vehiclesById = new Map<string, MutableTireSetUsageVehicle>();
+
+    for (const cycle of cycles) {
+      let vehicle = vehiclesById.get(cycle.vehicleId);
+      if (!vehicle) {
+        vehicle = {
+          vehicleId: cycle.vehicleId,
+          vehicleInternalNo: cycle.vehicleInternalNo,
+          vehiclePlateNumber: cycle.vehiclePlateNumber,
+          totalCycles: 0,
+          completedCycles: 0,
+          activeCycles: 0,
+          totalKmDriven: 0,
+          totalDaysInUse: 0,
+          firstMountedAt: cycle.mountedAt,
+          lastMountedAt: cycle.mountedAt,
+          activeSince: null,
+          activePositions: new Set<TirePosition>(),
+        };
+        vehiclesById.set(cycle.vehicleId, vehicle);
+      }
+
+      vehicle.totalCycles += 1;
+      vehicle.firstMountedAt =
+        cycle.mountedAt < vehicle.firstMountedAt ? cycle.mountedAt : vehicle.firstMountedAt;
+      vehicle.lastMountedAt =
+        cycle.mountedAt > vehicle.lastMountedAt ? cycle.mountedAt : vehicle.lastMountedAt;
+      vehicle.totalKmDriven += cycle.kmDriven ?? 0;
+      vehicle.totalDaysInUse += cycle.daysInUse ?? 0;
+
+      if (cycle.isActive) {
+        vehicle.activeCycles += 1;
+        vehicle.activeSince =
+          vehicle.activeSince === null || cycle.mountedAt > vehicle.activeSince
+            ? cycle.mountedAt
+            : vehicle.activeSince;
+        for (const position of cycle.positions) vehicle.activePositions.add(position);
+      } else {
+        vehicle.completedCycles += 1;
+      }
+    }
+
+    const vehicles: TireSetUsageVehicle[] = [...vehiclesById.values()]
+      .map((vehicle) => ({
+        vehicleId: vehicle.vehicleId,
+        vehicleInternalNo: vehicle.vehicleInternalNo,
+        vehiclePlateNumber: vehicle.vehiclePlateNumber,
+        totalCycles: vehicle.totalCycles,
+        completedCycles: vehicle.completedCycles,
+        activeCycles: vehicle.activeCycles,
+        totalKmDriven: vehicle.totalKmDriven,
+        totalDaysInUse: vehicle.totalDaysInUse,
+        firstMountedAt: vehicle.firstMountedAt,
+        lastMountedAt: vehicle.lastMountedAt,
+        activeSince: vehicle.activeSince,
+        activePositions: TIRE_POSITIONS.filter((position) => vehicle.activePositions.has(position)),
+      }))
+      .sort(compareTireSetUsageVehicles);
+
+    const completedCycles = cycles.filter((cycle) => !cycle.isActive).length;
+    return {
+      set: {
+        id: set.id,
+        code: set.code,
+        brand: set.brand,
+        model: set.model,
+        size: set.size,
+        season: set.season,
+        status: set.status,
+      },
+      summary: {
+        totalCycles: cycles.length,
+        completedCycles,
+        activeCycles: cycles.length - completedCycles,
+        distinctVehicles: vehicles.length,
+        totalKmDriven: vehicles.reduce((sum, vehicle) => sum + vehicle.totalKmDriven, 0),
+        totalDaysInUse: vehicles.reduce((sum, vehicle) => sum + vehicle.totalDaysInUse, 0),
+        firstMountedAt:
+          vehicles.length === 0
+            ? null
+            : vehicles.reduce(
+                (earliest, vehicle) =>
+                  vehicle.firstMountedAt < earliest ? vehicle.firstMountedAt : earliest,
+                vehicles[0]!.firstMountedAt,
+              ),
+        lastMountedAt:
+          vehicles.length === 0
+            ? null
+            : vehicles.reduce(
+                (latest, vehicle) => (vehicle.lastMountedAt > latest ? vehicle.lastMountedAt : latest),
+                vehicles[0]!.lastMountedAt,
+              ),
+      },
+      vehicles,
+      cycles,
+    };
   }
 
   /**

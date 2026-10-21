@@ -351,6 +351,16 @@ budući datum nabavke, strict DTO bez ručnog statusa/`setId`/`formData` te
 `TIRE_SELECT`. Fake ne dokazuje stvarni PostgreSQL lock, djelimično
 jedinstveni indeks ni Decimal zapis.
 
+`apps/api/test/unit/tire-set-usage.spec.ts` — 6 testova: agregati ukupnih,
+završenih i aktivnih ciklusa, grupisanje i determinističko sortiranje po
+vozilima, kanonske aktivne pozicije, ciklusi od najnovije montaže te prazan
+pregled bez historije. Provjerava se da obrisani i tuđi ciklusi ne ulaze u
+brojeve, da završen ciklus s `null` snapshot brojačima ne ruši zbir, da
+aktivni km/dani ostaju `null` bez procjene, da obrisan komplet vraća 404 bez
+čitanja ciklusa te da endpoint traži `tire:view` i nema audit. Odgovor se
+parsira strict `tireSetUsageSchema`; registar Prisma selecta dopunjen je za
+`TIRE_SET_USAGE_SELECT`. Fake ne dokazuje stvarni PostgreSQL join ni HTTP tok.
+
 `apps/web/src/features/tires/tire-sets-model.test.ts` — 12 testova query
 gradnje, izostavljanja praznih opcionalnih polja i pretvaranja nabavne cijene
 iz KM u feninge te izmjene: početne vrijednosti detalja, dozvoljene statusne
@@ -360,6 +370,8 @@ nekonzistentan `MOUNTED`, terminalni `SCRAPPED` i legacy zapis bez forme.
 Za pojedinačne gume pokriveni su kanonske slobodne pozicije, pretvaranje
 dubine profila i cijene u cijele API jedinice, lokalizovan prikaz milimetara
 te odbijanje praznog unosa, zauzete pozicije i vrijednosti izvan opsega.
+Panel korištenja je tipski vezan za isti shared ugovor, a agregatna logika
+ostaje serverska i pokrivena API testovima.
 Seed-form provjere sada imaju i eksplicitni test da `komplet_guma` nosi samo
 dobavljača, fakturu i napomenu bez normalizacije. Lažni Prisma klijent ne
 dokazuje stvarni PostgreSQL upit, jedinstveni indeks ni HTTP tok; to ostaje

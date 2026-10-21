@@ -657,6 +657,7 @@ Implementirani su:
 | `POST /tire-sets` | `tire:create` | unos kompleta kroz objavljenu `TIRE_SET` formu; audit `CREATE` na `TireSet` |
 | `GET /tire-sets/:id` | `tire:view` | detalj kompleta i `formData`; lista `formData` ne vraća |
 | `GET /tire-sets/:id/tires` | `tire:view` | pojedinačne gume kompleta `{items}`, bez paginacije |
+| `GET /tire-sets/:id/usage` | `tire:view` | sažetak, agregati po vozilima i svi ciklusi kompleta |
 | `POST /tire-sets/:id/tires` | `tire:create` | transakcijski unos pojedinačne gume; audit `CREATE` na `Tire` |
 | `PATCH /tire-sets/:id` | `tire:update` | zaključana CAS izmjena strukturiranih podataka, ručnog statusa i opcionalnog `formData`; audit `UPDATE` |
 | `DELETE /tire-sets/:id` | `tire:delete` | soft-delete kompleta i povezanih guma, `204`; audit `DELETE`/`CRITICAL` |
@@ -752,6 +753,19 @@ prati komplet, pri čemu se nekonzistentan `MOUNTED` kompleta za novu gumu
 tretira kao `IN_STOCK`. Odgovor je kreirani `TireView`. Izmjena i brisanje
 pojedinačne gume nisu dio ove cjeline.
 
+`GET /tire-sets/:id/usage` vraća `{set,summary,vehicles,cycles}` za
+neobrisan komplet; nepostojeći ili soft-obrisan komplet je
+`404 NOT_FOUND`, a obrisani ciklusi se isključuju. `cycles` su svi ciklusi
+tog kompleta od najnovije montaže i nose vozilo (interni broj i registarsku
+oznaku), datume i kilometraže montaže/demontaže, pozicije, razlog, skladište
+te `isActive`. `summary` daje ukupne, završene i aktivne cikluse, broj
+različitih vozila, ukupne km/dane i prvu/posljednju montažu. `vehicles` iste
+brojače grupiše po vozilu i sortira po ukupnim km, zatim danima i zadnjoj
+montaži. Ukupni km i dani sabiraju samo snapshot vrijednosti završenih
+ciklusa koje nisu `null`; aktivan ciklus zadržava `null` brojače i ne procjenjuje se
+iz trenutne kilometraže vozila. Agregat vozila za aktivni ciklus dodatno nosi
+`activeSince` i kanonski sortirane aktivne pozicije.
+
 Montaža ima strict DTO `{setId,vehicleId,mountedAt,mountedOdometerKm,
 positions,formSchemaVersionId?,formData}`. Pozicije su 1–5 jedinstvenih
 vrijednosti `FL|FR|RL|RR|SPARE` i ne smije ih biti više nego što komplet ima
@@ -808,7 +822,8 @@ računanja pretpostavljene kilometraže aktivne montaže.
 Pregledi nisu mutacije i nemaju audit; unos, izmjena i brisanje kompleta te
 ciklusi montaže imaju audit, a montaža/demontaža/zamjena pišu `OutboxEvent`
 u istoj transakciji. Nema novih ENV/Redis ključeva niti migracija; postojeći
-partial unique indeks aktivne montaže je DB zaštita. Zasebna evidencija
-pojedinačnih guma i usage pregled iz §2.8 još nisu implementirani. Globalni
+partial unique indeks aktivne montaže je DB zaštita. Evidencija
+pojedinačnih guma i usage pregled iz §2.8 su implementirani; `PATCH`/`DELETE`
+pojedinačne gume nisu dio ugovora. Globalni
 auth/RBAC ostaje obavezan; produkcijski HTTP test i stvarna konkurencija nad
 PostgreSQL-om nisu izvršeni u sandboxu.
