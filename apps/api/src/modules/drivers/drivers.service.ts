@@ -12,8 +12,9 @@
  *    `dateOfBirth`, `address` i `licenseNumber` su maskirani/izostavljeni, a
  *    odgovor nosi `piiRedacted`. Datum isteka dozvole **nije** PII — nosi ga
  *    rok i podsjetnik.
- * 3. **Arhiviranje ne briše evidencije.** `archive` mijenja status i
- *    `archivedAt`; `delete` je soft-delete (`deletedAt`), pa istorija ostaje.
+ * 3. **Arhiviranje ne briše evidencije.** `archive` mijenja samo `status`
+ *    (`Driver` nema `archivedAt` — to polje ima `Vehicle`); `delete` je
+ *    soft-delete (`deletedAt`), pa istorija ostaje.
  * 4. **Kategorija dozvole je jedinstvena po vozaču** (`@@unique([driverId, category])`);
  *    servis provjerava i prije upisa da greška bude `409 DUPLICATE_ENTRY` s poljem.
  * 5. **Optimističko zaključavanje:** `PATCH` nosi `version`; upis ide atomski
@@ -109,7 +110,11 @@ const DRIVER_SELECT = {
   createdAt: true,
   updatedAt: true,
   deletedAt: true,
-  archivedAt: true,
+  // `Driver` NEMA `archivedAt` (samo `Vehicle` ga ima) — arhiva je `status`.
+  // Selektovano polje koje ne postoji ne pada na typecheck-u (Prisma preskače
+  // provjeru viška ključeva kod spread objekta), nego na prvom upitu: baza
+  // vrati `column Driver.archivedAt does not exist` → `500 INTERNAL_ERROR`.
+  // Čuva `test/unit/prisma-select-fields.spec.ts`.
 } as const;
 
 /** Red kakav vraća Prisma (samo polja iz `DRIVER_SELECT` + kategorije). */

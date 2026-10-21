@@ -71,6 +71,7 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | Korisnici kontroler (permisije po ruti, audit `DELETE`=CRITICAL / reset=SECURITY, `AuditContext` bez tajni) | `test/unit/users-controller.spec.ts` | 20 | `users.controller.ts` 89 % / 67 % |
 | Reset lozinke tokenom (`/auth/reset-password`: hash, istek, jednokratnost, politika, revokacija) | `test/unit/auth-service.spec.ts` (describe „reset lozinke tokenom") | 5 | `auth.service.ts` 95 % / 86 % |
 | Konverzija datuma (`toDatabaseDate`: date-only → UTC ponoć, `Date` prolazi, `null`, odbijanje neispravnog i `2026-02-30`) | `test/unit/dates.spec.ts` | 5 | `src/common/dates.ts` |
+| Prisma `select` polja prema šemi (svaki `*_SELECT` koristi samo polja svog modela, registar pokriva sve select konstante, inline select polja postoje, regresija `Driver.archivedAt` → `GET /drivers` 500) | `test/unit/prisma-select-fields.spec.ts` | 5 | `src/modules/**` vs `prisma/schema.prisma` |
 | DI wiring (Nest bootuje svaki servis/kontroler Faze 3; regresija za pad `AttachmentsService (PrismaService, ?)` — interfejs u konstruktoru bez `@Inject` tokena) | `test/unit/di-wiring.spec.ts` | 13 | `src/modules/**` |
 | Prilozi — bajtovi (magic bytes, SHA-256, `storageKey`, zaštita putanje, uklanjanje EXIF-a iz JPEG/PNG) | `test/unit/attachment-files.spec.ts` | 12 | `src/modules/attachments` |
 | Prilozi — servis (413/415, idempotentnost po `sha256`, `complete` + opseg, potpisani URL, `replace`, soft-delete) | `test/unit/attachments-service.spec.ts` | 16 | `src/modules/attachments` |
