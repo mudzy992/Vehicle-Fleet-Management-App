@@ -135,7 +135,7 @@ HTTP → Traefik → nginx(web) /api → api
  8. ClientTypeGuard             (MOBILE_ANDROID token + SUPER_ADMIN     → 403 MOBILE_ACCESS_FORBIDDEN)
  9. PermissionsGuard            (učita permisije iz keša/DB, provjeri kod + scope)
 10. ZodValidationPipe           (DTO iz @vfm/shared; greške → 422 s mapom po poljima)
-11. IdempotencyInterceptor      (Idempotency-Key → vfm:idem:{key} / DB tabela)
+11. IdempotencyInterceptor      (Idempotency-Key → Redis vfm:idem:{userId}:{key}, 24 h)
 12. Handler (servis)            (transakcija: poslovni upis + OutboxEvent + AuditLog)
 13. AuditInterceptor            (before/after diff, actor, IP, UA, requestId, clientType)
 14. ResponseEnvelopeInterceptor ({ data, meta }) + redigovanje tajni

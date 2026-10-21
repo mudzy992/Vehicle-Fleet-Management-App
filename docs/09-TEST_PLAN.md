@@ -64,6 +64,7 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | RBAC servis (opsezi, keš, verzije, revokacija) | `test/unit/permissions-service.spec.ts` | 32 | `auth/permissions` 90 % / 79 % |
 | Tokeni/lozinke | `token-service.spec.ts`, `password-service.spec.ts` | 29 + 25 | `auth/services` 96 % / 88 % |
 | Audit persistencija (`AuditLog` + SECURITY događaji) | `prisma-audit-sink.spec.ts`, `audit.spec.ts` | 10 | `common/audit` 93 % / 77 % |
+| Idempotency-Key replay (Redis rezervacija/vlasništvo, isti i različiti otisak, `in-progress`, opseg korisnika, status/tijelo, sigurnosna izuzeća i 503 mapiranje) | `test/unit/idempotency.spec.ts` | 19 | `src/infra/redis`, `src/common/interceptors` |
 | Validacija ulaza (Zod) + čitanje cookie-ja | `zod-validation-pipe.spec.ts`, `http-cookies.spec.ts` | 31 | `common/pipes` 100 %, `common/http` 100 % |
 | Role i matrica prava (P2: grantovi u transakciji, bump verzije + Redis invalidacija, opsezi, zaštite Super Admina i arhiviranja) | `test/unit/roles-service.spec.ts` | 23 | `src/modules/roles` 97 % / 75 % |
 | Role/Permisije kontroler (permisije po ruti, audit metadata, `AuditContext` diff, redoslijed ruta `matrix` prije `:id`, DI modula) | `test/unit/roles-controller.spec.ts` | 22 | `roles.controller.ts` 100 % / 50 % — tanki passthrough (neskrivene grane su `user?.id` i `?? null`) |
@@ -73,7 +74,7 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | Konverzija datuma (`toDatabaseDate`: date-only → UTC ponoć, `Date` prolazi, `null`, odbijanje neispravnog i `2026-02-30`) | `test/unit/dates.spec.ts` | 5 | `src/common/dates.ts` |
 | Servisi — pregled: filteri/paginacija, soft-delete, datumi, novac, sortiranje, validacija i permisije kontrolera | `test/unit/services-service.spec.ts` | 7 | `src/modules/services` |
 | Prisma `select` polja prema šemi (svaki `*_SELECT` koristi samo polja svog modela, registar pokriva sve select konstante, inline select polja postoje, regresija `Driver.archivedAt` → `GET /drivers` 500) | `test/unit/prisma-select-fields.spec.ts` | 5 | `src/modules/**` vs `prisma/schema.prisma` |
-| DI wiring (Nest bootuje svaki servis/kontroler Faze 3 i pregled servisa Faze 4; regresija za pad `AttachmentsService (PrismaService, ?)` — interfejs u konstruktoru bez `@Inject` tokena) | `test/unit/di-wiring.spec.ts` | 13 | `src/modules/**` |
+| DI wiring (Nest bootuje servise/kontrolere Faze 3 i 4 te globalni `IdempotencyInterceptor`; regresija za pad `AttachmentsService (PrismaService, ?)` — interfejs u konstruktoru bez `@Inject` tokena) | `test/unit/di-wiring.spec.ts` | 22 | `src/modules/**`, `src/common/interceptors` |
 | Prilozi — bajtovi (magic bytes, SHA-256, `storageKey`, zaštita putanje, uklanjanje EXIF-a iz JPEG/PNG) | `test/unit/attachment-files.spec.ts` | 12 | `src/modules/attachments` |
 | Prilozi — servis (413/415, idempotentnost po `sha256`, `complete` + opseg, potpisani URL, `replace`, soft-delete) | `test/unit/attachments-service.spec.ts` | 16 | `src/modules/attachments` |
 | Forme — dinamička polja (vidljivost sekcija, `hiddenKeys` protiv duplih kontrola, serverska greška uz polje, konverzija unosa po `fieldKey`, `INTEGER` filter, `aria-invalid`) | `apps/web/src/features/forms/form-fields.test.tsx` | 8 | `apps/web/src/features/forms` |
@@ -396,3 +397,18 @@ zahtjeva. Seed-form test dodatno provjerava da `montaza_guma` mapira datum i
 kilometražu u normalizovane kolone. Fake transakcija ne dokazuje stvarni
 PostgreSQL `FOR UPDATE`, partial unique indeks pod opterećenjem, rollback ni
 HTTP tok; to ostaju integracijska/deploy provjera.
+
+### Idempotency-Key replay — cross-cutting
+
+`apps/api/test/unit/idempotency.spec.ts` — 19 testova nad in-memory Redis
+lažnjakom: stabilan hash JSON otiska, rezervacija od 5 minuta i završeni
+zapis od 24 h, regresija da `complete` čuva hash zahtjeva umjesto hash
+odgovora, replay istog statusa/tijela bez drugog handler poziva, DELETE 204,
+različit payload ili putanja kao `422 IDEMPOTENCY_KEY_REUSED`, paralelni
+zahtjev u toku kao `409 VERSION_CONFLICT`, oslobađanje nakon greške i zabrana
+da tuđi token završi/oslobodi rezervaciju. Pokriveni su i opseg po korisniku,
+neispravno zaglavlje, javne/auth/multipart rute, odgovor s privremenom
+lozinkom koji se ne kešira te mapiranje Redis greške u 503. DI provjera je
+dopunjena globalnim interceptorom (+1). Lažnjak ne dokazuje stvarnu Redis
+konkurenciju, TTL isteke pod satom servera ni puni Nest HTTP redoslijed
+guardova/interceptora; to ostaje integracijska/deploy provjera.

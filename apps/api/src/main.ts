@@ -13,7 +13,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Logger, VersioningType } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { REQUEST_ID_HEADER } from '@vfm/shared';
+import { IDEMPOTENCY_HEADER, REQUEST_ID_HEADER } from '@vfm/shared';
 import { AppModule } from './app.module.js';
 import { getEnv } from './config/env.js';
 import { trustProxyHops } from '@vfm/shared/env';
@@ -57,7 +57,7 @@ async function bootstrap(): Promise<void> {
     origin: env.CORS_ORIGINS,
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', REQUEST_ID_HEADER, 'X-Client-Type', 'Idempotency-Key'],
+    allowedHeaders: ['Content-Type', 'Authorization', REQUEST_ID_HEADER, 'X-Client-Type', IDEMPOTENCY_HEADER],
     exposedHeaders: [REQUEST_ID_HEADER, 'X-Permissions-Version'],
     maxAge: 600,
   });
@@ -97,7 +97,7 @@ async function bootstrap(): Promise<void> {
 
 bootstrap().catch((error: unknown) => {
   // Boot greška mora biti jasno vidljiva u Coolify logovima.
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
+  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
   Logger.error(`Pokretanje API-ja nije uspjelo:\n${message}`, 'Bootstrap');
   process.exit(1);
 });

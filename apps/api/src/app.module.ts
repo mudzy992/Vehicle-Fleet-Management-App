@@ -21,6 +21,7 @@ import { QueueModule } from './infra/queue/queue.module.js';
 import { HealthModule } from './health/health.module.js';
 import { AuditModule } from './common/audit/audit.module.js';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor.js';
+import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { UsersModule } from './modules/users/users.module.js';
@@ -80,7 +81,12 @@ import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: ApiEnvelopeInterceptor },
     /**
-     * Audit je **unutar** envelope-a (registrovan drugi) → vidi sirove podatke
+     * Idempotency je između envelope-a i audita → replay vraća sirovi odgovor
+     * envelope-u, ali ne poziva Audit ni handler drugi put.
+     */
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
+    /**
+     * Audit je **unutar** envelope-a i idempotency sloja → vidi sirove podatke
      * handler-a za `after`/diff, ne omotanu `{ data, meta }` strukturu.
      */
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },

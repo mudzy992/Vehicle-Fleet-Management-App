@@ -105,8 +105,15 @@ export class FakeRedis implements PermissionsRedisClient {
     return this.store.get(key) ?? null;
   }
 
-  async set(key: string, value: string, _mode?: 'EX', seconds?: number): Promise<'OK'> {
+  async set(
+    key: string,
+    value: string,
+    _mode?: 'EX',
+    seconds?: number,
+    condition?: 'NX',
+  ): Promise<'OK' | null> {
     this.maybeFail();
+    if (condition === 'NX' && this.store.has(key)) return null;
     this.store.set(key, value);
     if (seconds !== undefined) this.ttls.set(key, seconds);
     return 'OK';
@@ -186,6 +193,10 @@ export function fakeRedisService(client: FakeRedis | undefined, available = true
     isEnabled: client !== undefined,
     isAvailable: () => available && client !== undefined,
     getConnection: () => client,
+    requireConnection: () => {
+      if (!client) throw new Error('Redis nije konfigurisan (REDIS_HOST nije postavljen).');
+      return client;
+    },
     key: (namespace: keyof typeof REDIS_NS, ...parts: readonly (string | number)[]) =>
       parts.length > 0 ? `${REDIS_NS[namespace]}:${parts.join(':')}` : REDIS_NS[namespace],
   } as unknown as RedisService;

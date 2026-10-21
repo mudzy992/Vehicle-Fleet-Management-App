@@ -58,9 +58,23 @@ GET /api/v1/tasks?page=1&pageSize=20&sort=createdAt:desc,dueAt:asc
 
 ### 1.4 Optimistic locking i idempotencija
 - `PUT/PATCH` šalje `version` (ili `If-Match: "<version>"`); neusklađenost → `409 VERSION_CONFLICT`.
-- `POST` mutacije koje mogu biti retry-ovane prihvataju `Idempotency-Key: <uuid>`:
-  prvi poziv se izvrši i rezultat se kešira 24 h; ponovljeni poziv s istim ključem vraća **isti**
-  odgovor (bez novog upisa); isti ključ s različitim `requestHash` → `422 IDEMPOTENCY_KEY_REUSED`.
+- Autentifikovane JSON mutacije (`POST`, `PUT`, `PATCH`, `DELETE`) prihvataju
+  opciono `Idempotency-Key` zaglavlje (1–128 vidljivih ASCII znakova; preporučen
+  je UUID po pokušaju klijenta). Ključ vrijedi u opsegu korisnika, a otisak
+  zahtjeva obuhvata metodu, punu putanju s query dijelom i JSON tijelo. Prvi
+  uspješan odgovor čuva se 24 h u Redisu (`vfm:idem:{userId}:{key}`); isti
+  korisnik, ključ i otisak vraćaju isti status i tijelo bez ponovnog handlera,
+  domenskog upisa, outbox događaja i audita. Rate limit, autentifikacija, tip
+  klijenta i permisije i dalje se provjeravaju prije replaya.
+- Isti ključ s različitim otiskom → `422 IDEMPOTENCY_KEY_REUSED`. Ako je prvi
+  isti zahtjev još u obradi → `409 VERSION_CONFLICT` uz `retryAfterSeconds`
+  i `idempotencyState: "in-progress"`; nezavršena rezervacija ističe za 5 min.
+  Greška handlera oslobađa rezervaciju. Neispravno zaglavlje →
+  `400 VALIDATION_ERROR`, a nedostupan Redis → `503 DEPENDENCY_UNAVAILABLE`.
+- Globalni replay se ne primjenjuje na javne i `/auth/*` rute ni na multipart
+  upload (fajl se ne može vjerno hashirati prije Multer obrade). Odgovori koji
+  nose lozinku/token/tajnu, binarni/stream odgovori i tijela veća od 64 KiB ne
+  keširaju se u Redis; za njih nema replay garancije.
 
 ### 1.5 Katalog kodova grešaka
 
@@ -70,10 +84,10 @@ GET /api/v1/tasks?page=1&pageSize=20&sort=createdAt:desc,dueAt:asc
 | 401 | `UNAUTHENTICATED`, `TOKEN_EXPIRED`, `TOKEN_REVOKED`, `PERMISSIONS_STALE`, `REFRESH_REUSED` | auth |
 | 403 | `PERMISSION_DENIED`, `SCOPE_DENIED`, `MOBILE_ACCESS_FORBIDDEN`, `MOBILE_SCOPE_NOT_ALLOWED`, `LAST_SUPER_ADMIN_PROTECTED`, `PII_ACCESS_DENIED`, `PASSWORD_CHANGE_REQUIRED` | autorizacija |
 | 404 | `NOT_FOUND`, `ATTACHMENT_NOT_FOUND` | resurs ne postoji (ili nije u scope-u) |
-| 409 | `TASK_ALREADY_CLAIMED`, `TASK_NOT_OPEN`, `NOT_ASSIGNEE`, `VERSION_CONFLICT`, `DUPLICATE_ENTRY`, `PERIOD_OVERLAP`, `TIRE_ALREADY_MOUNTED`, `ODOMETER_REGRESSION`, `IDEMPOTENCY_KEY_REUSED` | sukob stanja |
+| 409 | `TASK_ALREADY_CLAIMED`, `TASK_NOT_OPEN`, `NOT_ASSIGNEE`, `VERSION_CONFLICT`, `DUPLICATE_ENTRY`, `PERIOD_OVERLAP`, `TIRE_ALREADY_MOUNTED`, `ODOMETER_REGRESSION` | sukob stanja |
 | 413 | `PAYLOAD_TOO_LARGE` | upload |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | upload |
-| 422 | `FORM_VALIDATION_FAILED`, `UNKNOWN_FIELD`, `FIELD_NOT_VISIBLE`, `RESERVED_FIELD_KEY`, `FORM_VERSION_NOT_PUBLISHED`, `NORMALIZATION_MISMATCH`, `SCHEMA_INVALID`, `COMPUTED_TIMEOUT` | forme/validacija domene |
+| 422 | `FORM_VALIDATION_FAILED`, `UNKNOWN_FIELD`, `FIELD_NOT_VISIBLE`, `RESERVED_FIELD_KEY`, `FORM_VERSION_NOT_PUBLISHED`, `NORMALIZATION_MISMATCH`, `SCHEMA_INVALID`, `COMPUTED_TIMEOUT`, `IDEMPOTENCY_KEY_REUSED` | forme/validacija domene |
 | 429 | `RATE_LIMITED` | throttling (+ `Retry-After`) |
 | 500 | `INTERNAL_ERROR` | neočekivano (bez stack trace-a) |
 | 503 | `DEPENDENCY_UNAVAILABLE` | DB/Redis/FCM down |
@@ -803,10 +817,11 @@ validiraju i stari i novi komplet (uključujući aktivnu montažu i pozicije,
 uz izuzetak stare montaže koja se zatvara), pa se tek onda u istoj transakciji
 stari ciklus zatvara, novi otvara, statusi kompleta/guma mijenjaju, upisuje
 **jedno** `TIRE` očitanje i outbox `TIRE_SET_SWAPPED`. Greška u bilo kojem
-koraku vraća cijelu zamjenu. Header `Idempotency-Key` iz §1.4 još nema
-globalnu replay implementaciju; zaštita od duplog efekta ovdje je stanje
-transakcije (aktivan komplet/pozicija, CAS verzija i partial unique indeks),
-pa ponovljeni zahtjev ne pravi drugi ciklus, ali ne vraća keširani prvi odgovor.
+koraku vraća cijelu zamjenu. Uz `Idempotency-Key` iz §1.4 globalni interceptor
+vraća prvi `{dismounted,mounted}` odgovor bez drugog ciklusa. Bez zaglavlja
+zaštita od duplog efekta ostaje stanje transakcije (aktivan komplet/pozicija,
+CAS verzija i partial unique indeks), pa ponovljeni zahtjev ne pravi drugi
+ciklus, ali dobija konflikt umjesto keširanog prvog odgovora.
 
 Implementiran `GET /tire-installations` uz `tire:view`. Query: standardna
 paginacija, `vehicleId`, `setId`, `q` (kod kompleta), `activeOnly=true|false`.

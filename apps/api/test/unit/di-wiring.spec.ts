@@ -24,7 +24,10 @@ import 'reflect-metadata';
 import { describe, expect, it } from 'vitest';
 import { Test } from '@nestjs/testing';
 import type { Provider } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
+import { IdempotencyInterceptor } from '../../src/common/interceptors/idempotency.interceptor.js';
+import { IdempotencyService } from '../../src/infra/redis/idempotency.service.js';
 import { AttachmentsService } from '../../src/modules/attachments/attachments.service.js';
 import { AttachmentsController } from '../../src/modules/attachments/attachments.controller.js';
 import { VehiclesService } from '../../src/modules/vehicles/vehicles.service.js';
@@ -83,6 +86,19 @@ describe('DI wiring (Faza 3)', () => {
     }).compile();
 
     expect(moduleRef.get(controller as never)).toBeTruthy();
+    await moduleRef.close();
+  });
+
+  it('IdempotencyInterceptor dobija servis i Reflector kroz Nest', async () => {
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        IdempotencyInterceptor,
+        { provide: IdempotencyService, useValue: {} },
+        { provide: Reflector, useValue: new Reflector() },
+      ],
+    }).compile();
+
+    expect(moduleRef.get(IdempotencyInterceptor)).toBeInstanceOf(IdempotencyInterceptor);
     await moduleRef.close();
   });
 
