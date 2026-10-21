@@ -82,9 +82,9 @@ GET /api/v1/tasks?page=1&pageSize=20&sort=createdAt:desc,dueAt:asc
 |---|---|---|
 | 400 | `VALIDATION_FAILED`, `INVALID_FILTER`, `INVALID_SORT`, `MALFORMED_JSON` | loš zahtjev |
 | 401 | `UNAUTHENTICATED`, `TOKEN_EXPIRED`, `TOKEN_REVOKED`, `PERMISSIONS_STALE`, `REFRESH_REUSED` | auth |
-| 403 | `PERMISSION_DENIED`, `SCOPE_DENIED`, `MOBILE_ACCESS_FORBIDDEN`, `MOBILE_SCOPE_NOT_ALLOWED`, `LAST_SUPER_ADMIN_PROTECTED`, `PII_ACCESS_DENIED`, `PASSWORD_CHANGE_REQUIRED` | autorizacija |
+| 403 | `PERMISSION_DENIED`, `SCOPE_DENIED`, `NOT_ASSIGNEE`, `MOBILE_ACCESS_FORBIDDEN`, `MOBILE_SCOPE_NOT_ALLOWED`, `LAST_SUPER_ADMIN_PROTECTED`, `PII_ACCESS_DENIED`, `PASSWORD_CHANGE_REQUIRED` | autorizacija |
 | 404 | `NOT_FOUND`, `ATTACHMENT_NOT_FOUND` | resurs ne postoji (ili nije u scope-u) |
-| 409 | `TASK_ALREADY_CLAIMED`, `TASK_NOT_OPEN`, `NOT_ASSIGNEE`, `VERSION_CONFLICT`, `DUPLICATE_ENTRY`, `PERIOD_OVERLAP`, `TIRE_ALREADY_MOUNTED`, `ODOMETER_REGRESSION` | sukob stanja |
+| 409 | `TASK_ALREADY_CLAIMED`, `TASK_NOT_OPEN`, `VERSION_CONFLICT`, `DUPLICATE_ENTRY`, `PERIOD_OVERLAP`, `TIRE_ALREADY_MOUNTED`, `ODOMETER_REGRESSION` | sukob stanja |
 | 413 | `PAYLOAD_TOO_LARGE` | upload |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | upload |
 | 422 | `FORM_VALIDATION_FAILED`, `UNKNOWN_FIELD`, `FIELD_NOT_VISIBLE`, `RESERVED_FIELD_KEY`, `FORM_VERSION_NOT_PUBLISHED`, `NORMALIZATION_MISMATCH`, `SCHEMA_INVALID`, `COMPUTED_TIMEOUT`, `IDEMPOTENCY_KEY_REUSED` | forme/validacija domene |
@@ -358,7 +358,7 @@ Detaljan implementirani ugovor je u §7.6.
 | GET | `/tasks/:id` | `task:view` / `task:view_all` (+ scope) | implementirano; uključuje `assignments`, `events`, `attachmentIds`, `commentCount`, `formSchemaVersion` |
 | PATCH | `/tasks/:id` | `task:update` | implementirano; CAS `version`, vlastiti zadatak dok je `OPEN` ili puni opseg |
 | **POST** | **`/tasks/:id/claim`** `Idem` | `task:claim` | implementirano; **atomski** prelaz `OPEN → IN_PROGRESS`; `409 TASK_ALREADY_CLAIMED` s imenom i vremenom izvršioca kad akter smije vidjeti zadatak ili je bio kandidat |
-| POST | `/tasks/:id/complete` `Idem` | `task:complete` (izvršilac) ili `task:complete_override` | `{formValues, attachmentIds, comment, odometerKm?}` |
+| POST | `/tasks/:id/complete` `Idem` | `task:complete` (izvršilac) ili `task:complete_override` | implementirano; strict `{version,formData?,attachmentIds?,comment?,odometerKm?,reason?}`, puna forma i normalizacija, DB outbox `TASK_COMPLETED` |
 | POST | `/tasks/:id/cancel` | `task:cancel` | implementirano; `{version,reason}` (`reason` obavezno) |
 | POST | `/tasks/:id/reopen` | `task:reopen` | implementirano; `{version,reason?,dueAt?}`, audit + DB outbox |
 | POST | `/tasks/:id/release` | `task:release` | vraća među slobodne + obavijest pozvanima |
@@ -378,10 +378,11 @@ Detaljan implementirani ugovor je u §7.6.
   "claimedAt": "2026-10-19T09:29:10Z", "requestId": "…" } }
 ```
 
-Detaljan implementirani ugovor jezgre zadataka je u §7.7, a atomskog
-preuzimanja i slobodnih zadataka u §7.8. Završetak, release, naknadna
-dodjela i komentari ostaju zasebne cjeline; DB outbox redovi se zapisuju,
-ali worker/FCM/SSE isporuka još nije dio ugovora.
+Detaljan implementirani ugovor jezgre zadataka je u §7.7, atomskog
+preuzimanja i slobodnih zadataka u §7.8, a završetka i override prelaza u
+§7.9. Release, naknadna dodjela i samostalni komentari ostaju zasebne
+cjeline; DB outbox redovi se zapisuju, ali worker/FCM/SSE isporuka još
+nije dio ugovora.
 
 ### 2.12 Prilozi (`/attachments`)
 
@@ -547,12 +548,18 @@ Tijelo je opcionalno; poslani `formData` se spaja s nacrtom zadatka.
 ```http
 POST /api/v1/tasks/2f1c…/complete
 Idempotency-Key: 5d77…-uuid
-{ "formValues": { "washType": "FULL", "washDurationMin": 45 },
+{ "version": 4,
+  "formData": { "washType": "FULL", "washDurationMin": 45,
+    "washCost": { "amount": 9000, "currency": "BAM" },
+    "photosAfter": ["…"] },
   "attachmentIds": ["…"], "comment": "Felge očišćene", "odometerKm": 148230 }
 ```
-`200` → `{ "data": { "status": "COMPLETED", "completedAt": "2026-10-19T14:32:11Z",
-"durationMinutes": 130 } }`
-`403 NOT_ASSIGNEE` ako nije izvršilac (i nema `complete_override`).
+Poslani `formData` se spaja preko nacrta i prolazi punu validaciju.
+`200 TaskDetail` → `{ "data": { "id": "…", "status": "COMPLETED",
+"completedAt": "…", "completedById": "…", "durationMinutes": 130,
+"totalCost": 9000, "odometerKm": 148230, "version": 5 } }`
+Vidljivom neizvršiocu bez `task:complete_override` vraća se
+`403 NOT_ASSIGNEE`; detaljan ugovor je u §7.9.
 
 ---
 
@@ -966,8 +973,9 @@ objavljena TASK forma vezana za tu vrstu. Kad efektivna forma postoji, ključ
 mora postojati u trenutno objavljenoj definiciji i `minPhotos > 0` mora
 pokazivati na `PHOTO` polje. Bez efektivne forme ključevi se zasad smiju
 konfigurisati unaprijed; jezgra zadataka iz §7.7 pri kreiranju provjerava
-`ON_CREATE` zahtjeve prema snapshotovanoj verziji, dok će završetak u
-zasebnoj cjelini provjeriti cijelu formu i ostale faze.
+`ON_CREATE` zahtjeve prema snapshotovanoj verziji, claim iz §7.8 dodaje
+`ON_CLAIM`, a završetak iz §7.9 provjerava cijelu formu i sve dosadašnje
+faze.
 
 Idempotentni seed dodaje `WASH`, `INTERIOR_CLEANING`, `FUEL_REFILL`,
 `SERVICE_VISIT`, `TIRE_CHANGE`, `TECHNICAL_INSPECTION`, `REGISTRATION` i
@@ -1039,7 +1047,7 @@ Početni `formData` je nacrt: nepoznata polja i pogrešni tipovi/vrijednosti
 poslanih polja su `422 FORM_VALIDATION_FAILED`, dok se obavezna polja forme
 još ne traže u cijelosti. Obavezni `ON_CREATE` zahtjevi vrste primjenjuju se
 odmah, uključujući `minPhotos`. Puna validacija i normalizacija pripadaju
-završetku u sljedećoj cjelini.
+završetku iz §7.9.
 
 U istoj DB transakciji nastaju zadatak, `TaskAssignment` redovi,
 immutabilni `TaskEvent` (`CREATED` te po potrebi `INVITED` ili `ASSIGNED`) i
@@ -1072,11 +1080,11 @@ se brišu. Obje akcije zaključavaju red, rade CAS na verziji/statusu, pišu
 događaj i DB outbox s novom verzijom u idempotency ključu.
 
 Nema novih ENV varijabli, Redis ključeva/redova ni migracija. Atomski
-claim i `/tasks/available` dodani su u §7.8. Završetak/override, release,
-naknadna dodjela, komentari, zasebna historija, outbox worker i FCM/SSE
-isporuka nisu dio jezgre. Jedinični lažni klijent ne dokazuje stvarni
-PostgreSQL advisory lock, `FOR UPDATE`, rollback ni puni HTTP lanac na
-Coolifyu.
+claim i `/tasks/available` dodani su u §7.8, a završetak/override u §7.9.
+Release, naknadna dodjela, samostalni komentari, zasebna historija, outbox
+worker i FCM/SSE isporuka nisu dio jezgre. Jedinični lažni klijent ne
+dokazuje stvarni PostgreSQL advisory lock, `FOR UPDATE`, rollback ni puni
+HTTP lanac na Coolifyu.
 
 ### 7.8 Slobodni zadaci i atomski claim — treća cjelina Faze 5
 
@@ -1147,7 +1155,97 @@ kandidat; ostali dobijaju `404`, bez otkrivanja stanja.
 Nema novih ENV varijabli, Redis ključeva/redova ni migracija: djelimični
 jedinstveni indeks aktivnog izvršioca već postoji u ručnoj migraciji.
 Outbox red se zapisuje transakcijski, ali worker, FCM i SSE isporuka,
-web/mobilni ekrani zadataka, završetak i release ostaju zasebne cjeline.
-Lažni jedinični klijent dokazuje uslovnu logiku i klasifikaciju, ne
-stvarnu PostgreSQL konkurenciju, djelimični indeks pod opterećenjem,
-rollback ni Coolify HTTP tok; P6 stress-test i dalje zahtijeva pravu bazu.
+web/mobilni ekrani zadataka i release ostaju zasebne cjeline. Lažni
+jedinični klijent dokazuje uslovnu logiku i klasifikaciju, ne stvarnu
+PostgreSQL konkurenciju, djelimični indeks pod opterećenjem, rollback ni
+Coolify HTTP tok; P6 stress-test i dalje zahtijeva pravu bazu.
+
+### 7.9 Završetak i override — četvrta cjelina Faze 5
+
+Implementirana je jedna ruta:
+
+| Metoda i ruta | Permisija | Odgovor i audit |
+|---|---|---|
+| `POST /tasks/:id/complete` | `task:complete` ili `task:complete_override` | `200 TaskDetail`; audit `COMPLETE`/`INFO` prije/poslije, DB outbox `TASK_COMPLETED` |
+
+DTO je strict i kanonički koristi isti naziv kao ostali task ugovori:
+`{version, formData?, attachmentIds?, comment?, odometerKm?, reason?}`.
+Stari nacrtni naziv `formValues` se ne prima. `version` je obavezni CAS
+zaštitnik završne forme; `formData` i `attachmentIds` imaju prazne
+podrazumijevane vrijednosti, `attachmentIds` prima najviše 20 jedinstvenih
+UUID-ova, `comment` najviše 2000 znakova, `odometerKm` je nenegativni
+32-bitni cijeli broj, a opcioni `reason` ima 3–500 znakova. Serverska polja
+poput statusa, izvršioca i vremena završetka dio su strict odbijanja.
+
+Prelaz je isključivo `IN_PROGRESS → COMPLETED` nad zaključanim redom i
+zahtijeva kanonskog izvršioca s aktivnim
+`TaskAssignment(role=ASSIGNEE)` redom. Trenutni izvršilac završava kroz
+primjenjivi opseg `task:complete` (ili vlastiti
+`task:complete_override`, što se ne bilježi kao tuđi override). Drugi
+akter prolazi samo kroz primjenjivi `task:complete_override`: `ALL` bez
+dodatnog ograničenja, `OWN` za zadatak koji je kreirao, `VEHICLE_IDS` samo
+za grantovano vozilo, dok `DRIVER_IDS` nema primjenu na zadatak. Sam
+`task:complete` u `ALL` opsegu ne zaobilazi pravilo izvršioca. Vidljivom
+neizvršiocu bez override prava vraća se `403 NOT_ASSIGNEE` s `taskId` i
+`assigneeUserId`; nevidljiv zadatak daje `404 NOT_FOUND`, a prisutna
+permisija čiji opseg ne obuhvata zadatak `403 SCOPE_DENIED`. Bez ijedne od
+dvije permisije odgovor je `403 PERMISSION_DENIED`.
+
+Poslani `formData` spaja se preko postojećeg nacrta i zatim prolazi **punu**
+validaciju prema snapshotovanoj `Task.formSchemaVersionId` verziji —
+uključujući obavezna i COMPUTED polja — te trenutne obavezne zahtjeve
+vrste u fazama `GENERAL`, `ON_CREATE`, `ON_CLAIM` i `ON_COMPLETE`.
+Duplikati unutar jednog PHOTO/FILE polja se kanonički uklanjaju prije
+brojanja, a isti prilog ne može popuniti dva polja. Za svaki ID iz
+PHOTO/FILE polja i opće `attachmentIds` liste provjerava se stvarni,
+neobrisani `Attachment` red. Dozvoljen je prilog već vezan uz ovaj zadatak
+ili nevezani upload samog aktera (`ownerType=OTHER`, `ownerId=actor`,
+`uploadedById=actor`); prilog drugog zapisa ili tuđi nevezani upload
+odbija završetak. Uspješan završetak u istoj transakciji kanonski veže
+prihvaćene priloge (`ownerType=TASK`, `ownerId=taskId`, `taskId`, polje
+forme gdje postoji); novovezani dobijaju fazu `ON_COMPLETE`, a ranije
+vezani zadržavaju svoju fazu. Opći `attachmentIds` ne zamjenjuju niti brišu
+postojeće priloge i ne broje se u `minPhotos` konkretnog PHOTO polja.
+
+Iz `normalizedName` mapiranja snapshotovane forme popunjavaju se samo
+mjerljive kolone rezultata: `odometerKm`, `totalCost`, `fuelLiters` i
+`fuelAmount`. Ako mapirana vrijednost u završnoj formi nedostaje, kolona
+se postavlja na `null`; naslov, opis, prioritet, rok, status i izvršilac
+ne mogu se prepisati formom. Direktni `odometerKm` dozvoljen je samo za
+zadatak s vozilom i mora biti jednak normalizovanoj kilometraži kad forma
+takvu vrijednost daje. `durationMinutes` server računa kao cijele minute
+od `claimedAt` do trenutka završetka, ne iz polja forme.
+
+Uspjeh postavlja `COMPLETED`, `completedAt`, `completedById` na stvarnog
+aktera, trajanje, očišćeni `formData`, normalizovane kolone i `version+1`;
+izvršilac ostaje nepromijenjen. Neprazan `comment` u istoj transakciji
+stvara `TaskComment` bez mentiona. Uvijek nastaju immutabilni
+`TaskEvent(COMPLETED)` ili — kad zadatak završi druga osoba —
+`TaskEvent(OVERRIDE_COMPLETED)`, te `OutboxEvent(TASK_COMPLETED)` s
+ključem `task:{taskId}:TASK_COMPLETED:v{newVersion}`. Događaj, outbox i
+audit nose `override`, stvarnog `completedById`, trajanje, opcioni razlog
+i ID komentara; primaoci outboxa su uključene osobe osim aktera, pa
+izvršilac dobija obavijest o override završetku. AuditLog koristi postojeću
+akciju `COMPLETE` uz meta `override=true`, dok je `OVERRIDE_COMPLETED`
+akcija domenskog `TaskEvent` zapisa.
+
+Greške su: `400 VALIDATION_ERROR` za neispravan DTO, nedozvoljen opći
+prilog, kilometražu bez vozila ili neslaganje direktne i normalizovane
+kilometraže; `403 PERMISSION_DENIED`/`SCOPE_DENIED`/`NOT_ASSIGNEE` kako je
+opisano; `404 NOT_FOUND`; `409 VERSION_CONFLICT` s `currentVersion` za
+zastarjelu verziju; `409 FORM_VERSION_NOT_PUBLISHED` za neupotrebljiv
+snapshot; `422 INVALID_TASK_TRANSITION` izvan `IN_PROGRESS` ili bez
+aktivnog izvršioca; te `422 FORM_VALIDATION_FAILED`/
+`NORMALIZATION_MISMATCH` za završnu formu i njena mapiranja. Globalni
+`Idempotency-Key` replay vraća prvi uspješni odgovor bez ponovnog prelaza,
+komentara, vezivanja ili outbox reda.
+
+Nema novih ENV varijabli, Redis ključeva/redova ni migracija.
+`fuelConsumptionL100` se u ovoj generičkoj cjelini ne izračunava jer
+form-engine TASK whitelist i postojeći ugovor nemaju jednoznačnu početnu
+kilometražu za potrošnju; kolona ostaje kakva jest do zasebne
+`FUEL_REFILL` semantike. Release, naknadna dodjela, samostalni komentari i
+historija, outbox worker/FCM/SSE i web zadaci ostaju zasebne cjeline.
+Jedinični lažni klijent ne dokazuje stvarni PostgreSQL lock/rollback,
+Decimal upis, HTTP replay ni Coolify tok; P7 integracijski dokaz i dalje
+zahtijeva pravu bazu.

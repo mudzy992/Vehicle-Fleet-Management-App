@@ -1,10 +1,9 @@
 /**
- * Zadaci — jezgra i atomsko preuzimanje u Fazi 5 (docs/07 §2.11).
+ * Zadaci — jezgra, atomsko preuzimanje i završetak u Fazi 5 (docs/07 §2.11).
  *
  * Servis pokriva kreiranje, čitanje, djelimičnu izmjenu, otkazivanje,
- * ponovno otvaranje, listu slobodnih zadataka i claim. Završetak ostaje
- * zasebna cjelina jer tek tada forma prolazi punu validaciju i
- * normalizaciju u kolone zadatka.
+ * ponovno otvaranje, listu slobodnih zadataka, claim i završetak. Tek pri
+ * završetku forma prolazi punu validaciju i normalizaciju u kolone zadatka.
  *
  * Pri kreiranju se snapshotuje tačna objavljena TASK forma: prvo eksplicitna
  * zadana forma vrste (`TaskType.formSchemaId`), zatim objavljena forma vezana
@@ -25,10 +24,17 @@ import {
   type TaskAssignMode,
   type TaskStatus,
 } from '@vfm/shared';
-import { flattenFields, validateRecord, type FormDefinition } from '@vfm/form-engine';
+import {
+  flattenFields,
+  NORMALIZATION_COLUMNS,
+  validateRecord,
+  type AttachmentFacts,
+  type FormDefinition,
+} from '@vfm/form-engine';
 import type {
   CancelTaskInput,
   ClaimTaskInput,
+  CompleteTaskInput,
   CreateTaskInput,
   ReopenTaskInput,
   TaskAssignmentView,
@@ -112,6 +118,27 @@ const USER_NAME_FIELDS = {
   displayName: true,
 } as const;
 
+const TASK_ATTACHMENT_SELECT = {
+  id: true,
+  ownerType: true,
+  ownerId: true,
+  stage: true,
+  mimeType: true,
+  sizeBytes: true,
+  uploadedById: true,
+  taskId: true,
+  formFieldKey: true,
+  deletedAt: true,
+} as const satisfies Prisma.AttachmentSelect;
+
+/**
+ * Rezultat završetka smije iz forme napuniti samo mjerljive kolone. Naslov,
+ * opis, prioritet i rok ostaju sistemska polja zadatka pod kontrolom DTO-a i
+ * PATCH toka, iako ih form-engine poznaje kao moguće TASK kolone.
+ */
+const TASK_COMPLETION_NORMALIZED_COLUMNS = ['odometerKm', 'totalCost', 'fuelLiters', 'fuelAmount'] as const;
+type TaskCompletionNormalizedColumn = (typeof TASK_COMPLETION_NORMALIZED_COLUMNS)[number];
+
 type TaskSelectWithRelations = typeof TASK_SELECT & {
   vehicle: {
     select: { internalNo: true; make: true; model: true; plateNumber: true };
@@ -172,6 +199,10 @@ interface ActorAccess {
   readonly claimScope: PermissionScope | null;
   /** `null` = bez ograničenja po vozilu; prazan skup = nijedno vozilo. */
   readonly claimVehicleIds: readonly string[] | null;
+  readonly completeScope: PermissionScope | null;
+  readonly completeVehicleIds: readonly string[] | null;
+  readonly completeOverrideScope: PermissionScope | null;
+  readonly completeOverrideVehicleIds: readonly string[] | null;
 }
 
 interface ResolvedTaskForm {
@@ -187,6 +218,23 @@ interface RequirementRow {
   readonly required: boolean;
   readonly stage: string;
   readonly minPhotos: number;
+}
+
+type TaskAttachmentRow = Prisma.AttachmentGetPayload<{ select: typeof TASK_ATTACHMENT_SELECT }>;
+
+interface CompletionAttachmentPlan {
+  /** Činjenice za form-engine: samo prilozi koji smiju pripasti ovom zadatku. */
+  readonly facts: ReadonlyMap<string, AttachmentFacts>;
+  /** Kanonsko vezivanje po prilogu; `null` je opći prilog bez polja forme. */
+  readonly bindings: ReadonlyMap<string, string | null>;
+  readonly rows: ReadonlyMap<string, TaskAttachmentRow>;
+  readonly referencedIds: readonly string[];
+}
+
+interface ValidatedCompletionForm {
+  readonly values: Record<string, unknown>;
+  readonly normalized: Partial<Record<TaskCompletionNormalizedColumn, number>>;
+  readonly mappedColumns: ReadonlySet<TaskCompletionNormalizedColumn>;
 }
 
 function taskSelect(): TaskSelectWithRelations {
@@ -1084,6 +1132,229 @@ export class TasksService {
     });
   }
 
+  /**
+   * Završetak zadatka u izvršavanju.
+   *
+   * Red se zaključava i CAS-om prelazi `IN_PROGRESS → COMPLETED`. Poslani
+   * `formData` spaja se s nacrtom, zatim prolazi punu validaciju prema
+   * snapshotovanoj formi, svim dosadašnjim zahtjevima vrste i stvarnim
+   * prilozima. U istoj transakciji nastaju vezani prilozi, opcioni komentar,
+   * `COMPLETED`/`OVERRIDE_COMPLETED` događaj i `TASK_COMPLETED` outbox.
+   */
+  async complete(
+    id: string,
+    input: CompleteTaskInput,
+    actorInput: TaskActorContext | string | undefined,
+  ): Promise<TaskMutation<TaskDetail>> {
+    const access = await this.resolveAccess(actorInput);
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockRow(tx, 'Task', id);
+      const current = await this.loadDetail(tx, id);
+      const before = this.serializeDetail(current);
+      const { override } = this.authorizeCompletion(current, access);
+      this.assertVersion(current.version, input.version);
+
+      if (!canTransitionTask(current.status, 'COMPLETED')) {
+        throw new VfmException(
+          'INVALID_TASK_TRANSITION',
+          `Zadatak u statusu ${current.status} se ne može završiti.`,
+          undefined,
+          { from: current.status, to: 'COMPLETED' },
+        );
+      }
+      const hasActiveAssignee =
+        current.assigneeUserId !== null &&
+        current.assignments.some(
+          (assignment) =>
+            assignment.role === 'ASSIGNEE' &&
+            assignment.userId === current.assigneeUserId &&
+            !assignment.revokedAt,
+        );
+      if (!hasActiveAssignee) {
+        throw new VfmException(
+          'INVALID_TASK_TRANSITION',
+          'Zadatak u izvršavanju nema aktivnog izvršioca i ne može se završiti.',
+          undefined,
+          { from: current.status, to: 'COMPLETED' },
+        );
+      }
+      if (input.odometerKm !== undefined && current.vehicleId === null) {
+        throw VfmErrors.validationError([
+          detail('odometerKm', 'Kilometraža se može evidentirati samo za zadatak s vozilom.'),
+        ]);
+      }
+
+      const form = await this.loadSnapshotForm(tx, current.formSchemaVersionId);
+      const requirements = await tx.taskCompletionRequirement.findMany({
+        where: { taskTypeId: current.taskTypeId },
+        select: { fieldKey: true, required: true, stage: true, minPhotos: true },
+      });
+      const mergedFormData = this.dedupeAttachmentFieldValues(form.definition, {
+        ...plainRecord(current.formData),
+        ...input.formData,
+      });
+      const attachmentPlan = await this.prepareCompletionAttachments(tx, {
+        taskId: id,
+        actorId: access.actor.id,
+        definition: form.definition,
+        values: mergedFormData,
+        attachmentIds: input.attachmentIds,
+      });
+      const validated = this.validateCompletionFormData({
+        form,
+        values: mergedFormData,
+        requirements,
+        attachments: attachmentPlan.facts,
+      });
+
+      if (
+        input.odometerKm !== undefined &&
+        validated.normalized.odometerKm !== undefined &&
+        input.odometerKm !== validated.normalized.odometerKm
+      ) {
+        throw VfmErrors.validationError([
+          detail('odometerKm', 'Kilometraža iz zahtjeva mora biti jednaka kilometraži iz završne forme.'),
+        ]);
+      }
+      const effectiveOdometerKm =
+        input.odometerKm ??
+        (validated.mappedColumns.has('odometerKm')
+          ? (validated.normalized.odometerKm ?? null)
+          : current.odometerKm);
+
+      const now = new Date();
+      const durationMinutes = current.claimedAt
+        ? Math.max(0, Math.floor((now.getTime() - current.claimedAt.getTime()) / 60_000))
+        : null;
+      const data: Prisma.TaskUncheckedUpdateManyInput = {
+        status: 'COMPLETED',
+        completedAt: now,
+        completedById: access.actor.id,
+        durationMinutes,
+        formData: validated.values as Prisma.InputJsonObject,
+        version: { increment: 1 },
+      };
+      if (validated.mappedColumns.has('odometerKm') || input.odometerKm !== undefined) {
+        data.odometerKm = effectiveOdometerKm;
+      }
+      if (validated.mappedColumns.has('totalCost')) {
+        data.totalCost = validated.normalized.totalCost ?? null;
+      }
+      if (validated.mappedColumns.has('fuelLiters')) {
+        data.fuelLiters = validated.normalized.fuelLiters ?? null;
+      }
+      if (validated.mappedColumns.has('fuelAmount')) {
+        data.fuelAmount = validated.normalized.fuelAmount ?? null;
+      }
+
+      const changed = await tx.task.updateMany({
+        where: {
+          id,
+          version: input.version,
+          status: 'IN_PROGRESS',
+          assigneeUserId: current.assigneeUserId,
+          deletedAt: null,
+        },
+        data,
+      });
+      if (changed.count !== 1) await this.throwCasFailure(tx, id, input.version);
+
+      const boundAttachmentIds = await this.bindCompletionAttachments(
+        tx,
+        id,
+        access.actor.id,
+        attachmentPlan,
+      );
+
+      const comment = input.comment?.trim() ? input.comment.trim() : null;
+      let commentId: string | null = null;
+      if (comment) {
+        commentId = randomUUID();
+        await tx.taskComment.create({
+          data: {
+            id: commentId,
+            taskId: id,
+            authorId: access.actor.id,
+            body: comment,
+            mentionsUserIds: [],
+            createdAt: now,
+            updatedAt: now,
+          } as Prisma.TaskCommentUncheckedCreateInput,
+        });
+      }
+
+      const eventAction = override ? ('OVERRIDE_COMPLETED' as const) : ('COMPLETED' as const);
+      await tx.taskEvent.create({
+        data: this.eventData({
+          taskId: id,
+          action: eventAction,
+          actor: access.actor,
+          at: now,
+          data: {
+            fromStatus: 'IN_PROGRESS',
+            toStatus: 'COMPLETED',
+            assigneeUserId: current.assigneeUserId,
+            completedById: access.actor.id,
+            override,
+            reason: input.reason ?? null,
+            durationMinutes,
+            odometerKm: effectiveOdometerKm,
+            normalized: validated.normalized,
+            attachmentIds: attachmentPlan.referencedIds,
+            submittedAttachmentIds: [...input.attachmentIds],
+            boundAttachmentIds,
+            commentId,
+            comment,
+            previousVersion: current.version,
+            version: current.version + 1,
+          },
+          formSchemaVersionId: current.formSchemaVersionId,
+        }),
+      });
+      await this.createOutbox(tx, {
+        taskId: id,
+        code: current.code,
+        eventType: 'TASK_COMPLETED',
+        status: 'COMPLETED',
+        version: current.version + 1,
+        actorId: access.actor.id,
+        recipientUserIds: this.involvedUserIds(current, access.actor.id),
+        extra: {
+          fromStatus: 'IN_PROGRESS',
+          assigneeUserId: current.assigneeUserId,
+          completedById: access.actor.id,
+          override,
+          reason: input.reason ?? null,
+          durationMinutes,
+          odometerKm: effectiveOdometerKm,
+          submittedAttachmentIds: [...input.attachmentIds],
+          commentId,
+        },
+      });
+
+      const updated = await this.loadDetail(tx, id);
+      const serialized = this.serializeDetail(updated, now);
+      return {
+        data: serialized,
+        before: { ...before },
+        after: { ...serialized },
+        meta: {
+          code: serialized.code,
+          status: serialized.status,
+          assigneeUserId: serialized.assigneeUserId,
+          completedById: serialized.completedById,
+          completedAt: serialized.completedAt,
+          durationMinutes: serialized.durationMinutes,
+          override,
+          reason: input.reason ?? null,
+          commentId,
+          boundAttachmentIds,
+        },
+      };
+    });
+  }
+
   private serialize(row: TaskRow, now = new Date()): TaskView {
     return {
       id: row.id,
@@ -1190,6 +1461,81 @@ export class TasksService {
     throw VfmErrors.permissionDenied([
       detail('task:claim', 'Za pregled slobodnih zadataka i preuzimanje potrebna je permisija task:claim.'),
     ]);
+  }
+
+  private completionScopeAllows(
+    row: TaskDetailRow,
+    access: ActorAccess,
+    scope: PermissionScope | null,
+    vehicleIds: readonly string[] | null,
+    override: boolean,
+  ): boolean {
+    if (scope === null || scope === 'DRIVER_IDS') return false;
+    if (scope === 'ALL') return true;
+    if (scope === 'VEHICLE_IDS') {
+      return row.vehicleId !== null && vehicleIds !== null && vehicleIds.includes(row.vehicleId);
+    }
+    return row.assigneeUserId === access.actor.id || (override && row.createdById === access.actor.id);
+  }
+
+  /**
+   * Običan završetak pripada trenutnom izvršiocu. Drugi akter prolazi samo
+   * kroz primjenjivi `task:complete_override` opseg; vidljivom neizvršiocu
+   * bez tog prava vraća se P7 greška `NOT_ASSIGNEE`, a nevidljiv zadatak se
+   * ne otkriva.
+   */
+  private authorizeCompletion(row: TaskDetailRow, access: ActorAccess): { override: boolean } {
+    const isAssignee = row.assigneeUserId === access.actor.id;
+    const canSelfComplete =
+      isAssignee &&
+      (this.completionScopeAllows(row, access, access.completeScope, access.completeVehicleIds, false) ||
+        this.completionScopeAllows(
+          row,
+          access,
+          access.completeOverrideScope,
+          access.completeOverrideVehicleIds,
+          false,
+        ));
+    if (canSelfComplete) return { override: false };
+
+    const canOverride =
+      !isAssignee &&
+      this.completionScopeAllows(
+        row,
+        access,
+        access.completeOverrideScope,
+        access.completeOverrideVehicleIds,
+        true,
+      );
+    if (canOverride) return { override: true };
+
+    if (access.completeScope === null && access.completeOverrideScope === null) {
+      throw VfmErrors.permissionDenied([
+        detail(
+          'task:complete',
+          'Za završetak zadatka potrebna je permisija task:complete ili task:complete_override.',
+        ),
+      ]);
+    }
+    if (isAssignee) {
+      throw VfmErrors.scopeDenied([
+        detail('task:complete', 'Permisija za završetak ne obuhvata ovaj zadatak.'),
+      ]);
+    }
+    if (!this.canView(row, access)) {
+      throw new VfmException('NOT_FOUND', 'Zadatak nije pronađen.');
+    }
+    if (access.completeOverrideScope !== null) {
+      throw VfmErrors.scopeDenied([
+        detail('task:complete_override', 'Override permisija ne obuhvata ovaj zadatak.'),
+      ]);
+    }
+    throw new VfmException(
+      'NOT_ASSIGNEE',
+      'Zadatak može završiti samo dodijeljeni izvršilac ili korisnik s task:complete_override permisijom.',
+      undefined,
+      { taskId: row.id, assigneeUserId: row.assigneeUserId },
+    );
   }
 
   private async assertActiveClaimant(tx: Tx, actorId: string): Promise<void> {
@@ -1400,19 +1746,29 @@ export class TasksService {
     const all = (permission: Permission): boolean =>
       permissions.isSuperAdmin || permissions.permissions.get(permission) === 'ALL';
 
-    const claimScope: PermissionScope | null = permissions.isSuperAdmin
-      ? 'ALL'
-      : (permissions.permissions.get('task:claim') ?? null);
-    const claimVehicleIds =
-      claimScope === 'VEHICLE_IDS'
-        ? [
-            ...new Set(
-              permissions.grants
-                .filter((grant) => grant.permission === 'task:claim' && grant.scope === 'VEHICLE_IDS')
-                .flatMap((grant) => grant.scopeVehicleIds ?? []),
-            ),
-          ]
-        : null;
+    const scopedPermission = (
+      permission: Permission,
+    ): { scope: PermissionScope | null; vehicleIds: readonly string[] | null } => {
+      const scope: PermissionScope | null = permissions.isSuperAdmin
+        ? 'ALL'
+        : (permissions.permissions.get(permission) ?? null);
+      return {
+        scope,
+        vehicleIds:
+          scope === 'VEHICLE_IDS'
+            ? [
+                ...new Set(
+                  permissions.grants
+                    .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+                    .flatMap((grant) => grant.scopeVehicleIds ?? []),
+                ),
+              ]
+            : null,
+      };
+    };
+    const claim = scopedPermission('task:claim');
+    const complete = scopedPermission('task:complete');
+    const completeOverride = scopedPermission('task:complete_override');
 
     return {
       actor,
@@ -1421,8 +1777,12 @@ export class TasksService {
       updateAll: all('task:update'),
       cancelAll: all('task:cancel'),
       reopenAll: all('task:reopen'),
-      claimScope,
-      claimVehicleIds,
+      claimScope: claim.scope,
+      claimVehicleIds: claim.vehicleIds,
+      completeScope: complete.scope,
+      completeVehicleIds: complete.vehicleIds,
+      completeOverrideScope: completeOverride.scope,
+      completeOverrideVehicleIds: completeOverride.vehicleIds,
     };
   }
 
@@ -1655,6 +2015,186 @@ export class TasksService {
     };
   }
 
+  private dedupeAttachmentFieldValues(
+    definition: FormDefinition,
+    values: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const result = { ...values };
+    for (const { field } of flattenFields(definition)) {
+      if (field.type !== 'PHOTO' && field.type !== 'FILE') continue;
+      const value = result[field.key];
+      if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+        result[field.key] = [...new Set(value)];
+      }
+    }
+    return result;
+  }
+
+  private isCompletionAttachmentEligible(row: TaskAttachmentRow, taskId: string, actorId: string): boolean {
+    const pointsToTask = row.taskId === taskId || (row.ownerType === 'TASK' && row.ownerId === taskId);
+    if (pointsToTask) {
+      if (row.taskId !== null && row.taskId !== taskId) return false;
+      if (row.ownerType === 'TASK' && row.ownerId !== taskId) return false;
+      return row.ownerType === 'TASK' || row.ownerType === 'OTHER';
+    }
+    return (
+      row.taskId === null &&
+      row.ownerType === 'OTHER' &&
+      row.ownerId === actorId &&
+      row.uploadedById === actorId
+    );
+  }
+
+  /**
+   * Priprema dokaze za PHOTO/FILE polja i dodatne opće priloge.
+   *
+   * Prihvata se prilog koji je već vezan uz ovaj zadatak ili je još uvijek
+   * nevezani upload samog aktera. Tuđi nevezani upload i prilog drugog
+   * zapisa ne ulaze u mapu form-enginea, pa završetak pada prije prelaza.
+   */
+  private async prepareCompletionAttachments(
+    tx: Tx,
+    args: {
+      taskId: string;
+      actorId: string;
+      definition: FormDefinition;
+      values: Record<string, unknown>;
+      attachmentIds: readonly string[];
+    },
+  ): Promise<CompletionAttachmentPlan> {
+    const fieldValues = new Map<string, readonly string[]>();
+    const fieldsByAttachment = new Map<string, string[]>();
+
+    for (const { field } of flattenFields(args.definition)) {
+      if (field.type !== 'PHOTO' && field.type !== 'FILE') continue;
+      const value = args.values[field.key];
+      if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) continue;
+      const ids = value as string[];
+      fieldValues.set(field.key, ids);
+      for (const id of ids) {
+        const fields = fieldsByAttachment.get(id) ?? [];
+        fields.push(field.key);
+        fieldsByAttachment.set(id, fields);
+      }
+    }
+
+    const generalIds = [...new Set(args.attachmentIds)];
+    const referencedIds = [...new Set([...fieldsByAttachment.keys(), ...generalIds])];
+    const rows =
+      referencedIds.length === 0
+        ? []
+        : await tx.attachment.findMany({
+            where: { id: { in: referencedIds }, deletedAt: null },
+            select: TASK_ATTACHMENT_SELECT,
+          });
+    const rowById = new Map(rows.map((row) => [row.id, row]));
+
+    const generalIssues = generalIds.flatMap((id, index) => {
+      const row = rowById.get(id);
+      return !row || !this.isCompletionAttachmentEligible(row, args.taskId, args.actorId)
+        ? [
+            detail(
+              `attachmentIds.${index}`,
+              'Prilog ne postoji, obrisan je ili se ne smije vezati uz ovaj zadatak.',
+            ),
+          ]
+        : [];
+    });
+    if (generalIssues.length > 0) throw VfmErrors.validationError(generalIssues);
+
+    const fieldIssues = [] as ReturnType<typeof detail>[];
+    for (const [fieldKey, ids] of fieldValues) {
+      for (const id of ids) {
+        if ((fieldsByAttachment.get(id)?.length ?? 0) > 1) {
+          fieldIssues.push(detail(`formData.${fieldKey}`, 'Isti prilog ne može popuniti više polja forme.'));
+          continue;
+        }
+        const row = rowById.get(id);
+        if (row && this.isCompletionAttachmentEligible(row, args.taskId, args.actorId)) {
+          if (row.formFieldKey !== null && row.formFieldKey !== fieldKey) {
+            fieldIssues.push(detail(`formData.${fieldKey}`, 'Prilog pripada drugom polju forme.'));
+          }
+        }
+      }
+    }
+    if (fieldIssues.length > 0) {
+      throw new VfmException('FORM_VALIDATION_FAILED', 'Prilozi forme nisu ispravno vezani.', fieldIssues);
+    }
+
+    const facts = new Map<string, AttachmentFacts>();
+    const bindings = new Map<string, string | null>();
+    const eligibleRows = new Map<string, TaskAttachmentRow>();
+    for (const [fieldKey, ids] of fieldValues) {
+      for (const id of ids) {
+        const row = rowById.get(id);
+        if (!row || !this.isCompletionAttachmentEligible(row, args.taskId, args.actorId)) continue;
+        facts.set(id, {
+          mimeType: row.mimeType,
+          sizeBytes: typeof row.sizeBytes === 'bigint' ? Number(row.sizeBytes) : row.sizeBytes,
+        });
+        bindings.set(id, fieldKey);
+        eligibleRows.set(id, row);
+      }
+    }
+    for (const id of generalIds) {
+      const row = rowById.get(id);
+      if (!row) continue;
+      eligibleRows.set(id, row);
+      if (!bindings.has(id)) bindings.set(id, null);
+    }
+
+    return { facts, bindings, rows: eligibleRows, referencedIds };
+  }
+
+  private async bindCompletionAttachments(
+    tx: Tx,
+    taskId: string,
+    actorId: string,
+    plan: CompletionAttachmentPlan,
+  ): Promise<readonly string[]> {
+    const boundIds: string[] = [];
+
+    for (const [attachmentId, formFieldKey] of plan.bindings) {
+      const row = plan.rows.get(attachmentId);
+      if (!row) continue;
+      const alreadyBound = row.taskId === taskId && row.ownerType === 'TASK' && row.ownerId === taskId;
+      const pointsToTask = row.taskId === taskId || (row.ownerType === 'TASK' && row.ownerId === taskId);
+      const nextFormFieldKey = row.formFieldKey ?? formFieldKey;
+      const needsBinding = !alreadyBound || (formFieldKey !== null && row.formFieldKey !== formFieldKey);
+
+      const eligibility: Prisma.AttachmentWhereInput = alreadyBound
+        ? { taskId, ownerType: 'TASK', ownerId: taskId }
+        : row.taskId === taskId || (row.ownerType === 'TASK' && row.ownerId === taskId)
+          ? {
+              OR: [{ taskId }, { ownerType: 'TASK', ownerId: taskId }],
+            }
+          : {
+              taskId: null,
+              ownerType: 'OTHER',
+              ownerId: actorId,
+              uploadedById: actorId,
+            };
+      const changed = await tx.attachment.updateMany({
+        where: { id: attachmentId, deletedAt: null, AND: [eligibility] },
+        data: {
+          ownerType: 'TASK',
+          ownerId: taskId,
+          taskId,
+          formFieldKey: nextFormFieldKey,
+          ...(pointsToTask ? {} : { stage: 'ON_COMPLETE' as const }),
+        } as Prisma.AttachmentUncheckedUpdateManyInput,
+      });
+      if (changed.count !== 1) {
+        throw VfmErrors.validationError([
+          detail('attachmentIds', 'Prilog je u međuvremenu obrisan ili vezan uz drugi zapis.'),
+        ]);
+      }
+      if (needsBinding) boundIds.push(attachmentId);
+    }
+
+    return boundIds;
+  }
+
   private validateDraftFormData(args: {
     form: ResolvedTaskForm;
     values: Record<string, unknown>;
@@ -1700,6 +2240,105 @@ export class TasksService {
     return values;
   }
 
+  /**
+   * Puna validacija završne forme: sva obavezna polja snapshotovane verzije,
+   * stvarni prilozi te svi dosadašnji zahtjevi vrste (`GENERAL`, `ON_CREATE`,
+   * `ON_CLAIM`, `ON_COMPLETE`). Normalizacija se primjenjuje samo na
+   * mjerljive kolone rezultata.
+   */
+  private validateCompletionFormData(args: {
+    form: ResolvedTaskForm;
+    values: Record<string, unknown>;
+    requirements: readonly RequirementRow[];
+    attachments: ReadonlyMap<string, AttachmentFacts>;
+  }): ValidatedCompletionForm {
+    let result: ReturnType<typeof validateRecord>;
+    try {
+      result = validateRecord({
+        version: {
+          id: args.form.formSchemaVersionId,
+          version: args.form.version,
+          status: args.form.status,
+          definition: args.form.definition,
+        },
+        values: args.values,
+        isNew: false,
+        today: toLocalDateString(new Date()),
+        attachments: args.attachments,
+      });
+    } catch (error) {
+      if (error instanceof VfmException) throw error;
+      throw new VfmException(
+        'NORMALIZATION_MISMATCH',
+        error instanceof Error ? error.message : 'Normalizacija završene forme nije moguća.',
+      );
+    }
+
+    if (result.versionError) {
+      throw new VfmException('FORM_VERSION_NOT_PUBLISHED', undefined, undefined, {
+        versionError: result.versionError,
+      });
+    }
+    if (!result.ok) {
+      throw new VfmException(
+        'FORM_VALIDATION_FAILED',
+        `Podaci za završetak zadatka nisu ispravni (${result.errors.length} greška/e).`,
+        result.errors.map((error) => detail(`formData.${error.key}`, `${error.code}: ${error.message}`)),
+        { errors: result.errors },
+      );
+    }
+
+    const values = { ...result.values } as Record<string, unknown>;
+    this.assertStageRequirements(args.form.definition, values, args.requirements, [
+      'GENERAL',
+      'ON_CREATE',
+      'ON_CLAIM',
+      'ON_COMPLETE',
+    ]);
+
+    const allowedColumns = NORMALIZATION_COLUMNS['TASK'] ?? [];
+    for (const column of Object.keys(result.normalized)) {
+      if (!allowedColumns.includes(column)) {
+        throw new VfmException(
+          'NORMALIZATION_MISMATCH',
+          `Mapiranje na kolonu "${column}" ne postoji na entitetu TASK.`,
+          [detail(`normalizedName.${column}`, column)],
+        );
+      }
+    }
+
+    const supported = new Set<string>(TASK_COMPLETION_NORMALIZED_COLUMNS);
+    const mappedColumns = new Set<TaskCompletionNormalizedColumn>();
+    for (const mapping of args.form.definition.normalizedName ?? []) {
+      if (mapping.column !== null && supported.has(mapping.column)) {
+        mappedColumns.add(mapping.column as TaskCompletionNormalizedColumn);
+      }
+    }
+
+    const normalized: Partial<Record<TaskCompletionNormalizedColumn, number>> = {};
+    for (const column of TASK_COMPLETION_NORMALIZED_COLUMNS) {
+      const value = result.normalized[column];
+      if (value === undefined) continue;
+      const integerColumn = column !== 'fuelLiters';
+      if (
+        typeof value !== 'number' ||
+        !Number.isFinite(value) ||
+        value < 0 ||
+        (integerColumn && (!Number.isInteger(value) || value > 2_147_483_647)) ||
+        (!integerColumn && value > 99_999_999.99)
+      ) {
+        throw new VfmException(
+          'NORMALIZATION_MISMATCH',
+          `Normalizovana vrijednost za "${column}" nije u dozvoljenom opsegu zadatka.`,
+          [detail(`normalizedName.${column}`, String(value))],
+        );
+      }
+      normalized[column] = value;
+    }
+
+    return { values, normalized, mappedColumns };
+  }
+
   private assertStageRequirements(
     definition: FormDefinition,
     values: Record<string, unknown>,
@@ -1738,7 +2377,11 @@ export class TasksService {
               ? 'Pri kreiranju'
               : requirement.stage === 'ON_CLAIM'
                 ? 'Pri preuzimanju'
-                : `U fazi ${requirement.stage}`;
+                : requirement.stage === 'ON_COMPLETE'
+                  ? 'Pri završetku'
+                  : requirement.stage === 'GENERAL'
+                    ? 'Za završetak'
+                    : `U fazi ${requirement.stage}`;
           issues.push(
             detail(
               `formData.${requirement.fieldKey}`,
@@ -1755,7 +2398,11 @@ export class TasksService {
             ? 'Polje je obavezno pri kreiranju zadatka.'
             : requirement.stage === 'ON_CLAIM'
               ? 'Polje je obavezno pri preuzimanju zadatka.'
-              : `Polje je obavezno u fazi ${requirement.stage}.`;
+              : requirement.stage === 'ON_COMPLETE'
+                ? 'Polje je obavezno pri završetku zadatka.'
+                : requirement.stage === 'GENERAL'
+                  ? 'Polje je obavezno za završetak zadatka.'
+                  : `Polje je obavezno u fazi ${requirement.stage}.`;
         issues.push(detail(`formData.${requirement.fieldKey}`, message));
       }
     }
@@ -1816,7 +2463,7 @@ export class TasksService {
     args: {
       taskId: string;
       code: string;
-      eventType: 'TASK_CREATED' | 'TASK_CLAIMED' | 'TASK_CANCELLED' | 'TASK_REOPENED';
+      eventType: 'TASK_CREATED' | 'TASK_CLAIMED' | 'TASK_COMPLETED' | 'TASK_CANCELLED' | 'TASK_REOPENED';
       status: TaskStatus;
       version: number;
       actorId: string;

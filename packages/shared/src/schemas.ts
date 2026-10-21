@@ -3094,6 +3094,34 @@ export const claimTaskSchema = z
   .strict();
 export type ClaimTaskInput = z.output<typeof claimTaskSchema>;
 
+/**
+ * Završetak zadatka u izvršavanju.
+ *
+ * `version` je obavezni CAS zaštitnik završne forme, a poslani `formData` se
+ * spaja preko postojećeg nacrta i tek tada prolazi punu validaciju prema
+ * snapshotovanoj verziji TASK forme. `attachmentIds` su dodatni opći prilozi
+ * koji se transakcijski vežu uz zadatak; fotografije konkretnih PHOTO/FILE
+ * polja i dalje se navode unutar `formData`. Neprazan `comment` postaje
+ * `TaskComment`, dok je `reason` opcioni auditni razlog override završetka.
+ */
+export const completeTaskSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    formData: z.record(z.string(), z.unknown()).default({}),
+    attachmentIds: z
+      .array(uuidSchema)
+      .max(20)
+      .default([])
+      .refine((ids) => new Set(ids).size === ids.length, {
+        message: 'Prilog se ne smije navesti više puta.',
+      }),
+    comment: z.string().trim().max(2000).optional(),
+    odometerKm: z.number().int().min(0).max(2147483647).optional(),
+    reason: z.string().trim().min(3).max(500).optional(),
+  })
+  .strict();
+export type CompleteTaskInput = z.output<typeof completeTaskSchema>;
+
 export const taskListQuerySchema = paginationQuerySchema
   .extend({
     status: taskStatusSchema.optional(),

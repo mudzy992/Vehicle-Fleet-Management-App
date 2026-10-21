@@ -5,6 +5,7 @@ import { HTTP_CODE_METADATA } from '@nestjs/common/constants.js';
 import {
   cancelTaskSchema,
   claimTaskSchema,
+  completeTaskSchema,
   createTaskSchema,
   reopenTaskSchema,
   taskAvailableQuerySchema,
@@ -30,6 +31,7 @@ const inactiveId = '88888888-8888-4888-8888-888888888888';
 const missingId = '99999999-9999-4999-8999-999999999999';
 const broadcastUserId = '10101010-1010-4101-8101-101010101010';
 const vehicleClaimId = '12121212-1212-4121-8121-121212121212';
+const overrideId = '13131313-1313-4131-8131-131313131313';
 
 const vehicleId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
 const archivedVehicleId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2';
@@ -43,6 +45,8 @@ const genericVersionId = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc2';
 const boundFormId = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3';
 const boundVersionId = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc4';
 const photoId = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1';
+const generalAttachmentId = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd2';
+const otherAttachmentId = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd3';
 
 type Row = Record<string, unknown>;
 
@@ -81,6 +85,8 @@ class FakePermissions {
       'task:update': 'ALL',
       'task:cancel': 'ALL',
       'task:reopen': 'ALL',
+      'task:complete': 'ALL',
+      'task:complete_override': 'ALL',
     });
     this.set(invitedId, {
       'task:view': 'OWN',
@@ -88,21 +94,33 @@ class FakePermissions {
       'task:update': 'OWN',
       'task:cancel': 'OWN',
       'task:reopen': 'OWN',
+      'task:complete': 'OWN',
     });
-    this.set(invited2Id, { 'task:view': 'OWN', 'task:claim': 'OWN' });
-    this.set(assigneeId, { 'task:view': 'OWN', 'task:claim': 'OWN', 'task:update': 'OWN' });
-    this.set(observerId, { 'task:view': 'OWN', 'task:claim': 'OWN' });
+    this.set(invited2Id, { 'task:view': 'OWN', 'task:claim': 'OWN', 'task:complete': 'OWN' });
+    this.set(assigneeId, {
+      'task:view': 'OWN',
+      'task:claim': 'OWN',
+      'task:update': 'OWN',
+      'task:complete': 'OWN',
+    });
+    this.set(observerId, { 'task:view': 'OWN', 'task:claim': 'OWN', 'task:complete': 'OWN' });
     this.set(outsiderId, {
       'task:view': 'OWN',
       'task:claim': 'OWN',
       'task:update': 'OWN',
       'task:cancel': 'OWN',
       'task:reopen': 'OWN',
+      'task:complete': 'OWN',
     });
     this.set(noClaimId, { 'task:view': 'OWN' });
     this.set(inactiveId, { 'task:view': 'OWN', 'task:claim': 'OWN' });
     this.set(broadcastUserId, { 'task:view': 'OWN', 'task:claim': 'ALL' });
-    this.set(vehicleClaimId, { 'task:view': 'OWN', 'task:claim': 'VEHICLE_IDS' });
+    this.set(vehicleClaimId, {
+      'task:view': 'OWN',
+      'task:claim': 'VEHICLE_IDS',
+      'task:complete': 'VEHICLE_IDS',
+    });
+    this.set(overrideId, { 'task:view': 'OWN', 'task:complete_override': 'ALL' });
   }
 
   private set(userId: string, grants: Record<string, 'ALL' | 'OWN' | 'VEHICLE_IDS'>): void {
@@ -117,7 +135,10 @@ class FakePermissions {
       list: [...permissions.keys()],
       grants:
         userId === vehicleClaimId
-          ? [{ permission: 'task:claim', scope: 'VEHICLE_IDS', scopeVehicleIds: [vehicleId] }]
+          ? [
+              { permission: 'task:claim', scope: 'VEHICLE_IDS', scopeVehicleIds: [vehicleId] },
+              { permission: 'task:complete', scope: 'VEHICLE_IDS', scopeVehicleIds: [vehicleId] },
+            ]
           : [],
     };
   }
@@ -162,6 +183,7 @@ class FakeTasksPrisma {
       [inactiveId, 'Ivo', 'Neaktivan', 'SUSPENDED'],
       [broadcastUserId, 'Dino', 'Broadcast', 'ACTIVE'],
       [vehicleClaimId, 'Vedad', 'VoziloOpseg', 'ACTIVE'],
+      [overrideId, 'Mujo', 'Override', 'ACTIVE'],
     ] as const) {
       this.users.set(id, {
         id,
@@ -661,6 +683,24 @@ class FakeTasksPrisma {
     create: async (args: { data: Row }) => {
       this.outbox.push(clone(args.data));
       return clone(args.data);
+    },
+  };
+
+  readonly attachment = {
+    findMany: async (args: { where?: Row } = {}) =>
+      this.attachments.filter((row) => this.matches(row, args.where)).map(clone),
+    updateMany: async (args: { where?: Row; data: Row }) => {
+      const rows = this.attachments.filter((row) => this.matches(row, args.where));
+      for (const row of rows) applyUpdate(row, args.data);
+      return { count: rows.length };
+    },
+  };
+
+  readonly taskComment = {
+    create: async (args: { data: Row }) => {
+      const row = { deletedAt: null, ...clone(args.data) };
+      this.comments.push(row);
+      return clone(row);
     },
   };
 }
@@ -1647,6 +1687,434 @@ describe('TasksService — slobodni zadaci i atomski claim', () => {
   });
 });
 
+describe('TasksService — završetak i override', () => {
+  const validCompletionForm = (): Record<string, unknown> => ({
+    washType: 'FULL',
+    washDurationMin: 45,
+    washCost: { amount: 9000, currency: 'BAM' },
+    photosAfter: [photoId],
+  });
+  const completeInput = (patch: Row = {}) =>
+    completeTaskSchema.parse({ version: 2, formData: validCompletionForm(), ...patch });
+
+  const seedInProgress = (fake: FakeTasksPrisma, patch: Row = {}): string => {
+    const { skipAssignment, ...taskPatch } = patch;
+    const id = String(taskPatch.id ?? `ffffffff-ffff-4fff-8fff-fffffffff${200 + fake.tasks.size}`);
+    fake.addTask({
+      id,
+      code: `Z-2026-000${200 + fake.tasks.size}`,
+      status: 'IN_PROGRESS',
+      assigneeUserId: assigneeId,
+      claimedAt: new Date(Date.now() - 65 * 60_000),
+      version: 2,
+      ...taskPatch,
+    });
+    if (skipAssignment !== true) {
+      fake.addAssignment(id, String(taskPatch.assigneeUserId ?? assigneeId), 'ASSIGNEE');
+    }
+    return id;
+  };
+
+  const addAttachment = (fake: FakeTasksPrisma, patch: Row = {}): Row => {
+    const row: Row = {
+      id: photoId,
+      ownerType: 'OTHER',
+      ownerId: assigneeId,
+      stage: 'GENERAL',
+      mimeType: 'image/jpeg',
+      sizeBytes: 2048n,
+      uploadedById: assigneeId,
+      taskId: null,
+      formFieldKey: null,
+      deletedAt: null,
+      ...patch,
+    };
+    fake.attachments.push(row);
+    return row;
+  };
+
+  it('izvršilac završava zadatak uz punu formu, normalizaciju, priloge, komentar, događaj i outbox', async () => {
+    const { fake, service } = setup();
+    const taskId = seedInProgress(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff201',
+      code: 'Z-2026-000201',
+      formData: { washType: 'FULL' },
+    });
+    fake.addAssignment(taskId, observerId, 'OBSERVER');
+    addAttachment(fake);
+    addAttachment(fake, { id: generalAttachmentId });
+
+    const result = await service.complete(
+      taskId,
+      completeInput({
+        formData: {
+          washDurationMin: 45,
+          washCost: { amount: 9000, currency: 'BAM' },
+          photosAfter: [photoId],
+        },
+        attachmentIds: [generalAttachmentId],
+        comment: 'Felge su dodatno oprane.',
+        odometerKm: 148230,
+      }),
+      actor(assigneeId),
+    );
+
+    expect(result.data).toMatchObject({
+      status: 'COMPLETED',
+      assigneeUserId: assigneeId,
+      completedById: assigneeId,
+      version: 3,
+      odometerKm: 148230,
+      totalCost: 9000,
+      commentCount: 1,
+    });
+    expect(result.data.completedAt).not.toBeNull();
+    expect(result.data.durationMinutes).toBeGreaterThanOrEqual(65);
+    expect(result.data.durationMinutes).toBeLessThanOrEqual(66);
+    expect(result.data.formData).toMatchObject({
+      washType: 'FULL',
+      washDurationMin: 45,
+      photosAfter: [photoId],
+    });
+    expect(result.data.attachmentIds).toEqual(expect.arrayContaining([photoId, generalAttachmentId]));
+    expect(taskDetailSchema.parse(result.data)).toEqual(result.data);
+    expect(result.meta).toMatchObject({ override: false, completedById: assigneeId });
+    expect(result.meta?.boundAttachmentIds).toEqual(expect.arrayContaining([photoId, generalAttachmentId]));
+
+    expect(fake.attachments.find((row) => row.id === photoId)).toMatchObject({
+      ownerType: 'TASK',
+      ownerId: taskId,
+      taskId,
+      formFieldKey: 'photosAfter',
+      stage: 'ON_COMPLETE',
+    });
+    expect(fake.attachments.find((row) => row.id === generalAttachmentId)).toMatchObject({
+      ownerType: 'TASK',
+      ownerId: taskId,
+      taskId,
+      formFieldKey: null,
+      stage: 'ON_COMPLETE',
+    });
+    expect(fake.comments).toHaveLength(1);
+    expect(fake.comments[0]).toMatchObject({
+      taskId,
+      authorId: assigneeId,
+      body: 'Felge su dodatno oprane.',
+      mentionsUserIds: [],
+    });
+
+    const events = fake.events.filter((row) => row.taskId === taskId && row.action === 'COMPLETED');
+    expect(events).toHaveLength(1);
+    expect(events[0]?.data).toMatchObject({
+      fromStatus: 'IN_PROGRESS',
+      toStatus: 'COMPLETED',
+      assigneeUserId: assigneeId,
+      completedById: assigneeId,
+      override: false,
+      odometerKm: 148230,
+      normalized: { totalCost: 9000 },
+      submittedAttachmentIds: [generalAttachmentId],
+      comment: 'Felge su dodatno oprane.',
+    });
+    expect(fake.outbox).toHaveLength(1);
+    expect(fake.outbox[0]).toMatchObject({
+      eventType: 'TASK_COMPLETED',
+      idempotencyKey: `task:${taskId}:TASK_COMPLETED:v3`,
+    });
+    expect((fake.outbox[0]!.payload as Row).recipientUserIds).toEqual([adminId, observerId]);
+    expect(fake.outbox[0]!.payload as Row).toMatchObject({ override: false, odometerKm: 148230 });
+  });
+
+  it('puna validacija primjenjuje ON_COMPLETE fotografije, stvarne priloge i ranije fazne zahtjeve', async () => {
+    const { fake, service } = setup();
+    const taskId = seedInProgress(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff202',
+      code: 'Z-2026-000202',
+    });
+
+    const missingPhotos = await errorOf(() =>
+      service.complete(
+        taskId,
+        completeInput({
+          formData: { ...validCompletionForm(), washType: 'INTERNAL', photosAfter: [] },
+        }),
+        actor(assigneeId),
+      ),
+    );
+    expect(missingPhotos.code).toBe('FORM_VALIDATION_FAILED');
+    expect(missingPhotos.httpStatus).toBe(422);
+    expect(missingPhotos.details?.some((item) => item.path.join('.') === 'formData.photosAfter')).toBe(true);
+    expect(fake.tasks.get(taskId)).toMatchObject({ status: 'IN_PROGRESS', version: 2 });
+
+    const unknownPhoto = await errorOf(() =>
+      service.complete(
+        taskId,
+        completeInput({ formData: { ...validCompletionForm(), photosAfter: [otherAttachmentId] } }),
+        actor(assigneeId),
+      ),
+    );
+    expect(unknownPhoto.code).toBe('FORM_VALIDATION_FAILED');
+    expect(
+      ((unknownPhoto.extra as Row).errors as Row[]).some((item) => item.code === 'ATTACHMENT_UNKNOWN'),
+    ).toBe(true);
+
+    addAttachment(fake, {
+      ownerType: 'TASK',
+      ownerId: taskId,
+      taskId,
+      formFieldKey: 'photosAfter',
+      stage: 'ON_CLAIM',
+    });
+    addAttachment(fake, {
+      id: otherAttachmentId,
+      ownerType: 'TASK',
+      ownerId: missingId,
+      taskId: missingId,
+      stage: 'ON_COMPLETE',
+    });
+    const foreignGeneral = await errorOf(() =>
+      service.complete(taskId, completeInput({ attachmentIds: [otherAttachmentId] }), actor(assigneeId)),
+    );
+    expect(foreignGeneral.code).toBe('VALIDATION_ERROR');
+    expect(foreignGeneral.httpStatus).toBe(400);
+    expect(fake.tasks.get(taskId)).toMatchObject({ status: 'IN_PROGRESS', version: 2 });
+    expect(fake.outbox).toHaveLength(0);
+
+    const custom = setup();
+    const customTaskId = seedInProgress(custom.fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff203',
+      code: 'Z-2026-000203',
+      taskTypeId: customTypeId,
+      vehicleId: null,
+      formSchemaId: boundFormId,
+      formSchemaVersionId: boundVersionId,
+    });
+    addAttachment(custom.fake);
+    const missingClaimField = await errorOf(() =>
+      custom.service.complete(
+        customTaskId,
+        completeInput({
+          formData: {
+            washType: 'FULL',
+            washCost: { amount: 9000, currency: 'BAM' },
+            photosAfter: [photoId],
+          },
+        }),
+        actor(assigneeId),
+      ),
+    );
+    expect(missingClaimField.code).toBe('FORM_VALIDATION_FAILED');
+    expect(
+      missingClaimField.details?.some((item) => item.path.join('.') === 'formData.washDurationMin'),
+    ).toBe(true);
+  });
+
+  it('P7: vidljivi neizvršilac dobija NOT_ASSIGNEE, nevidljivi NOT_FOUND, a opseg se poštuje', async () => {
+    const { fake, service } = setup();
+    const taskId = seedInProgress(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff204',
+      code: 'Z-2026-000204',
+    });
+    fake.addAssignment(taskId, observerId, 'OBSERVER');
+
+    const notAssignee = await errorOf(() => service.complete(taskId, completeInput(), actor(observerId)));
+    expect(notAssignee.code).toBe('NOT_ASSIGNEE');
+    expect(notAssignee.httpStatus).toBe(403);
+    expect(notAssignee.extra).toMatchObject({ taskId, assigneeUserId: assigneeId });
+    expect((await errorOf(() => service.complete(taskId, completeInput(), actor(outsiderId)))).code).toBe(
+      'NOT_FOUND',
+    );
+
+    const noPermissionTaskId = seedInProgress(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff205',
+      code: 'Z-2026-000205',
+      assigneeUserId: noClaimId,
+    });
+    expect(
+      (await errorOf(() => service.complete(noPermissionTaskId, completeInput(), actor(noClaimId)))).code,
+    ).toBe('PERMISSION_DENIED');
+
+    const otherVehicleTaskId = seedInProgress(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff206',
+      code: 'Z-2026-000206',
+      vehicleId: archivedVehicleId,
+      assigneeUserId: vehicleClaimId,
+    });
+    expect(
+      (await errorOf(() => service.complete(otherVehicleTaskId, completeInput(), actor(vehicleClaimId))))
+        .code,
+    ).toBe('SCOPE_DENIED');
+  });
+
+  it('override završava tuđi zadatak, bilježi stvarnog aktera i OVERRIDE_COMPLETED događaj', async () => {
+    const { fake, service } = setup();
+    const taskId = seedInProgress(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff207',
+      code: 'Z-2026-000207',
+    });
+    addAttachment(fake, {
+      ownerType: 'TASK',
+      ownerId: taskId,
+      taskId,
+      formFieldKey: 'photosAfter',
+      stage: 'ON_CLAIM',
+    });
+
+    const result = await service.complete(
+      taskId,
+      completeInput({ reason: 'Izvršilac je odsutan, posao je provjeren na terenu.' }),
+      actor(overrideId),
+    );
+
+    expect(result.data).toMatchObject({
+      status: 'COMPLETED',
+      assigneeUserId: assigneeId,
+      completedById: overrideId,
+      version: 3,
+    });
+    expect(result.meta).toMatchObject({
+      override: true,
+      completedById: overrideId,
+      reason: 'Izvršilac je odsutan, posao je provjeren na terenu.',
+    });
+    expect(fake.attachments.find((row) => row.id === photoId)).toMatchObject({ stage: 'ON_CLAIM' });
+
+    const events = fake.events.filter((row) => row.taskId === taskId && row.action === 'OVERRIDE_COMPLETED');
+    expect(events).toHaveLength(1);
+    expect(events[0]?.data).toMatchObject({
+      assigneeUserId: assigneeId,
+      completedById: overrideId,
+      override: true,
+      reason: 'Izvršilac je odsutan, posao je provjeren na terenu.',
+    });
+    expect((fake.outbox[0]!.payload as Row).recipientUserIds).toEqual([adminId, assigneeId]);
+    expect(fake.outbox[0]!.payload as Row).toMatchObject({
+      override: true,
+      completedById: overrideId,
+    });
+
+    const ownTaskId = seedInProgress(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff208',
+      code: 'Z-2026-000208',
+      assigneeUserId: overrideId,
+    });
+    addAttachment(fake, {
+      id: generalAttachmentId,
+      ownerId: overrideId,
+      uploadedById: overrideId,
+    });
+    const ownResult = await service.complete(
+      ownTaskId,
+      completeInput({
+        formData: { ...validCompletionForm(), photosAfter: [generalAttachmentId] },
+      }),
+      actor(overrideId),
+    );
+    expect(ownResult.meta).toMatchObject({ override: false, completedById: overrideId });
+    expect(fake.events.filter((row) => row.taskId === ownTaskId && row.action === 'COMPLETED')).toHaveLength(
+      1,
+    );
+  });
+
+  it('CAS verzija i statusna mašina odbijaju zastarjeli ili nedozvoljeni završetak', async () => {
+    const { fake, service } = setup();
+    const taskId = seedInProgress(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff209',
+      code: 'Z-2026-000209',
+    });
+    const conflict = await errorOf(() =>
+      service.complete(taskId, completeInput({ version: 3 }), actor(assigneeId)),
+    );
+    expect(conflict.code).toBe('VERSION_CONFLICT');
+    expect(conflict.httpStatus).toBe(409);
+    expect(conflict.extra).toMatchObject({ currentVersion: 2 });
+
+    const openTaskId = seedInProgress(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff210',
+      code: 'Z-2026-000210',
+      status: 'OPEN',
+      claimedAt: null,
+    });
+    expect((await errorOf(() => service.complete(openTaskId, completeInput(), actor(assigneeId)))).code).toBe(
+      'INVALID_TASK_TRANSITION',
+    );
+
+    const completedTaskId = seedInProgress(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff211',
+      code: 'Z-2026-000211',
+      status: 'COMPLETED',
+      completedAt: new Date('2026-10-20T10:00:00Z'),
+      completedById: assigneeId,
+    });
+    expect(
+      (await errorOf(() => service.complete(completedTaskId, completeInput(), actor(assigneeId)))).code,
+    ).toBe('INVALID_TASK_TRANSITION');
+    expect(fake.events.filter((row) => row.action === 'COMPLETED')).toHaveLength(0);
+  });
+
+  it('direktna kilometraža mora odgovarati normalizovanoj i zahtijeva vozilo', async () => {
+    const { fake, service } = setup();
+    const version = fake.versions.get(genericVersionId)!;
+    const definition = version.definition as Row;
+    const firstSection = (definition.sections as Row[])[0]!;
+    (firstSection.fields as Row[]).push({
+      key: 'odometerKm',
+      type: 'INTEGER',
+      label: 'Kilometraža',
+      order: 99,
+      validation: { min: 0, max: 2147483647 },
+    });
+    definition.normalizedName = [
+      ...((definition.normalizedName as Row[]) ?? []),
+      { fieldKey: 'odometerKm', column: 'odometerKm', transform: 'TO_INT' },
+    ];
+
+    const taskId = seedInProgress(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff212',
+      code: 'Z-2026-000212',
+    });
+    addAttachment(fake);
+    const mismatch = await errorOf(() =>
+      service.complete(
+        taskId,
+        completeInput({
+          formData: { ...validCompletionForm(), odometerKm: 148000 },
+          odometerKm: 148001,
+        }),
+        actor(assigneeId),
+      ),
+    );
+    expect(mismatch.code).toBe('VALIDATION_ERROR');
+    expect(mismatch.details?.some((item) => item.path.join('.') === 'odometerKm')).toBe(true);
+    expect(fake.tasks.get(taskId)).toMatchObject({ status: 'IN_PROGRESS', version: 2 });
+
+    const result = await service.complete(
+      taskId,
+      completeInput({
+        formData: { ...validCompletionForm(), odometerKm: 148000 },
+        odometerKm: 148000,
+      }),
+      actor(assigneeId),
+    );
+    expect(result.data.odometerKm).toBe(148000);
+
+    const noVehicle = setup();
+    const noVehicleTaskId = seedInProgress(noVehicle.fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff213',
+      code: 'Z-2026-000213',
+      taskTypeId: customTypeId,
+      vehicleId: null,
+      formSchemaId: boundFormId,
+      formSchemaVersionId: boundVersionId,
+    });
+    const noVehicleError = await errorOf(() =>
+      noVehicle.service.complete(noVehicleTaskId, completeInput({ odometerKm: 1000 }), actor(assigneeId)),
+    );
+    expect(noVehicleError.code).toBe('VALIDATION_ERROR');
+    expect(noVehicleError.details?.some((item) => item.path.join('.') === 'odometerKm')).toBe(true);
+  });
+});
+
 describe('TasksController — metadata', () => {
   it('rute imaju odvojene permisije, audit i 201 za kreiranje', () => {
     const permissions = (method: unknown): unknown =>
@@ -1661,12 +2129,23 @@ describe('TasksController — metadata', () => {
     expect(permissions(TasksController.prototype.create)).toEqual(['task:create']);
     expect(permissions(TasksController.prototype.update)).toEqual(['task:update']);
     expect(permissions(TasksController.prototype.claim)).toEqual(['task:claim']);
+    expect(permissions(TasksController.prototype.complete)).toEqual([
+      'task:complete',
+      'task:complete_override',
+    ]);
+    expect(mode(TasksController.prototype.complete)).toBe('ANY');
     expect(permissions(TasksController.prototype.cancel)).toEqual(['task:cancel']);
     expect(permissions(TasksController.prototype.reopen)).toEqual(['task:reopen']);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.create)).toBe(201);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.claim)).toBe(200);
+    expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.complete)).toBe(200);
     expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.claim)).toMatchObject({
       action: 'CLAIM',
+      severity: 'INFO',
+      resource: 'Task',
+    });
+    expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.complete)).toMatchObject({
+      action: 'COMPLETE',
       severity: 'INFO',
       resource: 'Task',
     });
@@ -1687,6 +2166,15 @@ describe('TasksController — metadata', () => {
     expect(updateTaskSchema.safeParse({ version: 0 }).success).toBe(false);
     expect(cancelTaskSchema.safeParse({ version: 0 }).success).toBe(false);
     expect(claimTaskSchema.safeParse({ version: 0 }).success).toBe(false);
+    expect(completeTaskSchema.safeParse({ version: 0, status: 'COMPLETED' }).success).toBe(false);
+    expect(completeTaskSchema.safeParse({ version: 0, formValues: {} }).success).toBe(false);
+    expect(completeTaskSchema.safeParse({ version: 0, attachmentIds: [photoId, photoId] }).success).toBe(
+      false,
+    );
+    expect(completeTaskSchema.parse({ version: 0 })).toMatchObject({
+      formData: {},
+      attachmentIds: [],
+    });
     expect(taskAvailableQuerySchema.safeParse({ status: 'OPEN' }).success).toBe(false);
   });
 });

@@ -41,7 +41,7 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | **P4** | Admin kreira zadatak na mobilu | 5, 6 | e2e | Maestro `mobile-task-create.yaml` | login administratora → FAB → wizard → vozilo/tip → potvrdi → zadatak vidljiv u listi i na webu; bez `task:create` → FAB ne postoji **i** `POST /tasks` → 403 |
 | **P5** | Oba korisnika vide/dobiju slobodan zadatak | 5, 6 | integration | `task-open-visibility.integration.spec.ts` | zadatak `OPEN_CLAIM` s 2 pozvana → `GET /tasks/available` vraća zadatak za oba; `Notification` postoji za oba (unique `notificationKey`); outbox `PROCESSED`; nakon claim-a drugi korisnik vidi `assigneeName` |
 | **P6** | Paralelno preuzimanje → tačno 1 izvršilac | 5, 6 | **stress** | `task-claim-concurrency.stress.spec.ts` | `Promise.all` od **200** `POST /tasks/:id/claim` (različiti korisnici + isti korisnik 2×) → tačno **jedan** 200, ostali 409; `Task.status='IN_PROGRESS'`; `TaskAssignment` ima **1** red s `role='ASSIGNEE'`; `TaskEvent` ima **1** `CLAIMED`; ponovljeni poziv s istim `Idempotency-Key` vraća isti odgovor bez novog reda |
-| **P7** | Samo izvršilac/ovlaštena osoba završava | 5 | integration | `task-complete-authorization.integration.spec.ts` | korisnik B (nije izvršilac, nema override) → 403 `NOT_ASSIGNEE`; izvršilac → 200; korisnik C s `task:complete_override` → 200 + audit `OVERRIDE_COMPLETED` + `completedById=C` |
+| **P7** | Samo izvršilac/ovlaštena osoba završava | 5 | integration | `task-complete-authorization.integration.spec.ts` | korisnik B (nije izvršilac, nema override) → 403 `NOT_ASSIGNEE`; izvršilac → 200; korisnik C s `task:complete_override` → 200 + `TaskEvent(OVERRIDE_COMPLETED)` + AuditLog `COMPLETE` s `override=true` + `completedById=C` |
 | **P8** | Push greška ne briše zadatak; retry bez duplikata | 5 | integration | `outbox-fcm-failure.integration.spec.ts` | FCM mock vraća 500/timeout; zadatak ostaje `IN_PROGRESS`; `OutboxEvent` prelazi `PENDING→PROCESSING→FAILED→…`; `Notification` **jedan** red (unique key); nakon oporavka `Delivery=SENT`; `NotificationDelivery.attempts>1`; nijedan `Task` red nije obrisan/promijenjen |
 | **P9** | Forma: kreirati, validirati, preview, objaviti | 2 | e2e + unit | `form-publish-workflow.e2e.spec.ts`, `form-engine.unit.spec.ts` | draft → validate (10 provjera) → preview (web + mobilni fixture snapshot) → publish bez `changeNote` → 422 → publish s bilješkom → 200, verzija +1, prethodna `RETIRED`; pokuša li se `PUT` nad objavljenom → 422/DB trigger exception |
 | **P10** | Stari zapisi vezani za originalnu verziju | 2, 3 | integration | `form-version-binding.integration.spec.ts` | zapis kreiran s v2; nakon objave v3 → `GET /tasks/:id` vraća `formSchemaVersion=2` i renderuje v2 polja (uklj. polje koje u v3 ne postoji); novi zapis → v3 |
@@ -519,10 +519,10 @@ generičku formu. DI regresija je dopunjena `TasksService` i
 
 Lažni klijent izvršava transakcijski callback bez rollbacka i ne dokazuje
 stvarni PostgreSQL advisory lock za kod, `FOR UPDATE`, jedinstvenost pod
-konkurencijom, puni Nest HTTP lanac ni Coolify bazu. Atomski claim opisan
-je u sljedećem odjeljku; završetak i P4–P8 ostaju zasebne cjeline. Ova
-cjelina dokazuje samo upis DB outbox redova, ne worker, FCM ni SSE
-isporuku.
+konkurencijom, puni Nest HTTP lanac ni Coolify bazu. Atomski claim i
+završetak opisani su u sljedećim odjeljcima; P4–P8 integracijski dokazi
+ostaju zasebne cjeline. Ova cjelina dokazuje samo upis DB outbox redova,
+ne worker, FCM ni SSE isporuku.
 
 ### Slobodni zadaci i atomski claim — treća cjelina Faze 5
 
@@ -550,3 +550,39 @@ Paralelni jedinični test nije P6 dokaz: lažni klijent izvršava
 zaključavanja redova, djelimičnog jedinstvenog indeksa, rollbacka,
 Redis `Idempotency-Key` replaya i punog Nest HTTP lanca. P5/P6 i dalje
 zahtijevaju integration/stress test iz §3 nad pravom bazom na Coolifyu.
+
+### Završetak i override — četvrta cjelina Faze 5
+
+`apps/api/test/unit/tasks.spec.ts` sada ima 35 testova; novih 6 pokriva:
+uspješan završetak izvršioca koji spaja nacrt, prolazi punu formu,
+normalizuje trošak, upisuje trajanje iz `claimedAt`, veže fotografiju
+polja i opći prilog, stvara komentar, jedan `COMPLETED` događaj i jedan
+`TASK_COMPLETED` outbox; `ON_COMPLETE` minimum fotografija, nepoznat
+prilog (`ATTACHMENT_UNKNOWN`), tuđi opći prilog i zadržan `ON_CLAIM`
+zahtjev pri završetku; P7 klasifikaciju na jediničnom nivou — vidljivi
+neizvršilac `403 NOT_ASSIGNEE`, nevidljivi zadatak `404`, izvršilac bez
+permisije `PERMISSION_DENIED` i izvršilac izvan `VEHICLE_IDS` opsega
+`SCOPE_DENIED`; override korisnika koji završava tuđi zadatak uz
+`completedById` jednak akteru, razlog, `OVERRIDE_COMPLETED`, očuvanu fazu
+prethodno vezane fotografije i obavijest izvršiocu, dok isti korisnik na
+vlastitom zadatku daje obični `COMPLETED`; CAS `VERSION_CONFLICT` i
+`INVALID_TASK_TRANSITION` iz `OPEN`/`COMPLETED`; te direktnu kilometražu
+koja mora odgovarati normalizovanoj vrijednosti i nije dozvoljena bez
+vozila. Metadata test dodatno čuva obje completion permisije u `ANY`
+načinu, HTTP `200`, audit `COMPLETE` i strict DTO bez starog naziva
+`formValues`.
+
+`packages/shared/test/schemas.spec.ts` sada ima 33 testa; novi test čuva
+CAS verziju, prazne podrazumijevane `formData`/`attachmentIds`, trimovanje
+komentara i override razloga, granice kilometraže, zabranu duplih općih
+priloga i odbijanje serverskih polja. Registar u
+`prisma-select-fields.spec.ts` proširen je za `TASK_ATTACHMENT_SELECT`;
+ciljani API prolaz za zadatke i selecte je 40/40, a shared sheme 33/33.
+
+Ovi testovi nisu P7 integracijski dokaz: lažni klijent nema stvarni
+PostgreSQL `FOR UPDATE`, transakcijski rollback, Decimal upis, provjeru
+fajlova na disku, Redis replay, puni Nest auth/audit lanac ni Coolify
+bazu. P7 fajl `task-complete-authorization.integration.spec.ts` tek treba
+nad pravom bazom potvrditi korisnika B (`403 NOT_ASSIGNEE`), izvršioca
+(`200`) i korisnika C (`200`, AuditLog `COMPLETE` s `override=true`,
+TaskEvent `OVERRIDE_COMPLETED`, `completedById=C`).

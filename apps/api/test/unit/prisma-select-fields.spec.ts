@@ -49,6 +49,11 @@ const SELECT_REGISTRY: ReadonlyArray<{ file: string; constant: string; model: st
     model: 'TaskAssignment',
   },
   { file: 'modules/tasks/tasks.service.ts', constant: 'TASK_EVENT_SELECT', model: 'TaskEvent' },
+  {
+    file: 'modules/tasks/tasks.service.ts',
+    constant: 'TASK_ATTACHMENT_SELECT',
+    model: 'Attachment',
+  },
   { file: 'modules/tires/tires.service.ts', constant: 'TIRE_SET_SELECT', model: 'TireSet' },
   { file: 'modules/tires/tires.service.ts', constant: 'TIRE_SELECT', model: 'Tire' },
   {

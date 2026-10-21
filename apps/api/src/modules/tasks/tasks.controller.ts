@@ -1,8 +1,9 @@
-/** Zadaci — jezgra Faze 5 i atomsko preuzimanje slobodnih zadataka. */
+/** Zadaci — jezgra Faze 5, atomsko preuzimanje i završetak zadataka. */
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   cancelTaskSchema,
   claimTaskSchema,
+  completeTaskSchema,
   createTaskSchema,
   reopenTaskSchema,
   taskAvailableQuerySchema,
@@ -11,6 +12,7 @@ import {
   updateTaskSchema,
   type CancelTaskInput,
   type ClaimTaskInput,
+  type CompleteTaskInput,
   type CreateTaskInput,
   type ReopenTaskInput,
   type TaskAvailableQuery,
@@ -136,6 +138,34 @@ export class TasksController {
       .set('status', result.data.status)
       .set('assigneeUserId', result.data.assigneeUserId)
       .set('claimedAt', result.data.claimedAt);
+    return result.data;
+  }
+
+  @Post(':id/complete')
+  @HttpCode(HttpStatus.OK)
+  @RequireAnyPermission('task:complete', 'task:complete_override')
+  @Audit('COMPLETE', { severity: 'INFO', resource: 'Task' })
+  async complete(
+    @Param('id', new ZodValidationPipe(taskIdSchema, 'params')) id: string,
+    @Body(new ZodValidationPipe(completeTaskSchema, 'body')) input: CompleteTaskInput,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ) {
+    const result = await this.tasks.complete(id, input, actorContext(actor, request));
+    const audit = AuditContext.from(request)
+      .setEntityId(id)
+      .setBefore(result.before)
+      .setAfter(result.after)
+      .setResource('Task')
+      .set('code', result.data.code)
+      .set('status', result.data.status)
+      .set('assigneeUserId', result.data.assigneeUserId)
+      .set('completedById', result.data.completedById)
+      .set('completedAt', result.data.completedAt)
+      .set('durationMinutes', result.data.durationMinutes)
+      .set('override', result.meta?.['override'] ?? false);
+    if (input.reason) audit.set('reason', input.reason);
+    if (result.meta?.['commentId']) audit.set('commentId', result.meta['commentId']);
     return result.data;
   }
 

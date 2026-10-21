@@ -22,6 +22,7 @@ import {
   archiveTaskTypeSchema,
   cancelTaskSchema,
   claimTaskSchema,
+  completeTaskSchema,
   createTaskSchema,
   createTaskTypeSchema,
   reopenTaskSchema,
@@ -562,6 +563,46 @@ describe('zadaci (docs/07 §2.11)', () => {
         dueTo: '2026-10-21T00:00:00Z',
       }).success,
     ).toBe(false);
+  });
+
+  it('završetak nosi CAS verziju, završnu formu, priloge, komentar i kilometražu', () => {
+    const attachmentId = '99999999-9999-4999-8999-999999999999';
+    expect(completeTaskSchema.parse({ version: 4 })).toEqual({
+      version: 4,
+      formData: {},
+      attachmentIds: [],
+    });
+    expect(
+      completeTaskSchema.parse({
+        version: 5,
+        formData: { photosAfter: [attachmentId] },
+        attachmentIds: [attachmentId],
+        comment: '  Završeno  ',
+        odometerKm: 148230,
+        reason: '  Provjereno na terenu  ',
+      }),
+    ).toEqual({
+      version: 5,
+      formData: { photosAfter: [attachmentId] },
+      attachmentIds: [attachmentId],
+      comment: 'Završeno',
+      odometerKm: 148230,
+      reason: 'Provjereno na terenu',
+    });
+
+    for (const patch of [
+      {},
+      { version: -1 },
+      { version: 1, formValues: {} },
+      { version: 1, status: 'COMPLETED' },
+      { version: 1, completedById: assigneeId },
+      { version: 1, attachmentIds: [attachmentId, attachmentId] },
+      { version: 1, odometerKm: -1 },
+      { version: 1, odometerKm: 1.5 },
+      { version: 1, reason: 'x' },
+    ]) {
+      expect(completeTaskSchema.safeParse(patch).success).toBe(false);
+    }
   });
 
   it('odgovori zadatka su strict i nose snapshot forme, dodjele i događaje', () => {
