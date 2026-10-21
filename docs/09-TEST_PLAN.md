@@ -73,6 +73,8 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | Reset lozinke tokenom (`/auth/reset-password`: hash, istek, jednokratnost, politika, revokacija) | `test/unit/auth-service.spec.ts` (describe „reset lozinke tokenom") | 5 | `auth.service.ts` 95 % / 86 % |
 | Konverzija datuma (`toDatabaseDate`: date-only → UTC ponoć, `Date` prolazi, `null`, odbijanje neispravnog i `2026-02-30`) | `test/unit/dates.spec.ts` | 5 | `src/common/dates.ts` |
 | Servisi — pregled: filteri/paginacija, soft-delete, datumi, novac, sortiranje, validacija i permisije kontrolera | `test/unit/services-service.spec.ts` | 7 | `src/modules/services` |
+| Servisi — potpuna izmjena: zaključavanje vozila, datum/km/rokovi, novo SERVICE očitanje, regresija, ponovni obračun rokova i CAS | `test/unit/services-full-update.spec.ts` | 10 | `src/modules/services` |
+| Servisi — web model izmjene: početne vrijednosti, diff payload, `null` brisanje i lokalna validacija datuma/km/rokova | `apps/web/src/features/services/service-edit-model.test.ts` | 6 | `apps/web/src/features/services` |
 | Prisma `select` polja prema šemi (svaki `*_SELECT` koristi samo polja svog modela, registar pokriva sve select konstante, inline select polja postoje, regresija `Driver.archivedAt` → `GET /drivers` 500) | `test/unit/prisma-select-fields.spec.ts` | 5 | `src/modules/**` vs `prisma/schema.prisma` |
 | DI wiring (Nest bootuje servise/kontrolere Faze 3 i 4 te globalni `IdempotencyInterceptor`; regresija za pad `AttachmentsService (PrismaService, ?)` — interfejs u konstruktoru bez `@Inject` tokena) | `test/unit/di-wiring.spec.ts` | 22 | `src/modules/**`, `src/common/interceptors` |
 | Prilozi — bajtovi (magic bytes, SHA-256, `storageKey`, zaštita putanje, uklanjanje EXIF-a iz JPEG/PNG) | `test/unit/attachment-files.spec.ts` | 12 | `src/modules/attachments` |
@@ -305,10 +307,26 @@ decimale cijene, razdvajanje hiljada i izostavljanje suvišnih nula količine.
 Vizuelna provjera na korisničkom deployu ostaje potrebna; testovi ne porede screenshotove.
 
 `apps/api/test/unit/services-update.spec.ts` — 8 testova opisne izmjene:
-CAS, zapisna RETIRED forma, audit snapshot, očuvanje km/datuma/rokova/troška,
-zastarjela verzija prije upisa i konkurentna promjena tokom validacije,
-404, blokada neaktivnog servisa/arhiviranog vozila, strict DTO i permisija.
-Transakcijski fake ne dokazuje stvarni PostgreSQL rollback/konkurenciju.
+CAS, zapisna RETIRED forma, audit snapshot, očuvanje km/datuma/rokova/troška
+kad se mijenjaju samo opisna polja, zastarjela verzija prije upisa i
+konkurentna promjena tokom validacije, 404, blokada neaktivnog
+servisa/arhiviranog vozila, strict prošireni DTO i permisija.
+
+`apps/api/test/unit/services-full-update.spec.ts` — 10 testova potpune
+izmjene nad lažnom transakcijom: redoslijed zaključavanja vozila, Date
+vrijednosti za `@db.Date`, sinhronizacija mapiranog datuma u `formData`,
+novo SERVICE očitanje i podizanje km vozila, ponovni obračun rokova kad
+servis prestane biti najnoviji, zaštita roka novijeg servisa, regresija ispod
+zaključane trenutne km, spuštanje snapshota na već korigovanu trenutnu km,
+brisanje km/rokova bez promjene trenutne km, efektivni rokovi i budući datum,
+arhivirano vozilo, CAS konflikt bez očitanja/vozila te audit meta kontrolera.
+
+`apps/web/src/features/services/service-edit-model.test.ts` — 6 testova:
+početne vrijednosti i `null` kontrole, PATCH samo sa stvarnim izmjenama,
+brisanje opcionalnih polja kroz `null`, bez izmjena nema payloada, odbijanje
+neispravnog datuma/km te efektivni odnos servisa i sljedećeg roka.
+Transakcijski/API fakeovi ne dokazuju stvarni PostgreSQL `FOR UPDATE`,
+rollback ni konkurenciju; web testovi ne dokazuju vizuelni prikaz.
 
 `apps/api/test/unit/tires-service.spec.ts` — 7 testova pregleda montaža:
 filteri i paginacija, soft-delete, boolean true/false, validacija UUID/query,

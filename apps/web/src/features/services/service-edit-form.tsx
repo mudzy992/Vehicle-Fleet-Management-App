@@ -1,35 +1,38 @@
-/** Samo opisni podaci: stavke i kilometraža se ne prepisuju ovom formom. */
+/** Potpuna izmjena osnovnih podataka servisa; trošak ostaje u stavkama računa. */
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ServiceRecord } from '@vfm/shared/schemas';
 import { Button, Card, CardContent, CardHeader } from '../../components/ui/index.js';
 import { api, ApiError } from '../../lib/api.js';
 import { CoreFields, type CoreFieldSpec } from '../forms/form-fields.js';
+import { buildServiceUpdatePayload, initialServiceEditValues } from './service-edit-model.js';
 const FIELDS: readonly CoreFieldSpec[] = [
+  { key: 'serviceDate', label: 'Datum servisa', kind: 'DATE', required: true },
   { key: 'serviceType', label: 'Vrsta servisa', kind: 'TEXT', required: true },
   { key: 'workshopName', label: 'Radionica', kind: 'TEXT' },
   { key: 'description', label: 'Opis', kind: 'MULTILINE' },
+  {
+    key: 'odometerKm',
+    label: 'Kilometraža servisa (km)',
+    kind: 'INTEGER',
+    hint: 'Manja od trenutne km vozila zahtijeva zasebnu korekciju kilometraže.',
+  },
+  { key: 'nextServiceDueDate', label: 'Sljedeći servis — datum', kind: 'DATE' },
+  { key: 'nextServiceDueKm', label: 'Sljedeći servis — km', kind: 'INTEGER' },
 ];
 export function ServiceEditForm({ record, onClose }: { record: ServiceRecord; onClose: () => void }) {
   const client = useQueryClient();
-  const [values, setValues] = useState<Record<string, string>>({
-    serviceType: record.serviceType,
-    workshopName: record.workshopName ?? '',
-    description: record.description ?? '',
-  });
+  const [values, setValues] = useState<Record<string, string>>(() => initialServiceEditValues(record));
   const [message, setMessage] = useState('');
   const save = useMutation({
-    mutationFn: () =>
-      api.patch(`/services/${record.id}`, {
-        version: record.version,
-        serviceType: (values.serviceType ?? '').trim(),
-        workshopName: (values.workshopName ?? '').trim() || null,
-        description: (values.description ?? '').trim() || null,
-      }),
+    mutationFn: () => api.patch(`/services/${record.id}`, buildServiceUpdatePayload(record, values)),
     onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: ['services'] }),
         client.invalidateQueries({ queryKey: ['service-items', record.id] }),
+        client.invalidateQueries({ queryKey: ['vehicle', record.vehicleId] }),
+        client.invalidateQueries({ queryKey: ['vehicles'] }),
+        client.invalidateQueries({ queryKey: ['odometer', record.vehicleId] }),
       ]);
       onClose();
     },
@@ -46,7 +49,7 @@ export function ServiceEditForm({ record, onClose }: { record: ServiceRecord; on
     <Card>
       <CardHeader
         title="Izmjena servisa"
-        description={`Verzija zapisa ${record.version}. Datum, kilometraža, rokovi i trošak se ovdje ne mijenjaju.`}
+        description={`Verzija zapisa ${record.version}. Trošak se mijenja kroz stavke računa; rokovi vozila se ponovo računaju nakon snimanja.`}
       />
       <CardContent>
         <form

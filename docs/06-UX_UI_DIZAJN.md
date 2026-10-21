@@ -836,15 +836,18 @@ Na uskom ekranu tabela ima horizontalno pomjeranje umjesto prelamanja iznosa.
 Forma koristi zasebne blokove po stavci i prilagodljivi raspored 1/2/3 kolone;
 količina/cijena otvaraju decimalnu tastaturu. API ugovor se ne mijenja.
 
-### Opisna izmjena servisa — Faza 4
+### Potpuna izmjena servisa — Faza 4
 
 Profil vozila → Servisi → **Uredi servis** uz `service:update` na aktivnom redu.
-`features/services/service-edit-form.tsx` uređuje vrstu, radionicu i opis.
-Prazna radionica/opis šalju se kao `null`. Forma jasno navodi da se datum,
-kilometraža, rokovi i trošak ovdje ne mijenjaju. Verzijski konflikt čuva unos
-u otvorenoj formi; zatvaranje i ponovno otvaranje učitava novu verziju.
-Nakon uspjeha osvježavaju se lista servisa i verzija stavki računa.
-Potpuna izmjena datum/km/rokovi i brisanje servisa još nisu implementirani.
+`features/services/service-edit-form.tsx` uređuje datum, vrstu, radionicu,
+opis, kilometražu servisa te datum/km sljedećeg servisa. Model
+`service-edit-model.ts` šalje samo stvarne izmjene; prazna opcionalna polja
+šalju se kao `null`, a neispravan datum/kilometraža i obrnuti rokovi odbijaju
+se prije zahtjeva. Trošak ostaje u stavkama računa. Forma upozorava da manja
+km od trenutne kilometraže vozila zahtijeva zasebnu korekciju. Verzijski
+konflikt čuva unos u otvorenoj formi; zatvaranje i ponovno otvaranje učitava
+novu verziju. Nakon uspjeha osvježavaju se servisi, stavke, vozilo, lista
+vozila i očitanja kilometraže. Brisanje servisa još nije implementirano.
 
 ### Gume vozila — pregled (Faza 4)
 

@@ -2333,16 +2333,34 @@ export const serviceItemsResponseSchema = z
   .strict();
 export type ServiceItemsResponse = z.output<typeof serviceItemsResponseSchema>;
 
-/** Izmjena opisa servisa ne mijenja km, rokove, formu ni zbir računa. */
+/** Potpuna izmjena servisa: datum/km/rokovi idu kroz istu CAS transakciju; zbir mijenjaju samo stavke. */
 export const updateServiceSchema = z
   .object({
     version: z.number().int().nonnegative(),
+    serviceDate: z.iso.date().optional(),
     serviceType: z.string().trim().min(1).max(120).optional(),
     workshopName: z.string().trim().max(200).nullable().optional(),
     description: z.string().trim().max(2000).nullable().optional(),
+    odometerKm: z.number().int().min(0).max(2147483647).nullable().optional(),
+    nextServiceDueDate: z.iso.date().nullable().optional(),
+    nextServiceDueKm: z.number().int().min(0).max(2147483647).nullable().optional(),
   })
   .strict()
-  .refine((value) => Object.keys(value).length > 1, { message: 'Nema šta mijenjati.' });
+  .refine((value) => Object.keys(value).length > 1, { message: 'Nema šta mijenjati.' })
+  .refine(
+    (value) =>
+      value.serviceDate === undefined ||
+      !value.nextServiceDueDate ||
+      value.nextServiceDueDate >= value.serviceDate,
+    { path: ['nextServiceDueDate'], message: 'Sljedeći servis ne može prethoditi ovom servisu.' },
+  )
+  .refine(
+    (value) =>
+      value.odometerKm == null ||
+      value.nextServiceDueKm == null ||
+      value.nextServiceDueKm >= value.odometerKm,
+    { path: ['nextServiceDueKm'], message: 'Sljedeći servis ne može biti na manjoj kilometraži.' },
+  );
 export type UpdateServiceInput = z.output<typeof updateServiceSchema>;
 
 /** Faza 4 — historija montaža guma. */

@@ -40,15 +40,19 @@ export class ServicesController {
   async update(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(updateServiceSchema, 'body')) input: UpdateServiceInput,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
     @Req() request: VfmRequest,
   ) {
-    const result = await this.services.update(id, input);
-    AuditContext.from(request)
+    const result = await this.services.update(id, input, actor?.id);
+    const audit = AuditContext.from(request)
       .setEntityId(id)
       .setResource('ServiceRecord')
       .setBefore(result.before)
       .setAfter(result.after)
       .set('vehicleId', result.data.vehicleId);
+    if (result.vehicleBefore && result.vehicleAfter) {
+      audit.set('vehicleBefore', result.vehicleBefore).set('vehicleAfter', result.vehicleAfter);
+    }
     return result.data;
   }
   @Get(':id')

@@ -272,6 +272,7 @@ sistem, `ARCHIVED` je arhiva evidencije.
 |---|---|---|---|
 | GET | `/services` | `service:view` | `vehicleId`, `status`, `serviceType`, `q` (vrsta/radionica/opis), paginacija; sortiranje `serviceDate`, `totalCost`, `createdAt`, `serviceType`; default datum opadajuće, stabilni ID kao drugi ključ |
 | GET | `/services/:id` | `service:view` | pregled osnovne evidencije; nepostojeći/soft-delete → `404 NOT_FOUND` |
+| PATCH | `/services/:id` | `service:update` | potpuna CAS izmjena datuma/km/rokova i opisnih polja; detalji u §7.4 |
 
 Odgovor liste: `{items, page, pageSize, total, totalPages}`; zapis nosi
 `formSchemaId`, `formSchemaVersionId`, `version`, datum, kilometražu, vrstu,
@@ -281,7 +282,7 @@ Stavke računa i puna dinamička forma još nisu dio odgovora pregleda.
 
 **Planirano u narednim cjelinama (nije još dostupno):**
 
-`PATCH/DELETE /services/:id`, `GET/POST/PATCH/DELETE /services/:id/items`,
+`DELETE /services/:id`, zasebni endpointi po jednoj stavci računa,
 `POST /services/:id/attachments`. Pri kreiranju se opciono upisuje `OdometerReading` (ista
 transakcija) i ažurira `Vehicle.nextServiceDue*`.
 
@@ -645,21 +646,38 @@ uređivanje ide kroz ovu verzionisanu zamjenu cijelog računa.
 Nema novih ENV/Redis ključeva ni migracija. Jedinični i DI testovi su dodani;
 HTTP smoke-test sa stvarnom bazom i konkurentnim upisima nije izvršen u sandboxu.
 
-### 7.4 Opisna izmjena servisa — Faza 4
+### 7.4 Potpuna izmjena servisa — Faza 4
 
 `PATCH /services/:id` uz `service:update`, audit `UPDATE` prije/poslije.
-Tijelo: `version` i barem jedno od `serviceType` (neprazan tekst),
-`workshopName` ili `description` (tekst ili `null` za brisanje).
-Odgovor je osnovna servisna evidencija kao na GET-u. Svako drugo polje je
-odbijeno zajedničkim strict Zod DTO-om — km, datum, rokovi i trošak se ne mijenjaju.
+Tijelo: `version` i barem jedno od `serviceDate`, `serviceType`,
+`workshopName`, `description`, `odometerKm`, `nextServiceDueDate` ili
+`nextServiceDueKm`. Radionica/opis i km/rokovi mogu se obrisati s `null`.
+Odgovor je osnovna servisna evidencija kao na GET-u. Strict DTO i dalje
+odbija `totalCost`, vozilo, status i verziju forme; trošak mijenjaju samo
+stavke računa iz §7.3.
 
-Čitanje, validacija zapisne forme i CAS upis su u istoj transakciji. Verzija
-forme ostaje ista (uključujući RETIRED), mapirana radionica se usklađuje s formData.
-CAS provjerava verziju, soft-delete, aktivni servis i nearhivirano/neobrisano
-vozilo. Zastarjela verzija → 409, nepostojeći/obrisan zapis → 404, neaktivna
-servisna evidencija/arhivirano vozilo → validacijska greška. Verzija raste i
-štiti od konkurentnog uređivanja stavki računa. Nema novih migracija/ENV/Redis
-ključeva. Provjera sa stvarnom bazom nije izvršena iz sandboxa.
+Čitanje, validacija zapisne forme (uključujući RETIRED), sinhronizacija
+mapiranih osnovnih polja u `formData` i CAS upis su u istoj transakciji.
+Kad se mijenja datum/km/rok, vozilo se zaključava `FOR UPDATE`; efektivni
+datum ne smije biti u budućnosti, sljedeći datum ne smije prethoditi servisu,
+a sljedeća km ne smije biti manja od km ovog servisa. CAS provjerava verziju,
+soft-delete, aktivni servis i nearhivirano/neobrisano vozilo. Zastarjela
+verzija → 409, nepostojeći/obrisan zapis → 404, neaktivna evidencija ili
+arhivirano vozilo → validacijska greška.
+
+PATCH ne zaobilazi zasebnu korekciju kilometraže vozila: promijenjena km
+servisa manja od zaključane trenutne km vozila → `422 ODOMETER_REGRESSION`.
+Snapshot se smije spustiti na već zasebno korigovanu trenutnu vrijednost bez
+novog očitanja. Ako veća km servisa podiže trenutnu km vozila, u istoj
+transakciji nastaje novo `OdometerReading` (`SERVICE`, referenca na servis),
+bez prepisivanja historije očitanja. Brisanje km sa servisa ne mijenja i ne
+briše trenutnu/historijsku kilometražu vozila. Nakon upisa se
+`Vehicle.nextServiceDue*` ponovo računa iz najnovijeg aktivnog servisa po
+datumu, vremenu unosa i ID-u; verzija vozila raste samo ako se njegova
+denormalizovana km ili rok stvarno promijeni. Audit nosi servis prije/poslije
+i, za izmjene rasporeda, snapshot vozila prije/poslije u metapodacima.
+Nema novih migracija/ENV/Redis ključeva. Provjera sa stvarnom bazom nije
+izvršena iz sandboxa.
 
 ### 7.5 Gume — kompleti, pojedinačne gume i ciklusi montaže
 

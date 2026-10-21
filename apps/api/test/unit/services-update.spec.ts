@@ -35,20 +35,19 @@ function setup() {
       findUniqueOrThrow: vi.fn().mockResolvedValue({ ...row, workshopName: 'Nova', version: 4 }),
     },
     formSchemaVersion: {
-      findUnique: vi
-        .fn()
-        .mockResolvedValue({
-          id,
-          formSchemaId: id,
-          version: 1,
-          status: 'RETIRED',
-          formSchema: { subject: 'SERVICE' },
-          definition: SEED_FORMS.find((f) => f.subject === 'SERVICE')!.definition,
-        }),
+      findUnique: vi.fn().mockResolvedValue({
+        id,
+        formSchemaId: id,
+        version: 1,
+        status: 'RETIRED',
+        formSchema: { subject: 'SERVICE' },
+        definition: SEED_FORMS.find((f) => f.subject === 'SERVICE')!.definition,
+      }),
     },
     formSchema: { findFirst: vi.fn() },
   };
   return {
+    row,
     tx,
     svc: new ServicesService({
       $transaction: async (fn: (value: typeof tx) => Promise<unknown>) => fn(tx),
@@ -93,18 +92,13 @@ describe('Opisna izmjena servisa', () => {
     expect(tx.serviceRecord.updateMany).not.toHaveBeenCalled();
   });
   it('konkurentna izmjena tokom validacije se odbija CAS-om', async () => {
-    const { svc, tx } = setup();
+    const { row, svc, tx } = setup();
     tx.serviceRecord.updateMany.mockResolvedValue({ count: 0 });
     // Prvi read mora vidjeti v3, drugi v4.
     tx.serviceRecord.findFirst
       .mockReset()
-      .mockResolvedValueOnce({
-        id,
-        version: 3,
-        formSchemaVersionId: id,
-        formData: { serviceDate: '2026-01-20', totalCost: { amount: 10000, currency: 'BAM' } },
-      })
-      .mockResolvedValue({ id, version: 4 });
+      .mockResolvedValueOnce({ ...row })
+      .mockResolvedValue({ ...row, version: 4 });
     await expect(svc.update(id, { version: 3, description: 'Novo' })).rejects.toMatchObject({
       code: 'VERSION_CONFLICT',
     });
@@ -123,15 +117,32 @@ describe('Opisna izmjena servisa', () => {
       code: 'VALIDATION_ERROR',
     });
   });
-  it('DTO odbija verziju bez promjene i zaštićene kolone', () => {
+  it('DTO odbija verziju bez promjene, zaštićene kolone i obrnute rokove', () => {
     for (const input of [
       { version: 3 },
-      { version: 3, odometerKm: 100 },
       { version: 3, totalCost: 1 },
+      { version: 3, vehicleId: id },
       { version: 3, serviceType: '' },
+      { version: 3, serviceDate: '2026-02-01', nextServiceDueDate: '2026-01-01' },
+      { version: 3, odometerKm: 2000, nextServiceDueKm: 1999 },
+      { version: 3, odometerKm: 1.5 },
     ])
       expect(updateServiceSchema.safeParse(input).success).toBe(false);
-    expect(updateServiceSchema.parse({ version: 3, workshopName: null, description: null })).toMatchObject({
+    expect(
+      updateServiceSchema.parse({
+        version: 3,
+        serviceDate: '2026-01-21',
+        odometerKm: null,
+        nextServiceDueDate: null,
+        nextServiceDueKm: null,
+        workshopName: null,
+        description: null,
+      }),
+    ).toMatchObject({
+      serviceDate: '2026-01-21',
+      odometerKm: null,
+      nextServiceDueDate: null,
+      nextServiceDueKm: null,
       workshopName: null,
       description: null,
     });
