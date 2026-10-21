@@ -19,6 +19,15 @@ import {
   passwordSchema,
   refreshSchema,
   resetPasswordSchema,
+  archiveTaskTypeSchema,
+  createTaskTypeSchema,
+  replaceTaskCompletionRequirementsSchema,
+  taskCompletionRequirementInputSchema,
+  taskCompletionRequirementsResponseSchema,
+  taskTypeDetailSchema,
+  taskTypeListQuerySchema,
+  taskTypeListResponseSchema,
+  updateTaskTypeSchema,
 } from '../dist/schemas.js';
 import { ROLE_ALLOWED_CLIENT_TYPES, SUPER_ADMIN_ROLE } from '../dist/index.js';
 import * as envEntry from '../dist/env-schema.js';
@@ -241,6 +250,186 @@ describe('auth DTO šeme (docs/07 §2.1)', () => {
     const normal = ROLE_ALLOWED_CLIENT_TYPES.OBICNI_KORISNIK;
     expect(isClientTypeAllowed('MOBILE_ANDROID', normal)).toBe(true);
     expect(isClientTypeAllowed('SERVICE', [])).toBe(false);
+  });
+});
+
+describe('vrste zadataka i zahtjevi završetka (docs/07 §7.6)', () => {
+  const taskTypeId = '11111111-1111-4111-8111-111111111111';
+  const formSchemaId = '22222222-2222-4222-8222-222222222222';
+  const requirementId = '33333333-3333-4333-8333-333333333333';
+
+  it('kreiranje primjenjuje defaultove i normalizuje boju', () => {
+    const parsed = createTaskTypeSchema.parse({
+      code: ' DELIVERY ',
+      name: ' Dostava dokumentacije ',
+      colorHex: '#abc123',
+      formSchemaId,
+    });
+
+    expect(parsed).toMatchObject({
+      code: 'DELIVERY',
+      name: 'Dostava dokumentacije',
+      colorHex: '#ABC123',
+      requiresVehicle: true,
+      requiresOdometer: false,
+      requiresPhotos: false,
+      defaultPriority: 'NORMAL',
+      defaultAssignMode: 'OPEN_CLAIM',
+      allowMultipleClaimants: false,
+      sortOrder: 100,
+      formSchemaId,
+    });
+  });
+
+  it('kreiranje odbija neispravan kod/boju/rok, kilometražu bez vozila i nepoznata polja', () => {
+    const base = { code: 'TEST_TYPE', name: 'Test vrsta' };
+    for (const patch of [
+      { code: 'niska_slova' },
+      { code: 'A' },
+      { name: 'x' },
+      { colorHex: 'plava' },
+      { dueOffsetHours: 0 },
+      { dueOffsetHours: 8761 },
+      { sortOrder: 10001 },
+      { requiresVehicle: false, requiresOdometer: true },
+      { active: false },
+      { formSchemaId: 'nije-uuid' },
+    ]) {
+      expect(createTaskTypeSchema.safeParse({ ...base, ...patch }).success).toBe(false);
+    }
+  });
+
+  it('PATCH je djelimičan, dozvoljava null brisanje i odbija prazan zahtjev ili novi kod', () => {
+    expect(
+      updateTaskTypeSchema.parse({
+        description: null,
+        colorHex: '#00aa55',
+        requiresVehicle: false,
+        requiresOdometer: false,
+        dueOffsetHours: null,
+        formSchemaId: null,
+      }),
+    ).toEqual({
+      description: null,
+      colorHex: '#00AA55',
+      requiresVehicle: false,
+      requiresOdometer: false,
+      dueOffsetHours: null,
+      formSchemaId: null,
+    });
+    expect(updateTaskTypeSchema.safeParse({}).success).toBe(false);
+    expect(updateTaskTypeSchema.safeParse({ code: 'NOVI_KOD' }).success).toBe(false);
+    expect(updateTaskTypeSchema.safeParse({ requiresVehicle: false, requiresOdometer: true }).success).toBe(
+      false,
+    );
+  });
+
+  it('arhiva i lista prihvataju samo dokumentovane query vrijednosti', () => {
+    expect(archiveTaskTypeSchema.parse({})).toEqual({});
+    expect(archiveTaskTypeSchema.parse({ reason: ' Više se ne koristi ' }).reason).toBe('Više se ne koristi');
+    expect(archiveTaskTypeSchema.safeParse({ reason: 'x' }).success).toBe(false);
+    expect(archiveTaskTypeSchema.safeParse({ force: true }).success).toBe(false);
+
+    expect(
+      taskTypeListQuerySchema.parse({
+        q: 'pranje',
+        activeOnly: 'true',
+        requiresVehicle: 'false',
+        page: '2',
+        pageSize: '10',
+        sortBy: 'name',
+        sortOrder: 'desc',
+      }),
+    ).toMatchObject({
+      q: 'pranje',
+      activeOnly: true,
+      requiresVehicle: false,
+      page: 2,
+      pageSize: 10,
+      sortBy: 'name',
+      sortOrder: 'desc',
+    });
+    expect(taskTypeListQuerySchema.safeParse({ activeOnly: 'yes' }).success).toBe(false);
+    expect(taskTypeListQuerySchema.safeParse({ includeArchived: 'true' }).success).toBe(false);
+  });
+
+  it('zahtjev završetka ima defaultove i odbija fotografije u opcionalnom zahtjevu', () => {
+    expect(taskCompletionRequirementInputSchema.parse({ fieldKey: ' photosAfter ' })).toEqual({
+      fieldKey: 'photosAfter',
+      required: true,
+      stage: 'ON_COMPLETE',
+      minPhotos: 0,
+    });
+    expect(taskCompletionRequirementInputSchema.safeParse({ fieldKey: 'PhotosAfter' }).success).toBe(false);
+    expect(
+      taskCompletionRequirementInputSchema.safeParse({
+        fieldKey: 'photosAfter',
+        required: false,
+        minPhotos: 1,
+      }).success,
+    ).toBe(false);
+    expect(
+      taskCompletionRequirementInputSchema.safeParse({ fieldKey: 'photosAfter', minPhotos: 21 }).success,
+    ).toBe(false);
+  });
+
+  it('zamjena zahtjeva odbija dupli ključ, a odgovori ostaju strict', () => {
+    expect(replaceTaskCompletionRequirementsSchema.parse({ requirements: [] })).toEqual({
+      requirements: [],
+    });
+    expect(
+      replaceTaskCompletionRequirementsSchema.safeParse({
+        requirements: [{ fieldKey: 'photosAfter' }, { fieldKey: 'photosAfter' }],
+      }).success,
+    ).toBe(false);
+
+    const requirement = {
+      id: requirementId,
+      taskTypeId,
+      fieldKey: 'photosAfter',
+      required: true,
+      stage: 'ON_COMPLETE',
+      minPhotos: 2,
+    };
+    expect(
+      taskCompletionRequirementsResponseSchema.parse({ taskTypeId, requirements: [requirement] })
+        .requirements,
+    ).toEqual([requirement]);
+
+    const view = {
+      id: taskTypeId,
+      code: 'WASH',
+      name: 'Pranje vozila',
+      description: null,
+      iconName: 'car-wash',
+      colorHex: '#2563EB',
+      requiresVehicle: true,
+      requiresOdometer: false,
+      requiresPhotos: true,
+      defaultPriority: 'NORMAL',
+      defaultAssignMode: 'OPEN_CLAIM',
+      allowMultipleClaimants: false,
+      dueOffsetHours: 24,
+      formSchemaId,
+      formSchemaKey: 'pranje_vozila',
+      formSchemaName: 'Pranje vozila',
+      formSchemaVersion: 1,
+      active: true,
+      sortOrder: 10,
+      completionRequirementCount: 1,
+      createdAt: '2026-10-21T10:00:00.000Z',
+      updatedAt: '2026-10-21T10:00:00.000Z',
+    };
+    expect(taskTypeDetailSchema.parse({ ...view, completionRequirements: [requirement] })).toMatchObject({
+      code: 'WASH',
+    });
+    expect(
+      taskTypeListResponseSchema.parse({ items: [view], page: 1, pageSize: 25, total: 1, totalPages: 1 })
+        .items,
+    ).toHaveLength(1);
+    expect(
+      taskTypeDetailSchema.safeParse({ ...view, completionRequirements: [], deletedAt: null }).success,
+    ).toBe(false);
   });
 });
 

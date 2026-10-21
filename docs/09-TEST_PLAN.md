@@ -464,6 +464,11 @@ audit i `201`/`204` statusi kontrolera. DI regresija je dopunjena servisom i
 kontrolerom (+2), a registar Prisma selecta za `TASK_TYPE_SELECT` i
 `COMPLETION_REQUIREMENT_SELECT`.
 
+`packages/shared/test/schemas.spec.ts` — 6 novih testova direktno pokriva
+create/update/archive/list DTO-e, defaultove i normalizaciju boje, vezu
+vozila i kilometraže, strict zabranu serverskih polja te zahtjeve i
+odgovore; time shared coverage ostaje iznad CI praga za funkcije.
+
 `apps/api/test/unit/seed.spec.ts` — postojeći seed scenariji dopunjeni su
 provjerama da prvi prolaz dodaje svih 8 kodova, da se `WASH` veže za
 objavljenu formu `pranje_vozila`, da ostale početne vrste zasad nemaju
