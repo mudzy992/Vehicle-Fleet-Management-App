@@ -32,6 +32,20 @@ export const NAV_ITEMS: readonly NavItem[] = [
 
   { to: '/vozila', label: 'Vozila', group: 'Vozni park', permission: 'vehicle:view', phase: 'Faza 3' },
   { to: '/vozaci', label: 'Vozači', group: 'Vozni park', permission: 'driver:view', phase: 'Faza 3' },
+  {
+    to: '/registracije',
+    label: 'Registracije',
+    group: 'Vozni park',
+    permission: 'registration:view',
+    phase: 'Faza 3',
+  },
+  {
+    to: '/osiguranja',
+    label: 'Osiguranja',
+    group: 'Vozni park',
+    permission: 'insurance:view',
+    phase: 'Faza 3',
+  },
   { to: '/gume', label: 'Gume', group: 'Vozni park', permission: 'tire:view', phase: 'Faza 4' },
   { to: '/izvjestaji', label: 'Izvještaji', group: 'Vozni park', permission: 'report:view', phase: 'Faza 7' },
 

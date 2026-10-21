@@ -49,3 +49,77 @@ export function defaultPeriod(todayIso: string): { validFrom: string; validUntil
 export function isPeriodOverlap(code: string | undefined): boolean {
   return code === 'PERIOD_OVERLAP';
 }
+
+/** Filteri liste svih zapisa (W09/W10). */
+export interface RecordsFilters {
+  readonly q: string;
+  readonly status: string;
+  readonly vehicleId: string;
+  /** Prozor roka u danima ('' = svi). */
+  readonly windowDays: string;
+}
+
+/**
+ * Query za `GET /registrations` / `GET /insurances`.
+ *
+ * Prazni filteri se ne šalju — server tada koristi svoje defaulte, a URL ostaje
+ * čitljiv. `expiringInDays` server prevodi u `status = ACTIVE` + granicu
+ * `validUntil`, pa se ne kombinuje s drugim statusom.
+ */
+export function buildRecordsQuery(
+  filters: RecordsFilters,
+  page: number,
+  pageSize: number,
+): Record<string, string | number> {
+  const query: Record<string, string | number> = { page, pageSize };
+  if (filters.q.trim()) query.q = filters.q.trim();
+  if (filters.vehicleId) query.vehicleId = filters.vehicleId;
+  if (filters.status) query.status = filters.status;
+  if (filters.windowDays) query.expiringInDays = Number(filters.windowDays);
+  return query;
+}
+
+/** Red liste — zajednički oblik za registraciju i osiguranje. */
+export interface RecordRow {
+  readonly id: string;
+  readonly vehicleId: string;
+  readonly number: string;
+  readonly validFrom: string;
+  readonly validUntil: string;
+  readonly status: string;
+  readonly amount: number | null;
+  readonly extra: string;
+}
+
+/** Normalizuje zapis u red tabele (dvije vrste zapisa, jedna tabela). */
+export function toRecordRows(
+  kind: 'REGISTRATION' | 'INSURANCE',
+  items: readonly Readonly<Record<string, unknown>>[],
+): readonly RecordRow[] {
+  return items.map((item) => {
+    const base = {
+      id: String(item.id),
+      vehicleId: String(item.vehicleId),
+      validFrom: String(item.validFrom),
+      validUntil: String(item.validUntil),
+      status: String(item.status),
+    };
+    if (kind === 'REGISTRATION') {
+      return {
+        ...base,
+        number: String(item.registrationNumber ?? ''),
+        amount: typeof item.costAmount === 'number' ? item.costAmount : null,
+        extra: typeof item.issuedBy === 'string' && item.issuedBy !== '' ? item.issuedBy : '—',
+      };
+    }
+    return {
+      ...base,
+      number: typeof item.policyNumber === 'string' ? item.policyNumber : '—',
+      amount: typeof item.premiumAmount === 'number' ? item.premiumAmount : null,
+      extra:
+        (typeof item.insuranceCompany === 'string' && item.insuranceCompany) ||
+        (typeof item.type === 'string' && item.type) ||
+        '—',
+    };
+  });
+}

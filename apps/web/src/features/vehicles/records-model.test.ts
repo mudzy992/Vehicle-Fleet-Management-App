@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, defaultPeriod, feninziToInput, isPeriodOverlap, moneyToFeninzi } from './records-model.js';
 import { buildUpdatePayload, recordToCoreValues } from './records-fields.js';
+import { buildRecordsQuery, toRecordRows } from './records-model.js';
 
 describe('moneyToFeninzi', () => {
   it('pretvara KM u feninge, uključujući decimalni zarez', () => {
@@ -133,5 +134,72 @@ describe('recordToCoreValues', () => {
       costAmount: '45.50',
       notes: '',
     });
+  });
+});
+
+describe('buildRecordsQuery', () => {
+  it('ne šalje prazne filtere (URL ostaje čitljiv)', () => {
+    expect(buildRecordsQuery({ q: '  ', status: '', vehicleId: '', windowDays: '' }, 1, 25)).toEqual({
+      page: 1,
+      pageSize: 25,
+    });
+  });
+
+  it('šalje pretragu, vozilo, status i prozor roka kao broj', () => {
+    expect(
+      buildRecordsQuery({ q: ' 12-A-345 ', status: 'ACTIVE', vehicleId: 'v1', windowDays: '30' }, 2, 25),
+    ).toEqual({
+      page: 2,
+      pageSize: 25,
+      q: '12-A-345',
+      vehicleId: 'v1',
+      status: 'ACTIVE',
+      expiringInDays: 30,
+    });
+  });
+});
+
+describe('toRecordRows', () => {
+  it('registracija: broj, trošak i izdavalac', () => {
+    expect(
+      toRecordRows('REGISTRATION', [
+        {
+          id: 'r1',
+          vehicleId: 'v1',
+          registrationNumber: '12-A-345',
+          validFrom: '2026-10-20',
+          validUntil: '2027-10-19',
+          status: 'ACTIVE',
+          costAmount: 4550,
+          issuedBy: null,
+        },
+      ])[0],
+    ).toEqual({
+      id: 'r1',
+      vehicleId: 'v1',
+      number: '12-A-345',
+      validFrom: '2026-10-20',
+      validUntil: '2027-10-19',
+      status: 'ACTIVE',
+      amount: 4550,
+      extra: '—',
+    });
+  });
+
+  it('osiguranje: polisa, premija i kuća (fallback na vrstu)', () => {
+    const [row] = toRecordRows('INSURANCE', [
+      {
+        id: 'i1',
+        vehicleId: 'v1',
+        policyNumber: null,
+        insuranceCompany: '',
+        type: 'KASKO',
+        validFrom: '2026-10-20',
+        validUntil: '2027-10-19',
+        status: 'ACTIVE',
+        premiumAmount: null,
+      },
+    ]);
+    expect(row).toMatchObject({ number: '—', amount: null, extra: 'KASKO' });
   });
 });

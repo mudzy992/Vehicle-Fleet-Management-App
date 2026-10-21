@@ -26,6 +26,7 @@ import { VehicleEditPage } from '../features/vehicles/vehicle-edit-page.js';
 import { DashboardPage } from '../features/dashboard/dashboard-page.js';
 import { DriversPage } from '../features/drivers/drivers-page.js';
 import { RemindersPage } from '../features/reminders/reminders-page.js';
+import { RecordsListPage } from '../features/records/records-list-page.js';
 import { DriverCreatePage } from '../features/drivers/driver-create-page.js';
 import { DriverDetailPage } from '../features/drivers/driver-detail-page.js';
 import { VehicleDetailPage } from '../features/vehicles/vehicle-detail-page.js';
@@ -90,6 +91,24 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission="vehicle:view">
             <VehicleDetailPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        // W09 — registracije: svi zapisi s rokovima (do sada samo po vozilu).
+        path: 'registracije',
+        element: (
+          <RequirePermission permission="registration:view">
+            <RecordsListPage kind="REGISTRATION" />
+          </RequirePermission>
+        ),
+      },
+      {
+        // W10 — osiguranja: isti obrazac, druga vrsta zapisa.
+        path: 'osiguranja',
+        element: (
+          <RequirePermission permission="insurance:view">
+            <RecordsListPage kind="INSURANCE" />
           </RequirePermission>
         ),
       },
