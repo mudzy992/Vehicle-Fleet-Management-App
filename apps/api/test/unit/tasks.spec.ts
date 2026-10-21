@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { HTTP_CODE_METADATA } from '@nestjs/common/constants.js';
 import {
   cancelTaskSchema,
+  claimTaskSchema,
   createTaskSchema,
   reopenTaskSchema,
+  taskAvailableQuerySchema,
   taskDetailSchema,
   taskListQuerySchema,
   taskListResponseSchema,
@@ -26,6 +28,8 @@ const outsiderId = '66666666-6666-4666-8666-666666666666';
 const noClaimId = '77777777-7777-4777-8777-777777777777';
 const inactiveId = '88888888-8888-4888-8888-888888888888';
 const missingId = '99999999-9999-4999-8999-999999999999';
+const broadcastUserId = '10101010-1010-4101-8101-101010101010';
+const vehicleClaimId = '12121212-1212-4121-8121-121212121212';
 
 const vehicleId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
 const archivedVehicleId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2';
@@ -67,7 +71,7 @@ function applyUpdate(row: Row, data: Row): void {
 }
 
 class FakePermissions {
-  private readonly grants = new Map<string, Map<string, 'ALL' | 'OWN'>>();
+  private readonly grants = new Map<string, Map<string, 'ALL' | 'OWN' | 'VEHICLE_IDS'>>();
 
   constructor() {
     this.set(adminId, {
@@ -87,7 +91,7 @@ class FakePermissions {
     });
     this.set(invited2Id, { 'task:view': 'OWN', 'task:claim': 'OWN' });
     this.set(assigneeId, { 'task:view': 'OWN', 'task:claim': 'OWN', 'task:update': 'OWN' });
-    this.set(observerId, { 'task:view': 'OWN' });
+    this.set(observerId, { 'task:view': 'OWN', 'task:claim': 'OWN' });
     this.set(outsiderId, {
       'task:view': 'OWN',
       'task:claim': 'OWN',
@@ -97,9 +101,11 @@ class FakePermissions {
     });
     this.set(noClaimId, { 'task:view': 'OWN' });
     this.set(inactiveId, { 'task:view': 'OWN', 'task:claim': 'OWN' });
+    this.set(broadcastUserId, { 'task:view': 'OWN', 'task:claim': 'ALL' });
+    this.set(vehicleClaimId, { 'task:view': 'OWN', 'task:claim': 'VEHICLE_IDS' });
   }
 
-  private set(userId: string, grants: Record<string, 'ALL' | 'OWN'>): void {
+  private set(userId: string, grants: Record<string, 'ALL' | 'OWN' | 'VEHICLE_IDS'>): void {
     this.grants.set(userId, new Map(Object.entries(grants)));
   }
 
@@ -109,7 +115,10 @@ class FakePermissions {
       isSuperAdmin: false,
       permissions,
       list: [...permissions.keys()],
-      grants: [],
+      grants:
+        userId === vehicleClaimId
+          ? [{ permission: 'task:claim', scope: 'VEHICLE_IDS', scopeVehicleIds: [vehicleId] }]
+          : [],
     };
   }
 
@@ -151,6 +160,8 @@ class FakeTasksPrisma {
       [outsiderId, 'Omer', 'Vanjski', 'ACTIVE'],
       [noClaimId, 'Nermin', 'BezPrava', 'ACTIVE'],
       [inactiveId, 'Ivo', 'Neaktivan', 'SUSPENDED'],
+      [broadcastUserId, 'Dino', 'Broadcast', 'ACTIVE'],
+      [vehicleClaimId, 'Vedad', 'VoziloOpseg', 'ACTIVE'],
     ] as const) {
       this.users.set(id, {
         id,
@@ -280,6 +291,14 @@ class FakeTasksPrisma {
         stage: 'ON_CREATE',
         minPhotos: 1,
       },
+      {
+        id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee4',
+        taskTypeId: customTypeId,
+        fieldKey: 'washDurationMin',
+        required: true,
+        stage: 'ON_CLAIM',
+        minPhotos: 0,
+      },
     );
   }
 
@@ -340,7 +359,7 @@ class FakeTasksPrisma {
 
   addAssignment(taskId: string, userId: string, role: string, patch: Row = {}): void {
     this.assignments.push({
-      id: `assignment-${this.assignments.length + 1}`,
+      id: `00000000-0000-4000-8000-${String(this.assignments.length + 1).padStart(12, '0')}`,
       taskId,
       userId,
       role,
@@ -362,12 +381,26 @@ class FakeTasksPrisma {
         if (!(condition as Row[]).some((nested) => this.matches(row, nested))) return false;
         continue;
       }
+      if (key === 'NOT') {
+        const nested = Array.isArray(condition) ? (condition as Row[]) : [condition as Row];
+        if (nested.some((item) => this.matches(row, item))) return false;
+        continue;
+      }
       if (key === 'assignments' && typeof condition === 'object' && condition !== null) {
-        const some = (condition as Row).some as Row;
-        const hit = this.assignments.some(
-          (assignment) => assignment.taskId === row.id && this.matches(assignment, some),
-        );
-        if (!hit) return false;
+        const relation = condition as Row;
+        const related = this.assignments.filter((assignment) => assignment.taskId === row.id);
+        if (relation.some && !related.some((assignment) => this.matches(assignment, relation.some as Row))) {
+          return false;
+        }
+        if (relation.none && related.some((assignment) => this.matches(assignment, relation.none as Row))) {
+          return false;
+        }
+        if (
+          relation.every &&
+          !related.every((assignment) => this.matches(assignment, relation.every as Row))
+        ) {
+          return false;
+        }
         continue;
       }
       if (
@@ -503,6 +536,10 @@ class FakeTasksPrisma {
   readonly user = {
     findMany: async (args: { where?: Row } = {}) =>
       [...this.users.values()].filter((row) => this.matches(row, args.where)).map(clone),
+    findFirst: async (args: { where?: Row } = {}) => {
+      const row = [...this.users.values()].find((candidate) => this.matches(candidate, args.where));
+      return row ? clone(row) : null;
+    },
   };
 
   readonly formSchema = {
@@ -594,6 +631,10 @@ class FakeTasksPrisma {
   };
 
   readonly taskAssignment = {
+    findFirst: async (args: { where?: Row } = {}) => {
+      const row = this.assignments.find((candidate) => this.matches(candidate, args.where));
+      return row ? clone(row) : null;
+    },
     createMany: async (args: { data: Row[] }) => {
       this.assignments.push(...args.data.map((row) => ({ revokedAt: null, ...clone(row) })));
       return { count: args.data.length };
@@ -1227,6 +1268,385 @@ describe('TasksService — otkazivanje i ponovno otvaranje', () => {
   });
 });
 
+describe('TasksService — slobodni zadaci i atomski claim', () => {
+  const claimInput = (formData: Record<string, unknown> = {}) => claimTaskSchema.parse({ formData });
+  const availableQuery = (patch: Record<string, unknown> = {}) => taskAvailableQuerySchema.parse(patch);
+
+  function seedOpenClaim(fake: ReturnType<typeof setup>['fake'], patch: Row = {}): string {
+    const id = String(patch.id ?? 'ffffffff-ffff-4fff-8fff-fffffffff101');
+    fake.addTask({
+      id,
+      code: 'Z-2026-000101',
+      title: 'Slobodan zadatak',
+      formData: { washType: 'FULL' },
+      version: 2,
+      ...patch,
+    });
+    return id;
+  }
+
+  it('available vraća samo zadatke koje akter smije preuzeti po načinu dodjele i opsegu', async () => {
+    const { fake, service } = setup();
+    const openId = seedOpenClaim(fake);
+    fake.addAssignment(openId, invitedId, 'INVITED');
+    fake.addAssignment(openId, invited2Id, 'INVITED');
+    fake.addAssignment(openId, observerId, 'OBSERVER');
+
+    const directId = 'ffffffff-ffff-4fff-8fff-fffffffff102';
+    fake.addTask({
+      id: directId,
+      code: 'Z-2026-000102',
+      title: 'Direktni zadatak',
+      taskTypeId: directTypeId,
+      assignMode: 'ASSIGN_DIRECT',
+      assigneeUserId: assigneeId,
+    });
+    fake.addAssignment(directId, assigneeId, 'ASSIGNEE');
+
+    const broadcastId = 'ffffffff-ffff-4fff-8fff-fffffffff103';
+    fake.addTask({
+      id: broadcastId,
+      code: 'Z-2026-000103',
+      title: 'Broadcast zadatak',
+      assignMode: 'BROADCAST',
+    });
+    const ownBroadcastId = 'ffffffff-ffff-4fff-8fff-fffffffff104';
+    fake.addTask({
+      id: ownBroadcastId,
+      code: 'Z-2026-000104',
+      title: 'Vlastiti broadcast',
+      assignMode: 'BROADCAST',
+      createdById: invitedId,
+      priority: 'HIGH',
+    });
+    const progressId = 'ffffffff-ffff-4fff-8fff-fffffffff105';
+    fake.addTask({
+      id: progressId,
+      code: 'Z-2026-000105',
+      status: 'IN_PROGRESS',
+      assigneeUserId: invited2Id,
+      claimedAt: new Date('2026-10-20T09:00:00Z'),
+    });
+    fake.addAssignment(progressId, invitedId, 'INVITED');
+
+    const invitedList = await service.available(availableQuery(), actor(invitedId));
+    expect(taskListResponseSchema.parse(invitedList)).toEqual(invitedList);
+    expect(invitedList.total).toBe(2);
+    expect(invitedList.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([openId, ownBroadcastId]),
+    );
+    expect(
+      (await service.available(availableQuery({ priority: 'HIGH' }), actor(invitedId))).items.map(
+        (item) => item.id,
+      ),
+    ).toEqual([ownBroadcastId]);
+
+    expect((await service.available(availableQuery(), actor(invited2Id))).items.map((i) => i.id)).toEqual([
+      openId,
+    ]);
+    expect((await service.available(availableQuery(), actor(assigneeId))).items.map((i) => i.id)).toEqual([
+      directId,
+    ]);
+    expect(
+      (await service.available(availableQuery(), actor(broadcastUserId))).items.map((i) => i.id),
+    ).toEqual(expect.arrayContaining([broadcastId, ownBroadcastId]));
+    expect((await service.available(availableQuery(), actor(broadcastUserId))).total).toBe(2);
+    expect((await service.available(availableQuery(), actor(observerId))).total).toBe(0);
+    expect((await service.available(availableQuery(), actor(outsiderId))).total).toBe(0);
+
+    const denied = await errorOf(() => service.available(availableQuery(), actor(noClaimId)));
+    expect(denied.code).toBe('PERMISSION_DENIED');
+    expect(denied.httpStatus).toBe(403);
+  });
+
+  it('uspješan claim u jednoj transakciji postavlja izvršioca, ASSIGNEE red, CLAIMED događaj i outbox', async () => {
+    const { fake, service } = setup();
+    const taskId = seedOpenClaim(fake);
+    fake.addAssignment(taskId, invitedId, 'INVITED');
+    fake.addAssignment(taskId, invited2Id, 'INVITED');
+    fake.addAssignment(taskId, observerId, 'OBSERVER');
+
+    const result = await service.claim(taskId, claimInput(), actor(invitedId));
+
+    expect(taskDetailSchema.parse(result.data)).toEqual(result.data);
+    expect(result.data).toMatchObject({
+      status: 'IN_PROGRESS',
+      assigneeUserId: invitedId,
+      assigneeName: 'Emina Pozvana',
+      version: 3,
+      formData: { washType: 'FULL' },
+    });
+    expect(result.data.claimedAt).not.toBeNull();
+    expect(result.before).toMatchObject({ status: 'OPEN', version: 2 });
+    expect(result.after).toMatchObject({ status: 'IN_PROGRESS', version: 3 });
+
+    const activeAssignees = fake.assignments.filter(
+      (row) => row.taskId === taskId && row.role === 'ASSIGNEE' && row.revokedAt === null,
+    );
+    expect(activeAssignees).toHaveLength(1);
+    expect(activeAssignees[0]).toMatchObject({ userId: invitedId, assignedById: invitedId });
+    expect(
+      fake.assignments.filter((row) => row.taskId === taskId && row.role === 'INVITED' && !row.revokedAt),
+    ).toHaveLength(2);
+
+    const claimedEvents = fake.events.filter((row) => row.taskId === taskId && row.action === 'CLAIMED');
+    expect(claimedEvents).toHaveLength(1);
+    expect(claimedEvents[0]?.data).toMatchObject({
+      previousVersion: 2,
+      version: 3,
+      assigneeUserId: invitedId,
+    });
+    expect(fake.outbox).toHaveLength(1);
+    expect(fake.outbox[0]).toMatchObject({
+      eventType: 'TASK_CLAIMED',
+      idempotencyKey: `task:${taskId}:TASK_CLAIMED:v3`,
+      payload: {
+        status: 'IN_PROGRESS',
+        assigneeUserId: invitedId,
+        broadcast: false,
+      },
+    });
+    expect((fake.outbox[0]?.payload as Row).recipientUserIds).toEqual(
+      expect.arrayContaining([adminId, invited2Id, observerId]),
+    );
+    expect((fake.outbox[0]?.payload as Row).recipientUserIds).not.toContain(invitedId);
+  });
+
+  it('paralelni pokušaji nad lažnim klijentom daju tačno jednog pobjednika i ostale 409', async () => {
+    const { fake, service } = setup();
+    const taskId = seedOpenClaim(fake);
+    fake.addAssignment(taskId, invitedId, 'INVITED');
+    fake.addAssignment(taskId, invited2Id, 'INVITED');
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 20 }, (_, index) =>
+        service.claim(taskId, claimInput(), actor(index % 2 === 0 ? invitedId : invited2Id)),
+      ),
+    );
+    const fulfilled = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(19);
+    for (const result of rejected) {
+      expect(result.reason).toBeInstanceOf(VfmException);
+      expect((result.reason as VfmException).code).toBe('TASK_ALREADY_CLAIMED');
+      expect((result.reason as VfmException).httpStatus).toBe(409);
+    }
+    expect(fake.tasks.get(taskId)).toMatchObject({ status: 'IN_PROGRESS', version: 3 });
+    expect(
+      fake.assignments.filter((row) => row.taskId === taskId && row.role === 'ASSIGNEE' && !row.revokedAt),
+    ).toHaveLength(1);
+    expect(fake.events.filter((row) => row.taskId === taskId && row.action === 'CLAIMED')).toHaveLength(1);
+    expect(fake.outbox.filter((row) => row.eventType === 'TASK_CLAIMED')).toHaveLength(1);
+  });
+
+  it('direktni zadatak preuzima samo odabrani izvršilac i ne nastaje drugi ASSIGNEE red', async () => {
+    const { fake, service } = setup();
+    const taskId = 'ffffffff-ffff-4fff-8fff-fffffffff106';
+    fake.addTask({
+      id: taskId,
+      code: 'Z-2026-000106',
+      taskTypeId: directTypeId,
+      assignMode: 'ASSIGN_DIRECT',
+      createdById: invitedId,
+      assigneeUserId: assigneeId,
+      formData: { washType: 'FULL' },
+      version: 1,
+    });
+    fake.addAssignment(taskId, assigneeId, 'ASSIGNEE');
+
+    const creatorError = await errorOf(() => service.claim(taskId, claimInput(), actor(invitedId)));
+    expect(creatorError.code).toBe('SCOPE_DENIED');
+    const outsiderError = await errorOf(() => service.claim(taskId, claimInput(), actor(outsiderId)));
+    expect(outsiderError.code).toBe('NOT_FOUND');
+
+    const result = await service.claim(taskId, claimInput(), actor(assigneeId));
+    expect(result.data).toMatchObject({ status: 'IN_PROGRESS', assigneeUserId: assigneeId, version: 2 });
+    const assigneeRows = fake.assignments.filter((row) => row.taskId === taskId && row.role === 'ASSIGNEE');
+    expect(assigneeRows).toHaveLength(1);
+    expect(assigneeRows[0]).toMatchObject({ userId: assigneeId, assignedById: adminId, revokedAt: null });
+
+    const repeated = await errorOf(() => service.claim(taskId, claimInput(), actor(assigneeId)));
+    expect(repeated.code).toBe('TASK_ALREADY_CLAIMED');
+    expect(repeated.extra).toMatchObject({ claimedByUserId: assigneeId, claimedByName: 'Ivan Izvršilac' });
+  });
+
+  it('claim skriva nevidljiv zadatak, posmatraču daje scope grešku, a neaktivnog kandidata odbija', async () => {
+    const { fake, service } = setup();
+    const taskId = seedOpenClaim(fake);
+    fake.addAssignment(taskId, invitedId, 'INVITED');
+    fake.addAssignment(taskId, observerId, 'OBSERVER');
+    fake.addAssignment(taskId, inactiveId, 'INVITED');
+
+    expect((await errorOf(() => service.claim(taskId, claimInput(), actor(outsiderId)))).code).toBe(
+      'NOT_FOUND',
+    );
+    expect((await errorOf(() => service.claim(taskId, claimInput(), actor(observerId)))).code).toBe(
+      'SCOPE_DENIED',
+    );
+    expect((await errorOf(() => service.claim(taskId, claimInput(), actor(noClaimId)))).code).toBe(
+      'PERMISSION_DENIED',
+    );
+    expect((await errorOf(() => service.claim(taskId, claimInput(), actor(inactiveId)))).code).toBe(
+      'ACCOUNT_INACTIVE',
+    );
+    expect((await errorOf(() => service.claim(missingId, claimInput(), actor(invitedId)))).code).toBe(
+      'NOT_FOUND',
+    );
+    expect(fake.tasks.get(taskId)).toMatchObject({ status: 'OPEN', version: 2 });
+    expect(fake.events.filter((row) => row.action === 'CLAIMED')).toHaveLength(0);
+  });
+
+  it('kreator može preuzeti OPEN_CLAIM bez pozvanih, a opozvani ASSIGNEE red se reaktivira', async () => {
+    const { fake, service } = setup();
+    const ownId = seedOpenClaim(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff107',
+      code: 'Z-2026-000107',
+      createdById: invitedId,
+    });
+    const own = await service.claim(ownId, claimInput(), actor(invitedId));
+    expect(own.data.assigneeUserId).toBe(invitedId);
+
+    const reopenedId = seedOpenClaim(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff108',
+      code: 'Z-2026-000108',
+    });
+    fake.addAssignment(reopenedId, invitedId, 'INVITED');
+    fake.addAssignment(reopenedId, invitedId, 'ASSIGNEE', {
+      revokedAt: new Date('2026-10-20T12:00:00Z'),
+    });
+    await service.claim(reopenedId, claimInput(), actor(invitedId));
+    const assigneeRows = fake.assignments.filter(
+      (row) => row.taskId === reopenedId && row.role === 'ASSIGNEE',
+    );
+    expect(assigneeRows).toHaveLength(1);
+    expect(assigneeRows[0]).toMatchObject({ userId: invitedId, assignedById: invitedId, revokedAt: null });
+  });
+
+  it('broadcast poštuje OWN i VEHICLE_IDS opseg claim permisije', async () => {
+    const { fake, service } = setup();
+    const otherId = seedOpenClaim(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff109',
+      code: 'Z-2026-000109',
+      assignMode: 'BROADCAST',
+    });
+    const ownId = seedOpenClaim(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff110',
+      code: 'Z-2026-000110',
+      assignMode: 'BROADCAST',
+      createdById: outsiderId,
+    });
+    const otherVehicleId = seedOpenClaim(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff111',
+      code: 'Z-2026-000111',
+      assignMode: 'BROADCAST',
+      vehicleId: archivedVehicleId,
+    });
+
+    expect((await errorOf(() => service.claim(otherId, claimInput(), actor(outsiderId)))).code).toBe(
+      'SCOPE_DENIED',
+    );
+    await service.claim(ownId, claimInput(), actor(outsiderId));
+    await service.claim(otherId, claimInput(), actor(broadcastUserId));
+
+    expect((await service.available(availableQuery(), actor(vehicleClaimId))).total).toBe(0);
+    expect(
+      (await errorOf(() => service.claim(otherVehicleId, claimInput(), actor(vehicleClaimId)))).code,
+    ).toBe('SCOPE_DENIED');
+    const allowedId = seedOpenClaim(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff112',
+      code: 'Z-2026-000112',
+      assignMode: 'BROADCAST',
+      vehicleId,
+    });
+    expect((await service.available(availableQuery(), actor(vehicleClaimId))).items.map((i) => i.id)).toEqual(
+      [allowedId],
+    );
+    await service.claim(allowedId, claimInput(), actor(vehicleClaimId));
+  });
+
+  it('claim spaja poslani nacrt s postojećim i provjerava ON_CLAIM zahtjev prije prelaza', async () => {
+    const { fake, service } = setup();
+    const taskId = seedOpenClaim(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff113',
+      code: 'Z-2026-000113',
+      taskTypeId: customTypeId,
+      vehicleId: null,
+      formSchemaId: boundFormId,
+      formSchemaVersionId: boundVersionId,
+      formData: {
+        washType: 'FULL',
+        washCost: { amount: 9000, currency: 'BAM' },
+        photosAfter: [photoId],
+      },
+    });
+    fake.addAssignment(taskId, invitedId, 'INVITED');
+
+    const missing = await errorOf(() => service.claim(taskId, claimInput(), actor(invitedId)));
+    expect(missing.code).toBe('FORM_VALIDATION_FAILED');
+    expect(missing.details?.some((item) => item.path.join('.') === 'formData.washDurationMin')).toBe(true);
+    expect(fake.tasks.get(taskId)).toMatchObject({ status: 'OPEN', version: 2 });
+    expect(fake.events.filter((row) => row.action === 'CLAIMED')).toHaveLength(0);
+
+    const result = await service.claim(taskId, claimInput({ washDurationMin: 45 }), actor(invitedId));
+    expect(result.data.formData).toMatchObject({
+      washType: 'FULL',
+      photosAfter: [photoId],
+      washDurationMin: 45,
+    });
+    expect(result.data.status).toBe('IN_PROGRESS');
+  });
+
+  it('već preuzet zadatak daje podatke o izvršiocu kandidatu, a terminalna stanja invalidnu tranziciju', async () => {
+    const { fake, service } = setup();
+    const progressId = seedOpenClaim(fake, {
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff114',
+      code: 'Z-2026-000114',
+      status: 'IN_PROGRESS',
+      assigneeUserId: invited2Id,
+      claimedAt: new Date('2026-10-20T09:29:10Z'),
+      version: 3,
+    });
+    fake.addAssignment(progressId, invitedId, 'INVITED');
+    fake.addAssignment(progressId, invited2Id, 'ASSIGNEE');
+
+    const claimed = await errorOf(() => service.claim(progressId, claimInput(), actor(invitedId)));
+    expect(claimed.code).toBe('TASK_ALREADY_CLAIMED');
+    expect(claimed.extra).toMatchObject({
+      taskId: progressId,
+      claimedByUserId: invited2Id,
+      claimedByName: 'Adnan Pozvani',
+      claimedAt: '2026-10-20T09:29:10.000Z',
+    });
+    expect((await errorOf(() => service.claim(progressId, claimInput(), actor(outsiderId)))).code).toBe(
+      'NOT_FOUND',
+    );
+
+    for (const [status, suffix] of [
+      ['COMPLETED', '115'],
+      ['CANCELLED', '116'],
+    ] as const) {
+      const terminalId = seedOpenClaim(fake, {
+        id: `ffffffff-ffff-4fff-8fff-fffffffff${suffix}`,
+        code: `Z-2026-000${suffix}`,
+        status,
+        assigneeUserId: invited2Id,
+        claimedAt: new Date('2026-10-20T09:00:00Z'),
+        ...(status === 'COMPLETED'
+          ? { completedAt: new Date('2026-10-20T10:00:00Z'), completedById: invited2Id }
+          : { cancelledAt: new Date('2026-10-20T10:00:00Z'), cancelReason: 'Odgođeno' }),
+      });
+      fake.addAssignment(terminalId, invitedId, 'INVITED');
+      const error = await errorOf(() => service.claim(terminalId, claimInput(), actor(invitedId)));
+      expect(error.code).toBe('INVALID_TASK_TRANSITION');
+      expect(error.httpStatus).toBe(422);
+    }
+  });
+});
+
 describe('TasksController — metadata', () => {
   it('rute imaju odvojene permisije, audit i 201 za kreiranje', () => {
     const permissions = (method: unknown): unknown =>
@@ -1236,12 +1656,20 @@ describe('TasksController — metadata', () => {
 
     expect(permissions(TasksController.prototype.list)).toEqual(['task:view', 'task:view_all']);
     expect(mode(TasksController.prototype.list)).toBe('ANY');
+    expect(permissions(TasksController.prototype.available)).toEqual(['task:claim']);
     expect(permissions(TasksController.prototype.get)).toEqual(['task:view', 'task:view_all']);
     expect(permissions(TasksController.prototype.create)).toEqual(['task:create']);
     expect(permissions(TasksController.prototype.update)).toEqual(['task:update']);
+    expect(permissions(TasksController.prototype.claim)).toEqual(['task:claim']);
     expect(permissions(TasksController.prototype.cancel)).toEqual(['task:cancel']);
     expect(permissions(TasksController.prototype.reopen)).toEqual(['task:reopen']);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.create)).toBe(201);
+    expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.claim)).toBe(200);
+    expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.claim)).toMatchObject({
+      action: 'CLAIM',
+      severity: 'INFO',
+      resource: 'Task',
+    });
     expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.cancel)).toMatchObject({
       action: 'CANCEL',
       severity: 'WARN',
@@ -1258,5 +1686,7 @@ describe('TasksController — metadata', () => {
     expect(createTaskSchema.safeParse({ taskTypeId: washTypeId, status: 'COMPLETED' }).success).toBe(false);
     expect(updateTaskSchema.safeParse({ version: 0 }).success).toBe(false);
     expect(cancelTaskSchema.safeParse({ version: 0 }).success).toBe(false);
+    expect(claimTaskSchema.safeParse({ version: 0 }).success).toBe(false);
+    expect(taskAvailableQuerySchema.safeParse({ status: 'OPEN' }).success).toBe(false);
   });
 });

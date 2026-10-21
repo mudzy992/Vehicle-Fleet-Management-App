@@ -21,10 +21,12 @@ import {
   resetPasswordSchema,
   archiveTaskTypeSchema,
   cancelTaskSchema,
+  claimTaskSchema,
   createTaskSchema,
   createTaskTypeSchema,
   reopenTaskSchema,
   replaceTaskCompletionRequirementsSchema,
+  taskAvailableQuerySchema,
   taskDetailSchema,
   taskListQuerySchema,
   taskListResponseSchema,
@@ -531,6 +533,35 @@ describe('zadaci (docs/07 §2.11)', () => {
       }).success,
     ).toBe(false);
     expect(taskListQuerySchema.safeParse({ includeDeleted: 'true' }).success).toBe(false);
+  });
+
+  it('claim prima samo opcioni nacrt forme, a available query ne prima serverski status', () => {
+    expect(claimTaskSchema.parse({})).toEqual({ formData: {} });
+    expect(claimTaskSchema.parse({ formData: { washType: 'FULL' } })).toEqual({
+      formData: { washType: 'FULL' },
+    });
+    expect(claimTaskSchema.safeParse({ version: 1 }).success).toBe(false);
+    expect(claimTaskSchema.safeParse({ assigneeUserId: assigneeId }).success).toBe(false);
+
+    expect(
+      taskAvailableQuerySchema.parse({
+        vehicleId,
+        taskTypeId,
+        priority: 'HIGH',
+        overdueOnly: 'true',
+        dueFrom: '2026-10-21T00:00:00Z',
+        dueTo: '2026-10-22T00:00:00Z',
+        page: '3',
+      }),
+    ).toMatchObject({ priority: 'HIGH', overdueOnly: true, page: 3 });
+    expect(taskAvailableQuerySchema.safeParse({ status: 'OPEN' }).success).toBe(false);
+    expect(taskAvailableQuerySchema.safeParse({ mine: 'true' }).success).toBe(false);
+    expect(
+      taskAvailableQuerySchema.safeParse({
+        dueFrom: '2026-10-22T00:00:00Z',
+        dueTo: '2026-10-21T00:00:00Z',
+      }).success,
+    ).toBe(false);
   });
 
   it('odgovori zadatka su strict i nose snapshot forme, dodjele i događaje', () => {

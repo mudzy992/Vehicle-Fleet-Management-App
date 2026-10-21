@@ -1,15 +1,19 @@
-/** Zadaci — jezgra Faze 5: lista, detalj, kreiranje, izmjena, otkazivanje i reopen. */
+/** Zadaci — jezgra Faze 5 i atomsko preuzimanje slobodnih zadataka. */
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   cancelTaskSchema,
+  claimTaskSchema,
   createTaskSchema,
   reopenTaskSchema,
+  taskAvailableQuerySchema,
   taskIdSchema,
   taskListQuerySchema,
   updateTaskSchema,
   type CancelTaskInput,
+  type ClaimTaskInput,
   type CreateTaskInput,
   type ReopenTaskInput,
+  type TaskAvailableQuery,
   type TaskListQuery,
   type UpdateTaskInput,
 } from '@vfm/shared/schemas';
@@ -50,6 +54,16 @@ export class TasksController {
     @Req() request: VfmRequest,
   ) {
     return this.tasks.list(query, actorContext(actor, request));
+  }
+
+  @Get('available')
+  @RequirePermissions('task:claim')
+  available(
+    @Query(new ZodValidationPipe(taskAvailableQuerySchema, 'query')) query: TaskAvailableQuery,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ) {
+    return this.tasks.available(query, actorContext(actor, request));
   }
 
   @Post()
@@ -99,6 +113,29 @@ export class TasksController {
       .setResource('Task')
       .set('code', result.data.code)
       .set('status', result.data.status);
+    return result.data;
+  }
+
+  @Post(':id/claim')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('task:claim')
+  @Audit('CLAIM', { severity: 'INFO', resource: 'Task' })
+  async claim(
+    @Param('id', new ZodValidationPipe(taskIdSchema, 'params')) id: string,
+    @Body(new ZodValidationPipe(claimTaskSchema, 'body', { allowEmpty: true })) input: ClaimTaskInput,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ) {
+    const result = await this.tasks.claim(id, input, actorContext(actor, request));
+    AuditContext.from(request)
+      .setEntityId(id)
+      .setBefore(result.before)
+      .setAfter(result.after)
+      .setResource('Task')
+      .set('code', result.data.code)
+      .set('status', result.data.status)
+      .set('assigneeUserId', result.data.assigneeUserId)
+      .set('claimedAt', result.data.claimedAt);
     return result.data;
   }
 

@@ -357,7 +357,7 @@ Detaljan implementirani ugovor je u §7.6.
 | POST | `/tasks` `Idem` | `task:create` | implementirano; snapshot efektivne objavljene TASK verzije + DB outbox `TASK_CREATED` |
 | GET | `/tasks/:id` | `task:view` / `task:view_all` (+ scope) | implementirano; uključuje `assignments`, `events`, `attachmentIds`, `commentCount`, `formSchemaVersion` |
 | PATCH | `/tasks/:id` | `task:update` | implementirano; CAS `version`, vlastiti zadatak dok je `OPEN` ili puni opseg |
-| **POST** | **`/tasks/:id/claim`** `Idem` | `task:claim` | **atomski**; `409 TASK_ALREADY_CLAIMED` s `{assignee: {name, claimedAt}}` ako korisnik ima pravo vidjeti |
+| **POST** | **`/tasks/:id/claim`** `Idem` | `task:claim` | implementirano; **atomski** prelaz `OPEN → IN_PROGRESS`; `409 TASK_ALREADY_CLAIMED` s imenom i vremenom izvršioca kad akter smije vidjeti zadatak ili je bio kandidat |
 | POST | `/tasks/:id/complete` `Idem` | `task:complete` (izvršilac) ili `task:complete_override` | `{formValues, attachmentIds, comment, odometerKm?}` |
 | POST | `/tasks/:id/cancel` | `task:cancel` | implementirano; `{version,reason}` (`reason` obavezno) |
 | POST | `/tasks/:id/reopen` | `task:reopen` | implementirano; `{version,reason?,dueAt?}`, audit + DB outbox |
@@ -366,20 +366,22 @@ Detaljan implementirani ugovor je u §7.6.
 | GET/POST | `/tasks/:id/comments` | `task:view` / `task:comment` | |
 | POST | `/tasks/:id/attachments` | `attachment:upload` | |
 | GET | `/tasks/:id/events` | `task:view` | historija (immutabilna) |
-| GET | `/tasks/available` | `task:claim` | samo zadaci koje korisnik **smije** preuzeti |
+| GET | `/tasks/available` | `task:claim` | implementirano; samo `OPEN` zadaci koje korisnik **smije** preuzeti po načinu dodjele i opsegu permisije |
 
-**Odgovor na `409` pri claim-u:**
+**Odgovor na `409` pri claim-u** (mašinski čitljiva polja su u vrhu
+`error` objekta, kao i ostali `extra` podaci iz §1.5):
 ```jsonc
 { "error": { "code": "TASK_ALREADY_CLAIMED",
-  "message": "Zadatak je preuzeo Emina H. prije 12 minuta.",
-  "details": { "assigneeName": "Emina H.", "claimedAt": "2026-10-19T09:29:10Z", "taskId": "…" },
-  "requestId": "…" } }
+  "message": "Zadatak je preuzeo Emina H.",
+  "taskId": "…", "assigneeUserId": "…", "claimedByUserId": "…",
+  "assigneeName": "Emina H.", "claimedByName": "Emina H.",
+  "claimedAt": "2026-10-19T09:29:10Z", "requestId": "…" } }
 ```
 
-Detaljan implementirani ugovor jezgre zadataka je u §7.7. Claim, završetak,
-release, naknadna dodjela, komentari i `/available` ostaju zasebne cjeline;
-u ovoj cjelini se DB outbox redovi zapisuju, ali worker/FCM isporuka još nije
-dio ugovora.
+Detaljan implementirani ugovor jezgre zadataka je u §7.7, a atomskog
+preuzimanja i slobodnih zadataka u §7.8. Završetak, release, naknadna
+dodjela i komentari ostaju zasebne cjeline; DB outbox redovi se zapisuju,
+ali worker/FCM/SSE isporuka još nije dio ugovora.
 
 ### 2.12 Prilozi (`/attachments`)
 
@@ -534,9 +536,12 @@ Idempotency-Key: 7b1f…-uuid
 ```http
 POST /api/v1/tasks/2f1c…/claim
 Idempotency-Key: 9c2a…-uuid
+{ "formData": { "washDurationMin": 45 } }
 ```
-`200` → `{ "data": { "id": "…", "status": "IN_PROGRESS", "assigneeUserId": "…", "claimedAt": "…", "version": 4 } }`
-`409` → `TASK_ALREADY_CLAIMED` (§2.11)
+Tijelo je opcionalno; poslani `formData` se spaja s nacrtom zadatka.
+`200 TaskDetail` → `{ "data": { "id": "…", "status": "IN_PROGRESS",
+"assigneeUserId": "…", "claimedAt": "…", "version": 4 } }`
+`409` → `TASK_ALREADY_CLAIMED` (§2.11, detalji u §7.8)
 
 ### 3.4 Završetak
 ```http
@@ -1008,8 +1013,10 @@ PostgreSQL advisory lockom, uz jedinstveni indeks kao drugu zaštitu.
 
 Načini dodjele imaju tačnu semantiku:
 
-- `OPEN_CLAIM`: `invitedUserIds` su kandidati; prazna lista znači da zasad
-  nema kandidata osim kreatora i korisnika koji zadatak i inače smiju vidjeti.
+- `OPEN_CLAIM`: `invitedUserIds` su kandidati, a kreator s `task:claim`
+  također može preuzeti zadatak; prazna lista zato ostavlja kreatora kao
+  jedinog kandidata do buduće naknadne dodjele. Samo pravo pregleda
+  (`task:view_all`) ili uloga posmatrača ne daje kandidaturu.
 - `ASSIGN_DIRECT`: tačno jedan `assigneeUserId`, bez pozvanih. Zadatak ostaje
   `OPEN`, `claimedAt` je `null`, a `Task.assigneeUserId` i jedinstveni aktivni
   `TaskAssignment(role=ASSIGNEE)` označavaju odabranog izvršioca do claim-a.
@@ -1047,7 +1054,7 @@ koristi kao trajna garancija. Globalni `Idempotency-Key` mehanizam iz §1.4
 snapshot forme se ne mijenjaju. Korisnik s `task:update` u `OWN` opsegu smije
 mijenjati samo zadatak koji je kreirao ili mu je direktno dodijeljen i samo
 dok je `OPEN`; puni `ALL` opseg može mijenjati i `IN_PROGRESS`. `COMPLETED`
-i `CANCELLED` daju `409 INVALID_TASK_TRANSITION`, zastarjela verzija
+i `CANCELLED` daju `422 INVALID_TASK_TRANSITION`, zastarjela verzija
 `409 VERSION_CONFLICT` s `currentVersion`, a nedovoljan opseg
 `403 SCOPE_DENIED`. Novi `formData` zamjenjuje nacrt prema snapshotovanoj
 verziji (i kad je naknadno `RETIRED`) istim djelimičnim pravilima i trenutnim
@@ -1064,8 +1071,83 @@ izvršilac i `claimedAt` ostaju, a `completedAt`, `completedById` i trajanje
 se brišu. Obje akcije zaključavaju red, rade CAS na verziji/statusu, pišu
 događaj i DB outbox s novom verzijom u idempotency ključu.
 
-Nema novih ENV varijabli, Redis ključeva/redova ni migracija. Claim,
-završetak/override, release, naknadna dodjela, komentari, zasebna historija,
-`/tasks/available`, outbox worker i FCM/SSE isporuka nisu implementirani u
-ovoj cjelini. Jedinični lažni klijent ne dokazuje stvarni PostgreSQL advisory
-lock, `FOR UPDATE`, rollback ni puni HTTP lanac na Coolifyu.
+Nema novih ENV varijabli, Redis ključeva/redova ni migracija. Atomski
+claim i `/tasks/available` dodani su u §7.8. Završetak/override, release,
+naknadna dodjela, komentari, zasebna historija, outbox worker i FCM/SSE
+isporuka nisu dio jezgre. Jedinični lažni klijent ne dokazuje stvarni
+PostgreSQL advisory lock, `FOR UPDATE`, rollback ni puni HTTP lanac na
+Coolifyu.
+
+### 7.8 Slobodni zadaci i atomski claim — treća cjelina Faze 5
+
+Implementirani su:
+
+| Metoda i ruta | Permisija | Odgovor i audit |
+|---|---|---|
+| `GET /tasks/available` | `task:claim` | `TaskListResponse`; bez audita |
+| `POST /tasks/:id/claim` | `task:claim` | `200 TaskDetail`; audit `CLAIM`/`INFO` prije/poslije, DB outbox `TASK_CLAIMED` |
+
+`/tasks/available` koristi standardnu paginaciju, `q` nad kodom/naslovom/
+opisom te filtere `vehicleId`, `taskTypeId`, `priority`, `dueFrom`,
+`dueTo` i `overdueOnly`; sort whitelist i zadani redoslijed isti su kao
+kod `GET /tasks`. Status je serverski fiksiran na `OPEN`, pa DTO ne prima
+`status`, `assigneeUserId`, `createdById` ni `mine`.
+
+Ista kandidatura upravlja listom i claim-om:
+
+- `ASSIGN_DIRECT`: samo korisnik koji je istovremeno
+  `Task.assigneeUserId` i ima aktivan `TaskAssignment(role=ASSIGNEE)`.
+- `OPEN_CLAIM`: kreator ili korisnik s aktivnim `INVITED` redom; postojeći
+  aktivni izvršilac također ostaje kandidat za tačnu `409` klasifikaciju
+  nakon što zadatak pređe u `IN_PROGRESS`.
+- `BROADCAST`: svaki aktivni nosilac primjenjivog `task:claim` opsega;
+  kod opsega `OWN` samo kreator (ili već postavljeni izvršilac).
+- `VEHICLE_IDS` opseg dodatno zahtijeva da je vozilo zadatka u grantu;
+  `DRIVER_IDS` nema primjenjivu vezu prema zadatku i ne daje kandidaturu.
+- Posmatrač i korisnik koji zadatak vidi samo preko `task:view_all` nisu
+  kandidati za direktan ni pozvani zadatak. `allowMultipleClaimants` zasad
+  nema efekta jer model i djelimični jedinstveni indeks dozvoljavaju
+  tačno jednog aktivnog izvršioca.
+
+Claim DTO je strict `{formData}` i tijelo smije izostati. Poslani nacrt se
+spaja preko postojećeg `Task.formData`, validira prema snapshotovanoj
+verziji forme kao djelimičan zapis i mora ispuniti trenutne obavezne
+`ON_CREATE` i `ON_CLAIM` zahtjeve vrste, uključujući `minPhotos`; greške
+su `422 FORM_VALIDATION_FAILED` s detaljima po `formData.<fieldKey>`.
+Claim ne radi punu validaciju ni normalizaciju završetka.
+
+Uspješan prelaz radi jedan uslovni `UPDATE` nad `Task` kojem su u
+`WHERE` dijelu ID, `deletedAt IS NULL`, `status='OPEN'`, učitana verzija,
+kandidatura aktera i nepostojanje drugog aktivnog `ASSIGNEE` reda. Upis
+postavlja `IN_PROGRESS`, `assigneeUserId`, `claimedAt`, validirani
+`formData` i `version+1`. Ako paralelan PATCH samo poveća verziju, claim
+se u istoj transakciji ograničeno ponavlja nad svježim zapisom; ako drugi
+akter pobijedi, `count=0` se mapira na `409 TASK_ALREADY_CLAIMED`. U
+istoj transakciji nastaje ili se reaktivira tačno jedan aktivni
+`TaskAssignment(role=ASSIGNEE)`, immutabilni `TaskEvent(CLAIMED)` i
+`OutboxEvent(TASK_CLAIMED)` s ključem
+`task:{taskId}:TASK_CLAIMED:v{newVersion}`. Kod direktne dodjele
+postojeći aktivni `ASSIGNEE` red se ne duplira. Globalni
+`Idempotency-Key` replay štiti ponovljeni zahtjev od drugog izvršenja
+handlera; bez hash istog ključa ponovni claim već preuzetog zadatka je
+`409`, uključujući i kad je trenutni izvršilac sam akter.
+
+Greške su: `403 PERMISSION_DENIED` bez `task:claim`, `403
+ACCOUNT_INACTIVE` za neaktivnog kandidata, `404 NOT_FOUND` za
+nepostojeći ili akteru nevidljiv/nepristupačan zadatak, `403
+SCOPE_DENIED` za vidljiv zadatak izvan kandidature/opsega, `409
+TASK_ALREADY_CLAIMED` za `IN_PROGRESS` zadatak, `422
+INVALID_TASK_TRANSITION` za `COMPLETED`/`CANCELLED` te `409
+VERSION_CONFLICT` samo ako zapis nastavi mijenjati verziju tokom
+ograničenih ponavljanja. Kod `TASK_ALREADY_CLAIMED` se `taskId`,
+`assigneeUserId`/`claimedByUserId`, `assigneeName`/`claimedByName` i
+`claimedAt` izlažu samo akteru koji zadatak smije vidjeti ili je bio
+kandidat; ostali dobijaju `404`, bez otkrivanja stanja.
+
+Nema novih ENV varijabli, Redis ključeva/redova ni migracija: djelimični
+jedinstveni indeks aktivnog izvršioca već postoji u ručnoj migraciji.
+Outbox red se zapisuje transakcijski, ali worker, FCM i SSE isporuka,
+web/mobilni ekrani zadataka, završetak i release ostaju zasebne cjeline.
+Lažni jedinični klijent dokazuje uslovnu logiku i klasifikaciju, ne
+stvarnu PostgreSQL konkurenciju, djelimični indeks pod opterećenjem,
+rollback ni Coolify HTTP tok; P6 stress-test i dalje zahtijeva pravu bazu.

@@ -1,10 +1,10 @@
 /**
- * Zadaci — jezgra Faze 5 (docs/07 §2.11).
+ * Zadaci — jezgra i atomsko preuzimanje u Fazi 5 (docs/07 §2.11).
  *
- * Ova cjelina namjerno pokriva kreiranje, čitanje, djelimičnu izmjenu,
- * otkazivanje i ponovno otvaranje. Atomski claim i završetak ostaju zasebne
- * cjeline jer nose konkurencijske i autorizacijske garancije koje se moraju
- * dokazati odvojenim testovima.
+ * Servis pokriva kreiranje, čitanje, djelimičnu izmjenu, otkazivanje,
+ * ponovno otvaranje, listu slobodnih zadataka i claim. Završetak ostaje
+ * zasebna cjelina jer tek tada forma prolazi punu validaciju i
+ * normalizaciju u kolone zadatka.
  *
  * Pri kreiranju se snapshotuje tačna objavljena TASK forma: prvo eksplicitna
  * zadana forma vrste (`TaskType.formSchemaId`), zatim objavljena forma vezana
@@ -21,15 +21,18 @@ import {
   type ClientType,
   type EffectivePermissionsResult,
   type Permission,
+  type PermissionScope,
   type TaskAssignMode,
   type TaskStatus,
 } from '@vfm/shared';
 import { flattenFields, validateRecord, type FormDefinition } from '@vfm/form-engine';
 import type {
   CancelTaskInput,
+  ClaimTaskInput,
   CreateTaskInput,
   ReopenTaskInput,
   TaskAssignmentView,
+  TaskAvailableQuery,
   TaskDetail,
   TaskEventView,
   TaskListQuery,
@@ -166,6 +169,9 @@ interface ActorAccess {
   readonly updateAll: boolean;
   readonly cancelAll: boolean;
   readonly reopenAll: boolean;
+  readonly claimScope: PermissionScope | null;
+  /** `null` = bez ograničenja po vozilu; prazan skup = nijedno vozilo. */
+  readonly claimVehicleIds: readonly string[] | null;
 }
 
 interface ResolvedTaskForm {
@@ -359,7 +365,70 @@ export class TasksService {
       conditions.push({ dueAt: { lt: now }, status: { in: ['OPEN', 'IN_PROGRESS'] } });
     }
 
-    const where: Prisma.TaskWhereInput = { AND: conditions };
+    return this.queryTaskPage({ AND: conditions }, query, now);
+  }
+
+  /**
+   * Zadataci koje akter u ovom trenutku smije preuzeti.
+   *
+   * Kandidatura je ista kao u atomskom claim-u: direktni izvršilac, pozvani
+   * ili kreator kod `OPEN_CLAIM` te svi nosioci primjenjivog `task:claim`
+   * opsega kod `BROADCAST` zadatka. `task:view_all` sam po sebi ne daje
+   * kandidaturu za tuđi direktni ili pozvani zadatak.
+   */
+  async available(
+    query: TaskAvailableQuery,
+    actorInput: TaskActorContext | string | undefined,
+  ): Promise<TaskListResponse> {
+    const access = await this.resolveAccess(actorInput);
+    this.assertClaimPermission(access);
+
+    const now = new Date();
+    const conditions: Prisma.TaskWhereInput[] = [
+      { deletedAt: null },
+      { status: 'OPEN' },
+      this.claimEligibilityWhere(access),
+      {
+        assignments: {
+          none: {
+            role: 'ASSIGNEE',
+            revokedAt: null,
+            NOT: { userId: access.actor.id },
+          },
+        },
+      },
+    ];
+
+    if (query.vehicleId) conditions.push({ vehicleId: query.vehicleId });
+    if (query.taskTypeId) conditions.push({ taskTypeId: query.taskTypeId });
+    if (query.priority) conditions.push({ priority: query.priority });
+    if (query.dueFrom || query.dueTo) {
+      conditions.push({
+        dueAt: {
+          ...(query.dueFrom ? { gte: new Date(query.dueFrom) } : {}),
+          ...(query.dueTo ? { lte: new Date(query.dueTo) } : {}),
+        },
+      });
+    }
+    if (query.q?.trim()) {
+      const contains = { contains: query.q.trim(), mode: 'insensitive' as const };
+      conditions.push({ OR: [{ code: contains }, { title: contains }, { description: contains }] });
+    }
+    if (query.overdueOnly) conditions.push({ dueAt: { lt: now } });
+
+    return this.queryTaskPage({ AND: conditions }, query, now);
+  }
+
+  private async queryTaskPage(
+    where: Prisma.TaskWhereInput,
+    query: {
+      readonly page: number;
+      readonly pageSize: number;
+      readonly sortBy?: string;
+      readonly sortOrder: 'asc' | 'desc';
+    },
+    now = new Date(),
+  ): Promise<TaskListResponse> {
     const allowedSort = ['dueAt', 'createdAt', 'updatedAt', 'priority', 'title', 'code'] as const;
     const sort = allowedSort.find((key) => key === query.sortBy);
     const orderBy: Prisma.TaskOrderByWithRelationInput[] = sort
@@ -869,6 +938,152 @@ export class TasksService {
     });
   }
 
+  /**
+   * Atomsko preuzimanje slobodnog zadatka.
+   *
+   * Kandidatura i forma se provjere nad trenutnim zapisom, ali pobjednika
+   * odlučuje jedan uslovni `UPDATE` (`OPEN` + učitana verzija + kandidatura
+   * u `WHERE` dijelu). Paralelni gubitnik zato ne može upisati drugog
+   * izvršioca: njegov `count` je 0 i svježe stanje se mapira na
+   * `409 TASK_ALREADY_CLAIMED`. Ako je u međuvremenu samo PATCH povećao
+   * verziju, pokušaj se ograničeno ponavlja nad svježim nacrtom forme.
+   */
+  async claim(
+    id: string,
+    input: ClaimTaskInput,
+    actorInput: TaskActorContext | string | undefined,
+  ): Promise<TaskMutation<TaskDetail>> {
+    const access = await this.resolveAccess(actorInput);
+    this.assertClaimPermission(access);
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertActiveClaimant(tx, access.actor.id);
+      let latestVersion = 0;
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const current = await this.loadDetail(tx, id);
+        latestVersion = current.version;
+        const before = this.serializeDetail(current);
+        this.assertClaimable(current, access);
+
+        const form = await this.loadSnapshotForm(tx, current.formSchemaVersionId);
+        const requirements = await tx.taskCompletionRequirement.findMany({
+          where: {
+            taskTypeId: current.taskTypeId,
+            stage: { in: ['ON_CREATE', 'ON_CLAIM'] },
+          },
+          select: { fieldKey: true, required: true, stage: true, minPhotos: true },
+        });
+        const formData = this.validateDraftFormData({
+          form,
+          values: { ...plainRecord(current.formData), ...input.formData },
+          isNew: false,
+          requirements,
+          stages: ['ON_CREATE', 'ON_CLAIM'],
+        });
+
+        const now = new Date();
+        const data: Prisma.TaskUncheckedUpdateManyInput = {
+          status: 'IN_PROGRESS',
+          assigneeUserId: access.actor.id,
+          claimedAt: now,
+          formData: formData as Prisma.InputJsonObject,
+          version: { increment: 1 },
+        };
+        const changed = await tx.task.updateMany({
+          where: {
+            id,
+            deletedAt: null,
+            status: 'OPEN',
+            version: current.version,
+            AND: [
+              this.claimEligibilityWhere(access),
+              {
+                assignments: {
+                  none: {
+                    role: 'ASSIGNEE',
+                    revokedAt: null,
+                    NOT: { userId: access.actor.id },
+                  },
+                },
+              },
+            ],
+          },
+          data,
+        });
+
+        if (changed.count !== 1) {
+          const fresh = await this.loadDetail(tx, id);
+          latestVersion = fresh.version;
+          this.assertClaimable(fresh, access);
+          if (fresh.version !== current.version && attempt < 2) continue;
+          throw new VfmException(
+            'VERSION_CONFLICT',
+            'Zadatak je u međuvremenu izmijenjen. Ponovo ga učitajte i pokušajte preuzeti.',
+            undefined,
+            { currentVersion: fresh.version },
+          );
+        }
+
+        await this.ensureClaimAssignment(tx, id, access.actor.id, now);
+        await tx.taskEvent.create({
+          data: this.eventData({
+            taskId: id,
+            action: 'CLAIMED',
+            actor: access.actor,
+            at: now,
+            data: {
+              fromStatus: 'OPEN',
+              toStatus: 'IN_PROGRESS',
+              assigneeUserId: access.actor.id,
+              previousAssigneeUserId: current.assigneeUserId,
+              assignMode: current.assignMode,
+              previousVersion: current.version,
+              version: current.version + 1,
+            },
+            formSchemaVersionId: current.formSchemaVersionId,
+          }),
+        });
+        await this.createOutbox(tx, {
+          taskId: id,
+          code: current.code,
+          eventType: 'TASK_CLAIMED',
+          status: 'IN_PROGRESS',
+          version: current.version + 1,
+          actorId: access.actor.id,
+          recipientUserIds: this.involvedUserIds(current, access.actor.id),
+          extra: {
+            fromStatus: 'OPEN',
+            assigneeUserId: access.actor.id,
+            assignMode: current.assignMode,
+            broadcast: current.assignMode === 'BROADCAST',
+          },
+        });
+
+        const updated = await this.loadDetail(tx, id);
+        const serialized = this.serializeDetail(updated, now);
+        return {
+          data: serialized,
+          before: { ...before },
+          after: { ...serialized },
+          meta: {
+            code: serialized.code,
+            status: serialized.status,
+            assigneeUserId: serialized.assigneeUserId,
+            claimedAt: serialized.claimedAt,
+          },
+        };
+      }
+
+      throw new VfmException(
+        'VERSION_CONFLICT',
+        'Zadatak je u međuvremenu izmijenjen. Ponovo ga učitajte i pokušajte preuzeti.',
+        undefined,
+        { currentVersion: latestVersion },
+      );
+    });
+  }
+
   private serialize(row: TaskRow, now = new Date()): TaskView {
     return {
       id: row.id,
@@ -970,6 +1185,208 @@ export class TasksService {
     return [...ids];
   }
 
+  private assertClaimPermission(access: ActorAccess): void {
+    if (access.claimScope !== null) return;
+    throw VfmErrors.permissionDenied([
+      detail('task:claim', 'Za pregled slobodnih zadataka i preuzimanje potrebna je permisija task:claim.'),
+    ]);
+  }
+
+  private async assertActiveClaimant(tx: Tx, actorId: string): Promise<void> {
+    const user = await tx.user.findFirst({
+      where: { id: actorId, deletedAt: null },
+      select: { status: true },
+    });
+    if (!user || user.status !== 'ACTIVE') throw VfmErrors.accountInactive();
+  }
+
+  private claimVehicleAllowed(row: TaskDetailRow, access: ActorAccess): boolean {
+    if (access.claimVehicleIds === null) return true;
+    return row.vehicleId !== null && access.claimVehicleIds.includes(row.vehicleId);
+  }
+
+  /** Da li akter pripada krugu kandidata, neovisno o trenutnom statusu. */
+  private isClaimCandidate(row: TaskDetailRow, access: ActorAccess): boolean {
+    if (access.claimScope === null || access.claimScope === 'DRIVER_IDS') return false;
+    if (!this.claimVehicleAllowed(row, access)) return false;
+
+    const actorId = access.actor.id;
+    const activeRoles = new Set(
+      row.assignments
+        .filter((assignment) => assignment.userId === actorId && !assignment.revokedAt)
+        .map((assignment) => assignment.role),
+    );
+    if (row.assigneeUserId === actorId || activeRoles.has('ASSIGNEE')) return true;
+
+    if (row.assignMode === 'ASSIGN_DIRECT') return false;
+    if (row.assignMode === 'OPEN_CLAIM') {
+      return row.createdById === actorId || activeRoles.has('INVITED');
+    }
+    return access.claimScope !== 'OWN' || row.createdById === actorId;
+  }
+
+  private canClaimNow(row: TaskDetailRow, access: ActorAccess): boolean {
+    if (row.status !== 'OPEN' || !this.isClaimCandidate(row, access)) return false;
+    const actorId = access.actor.id;
+    if (row.assigneeUserId !== null && row.assigneeUserId !== actorId) return false;
+
+    const activeAssignees = row.assignments.filter(
+      (assignment) => assignment.role === 'ASSIGNEE' && !assignment.revokedAt,
+    );
+    if (activeAssignees.some((assignment) => assignment.userId !== actorId)) return false;
+    if (row.assignMode === 'ASSIGN_DIRECT') {
+      return (
+        row.assigneeUserId === actorId && activeAssignees.some((assignment) => assignment.userId === actorId)
+      );
+    }
+    return true;
+  }
+
+  private assertClaimable(row: TaskDetailRow, access: ActorAccess): void {
+    const candidate = this.isClaimCandidate(row, access);
+    const visible = this.canView(row, access);
+
+    if (row.status === 'IN_PROGRESS') {
+      if (candidate || visible) throw this.alreadyClaimedError(row, access.actor.id);
+      throw new VfmException('NOT_FOUND', 'Zadatak nije pronađen.');
+    }
+    if (row.status !== 'OPEN') {
+      if (candidate || visible) {
+        throw new VfmException(
+          'INVALID_TASK_TRANSITION',
+          `Zadatak u statusu ${row.status} se ne može preuzeti.`,
+          undefined,
+          { from: row.status, to: 'IN_PROGRESS' },
+        );
+      }
+      throw new VfmException('NOT_FOUND', 'Zadatak nije pronađen.');
+    }
+    if (this.canClaimNow(row, access)) return;
+
+    const occupiedByOther =
+      (row.assigneeUserId !== null && row.assigneeUserId !== access.actor.id) ||
+      row.assignments.some(
+        (assignment) =>
+          assignment.role === 'ASSIGNEE' && !assignment.revokedAt && assignment.userId !== access.actor.id,
+      );
+    if (candidate && occupiedByOther) throw this.alreadyClaimedError(row, access.actor.id);
+    if (visible) {
+      throw VfmErrors.scopeDenied([
+        detail(
+          'task:claim',
+          'Zadatak mogu preuzeti samo direktni izvršilac, pozvani korisnik, kreator slobodnog zadatka ili kandidat za broadcast zadatak u dozvoljenom opsegu.',
+        ),
+      ]);
+    }
+    throw new VfmException('NOT_FOUND', 'Zadatak nije pronađen.');
+  }
+
+  private alreadyClaimedError(row: TaskDetailRow, actorId: string): VfmException {
+    const claimedByName = userName(row.assignee);
+    const isSelf = row.assigneeUserId === actorId;
+    return new VfmException(
+      'TASK_ALREADY_CLAIMED',
+      isSelf
+        ? 'Zadatak ste već preuzeli.'
+        : claimedByName
+          ? `Zadatak je preuzeo ${claimedByName}.`
+          : undefined,
+      undefined,
+      {
+        taskId: row.id,
+        assigneeUserId: row.assigneeUserId,
+        claimedByUserId: row.assigneeUserId,
+        assigneeName: claimedByName,
+        claimedByName,
+        claimedAt: toIso(row.claimedAt),
+      },
+    );
+  }
+
+  /** Prisma pandan `isClaimCandidate`/`canClaimNow` za jedan atomski UPDATE. */
+  private claimEligibilityWhere(access: ActorAccess): Prisma.TaskWhereInput {
+    if (access.claimScope === null || access.claimScope === 'DRIVER_IDS') {
+      return { id: { in: [] } };
+    }
+
+    const actorId = access.actor.id;
+    const canonicalAssignee: Prisma.TaskWhereInput = {
+      OR: [{ assigneeUserId: null }, { assigneeUserId: actorId }],
+    };
+    const candidates: Prisma.TaskWhereInput[] = [
+      {
+        AND: [
+          canonicalAssignee,
+          {
+            assignments: {
+              some: { userId: actorId, role: 'ASSIGNEE', revokedAt: null },
+            },
+          },
+        ],
+      },
+      {
+        assignMode: 'OPEN_CLAIM',
+        AND: [
+          canonicalAssignee,
+          {
+            OR: [
+              { createdById: actorId },
+              {
+                assignments: {
+                  some: { userId: actorId, role: 'INVITED', revokedAt: null },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    if (access.claimScope === 'OWN') {
+      candidates.push({
+        assignMode: 'BROADCAST',
+        createdById: actorId,
+        AND: [canonicalAssignee],
+      });
+    } else {
+      candidates.push({ assignMode: 'BROADCAST', AND: [canonicalAssignee] });
+    }
+
+    const where: Prisma.TaskWhereInput = { OR: candidates };
+    return access.claimVehicleIds === null
+      ? where
+      : { AND: [where, { vehicleId: { in: [...access.claimVehicleIds] } }] };
+  }
+
+  private async ensureClaimAssignment(tx: Tx, taskId: string, actorId: string, now: Date): Promise<void> {
+    const existing = await tx.taskAssignment.findFirst({
+      where: { taskId, userId: actorId, role: 'ASSIGNEE' },
+      select: { id: true, revokedAt: true },
+    });
+    if (!existing) {
+      await tx.taskAssignment.createMany({
+        data: [
+          {
+            id: randomUUID(),
+            taskId,
+            userId: actorId,
+            role: 'ASSIGNEE',
+            assignedById: actorId,
+            assignedAt: now,
+            note: null,
+          },
+        ],
+      });
+      return;
+    }
+    if (existing.revokedAt !== null) {
+      await tx.taskAssignment.updateMany({
+        where: { id: existing.id, revokedAt: { not: null } },
+        data: { revokedAt: null, assignedById: actorId, assignedAt: now },
+      });
+    }
+  }
+
   private async resolveAccess(actorInput: TaskActorContext | string | undefined): Promise<ActorAccess> {
     const actor: TaskActorContext | undefined =
       typeof actorInput === 'string' ? { id: actorInput } : actorInput;
@@ -983,6 +1400,20 @@ export class TasksService {
     const all = (permission: Permission): boolean =>
       permissions.isSuperAdmin || permissions.permissions.get(permission) === 'ALL';
 
+    const claimScope: PermissionScope | null = permissions.isSuperAdmin
+      ? 'ALL'
+      : (permissions.permissions.get('task:claim') ?? null);
+    const claimVehicleIds =
+      claimScope === 'VEHICLE_IDS'
+        ? [
+            ...new Set(
+              permissions.grants
+                .filter((grant) => grant.permission === 'task:claim' && grant.scope === 'VEHICLE_IDS')
+                .flatMap((grant) => grant.scopeVehicleIds ?? []),
+            ),
+          ]
+        : null;
+
     return {
       actor,
       permissions,
@@ -990,6 +1421,8 @@ export class TasksService {
       updateAll: all('task:update'),
       cancelAll: all('task:cancel'),
       reopenAll: all('task:reopen'),
+      claimScope,
+      claimVehicleIds,
     };
   }
 
@@ -1227,6 +1660,7 @@ export class TasksService {
     values: Record<string, unknown>;
     isNew: boolean;
     requirements: readonly RequirementRow[];
+    stages?: readonly string[];
   }): Record<string, unknown> {
     const result = validateRecord({
       version: {
@@ -1257,26 +1691,33 @@ export class TasksService {
     }
 
     const values = { ...result.values } as Record<string, unknown>;
-    this.assertOnCreateRequirements(args.form.definition, values, args.requirements);
+    this.assertStageRequirements(
+      args.form.definition,
+      values,
+      args.requirements,
+      args.stages ?? ['ON_CREATE'],
+    );
     return values;
   }
 
-  private assertOnCreateRequirements(
+  private assertStageRequirements(
     definition: FormDefinition,
     values: Record<string, unknown>,
     requirements: readonly RequirementRow[],
+    stages: readonly string[],
   ): void {
     const fields = new Map(flattenFields(definition).map(({ field }) => [field.key, field]));
     const issues = [] as ReturnType<typeof detail>[];
+    const stageSet = new Set(stages);
 
     for (const requirement of requirements) {
-      if (requirement.stage !== 'ON_CREATE' || !requirement.required) continue;
+      if (!stageSet.has(requirement.stage) || !requirement.required) continue;
       const field = fields.get(requirement.fieldKey);
       if (!field) {
         issues.push(
           detail(
             `formData.${requirement.fieldKey}`,
-            `ON_CREATE zahtjev pokazuje na polje koje ne postoji u snapshotovanoj formi.`,
+            `${requirement.stage} zahtjev pokazuje na polje koje ne postoji u snapshotovanoj formi.`,
           ),
         );
         continue;
@@ -1288,14 +1729,20 @@ export class TasksService {
           issues.push(
             detail(
               `formData.${requirement.fieldKey}`,
-              'ON_CREATE zahtjev za fotografije mora pokazivati na PHOTO polje.',
+              `${requirement.stage} zahtjev za fotografije mora pokazivati na PHOTO polje.`,
             ),
           );
         } else if (!Array.isArray(value) || value.length < requirement.minPhotos) {
+          const when =
+            requirement.stage === 'ON_CREATE'
+              ? 'Pri kreiranju'
+              : requirement.stage === 'ON_CLAIM'
+                ? 'Pri preuzimanju'
+                : `U fazi ${requirement.stage}`;
           issues.push(
             detail(
               `formData.${requirement.fieldKey}`,
-              `Pri kreiranju je potrebno najmanje ${requirement.minPhotos} fotografija.`,
+              `${when} je potrebno najmanje ${requirement.minPhotos} fotografija.`,
             ),
           );
         }
@@ -1303,12 +1750,22 @@ export class TasksService {
       }
 
       if (isEmptyValue(value)) {
-        issues.push(detail(`formData.${requirement.fieldKey}`, 'Polje je obavezno pri kreiranju zadatka.'));
+        const message =
+          requirement.stage === 'ON_CREATE'
+            ? 'Polje je obavezno pri kreiranju zadatka.'
+            : requirement.stage === 'ON_CLAIM'
+              ? 'Polje je obavezno pri preuzimanju zadatka.'
+              : `Polje je obavezno u fazi ${requirement.stage}.`;
+        issues.push(detail(`formData.${requirement.fieldKey}`, message));
       }
     }
 
     if (issues.length > 0) {
-      throw new VfmException('FORM_VALIDATION_FAILED', 'ON_CREATE zahtjevi zadatka nisu ispunjeni.', issues);
+      throw new VfmException(
+        'FORM_VALIDATION_FAILED',
+        `${stages.join('/')} zahtjevi zadatka nisu ispunjeni.`,
+        issues,
+      );
     }
   }
 
@@ -1359,7 +1816,7 @@ export class TasksService {
     args: {
       taskId: string;
       code: string;
-      eventType: 'TASK_CREATED' | 'TASK_CANCELLED' | 'TASK_REOPENED';
+      eventType: 'TASK_CREATED' | 'TASK_CLAIMED' | 'TASK_CANCELLED' | 'TASK_REOPENED';
       status: TaskStatus;
       version: number;
       actorId: string;

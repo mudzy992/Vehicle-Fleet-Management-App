@@ -3080,6 +3080,20 @@ export const reopenTaskSchema = z
   .strict();
 export type ReopenTaskInput = z.output<typeof reopenTaskSchema>;
 
+/**
+ * Atomsko preuzimanje zadatka. Tijelo je opcionalno; poslani `formData` se
+ * spaja s postojećim nacrtom i validira prema snapshotovanoj verziji forme,
+ * uključujući `ON_CREATE` i `ON_CLAIM` zahtjeve vrste. Verzija zapisa nije
+ * dio ugovora jer je uslovni prelaz `OPEN → IN_PROGRESS` konkurencijska
+ * garancija, a ponovljeni HTTP zahtjev štiti globalni `Idempotency-Key`.
+ */
+export const claimTaskSchema = z
+  .object({
+    formData: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ClaimTaskInput = z.output<typeof claimTaskSchema>;
+
 export const taskListQuerySchema = paginationQuerySchema
   .extend({
     status: taskStatusSchema.optional(),
@@ -3104,6 +3118,33 @@ export const taskListQuerySchema = paginationQuerySchema
     }
   });
 export type TaskListQuery = z.output<typeof taskListQuerySchema>;
+
+/**
+ * Slobodni zadaci koje trenutni korisnik zaista smije preuzeti. Status je
+ * serverski fiksiran na `OPEN`, pa query namjerno ne prima `status`,
+ * izvršioca, kreatora ni `mine`; kandidatura se izvodi iz `task:claim`
+ * opsega, načina dodjele i aktivnih `TaskAssignment` redova.
+ */
+export const taskAvailableQuerySchema = paginationQuerySchema
+  .extend({
+    vehicleId: uuidSchema.optional(),
+    taskTypeId: uuidSchema.optional(),
+    priority: taskPrioritySchema.optional(),
+    dueFrom: z.iso.datetime().optional(),
+    dueTo: z.iso.datetime().optional(),
+    overdueOnly: queryBoolean.default(false),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.dueFrom && value.dueTo && value.dueTo < value.dueFrom) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dueTo'],
+        message: 'Kraj roka ne može biti prije početka roka.',
+      });
+    }
+  });
+export type TaskAvailableQuery = z.output<typeof taskAvailableQuerySchema>;
 
 export const taskAssignmentViewSchema = z
   .object({

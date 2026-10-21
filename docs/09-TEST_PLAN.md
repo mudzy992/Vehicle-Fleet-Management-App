@@ -519,6 +519,34 @@ generičku formu. DI regresija je dopunjena `TasksService` i
 
 Lažni klijent izvršava transakcijski callback bez rollbacka i ne dokazuje
 stvarni PostgreSQL advisory lock za kod, `FOR UPDATE`, jedinstvenost pod
-konkurencijom, puni Nest HTTP lanac ni Coolify bazu. Atomski claim, završetak
-i P4–P8 ostaju zasebne cjeline; ova cjelina dokazuje samo upis DB outbox
-redova, ne worker, FCM ni SSE isporuku.
+konkurencijom, puni Nest HTTP lanac ni Coolify bazu. Atomski claim opisan
+je u sljedećem odjeljku; završetak i P4–P8 ostaju zasebne cjeline. Ova
+cjelina dokazuje samo upis DB outbox redova, ne worker, FCM ni SSE
+isporuku.
+
+### Slobodni zadaci i atomski claim — treća cjelina Faze 5
+
+`apps/api/test/unit/tasks.spec.ts` sada ima 29 testova; novih 9 pokriva:
+`/tasks/available` za pozvane, direktnog izvršioca, kreatora vlastitog
+broadcast zadatka i broadcast korisnika s `ALL` opsegom, uz isključenje
+posmatrača, vanjskog korisnika, zadatka u toku i aktera bez
+`task:claim`; uspješan claim kao jedan prelaz s aktivnim `ASSIGNEE`
+redom, jednim `CLAIMED` događajem i jednim `TASK_CLAIMED` outbox redom;
+20 paralelnih poziva nad lažnim klijentom s tačno jednim uspjehom i 19
+odgovora `409`; direktnu dodjelu bez dupliranja postojećeg izvršioca;
+`404` za nevidljiv zadatak, `SCOPE_DENIED` za posmatrača i odbijanje
+neaktivnog kandidata; kreatora `OPEN_CLAIM` zadatka bez pozvanih i
+reaktivaciju opozvanog `ASSIGNEE` reda; `OWN` i `VEHICLE_IDS` granice
+broadcast kandidature; spajanje nacrta i `ON_CLAIM` zahtjev prije prelaza
+te podatke o pobjedniku u `TASK_ALREADY_CLAIMED` i `422` za terminalna
+stanja. Metadata test sada čuva `task:claim`, HTTP `200` i audit `CLAIM`.
+
+`packages/shared/test/schemas.spec.ts` sada ima 32 testa; novi test čuva
+strict claim DTO bez serverske verzije/izvršioca i available query bez
+serverskog statusa ili `mine` filtera.
+
+Paralelni jedinični test nije P6 dokaz: lažni klijent izvršava
+`updateMany` sinhrono u jednom JavaScript procesu, bez PostgreSQL
+zaključavanja redova, djelimičnog jedinstvenog indeksa, rollbacka,
+Redis `Idempotency-Key` replaya i punog Nest HTTP lanca. P5/P6 i dalje
+zahtijevaju integration/stress test iz §3 nad pravom bazom na Coolifyu.
