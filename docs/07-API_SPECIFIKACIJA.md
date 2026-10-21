@@ -604,3 +604,29 @@ najnovijeg aktivnog servisa po datumu, vremenu unosa i ID-u, pa historijski serv
 ne prepisuje rok novijeg. Bez km nema očitanja niti promjene kilometraže.
 Nema novih ENV, Redis ključeva ni migracija. Jedinični testovi nisu dokaz
 konkurencije/rollbacka na pravom PostgreSQL-u; taj smoke-test još nije izvršen.
+
+### 7.3 Stavke računa servisa — Faza 4
+
+| Metoda | Put | Permisija | Ugovor |
+|---|---|---|---|
+| GET | `/services/:id/items` | `service:view` | `{version, totalCost, items[]}`; soft-delete → 404 |
+| PUT | `/services/:id/items` | `service:update` | atomska zamjena svih stavki, audit UPDATE prije/poslije |
+
+PUT prima `{version, items[]}`. Stavka: `kind` (`PART/LABOR/FLUID/OTHER`),
+`name`, `quantityHundredths` (1–1000000), `unitPrice` (feninzi), opciono
+`partNumber`, `notes`. Najviše 100 stavki. Odgovor: `{id, version, totalCost}`.
+GET dodaje ID i izračunati `totalPrice` za svaku stavku. Količina je u stotinkama
+(npr. 150 = 1,50); svaka stavka se zaokružuje na najbliži fening, pola naviše.
+Zbir ne smije prekoračiti 2147483647 feninga.
+
+CAS (`id`, `version`, `deletedAt`, aktivni status i nearhivirano vozilo) u istoj
+transakciji povećava verziju, mijenja stavke, zbir i `formData` tačne zapisne
+verzije (dozvoljena RETIRED forma, P10). Konflikt → `409 VERSION_CONFLICT`,
+nepostojeći servis → 404, neaktivna evidencija/arhivirano vozilo → validacijska
+greška. PART i FLUID ulaze u `partsCost`, LABOR u `laborCost`, OTHER samo u zbir.
+Prazna lista namjerno postavlja zbir na nulu. Ne mijenja km niti rok vozila.
+Zasebni POST/PATCH/DELETE endpointi po stavci iz §2.7 nisu implementirani;
+uređivanje ide kroz ovu verzionisanu zamjenu cijelog računa.
+
+Nema novih ENV/Redis ključeva ni migracija. Jedinični i DI testovi su dodani;
+HTTP smoke-test sa stvarnom bazom i konkurentnim upisima nije izvršen u sandboxu.

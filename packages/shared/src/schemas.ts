@@ -2298,3 +2298,33 @@ export const createServiceSchema = z
     { path: ['nextServiceDueKm'], message: 'Sljedeći servis ne može biti na manjoj kilometraži.' },
   );
 export type CreateServiceInput = z.output<typeof createServiceSchema>;
+
+/** Stavke računa: količina u stotinkama, cijena i iznosi u feningama. */
+export const serviceItemInputSchema = z
+  .object({
+    kind: z.enum(['PART', 'LABOR', 'FLUID', 'OTHER']),
+    name: z.string().trim().min(1).max(200),
+    quantityHundredths: z.number().int().min(1).max(1000000),
+    unitPrice: z.number().int().min(0).max(2147483647),
+    partNumber: z.string().trim().max(120).nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+  })
+  .strict();
+export type ServiceItemInput = z.output<typeof serviceItemInputSchema>;
+export const replaceServiceItemsSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    items: z.array(serviceItemInputSchema).max(100),
+  })
+  .strict();
+export type ReplaceServiceItemsInput = z.output<typeof replaceServiceItemsSchema>;
+export const serviceItemsResponseSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    totalCost: z.number().int().nonnegative(),
+    items: z.array(
+      serviceItemInputSchema.extend({ id: uuidSchema, totalPrice: z.number().int().nonnegative() }),
+    ),
+  })
+  .strict();
+export type ServiceItemsResponse = z.output<typeof serviceItemsResponseSchema>;

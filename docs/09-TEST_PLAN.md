@@ -288,3 +288,12 @@ arhiva/nepostojeće vozilo, povučena forma, budući datum, propagacija greške 
 rok iz najnovijeg servisa i granice DTO-a. Testovi koriste lažni transakcijski
 klijent; stvarni rollback i paralelni upisi na PostgreSQL-u nisu ovim dokazani.
 Seed testovi očekuju 6 formi i provjeravaju idempotentnost drugog prolaza.
+
+### Stavke servisa — Faza 4
+
+`apps/api/test/unit/service-items.spec.ts` — 12 testova: zaokruživanje feninga,
+prazan račun, granica integera, validacija količine/cijene/broja stavki, CAS,
+zapisna RETIRED forma i usklađivanje `formData.totalCost`, konflikt prije
+brisanja, 404, blokada neaktivne evidencije/arhive, greška upisa, pretvaranje
+Decimal količine pri čitanju i permisije kontrolera. Nest DI test dopunjen
+servisom/kontrolerom stavki (+2). Fake transakcija ne dokazuje stvarni DB rollback.

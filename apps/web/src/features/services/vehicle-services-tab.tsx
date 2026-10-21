@@ -1,3 +1,4 @@
+import { ServiceItemsPanel } from './service-items-panel.js';
 import { ServiceCreateForm } from './service-create-form.js';
 import { useSession } from '../auth/session.js';
 import { useQueryClient } from '@tanstack/react-query';
@@ -24,6 +25,7 @@ import { api, ApiError } from '../../lib/api.js';
 export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
   const client = useQueryClient();
   const { hasPermission } = useSession();
+  const [itemsId, setItemsId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [page, setPage] = useState(1);
   const query = useQuery({
@@ -33,6 +35,7 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
         `/services?vehicleId=${encodeURIComponent(vehicleId)}&page=${page}&pageSize=25`,
       ),
   });
+  if (itemsId) return <ServiceItemsPanel serviceId={itemsId} onClose={() => setItemsId(null)} />;
   if (adding && hasPermission('service:create'))
     return (
       <ServiceCreateForm
@@ -85,6 +88,7 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
                 <TH align="right">Trošak</TH>
                 <TH>Sljedeći servis</TH>
                 <TH>Status</TH>
+                <TH>Stavke računa</TH>
               </TR>
             </THead>
             <TBody>
@@ -112,6 +116,11 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
                   </TD>
                   <TD>
                     <Badge level="neutral">{statusLabel(row.status, 'record')}</Badge>
+                  </TD>
+                  <TD>
+                    <Button size="sm" variant="ghost" onClick={() => setItemsId(row.id)}>
+                      Stavke
+                    </Button>
                   </TD>
                 </TR>
               ))}

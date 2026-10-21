@@ -1,3 +1,5 @@
+import { ServiceItemsService } from '../../src/modules/services/service-items.service.js';
+import { ServiceItemsController } from '../../src/modules/services/service-items.controller.js';
 import { ServicesService } from '../../src/modules/services/services.service.js';
 import { ServicesController } from '../../src/modules/services/services.controller.js';
 /**
@@ -35,6 +37,7 @@ import { RemindersController } from '../../src/modules/reminders/reminders.contr
 const prismaProvider: Provider = { provide: PrismaService, useValue: {} };
 
 const services = [
+  ['ServiceItemsService', ServiceItemsService],
   ['ServicesService', ServicesService],
   ['AttachmentsService', AttachmentsService],
   ['VehiclesService', VehiclesService],
@@ -45,6 +48,7 @@ const services = [
 ] as const;
 
 const controllers = [
+  ['ServiceItemsController', ServiceItemsController, ServiceItemsService],
   ['ServicesController', ServicesController, ServicesService],
   ['AttachmentsController', AttachmentsController, AttachmentsService],
   ['VehiclesController', VehiclesController, VehiclesService],

@@ -807,3 +807,15 @@ Trošak se unosi u KM i šalje kao feninge; opcioni km je cijeli nenegativan bro
 Greške se prikazuju bez brisanja unosa. Nakon uspjeha se osvježavaju servisne
 liste, vozilo, lista vozila i očitanja. Otkazivanje ne upisuje ništa.
 Stavke računa, izmjena i brisanje servisa još nisu implementirani.
+
+### Stavke računa — dopuna Faze 4
+
+Profil vozila → Servisi → **Stavke** otvara
+`features/services/service-items-panel.tsx` (isti ekran profila, bez nove rute).
+Pregled uz `service:view`; **Uredi stavke** uz `service:update`.
+Korisnik dodaje/uklanja stavke, bira Dio/Rad/Tečnost/Ostalo, unosi naziv,
+količinu do dvije decimale, cijenu u KM, šifru i napomenu. Server računa zbir.
+Potvrda prije snimanja jasno kaže da zbir zamjenjuje prethodni ukupni trošak,
+a prazna lista postavlja nulu. Verzijski konflikt ne briše unos; zatvaranje i
+ponovno otvaranje učitava novu verziju. Nakon uspjeha osvježavaju se stavke i
+servisna lista. Izmjena osnovnih podataka servisa još nije implementirana.
