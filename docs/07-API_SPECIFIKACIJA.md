@@ -273,6 +273,7 @@ sistem, `ARCHIVED` je arhiva evidencije.
 | GET | `/services` | `service:view` | `vehicleId`, `status`, `serviceType`, `q` (vrsta/radionica/opis), paginacija; sortiranje `serviceDate`, `totalCost`, `createdAt`, `serviceType`; default datum opadajuće, stabilni ID kao drugi ključ |
 | GET | `/services/:id` | `service:view` | pregled osnovne evidencije; nepostojeći/soft-delete → `404 NOT_FOUND` |
 | PATCH | `/services/:id` | `service:update` | potpuna CAS izmjena datuma/km/rokova i opisnih polja; detalji u §7.4 |
+| DELETE | `/services/:id` | `service:delete` | soft-delete uz zaključano vozilo i ponovni obračun rokova; `204`; detalji u §7.4a |
 
 Odgovor liste: `{items, page, pageSize, total, totalPages}`; zapis nosi
 `formSchemaId`, `formSchemaVersionId`, `version`, datum, kilometražu, vrstu,
@@ -282,7 +283,7 @@ Stavke računa i puna dinamička forma još nisu dio odgovora pregleda.
 
 **Planirano u narednim cjelinama (nije još dostupno):**
 
-`DELETE /services/:id`, zasebni endpointi po jednoj stavci računa,
+Zasebni endpointi po jednoj stavci računa,
 `POST /services/:id/attachments`. Pri kreiranju se opciono upisuje `OdometerReading` (ista
 transakcija) i ažurira `Vehicle.nextServiceDue*`.
 
@@ -676,6 +677,29 @@ briše trenutnu/historijsku kilometražu vozila. Nakon upisa se
 datumu, vremenu unosa i ID-u; verzija vozila raste samo ako se njegova
 denormalizovana km ili rok stvarno promijeni. Audit nosi servis prije/poslije
 i, za izmjene rasporeda, snapshot vozila prije/poslije u metapodacima.
+Nema novih migracija/ENV/Redis ključeva. Provjera sa stvarnom bazom nije
+izvršena iz sandboxa.
+
+### 7.4a Brisanje servisa — Faza 4
+
+`DELETE /services/:id` uz osjetljivu `service:delete` permisiju vraća `204`
+bez tijela i piše audit `DELETE`/`CRITICAL` prije/poslije, uz snapshot vozila
+u metapodacima. Zahtjev nema tijelo ni klijentsku verziju. Brisanje je
+soft-delete (`deletedAt`, verzija zapisa +1), pa zapis i njegove stavke ostaju
+u bazi, ali ih pregled, detalj i endpointi stavki više ne vraćaju.
+
+Transakcija prvo zaključava vozilo, zatim CAS-om na učitanoj verziji briše
+zapis. Konkurentna izmjena → `409 VERSION_CONFLICT` i zahtjev se ponavlja
+nakon ponovnog učitavanja; nepostojeći ili konkurentno obrisani zapis →
+`404 NOT_FOUND`; obrisano/arhivirano vozilo → validacijska greška. Status
+same servisne evidencije ne blokira brisanje.
+
+Ako je obrisani zapis bio `ACTIVE`, `Vehicle.nextServiceDue*` se u istoj
+transakciji ponovo računa iz najnovijeg preostalog aktivnog servisa po datumu,
+vremenu unosa i ID-u; bez preostalog aktivnog servisa oba roka postaju
+`null`. Verzija vozila raste samo ako se rok stvarno promijeni. Neaktivni
+zapis ne pokreće ponovni obračun. Historija očitanja i trenutna kilometraža
+vozila se ne mijenjaju — niža trenutna km ostaje zasebna auditovana korekcija.
 Nema novih migracija/ENV/Redis ključeva. Provjera sa stvarnom bazom nije
 izvršena iz sandboxa.
 

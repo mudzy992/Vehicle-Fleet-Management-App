@@ -464,7 +464,102 @@ export class ServicesService {
     });
   }
 
-  private async lockVehicle(tx: Prisma.TransactionClient, vehicleId: string): Promise<LockedVehicle> {
+  /**
+   * Soft-delete servisne evidencije.
+   *
+   * Vozilo se zaključava prije brisanja da uklanjanje najnovijeg aktivnog
+   * servisa i ponovni obračun `Vehicle.nextServiceDue*` budu jedna transakcija.
+   * Stavke računa ostaju vezane za obrisani zapis u bazi i više nisu dostupne
+   * kroz API; historija očitanja i trenutna kilometraža vozila se ne mijenjaju.
+   */
+  async remove(id: string, actorId?: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.serviceRecord.findFirst({
+        where: { id, deletedAt: null },
+        select: SERVICE_SELECT,
+      });
+      if (!current) throw new VfmException('NOT_FOUND', 'Servisna evidencija nije pronađena.');
+
+      const before = serialize(current);
+      const vehicle = await this.lockVehicle(
+        tx,
+        current.vehicleId,
+        'Briše se samo servis neobrisanog i nearhiviranog vozila.',
+      );
+      const vehicleBefore = vehicleSnapshot(vehicle);
+      const deletedAt = new Date();
+
+      const removed = await tx.serviceRecord.updateMany({
+        where: {
+          id,
+          version: current.version,
+          deletedAt: null,
+          vehicle: { deletedAt: null, status: { not: 'ARCHIVED' } },
+        },
+        data: { deletedAt, version: { increment: 1 } },
+      });
+      if (removed.count !== 1) {
+        const fresh = await tx.serviceRecord.findFirst({
+          where: { id, deletedAt: null },
+          select: { version: true },
+        });
+        if (!fresh) throw new VfmException('NOT_FOUND', 'Servisna evidencija nije pronađena.');
+        if (fresh.version !== current.version) {
+          throw new VfmException(
+            'VERSION_CONFLICT',
+            'Servis je izmijenjen. Ponovo učitajte evidenciju pa ponovite brisanje.',
+            undefined,
+            { currentVersion: fresh.version },
+          );
+        }
+        throw new VfmException(
+          'VALIDATION_ERROR',
+          'Briše se samo servis neobrisanog i nearhiviranog vozila.',
+        );
+      }
+
+      let vehicleAfter = vehicleBefore;
+      if (current.status === 'ACTIVE') {
+        const latest = await tx.serviceRecord.findFirst({
+          where: { vehicleId: current.vehicleId, deletedAt: null, status: 'ACTIVE' },
+          orderBy: [{ serviceDate: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+          select: { nextServiceDueDate: true, nextServiceDueKm: true },
+        });
+        const nextServiceDueDate = latest?.nextServiceDueDate ?? null;
+        const nextServiceDueKm = latest?.nextServiceDueKm ?? null;
+        const dueChanged =
+          dateOnly(nextServiceDueDate) !== dateOnly(vehicle.nextServiceDueDate) ||
+          nextServiceDueKm !== vehicle.nextServiceDueKm;
+
+        if (dueChanged) {
+          await tx.vehicle.update({
+            where: { id: vehicle.id },
+            data: { nextServiceDueDate, nextServiceDueKm, version: { increment: 1 } },
+          });
+          vehicleAfter = {
+            ...vehicleBefore,
+            nextServiceDueDate: dateOnly(nextServiceDueDate),
+            nextServiceDueKm,
+            version: vehicle.version + 1,
+          };
+        }
+      }
+
+      return {
+        data: { id },
+        before,
+        after: { id, deletedAt: deletedAt.toISOString(), deletedById: actorId ?? null },
+        vehicleBefore,
+        vehicleAfter,
+      };
+    });
+  }
+
+  private async lockVehicle(
+    tx: Prisma.TransactionClient,
+    vehicleId: string,
+    unavailableMessage = 'Mijenja se samo aktivni servis nearhiviranog vozila.',
+  ): Promise<LockedVehicle> {
     const rows = await tx.$queryRaw<LockedVehicle[]>`
       SELECT "id", "odometerKm", "status", "nextServiceDueDate", "nextServiceDueKm", "version"
       FROM "Vehicle"
@@ -472,7 +567,7 @@ export class ServicesService {
       FOR UPDATE`;
     const vehicle = rows[0];
     if (!vehicle || vehicle.status === 'ARCHIVED') {
-      throw new VfmException('VALIDATION_ERROR', 'Mijenja se samo aktivni servis nearhiviranog vozila.');
+      throw new VfmException('VALIDATION_ERROR', unavailableMessage);
     }
     return vehicle;
   }

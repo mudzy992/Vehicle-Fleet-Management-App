@@ -3,8 +3,13 @@ import type { ServiceRecord } from '@vfm/shared/schemas';
 import { ServiceItemsPanel } from './service-items-panel.js';
 import { ServiceCreateForm } from './service-create-form.js';
 import { useSession } from '../auth/session.js';
-import { useQueryClient } from '@tanstack/react-query';
-/** Pregled i unos servisa vozila; stavke računa slijede odvojeno. */
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  nextServicesPageAfterDelete,
+  serviceDeleteConfirmation,
+  serviceDeletedMessage,
+} from './service-delete-model.js';
+/** Pregled, unos, izmjena i brisanje servisa vozila. */
 import { useQuery } from '@tanstack/react-query';
 import { statusLabel } from '@vfm/shared';
 import type { ServiceListResponse } from '@vfm/shared/schemas';
@@ -31,6 +36,8 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
   const [itemsId, setItemsId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [page, setPage] = useState(1);
+  const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ['services', vehicleId, page],
     queryFn: () =>
@@ -38,6 +45,41 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
         `/services?vehicleId=${encodeURIComponent(vehicleId)}&page=${page}&pageSize=25`,
       ),
   });
+  const canDelete = hasPermission('service:delete');
+  const remove = useMutation({
+    mutationFn: (row: ServiceRecord) => api.delete<void>(`/services/${row.id}`),
+    onSuccess: async (_data, row) => {
+      const nextPage = nextServicesPageAfterDelete(page, query.data?.items.length ?? 0);
+      if (nextPage !== page) setPage(nextPage);
+      setDeleteMessage(serviceDeletedMessage(row));
+      setDeleteError(null);
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['services'] }),
+        client.invalidateQueries({ queryKey: ['service-items', row.id] }),
+        client.invalidateQueries({ queryKey: ['vehicle', vehicleId] }),
+        client.invalidateQueries({ queryKey: ['vehicles'] }),
+      ]);
+    },
+    onError: (error) =>
+      setDeleteError(
+        error instanceof ApiError || error instanceof Error ? error.message : 'Brisanje nije uspjelo.',
+      ),
+  });
+  const requestDelete = (row: ServiceRecord) => {
+    setDeleteMessage(null);
+    setDeleteError(null);
+    if (window.confirm(serviceDeleteConfirmation(row))) remove.mutate(row);
+  };
+  const deleteFeedback = (
+    <>
+      {deleteMessage && <p className="text-sm">{deleteMessage}</p>}
+      {deleteError && (
+        <p role="alert" className="text-sm text-[var(--danger)]">
+          {deleteError}
+        </p>
+      )}
+    </>
+  );
   if (editing && hasPermission('service:update'))
     return <ServiceEditForm key={editing.id} record={editing} onClose={() => setEditing(null)} />;
   if (itemsId) return <ServiceItemsPanel serviceId={itemsId} onClose={() => setItemsId(null)} />;
@@ -73,15 +115,14 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
     return (
       <div className="space-y-4">
         {addButton}
-        <EmptyState
-          title="Nema servisnih evidencija"
-          description="Dodajte servisnu evidenciju. Stavke računa slijede u narednoj cjelini."
-        />
+        {deleteFeedback}
+        <EmptyState title="Nema servisnih evidencija" description="Dodajte servisnu evidenciju." />
       </div>
     );
   return (
     <div className="space-y-4">
       {addButton}
+      {deleteFeedback}
       <Card>
         <CardContent>
           <Table>
@@ -129,6 +170,18 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
                     {hasPermission('service:update') && row.status === 'ACTIVE' && (
                       <Button size="sm" variant="ghost" onClick={() => setEditing(row)}>
                         Uredi servis
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        disabled={remove.isPending}
+                        loading={remove.isPending && remove.variables?.id === row.id}
+                        aria-label={`Obriši servis ${row.serviceType} od ${row.serviceDate}`}
+                        onClick={() => requestDelete(row)}
+                      >
+                        Obriši
                       </Button>
                     )}
                   </TD>

@@ -4,7 +4,19 @@ import { Audit, CurrentUser } from '../../common/decorators/auth.decorators.js';
 import { AuditContext } from '../../common/audit/audit.types.js';
 import type { AuthenticatedUser, VfmRequest } from '../../common/types/authenticated-user.js';
 /** Faza 4 — pregled i auditovani unos servisnih evidencija. */
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { serviceListQuerySchema, uuidSchema, type ServiceListQuery } from '@vfm/shared/schemas';
 import { RequirePermissions } from '../../common/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
@@ -54,6 +66,25 @@ export class ServicesController {
       audit.set('vehicleBefore', result.vehicleBefore).set('vehicleAfter', result.vehicleAfter);
     }
     return result.data;
+  }
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions('service:delete')
+  @Audit('DELETE', { severity: 'CRITICAL', resource: 'ServiceRecord' })
+  async remove(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ): Promise<void> {
+    const result = await this.services.remove(id, actor?.id);
+    AuditContext.from(request)
+      .setEntityId(id)
+      .setResource('ServiceRecord')
+      .setBefore(result.before)
+      .setAfter(result.after)
+      .set('vehicleId', result.before.vehicleId)
+      .set('vehicleBefore', result.vehicleBefore)
+      .set('vehicleAfter', result.vehicleAfter);
   }
   @Get(':id')
   @RequirePermissions('service:view')
