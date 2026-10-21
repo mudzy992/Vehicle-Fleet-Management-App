@@ -5,6 +5,7 @@
  * nove objekte, `updateMany` poštuje `version` u `where`, a filter podržava
  * `status`, `OR` s `contains`, `categories.some` i raspone datuma.
  */
+import { toLocalDateString } from '@vfm/shared';
 import { SEED_FORMS } from '../../src/tools/seed-forms.js';
 
 /** Definicija iz seed-a (ista koja ide u produkciju). */
@@ -392,10 +393,15 @@ function asPrisma(fake: FakeDriverPrisma): never {
   return fake as unknown as never;
 }
 
-/** Danas + N dana kao `Date` (za `licenseExpiresAt`). */
+/**
+ * Lokalni „danas” (`Europe/Sarajevo`) + N dana kao `@db.Date`.
+ *
+ * Servis granicu `expiringInDays` računa po lokalnom datumu, pa helper ne
+ * smije koristiti UTC datum: između lokalne ponoći i UTC ponoći ta dva
+ * datuma nisu ista.
+ */
 function inDays(days: number): Date {
-  const date = new Date();
-  date.setUTCHours(0, 0, 0, 0);
+  const date = new Date(`${toLocalDateString(new Date())}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date;
 }
