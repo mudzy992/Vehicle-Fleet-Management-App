@@ -2,7 +2,7 @@
 import 'reflect-metadata';
 import { describe, expect, it, vi } from 'vitest';
 import { createTireSetSchema, tireSetListQuerySchema, tireSetViewSchema } from '@vfm/shared/schemas';
-import { TiresController } from '../../src/modules/tires/tires.controller.js';
+import { TireSetsController } from '../../src/modules/tires/tires.controller.js';
 import { TiresService } from '../../src/modules/tires/tires.service.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 import { SEED_FORMS } from '../../src/tools/seed-forms.js';
@@ -211,12 +211,12 @@ describe('Gume — kompleti', () => {
 
   it('kontroler razdvaja pregled i unos po permisijama i auditu', () => {
     expect(
-      Reflect.getMetadata('vfm:requiredPermissions', TiresController.prototype.listSets).permissions,
+      Reflect.getMetadata('vfm:requiredPermissions', TireSetsController.prototype.listSets).permissions,
     ).toEqual(['tire:view']);
     expect(
-      Reflect.getMetadata('vfm:requiredPermissions', TiresController.prototype.createSet).permissions,
+      Reflect.getMetadata('vfm:requiredPermissions', TireSetsController.prototype.createSet).permissions,
     ).toEqual(['tire:create']);
-    expect(Reflect.getMetadata('vfm:audit', TiresController.prototype.createSet)).toMatchObject({
+    expect(Reflect.getMetadata('vfm:audit', TireSetsController.prototype.createSet)).toMatchObject({
       action: 'CREATE',
       resource: 'TireSet',
     });

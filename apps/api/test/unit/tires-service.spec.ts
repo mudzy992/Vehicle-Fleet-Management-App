@@ -2,8 +2,8 @@
 import 'reflect-metadata';
 import { describe, expect, it, vi } from 'vitest';
 import { tireInstallationListQuerySchema, tireInstallationViewSchema } from '@vfm/shared/schemas';
-import { TiresService } from '../../src/modules/tires/tires.service.js';
-import { TiresController } from '../../src/modules/tires/tires.controller.js';
+import { TireInstallationsService } from '../../src/modules/tires/tire-installations.service.js';
+import { TireInstallationsController } from '../../src/modules/tires/tire-installations.controller.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 const id = '11111111-1111-4111-8111-111111111111';
 function setup() {
@@ -15,7 +15,7 @@ function setup() {
     mountedOdometerKm: 1000,
     dismountedAt: null,
     dismountedOdometerKm: null,
-    positions: ['FRONT_LEFT'],
+    positions: ['FL'],
     kmDriven: null,
     daysInUse: null,
     storageLocationOnDismount: null,
@@ -25,13 +25,13 @@ function setup() {
     set: { code: 'G-001', brand: 'Izmišljeni', model: null, size: '205/55 R16', season: 'WINTER' },
   };
   const delegate = { count: vi.fn().mockResolvedValue(30), findMany: vi.fn().mockResolvedValue([row]) };
-  const svc = new TiresService({ tireInstallation: delegate } as unknown as PrismaService);
+  const svc = new TireInstallationsService({ tireInstallation: delegate } as unknown as PrismaService);
   return { svc, delegate, row };
 }
 describe('Gume — historija montaža', () => {
   it('filtrira vozilo, komplet, kod i samo aktivne montaže na serveru', async () => {
     const { svc, delegate } = setup();
-    await svc.listInstallations(
+    await svc.list(
       tireInstallationListQuerySchema.parse({
         vehicleId: id,
         setId: id,
@@ -56,7 +56,7 @@ describe('Gume — historija montaža', () => {
   });
   it('vraća datum bez vremena i čuva null brojače za aktivnu montažu', async () => {
     const { svc } = setup();
-    const result = await svc.listInstallations(tireInstallationListQuerySchema.parse({}));
+    const result = await svc.list(tireInstallationListQuerySchema.parse({}));
     expect(tireInstallationViewSchema.parse(result.items[0])).toMatchObject({
       mountedAt: '2026-01-10',
       dismountedAt: null,
@@ -67,19 +67,19 @@ describe('Gume — historija montaža', () => {
   });
   it('false uključuje i demontirane zapise, ne pretvara string u true', async () => {
     const { svc, delegate } = setup();
-    await svc.listInstallations(tireInstallationListQuerySchema.parse({ activeOnly: 'false' }));
+    await svc.list(tireInstallationListQuerySchema.parse({ activeOnly: 'false' }));
     expect(delegate.findMany.mock.calls[0]?.[0].where).not.toHaveProperty('dismountedAt');
   });
   it('nepoznat sort ne ide u Prisma upit; drugi ključ je stabilni ID', async () => {
     const { svc, delegate } = setup();
-    await svc.listInstallations(tireInstallationListQuerySchema.parse({ sortBy: 'nepostojecaKolona' }));
+    await svc.list(tireInstallationListQuerySchema.parse({ sortBy: 'nepostojecaKolona' }));
     expect(delegate.findMany.mock.calls[0]?.[0].orderBy).toEqual([{ mountedAt: 'asc' }, { id: 'asc' }]);
   });
   it('prazna lista vraća nula stranica', async () => {
     const { svc, delegate } = setup();
     delegate.count.mockResolvedValue(0);
     delegate.findMany.mockResolvedValue([]);
-    expect(await svc.listInstallations(tireInstallationListQuerySchema.parse({}))).toMatchObject({
+    expect(await svc.list(tireInstallationListQuerySchema.parse({}))).toMatchObject({
       total: 0,
       totalPages: 0,
       items: [],
@@ -96,7 +96,7 @@ describe('Gume — historija montaža', () => {
   });
   it('kontroler zahtijeva tire:view', () => {
     expect(
-      Reflect.getMetadata('vfm:requiredPermissions', TiresController.prototype.list).permissions,
+      Reflect.getMetadata('vfm:requiredPermissions', TireInstallationsController.prototype.list).permissions,
     ).toEqual(['tire:view']);
   });
 });

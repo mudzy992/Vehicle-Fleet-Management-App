@@ -37,6 +37,8 @@ import {
   FUEL_TYPES,
   ODOMETER_SOURCES,
   OWNERSHIP_TYPES,
+  TIRE_DISMOUNT_REASONS,
+  TIRE_POSITIONS,
   TIRE_SEASONS,
   TIRE_STATUSES,
   VEHICLE_STATUSES,
@@ -2386,6 +2388,68 @@ export const tireInstallationListResponseSchema = z
   })
   .strict();
 export type TireInstallationListResponse = z.output<typeof tireInstallationListResponseSchema>;
+
+/** Faza 4 — transakcijske promjene montaže. Pozicije su jedinstvene unutar jedne montaže. */
+export const tirePositionSchema = z.enum(TIRE_POSITIONS);
+export const tireDismountReasonSchema = z.enum(TIRE_DISMOUNT_REASONS);
+export const tirePositionsSchema = z
+  .array(tirePositionSchema)
+  .min(1)
+  .max(5)
+  .refine((positions) => new Set(positions).size === positions.length, {
+    message: 'Pozicija se ne može ponoviti u istoj montaži.',
+  });
+
+const tireOdometerKmSchema = z.number().int().min(0).max(2147483647);
+
+export const mountTireSetSchema = z
+  .object({
+    setId: uuidSchema,
+    vehicleId: uuidSchema,
+    mountedAt: z.iso.date(),
+    mountedOdometerKm: tireOdometerKmSchema,
+    positions: tirePositionsSchema,
+    formSchemaVersionId: uuidSchema.optional(),
+    formData: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type MountTireSetInput = z.output<typeof mountTireSetSchema>;
+
+export const dismountTireSetSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    dismountedAt: z.iso.date(),
+    dismountedOdometerKm: tireOdometerKmSchema,
+    reason: tireDismountReasonSchema.nullable().optional(),
+    storageLocationOnDismount: z.string().trim().max(200).nullable().optional(),
+  })
+  .strict();
+export type DismountTireSetInput = z.output<typeof dismountTireSetSchema>;
+
+export const swapTireSetSchema = z
+  .object({
+    vehicleId: uuidSchema,
+    currentInstallationId: uuidSchema,
+    currentVersion: z.number().int().nonnegative(),
+    newSetId: uuidSchema,
+    swappedAt: z.iso.date(),
+    odometerKm: tireOdometerKmSchema,
+    positions: tirePositionsSchema,
+    reason: tireDismountReasonSchema.default('SEASONAL_SWAP'),
+    storageLocationOnDismount: z.string().trim().max(200).nullable().optional(),
+    formSchemaVersionId: uuidSchema.optional(),
+    formData: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type SwapTireSetInput = z.output<typeof swapTireSetSchema>;
+
+export const tireSwapResponseSchema = z
+  .object({
+    dismounted: tireInstallationViewSchema,
+    mounted: tireInstallationViewSchema,
+  })
+  .strict();
+export type TireSwapResponse = z.output<typeof tireSwapResponseSchema>;
 
 /** Faza 4 — evidencija kompleta guma. Status se ne zadaje unosom: nov komplet je na skladištu. */
 export const tireSeasonSchema = z.enum(TIRE_SEASONS);

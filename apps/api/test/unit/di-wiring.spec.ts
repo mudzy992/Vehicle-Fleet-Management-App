@@ -1,5 +1,7 @@
 import { TiresService } from '../../src/modules/tires/tires.service.js';
-import { TiresController } from '../../src/modules/tires/tires.controller.js';
+import { TireSetsController } from '../../src/modules/tires/tires.controller.js';
+import { TireInstallationsService } from '../../src/modules/tires/tire-installations.service.js';
+import { TireInstallationsController } from '../../src/modules/tires/tire-installations.controller.js';
 import { ServiceItemsService } from '../../src/modules/services/service-items.service.js';
 import { ServiceItemsController } from '../../src/modules/services/service-items.controller.js';
 import { ServicesService } from '../../src/modules/services/services.service.js';
@@ -39,6 +41,7 @@ import { RemindersController } from '../../src/modules/reminders/reminders.contr
 const prismaProvider: Provider = { provide: PrismaService, useValue: {} };
 
 const services = [
+  ['TireInstallationsService', TireInstallationsService],
   ['TiresService', TiresService],
   ['ServiceItemsService', ServiceItemsService],
   ['ServicesService', ServicesService],
@@ -51,7 +54,8 @@ const services = [
 ] as const;
 
 const controllers = [
-  ['TiresController', TiresController, TiresService],
+  ['TireInstallationsController', TireInstallationsController, TireInstallationsService],
+  ['TireSetsController', TireSetsController, TiresService],
   ['ServiceItemsController', ServiceItemsController, ServiceItemsService],
   ['ServicesController', ServicesController, ServicesService],
   ['AttachmentsController', AttachmentsController, AttachmentsService],

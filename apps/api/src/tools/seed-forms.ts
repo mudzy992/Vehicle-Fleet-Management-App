@@ -411,6 +411,63 @@ function tireSetForm(): Record<string, unknown> {
   };
 }
 
+/**
+ * Forma montaže guma (Faza 4).
+ *
+ * Datum i kilometraža su normalizovane kolone instalacije; radionica i
+ * napomena ostaju dodatni podaci zapisa. Demontaža ne mijenja verziju forme
+ * kojom je montaža nastala.
+ */
+function tireInstallationForm(): Record<string, unknown> {
+  return {
+    $schema: 'vfm-form/1',
+    meta: {
+      title: 'Montaža guma',
+      description: 'Montaža kompleta na vozilo',
+      subject: 'TIRE_INSTALLATION',
+      language: 'bs',
+      estimatedMinutes: 2,
+    },
+    layout: { columns: 1, sectionsCollapsible: true, stickySubmit: true },
+    sections: [
+      {
+        key: 'montaza',
+        title: 'Montaža',
+        order: 1,
+        fields: [
+          { key: 'mountedAt', type: 'DATE', label: 'Datum montaže', required: true, order: 1 },
+          {
+            key: 'mountedOdometerKm',
+            type: 'INTEGER',
+            label: 'Kilometraža pri montaži',
+            required: true,
+            order: 2,
+            validation: { min: 0, max: 2147483647 },
+          },
+          {
+            key: 'workshopName',
+            type: 'TEXT',
+            label: 'Radionica',
+            order: 3,
+            validation: { maxLength: 120 },
+          },
+          {
+            key: 'napomena',
+            type: 'TEXTAREA',
+            label: 'Napomena',
+            order: 4,
+            validation: { maxLength: 500 },
+          },
+        ],
+      },
+    ],
+    normalizedName: [
+      { fieldKey: 'mountedAt', column: 'mountedAt', transform: 'TO_DATE' },
+      { fieldKey: 'mountedOdometerKm', column: 'mountedOdometerKm', transform: 'TO_INT' },
+    ],
+  };
+}
+
 /** Redoslijed je bitan samo za log; sve forme su nezavisne. */
 export const SEED_FORMS: readonly SeedForm[] = [
   {
@@ -494,5 +551,13 @@ export const SEED_FORMS: readonly SeedForm[] = [
     description: 'Dodatni podaci o nabavci kompleta.',
     ownerModule: 'tires',
     definition: tireSetForm(),
+  },
+  {
+    key: 'montaza_guma',
+    name: 'Montaža guma',
+    subject: 'TIRE_INSTALLATION',
+    description: 'Montaža kompleta na vozilo.',
+    ownerModule: 'tires',
+    definition: tireInstallationForm(),
   },
 ];

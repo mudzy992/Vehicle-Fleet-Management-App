@@ -731,7 +731,8 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 
 | Ekran | Ruta | Fajl | Napomena |
 |---|---|---|---|
-| Kompleti guma (W12) | `/gume` | `features/tires/tire-sets-page.tsx`, `tire-set-create-form.tsx` | server filteri `q`/sezona/status/dostupnost, sortiranje i paginacija; unos uz `tire:create` kroz objavljenu `TIRE_SET` formu; aktivna montaža linkuje na vozilo; montaža, demontaža i zamjena još nisu akcije na ekranu |
+| Kompleti guma (W12) | `/gume` | `features/tires/tire-sets-page.tsx`, `tire-set-create-form.tsx` | server filteri `q`/sezona/status/dostupnost, sortiranje i paginacija; unos uz `tire:create` kroz objavljenu `TIRE_SET` formu; aktivna montaža linkuje na vozilo |
+| Montaža i zamjena guma (W13) | `/vozila/:vehicleId` → Gume | `features/tires/vehicle-tires-tab.tsx`, `tire-mount-form.tsx`, `tire-dismount-form.tsx` | montaža uz `tire:mount`, zamjena uz `tire:swap`, demontaža uz `tire:dismount`; izbor samo dostupnih kompleta, pozicije i kilometraža; zamjena je jedna transakcijska potvrda, a konflikt verzije/pozicije/kompleta ostavlja formu otvorenom s porukom servera |
 
 Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);
 sidebar filtrira stavke prema `/auth/me` (`visibleNavItems`), ali **server ostaje
@@ -852,7 +853,8 @@ Tab se skriva i ne šalje upit bez `tire:view`. Tabela: komplet i sezona,
 status/pozicije, montaža i demontaža (datum/km), korištenje (km/dani),
 skladište i razlog. Filter „Samo trenutno montirani kompleti“ vraća stranicu
 na 1. Paginacija je serverska po 25. Posebna stanja učitavanja, greške i prazne
-liste; nepoznati brojači prikazani su crticom. Mutacije slijede odvojeno.
+liste; nepoznati brojači prikazani su crticom. Aktivni red nudi akcije
+zamjene i demontaže prema zasebnim permisijama.
 
 ### Kompleti guma — evidencija i unos (Faza 4)
 
@@ -868,5 +870,25 @@ Unos (`tire-set-create-form.tsx`) spaja strukturirane podatke s dodatnim
 poljima aktivne objavljene `TIRE_SET` forme i šalje njenu verziju. Nabavna
 cijena se iz KM pretvara u feninge; novi komplet uvijek nastaje kao
 „Na skladištu“. Ako objavljena forma ne postoji, ekran to jasno kaže i ne
-pokušava snimanje. Montaža, demontaža, zamjena, izmjena i brisanje kompleta
-još nisu dostupne akcije.
+pokušava snimanje. Izmjena i brisanje kompleta još nisu dostupne akcije;
+montaža se radi iz profila vozila.
+
+### Montaža, demontaža i zamjena kompleta (Faza 4)
+
+Profil vozila → **Gume** nudi **Montiraj komplet** uz `tire:mount`, a na
+aktivnom redu **Zamijeni** (`tire:swap`) i **Demontiraj** (`tire:dismount`).
+Arhivirano vozilo ne dobija montažu ni zamjenu, ali aktivni komplet se i dalje
+može demontirati da se oslobodi iz evidencije vozila.
+
+Forma montaže pretražuje samo komplete na skladištu bez aktivne montaže,
+prikazuje dodatna polja objavljene `TIRE_INSTALLATION` forme te datum,
+kilometražu i pozicije. Po izboru kompleta pozicije se predlažu prema broju
+guma, a pri zamjeni se prvo nude pozicije starog kompleta. Zamjena dodatno
+traži razlog i skladište starog kompleta; jedna potvrda zatvara stari ciklus,
+otvara novi i upisuje jedno očitanje kilometraže. Ako server vrati
+`409 TIRE_ALREADY_MOUNTED`, `409 VERSION_CONFLICT`, `409 PERIOD_OVERLAP` ili
+`422 ODOMETER_REGRESSION`, forma ostaje otvorena i prikazuje serversku poruku.
+
+Demontaža prikazuje datum/km montaže, traži završni datum i kilometražu te
+opcionalni razlog i skladište. Nakon uspjeha osvježavaju se historija vozila,
+evidencija kompleta i kilometraža u zaglavlju profila.

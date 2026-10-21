@@ -287,7 +287,7 @@ prije provjere km/upisa, referenca očitanja i audit snapshot, bez km, regresija
 arhiva/nepostojeće vozilo, povučena forma, budući datum, propagacija greške očitanja,
 rok iz najnovijeg servisa i granice DTO-a. Testovi koriste lažni transakcijski
 klijent; stvarni rollback i paralelni upisi na PostgreSQL-u nisu ovim dokazani.
-Seed testovi očekuju 7 formi i provjeravaju idempotentnost drugog prolaza.
+Seed testovi očekuju 8 formi i provjeravaju idempotentnost drugog prolaza.
 
 ### Stavke servisa — Faza 4
 
@@ -332,3 +332,23 @@ feninge. Seed-form provjere sada imaju i eksplicitni test da `komplet_guma`
 nosi samo dobavljača, fakturu i napomenu bez normalizacije. Lažni Prisma
 klijent ne dokazuje stvarni PostgreSQL upit, jedinstveni indeks ni HTTP tok;
 to ostaje provjera na deployu/bazi.
+
+### Montaža, demontaža i zamjena guma — Faza 4
+
+`apps/api/test/unit/tire-installations.spec.ts` — 12 testova nad stateful
+lažnim transakcijskim klijentom: redoslijed zaključavanja vozilo → komplet(i),
+uspješna montaža kroz objavljenu `TIRE_INSTALLATION` formu, status kompleta,
+očitanje `TIRE`, denormalizovana kilometraža i outbox; isti komplet na drugom
+vozilu i zauzeta pozicija kao `409 TIRE_ALREADY_MOUNTED`; regresija km,
+povučena forma i mapiranje `P2002`; demontaža s obračunom km/dana, CAS
+verzijom i oslobađanjem kompleta; zamjena s jednim očitanjem i validacijom
+novog kompleta prije upisa; strict DTO pozicija/razloga te permisije/audit.
+DI provjera je dopunjena zasebnim servisom i kontrolerom instalacija (+2).
+
+`apps/web/src/features/tires/tire-installation-model.test.ts` — 4 testa
+stabilnog redoslijeda pozicija, početnog izbora prema broju guma/starim
+pozicijama, mount/swap/dismount payloada i odbijanja nepotpunog unosa prije
+zahtjeva. Seed-form test dodatno provjerava da `montaza_guma` mapira datum i
+kilometražu u normalizovane kolone. Fake transakcija ne dokazuje stvarni
+PostgreSQL `FOR UPDATE`, partial unique indeks pod opterećenjem, rollback ni
+HTTP tok; to ostaju integracijska/deploy provjera.

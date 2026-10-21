@@ -1,11 +1,9 @@
-/** Faza 4 — kompleti guma i historija montaža. */
+/** Faza 4 — evidencija kompleta guma. */
 import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
 import {
   createTireSetSchema,
-  tireInstallationListQuerySchema,
   tireSetListQuerySchema,
   type CreateTireSetInput,
-  type TireInstallationListQuery,
   type TireSetListQuery,
 } from '@vfm/shared/schemas';
 import { AuditContext } from '../../common/audit/audit.types.js';
@@ -14,17 +12,17 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import type { AuthenticatedUser, VfmRequest } from '../../common/types/authenticated-user.js';
 import { TiresService } from './tires.service.js';
 
-@Controller()
-export class TiresController {
+@Controller('tire-sets')
+export class TireSetsController {
   constructor(private readonly tires: TiresService) {}
 
-  @Get('tire-sets')
+  @Get()
   @RequirePermissions('tire:view')
   listSets(@Query(new ZodValidationPipe(tireSetListQuerySchema, 'query')) query: TireSetListQuery) {
     return this.tires.listSets(query);
   }
 
-  @Post('tire-sets')
+  @Post()
   @RequirePermissions('tire:create')
   @Audit('CREATE', { severity: 'INFO', resource: 'TireSet' })
   async createSet(
@@ -39,13 +37,5 @@ export class TiresController {
       .setResource('TireSet')
       .set('code', result.data.code);
     return result.data;
-  }
-
-  @Get('tire-installations')
-  @RequirePermissions('tire:view')
-  list(
-    @Query(new ZodValidationPipe(tireInstallationListQuerySchema, 'query')) query: TireInstallationListQuery,
-  ) {
-    return this.tires.listInstallations(query);
   }
 }

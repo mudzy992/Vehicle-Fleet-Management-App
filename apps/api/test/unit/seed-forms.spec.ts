@@ -60,6 +60,21 @@ describe('SEED_FORMS', () => {
     expect(parsed.definition.normalizedName).toEqual([]);
   });
 
+  it('forma montaže mapira datum i kilometražu na instalaciju', () => {
+    const installation = SEED_FORMS.find((form) => form.key === 'montaza_guma');
+    expect(installation).toBeDefined();
+    expect(installation?.subject).toBe('TIRE_INSTALLATION');
+
+    const parsed = parseDefinition(installation!.definition);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.definition.normalizedName).toEqual([
+      { fieldKey: 'mountedAt', column: 'mountedAt', transform: 'TO_DATE' },
+      { fieldKey: 'mountedOdometerKm', column: 'mountedOdometerKm', transform: 'TO_INT' },
+    ]);
+  });
+
   it('forma vozila pokriva obavezne kolone iz seed-a', () => {
     const vehicle = SEED_FORMS.find((form) => form.key === 'vehicle');
     expect(vehicle).toBeDefined();

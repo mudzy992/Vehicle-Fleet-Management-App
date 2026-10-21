@@ -647,7 +647,7 @@ servisna evidencija/arhivirano vozilo → validacijska greška. Verzija raste i
 štiti od konkurentnog uređivanja stavki računa. Nema novih migracija/ENV/Redis
 ključeva. Provjera sa stvarnom bazom nije izvršena iz sandboxa.
 
-### 7.5 Gume — kompleti i pregled historije montaža
+### 7.5 Gume — kompleti i ciklusi montaže
 
 Implementirani su:
 
@@ -656,6 +656,9 @@ Implementirani su:
 | `GET /tire-sets` | `tire:view` | lista neobrisanih kompleta `{items,page,pageSize,total,totalPages}` |
 | `POST /tire-sets` | `tire:create` | unos kompleta kroz objavljenu `TIRE_SET` formu; audit `CREATE` na `TireSet` |
 | `GET /tire-installations` | `tire:view` | historija montaža, kako je opisano niže |
+| `POST /tire-installations` | `tire:mount` | transakcijska montaža kroz objavljenu `TIRE_INSTALLATION` formu; audit `CREATE` |
+| `POST /tire-installations/:id/dismount` | `tire:dismount` | transakcijska demontaža uz `version`; audit `UPDATE` |
+| `POST /tire-installations/swap` | `tire:swap` | demontaža starog i montaža novog kompleta u jednoj transakciji; audit `UPDATE` |
 
 `GET /tire-sets` prihvata standardnu paginaciju te `q`, `season`, `status` i
 `availableOnly=true|false`. Pretraga obuhvata kod, proizvođača, model,
@@ -679,6 +682,48 @@ pa forma nosi dodatne podatke, dok zapis pamti tačne `formSchemaId`,
 `formSchemaVersionId` i validirani `formData`. Idempotentni seed osigurava
 početnu formu `komplet_guma`; bez nje/objavljene zamjene unos nije moguć.
 
+Montaža ima strict DTO `{setId,vehicleId,mountedAt,mountedOdometerKm,
+positions,formSchemaVersionId?,formData}`. Pozicije su 1–5 jedinstvenih
+vrijednosti `FL|FR|RL|RR|SPARE` i ne smije ih biti više nego što komplet ima
+guma. Datum ne smije biti u budućnosti ni prije nabavke kompleta. U transakciji
+se redom zaključavaju vozilo i komplet (`FOR UPDATE`); vozilo mora postojati i
+ne biti arhivirano, a komplet mora biti `IN_STOCK` i bez aktivne montaže.
+Aktivna montaža istog kompleta ili zauzeta pozicija na vozilu vraća
+`409 TIRE_ALREADY_MOUNTED` s vozilom/kompletom u `extra`, historijsko
+preklapanje ciklusa `409 PERIOD_OVERLAP`, a niža kilometraža od trenutne
+`422 ODOMETER_REGRESSION`. Isti upis postavlja komplet na `MOUNTED`, povezane
+pojedinačne gume na odabranim pozicijama na `MOUNTED`, `OdometerReading`
+izvora `TIRE`, denormalizovanu kilometražu vozila i outbox događaj
+`TIRE_SET_MOUNTED`. Nov zapis mora koristiti objavljenu `TIRE_INSTALLATION`
+verziju; seed osigurava formu `montaza_guma`, čiji se datum/km mapiraju u
+normalizovane kolone.
+
+Demontaža ima strict DTO `{version,dismountedAt,dismountedOdometerKm,reason?,
+storageLocationOnDismount?}`; razlog je enum `SEASONAL_SWAP|DAMAGE|WEAR|SALE|
+REPAIR`. Transakcija zaključava vozilo pa komplet, ponovo čita montažu i radi
+CAS na `version` + `dismountedAt IS NULL`. Datum mora biti od montaže do danas,
+a kilometraža ne smije biti manja ni od montaže ni od trenutnog stanja vozila.
+`kmDriven` je razlika kilometara, a `daysInUse` broj proteklih kalendarskih
+dana između datuma (isti dan = 0); oba ostaju snapshot završenog ciklusa.
+Postojeća `formData` se validira zapisnom verzijom forme (i `RETIRED`), bez
+prelaska na novu verziju. Komplet i povezane gume prelaze u `IN_REPAIR` za
+razlog `REPAIR`, `RETIRED` za `SALE`, inače `IN_STOCK`; upisuju se očitanje
+`TIRE`, kilometraža vozila i outbox `TIRE_SET_DISMOUNTED`. Demontaža je
+dozvoljena i za arhivirano vozilo da se komplet može osloboditi.
+
+Zamjena ima strict DTO `{vehicleId,currentInstallationId,currentVersion,
+newSetId,swappedAt,odometerKm,positions,reason?,storageLocationOnDismount?,
+formSchemaVersionId?,formData}` i odgovor `{dismounted,mounted}`. Nakon
+zaključavanja vozila kompleti se zaključavaju sortirano po ID-ju. Prvo se
+validiraju i stari i novi komplet (uključujući aktivnu montažu i pozicije,
+uz izuzetak stare montaže koja se zatvara), pa se tek onda u istoj transakciji
+stari ciklus zatvara, novi otvara, statusi kompleta/guma mijenjaju, upisuje
+**jedno** `TIRE` očitanje i outbox `TIRE_SET_SWAPPED`. Greška u bilo kojem
+koraku vraća cijelu zamjenu. Header `Idempotency-Key` iz §1.4 još nema
+globalnu replay implementaciju; zaštita od duplog efekta ovdje je stanje
+transakcije (aktivan komplet/pozicija, CAS verzija i partial unique indeks),
+pa ponovljeni zahtjev ne pravi drugi ciklus, ali ne vraća keširani prvi odgovor.
+
 Implementiran `GET /tire-installations` uz `tire:view`. Query: standardna
 paginacija, `vehicleId`, `setId`, `q` (kod kompleta), `activeOnly=true|false`.
 Samo `true` ograničava na `dismountedAt IS NULL`. Uvijek `deletedAt IS NULL`;
@@ -690,8 +735,10 @@ demontaže, pozicije, sačuvane `kmDriven`/`daysInUse`, skladište/razlog,
 verziju i opcionu zapisnu verziju forme. Null brojači ostaju null; nema
 računanja pretpostavljene kilometraže aktivne montaže.
 
-Pregledi nisu mutacije i nemaju audit; unos kompleta ima audit `CREATE`.
-Nema outboxa, novih ENV/Redis ključeva niti migracija. Izmjena/brisanje
-kompleta, pojedinačne gume, montaža, demontaža, zamjena i usage pregled iz
-§2.8 još nisu implementirani. Globalni auth/RBAC ostaje obavezan;
-produkcijski HTTP test s pravom bazom nije izvršen u sandboxu.
+Pregledi nisu mutacije i nemaju audit; unos kompleta i ciklusi montaže imaju
+audit, a montaža/demontaža/zamjena pišu `OutboxEvent` u istoj transakciji.
+Nema novih ENV/Redis ključeva niti migracija; postojeći partial unique indeks
+aktivne montaže je DB zaštita. Izmjena/brisanje kompleta, evidencija
+pojedinačnih guma i usage pregled iz §2.8 još nisu implementirani. Globalni
+auth/RBAC ostaje obavezan; produkcijski HTTP test i stvarna konkurencija nad
+PostgreSQL-om nisu izvršeni u sandboxu.

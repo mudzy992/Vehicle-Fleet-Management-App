@@ -206,7 +206,13 @@ export function VehicleDetailPage() {
       </div>
 
       {tab === 'gume' && hasPermission('tire:view') && (
-        <VehicleTiresTab key={vehicle.id} vehicleId={vehicle.id} />
+        <VehicleTiresTab
+          key={vehicle.id}
+          vehicleId={vehicle.id}
+          vehicleOdometerKm={vehicle.odometerKm}
+          vehicleStatus={vehicle.status}
+          onChanged={invalidate}
+        />
       )}
       {tab === 'osnovno' && <OverviewTab vehicle={vehicle} />}
       {tab === 'registracije' && <RegistrationsTab vehicleId={vehicle.id} onChanged={invalidate} />}
