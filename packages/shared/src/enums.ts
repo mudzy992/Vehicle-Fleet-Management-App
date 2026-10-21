@@ -482,6 +482,24 @@ export function canTransitionFormSchema(from: FormSchemaStatus, to: FormSchemaSt
   return FORM_SCHEMA_TRANSITIONS[from].includes(to);
 }
 
+/**
+ * Ručni prelazi statusa kompleta kroz PATCH.
+ *
+ * `MOUNTED` se ne postavlja niti skida ručno: ulaz je isključivo transakcijska
+ * montaža, izlaz demontaža/zamjena. `SCRAPPED` je terminalno stanje.
+ */
+export const TIRE_SET_MANUAL_STATUS_TRANSITIONS: Readonly<Record<TireStatus, readonly TireStatus[]>> = {
+  IN_STOCK: ['IN_REPAIR', 'RETIRED', 'SCRAPPED'],
+  MOUNTED: [],
+  IN_REPAIR: ['IN_STOCK', 'RETIRED', 'SCRAPPED'],
+  RETIRED: ['IN_STOCK', 'IN_REPAIR', 'SCRAPPED'],
+  SCRAPPED: [],
+} as const;
+
+export function canTransitionTireSetStatus(from: TireStatus, to: TireStatus): boolean {
+  return from === to || TIRE_SET_MANUAL_STATUS_TRANSITIONS[from].includes(to);
+}
+
 /** Statusi koje `Role.allowedClientTypes` smije sadržavati za Super Admina. */
 export const SUPER_ADMIN_ALLOWED_CLIENT_TYPES: readonly ClientType[] = ['WEB'] as const;
 

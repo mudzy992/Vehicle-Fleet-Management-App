@@ -11,7 +11,7 @@ import { CoreFields, FormFields, type CoreFieldSpec } from '../forms/form-fields
 import { sarajevoToday } from '../forms/forms-preview-values.js';
 import { buildTireSetPayload } from './tire-sets-model.js';
 
-const FIELDS: readonly CoreFieldSpec[] = [
+export const TIRE_SET_CORE_FIELDS: readonly CoreFieldSpec[] = [
   {
     key: 'code',
     label: 'Kod kompleta',
@@ -108,7 +108,7 @@ export function TireSetCreateForm({
       ) : (
         <>
           <CoreFields
-            fields={FIELDS}
+            fields={TIRE_SET_CORE_FIELDS}
             values={core}
             errors={{}}
             idPrefix="komplet-guma"
@@ -117,7 +117,7 @@ export function TireSetCreateForm({
           />
           <FormFields
             model={model}
-            hiddenKeys={FIELDS.map((field) => field.key)}
+            hiddenKeys={TIRE_SET_CORE_FIELDS.map((field) => field.key)}
             errors={{}}
             idPrefix="komplet-guma-dodatno"
             onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))}

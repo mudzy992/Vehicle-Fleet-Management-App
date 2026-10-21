@@ -655,6 +655,9 @@ Implementirani su:
 |---|---|---|
 | `GET /tire-sets` | `tire:view` | lista neobrisanih kompleta `{items,page,pageSize,total,totalPages}` |
 | `POST /tire-sets` | `tire:create` | unos kompleta kroz objavljenu `TIRE_SET` formu; audit `CREATE` na `TireSet` |
+| `GET /tire-sets/:id` | `tire:view` | detalj kompleta i `formData`; lista `formData` ne vraća |
+| `PATCH /tire-sets/:id` | `tire:update` | zaključana CAS izmjena strukturiranih podataka, ručnog statusa i opcionalnog `formData`; audit `UPDATE` |
+| `DELETE /tire-sets/:id` | `tire:delete` | soft-delete kompleta i povezanih guma, `204`; audit `DELETE`/`CRITICAL` |
 | `GET /tire-installations` | `tire:view` | historija montaža, kako je opisano niže |
 | `POST /tire-installations` | `tire:mount` | transakcijska montaža kroz objavljenu `TIRE_INSTALLATION` formu; audit `CREATE` |
 | `POST /tire-installations/:id/dismount` | `tire:dismount` | transakcijska demontaža uz `version`; audit `UPDATE` |
@@ -681,6 +684,45 @@ trenutno objavljena. Za ovaj subject nema normalizacijskog mapiranja u kolone,
 pa forma nosi dodatne podatke, dok zapis pamti tačne `formSchemaId`,
 `formSchemaVersionId` i validirani `formData`. Idempotentni seed osigurava
 početnu formu `komplet_guma`; bez nje/objavljene zamjene unos nije moguć.
+
+`GET /tire-sets/:id` vraća isti strukturirani pogled kao lista, vozilo
+aktivne montaže ako postoji te `formData`. Soft-obrisan ili nepostojeći
+komplet vraća `404 NOT_FOUND`.
+
+`PATCH /tire-sets/:id` ima strict DTO s obaveznim `version` i najmanje jednom
+izmjenom među `code`, `brand`, `model`, `size`, `season`, `tireCount`,
+`purchaseDate`, `purchasePrice`, `currentLocation`, `notes`, `status` i
+`formData`. Cijena je i dalje cijeli broj feninga, a opcionalna tekstualna,
+datumska i novčana polja prihvataju `null` za brisanje vrijednosti. Datum
+nabavke ne smije biti u budućnosti ni nakon prve montaže kompleta.
+Transakcija prvo zaključava red kompleta (`FOR UPDATE`), provjerava verziju i
+duplikat aktivnog koda, pa radi CAS upis. Zastarjela verzija vraća
+`409 VERSION_CONFLICT` s `currentVersion`, duplikat
+`409 DUPLICATE_ENTRY`. Montiran komplet smije dobiti opisnu ispravku, ali
+ručna promjena statusa vraća `409 TIRE_ALREADY_MOUNTED`, a `tireCount` ne
+smije pasti ispod broja aktivnih pozicija.
+
+Ručni `status` prihvata samo `IN_STOCK`, `IN_REPAIR`, `RETIRED` i
+`SCRAPPED`; `MOUNTED` postavlja isključivo montaža. Dozvoljene su promjene
+`IN_STOCK ↔ IN_REPAIR`, iz oba u `RETIRED`/`SCRAPPED` te iz `RETIRED` u
+`IN_STOCK`/`IN_REPAIR`/`SCRAPPED`. `SCRAPPED` je terminalan. Ako zapis
+nekonzistentno nosi `MOUNTED` bez aktivne montaže, smije se ispraviti u bilo
+koji ručni status. Promjena statusa u istoj transakciji sinhronizuje sve
+neobrisane pojedinačne gume kompleta.
+
+Forma se pri izmjeni uvijek validira zapisnom `formSchemaVersionId`,
+uključujući `RETIRED` verziju; PATCH nikad ne prevodi zapis na novu formu.
+Poslani `formData` je dopuna postojećem, a efektivne strukturirane
+vrijednosti se uklapaju prije validacije. Ako zapis nema zapisnu verziju,
+strukturirana izmjena je dozvoljena, ali slanje `formData` vraća validacijsku
+grešku.
+
+`DELETE /tire-sets/:id` nema tijelo zahtjeva. Pod zaključanim redom kompleta
+aktivna montaža vraća `409 TIRE_ALREADY_MOUNTED`, a status `MOUNTED` bez
+aktivne montaže takođe blokira brisanje radi očuvanja konzistentnosti.
+Inače se u jednoj transakciji postavljaju `deletedAt` i nova verzija na
+kompletu te `deletedAt` na svim njegovim neobrisanim gumama. Historija
+montaža se ne briše. Odgovor je `204 No Content`.
 
 Montaža ima strict DTO `{setId,vehicleId,mountedAt,mountedOdometerKm,
 positions,formSchemaVersionId?,formData}`. Pozicije su 1–5 jedinstvenih
@@ -735,10 +777,10 @@ demontaže, pozicije, sačuvane `kmDriven`/`daysInUse`, skladište/razlog,
 verziju i opcionu zapisnu verziju forme. Null brojači ostaju null; nema
 računanja pretpostavljene kilometraže aktivne montaže.
 
-Pregledi nisu mutacije i nemaju audit; unos kompleta i ciklusi montaže imaju
-audit, a montaža/demontaža/zamjena pišu `OutboxEvent` u istoj transakciji.
-Nema novih ENV/Redis ključeva niti migracija; postojeći partial unique indeks
-aktivne montaže je DB zaštita. Izmjena/brisanje kompleta, evidencija
+Pregledi nisu mutacije i nemaju audit; unos, izmjena i brisanje kompleta te
+ciklusi montaže imaju audit, a montaža/demontaža/zamjena pišu `OutboxEvent`
+u istoj transakciji. Nema novih ENV/Redis ključeva niti migracija; postojeći
+partial unique indeks aktivne montaže je DB zaštita. Zasebna evidencija
 pojedinačnih guma i usage pregled iz §2.8 još nisu implementirani. Globalni
 auth/RBAC ostaje obavezan; produkcijski HTTP test i stvarna konkurencija nad
 PostgreSQL-om nisu izvršeni u sandboxu.

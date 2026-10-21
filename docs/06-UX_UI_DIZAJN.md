@@ -731,7 +731,7 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 
 | Ekran | Ruta | Fajl | Napomena |
 |---|---|---|---|
-| Kompleti guma (W12) | `/gume` | `features/tires/tire-sets-page.tsx`, `tire-set-create-form.tsx` | server filteri `q`/sezona/status/dostupnost, sortiranje i paginacija; unos uz `tire:create` kroz objavljenu `TIRE_SET` formu; aktivna montaža linkuje na vozilo |
+| Kompleti guma (W12) | `/gume` | `features/tires/tire-sets-page.tsx`, `tire-set-create-form.tsx`, `tire-set-edit-form.tsx` | server filteri `q`/sezona/status/dostupnost, sortiranje i paginacija; unos uz `tire:create` kroz objavljenu `TIRE_SET` formu; **Uredi** uz `tire:update` i zapisnu formu, **Obriši** uz `tire:delete` i potvrdu; aktivna montaža linkuje na vozilo i zaključava ručni status/brisanje |
 | Montaža i zamjena guma (W13) | `/vozila/:vehicleId` → Gume | `features/tires/vehicle-tires-tab.tsx`, `tire-mount-form.tsx`, `tire-dismount-form.tsx` | montaža uz `tire:mount`, zamjena uz `tire:swap`, demontaža uz `tire:dismount`; izbor samo dostupnih kompleta, pozicije i kilometraža; zamjena je jedna transakcijska potvrda, a konflikt verzije/pozicije/kompleta ostavlja formu otvorenom s porukom servera |
 
 Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);
@@ -856,7 +856,7 @@ na 1. Paginacija je serverska po 25. Posebna stanja učitavanja, greške i prazn
 liste; nepoznati brojači prikazani su crticom. Aktivni red nudi akcije
 zamjene i demontaže prema zasebnim permisijama.
 
-### Kompleti guma — evidencija i unos (Faza 4)
+### Kompleti guma — evidencija, unos i životni ciklus (Faza 4)
 
 `/gume`, `features/tires/tire-sets-page.tsx`, uz `RequirePermission(tire:view)`;
 dugme **Novi komplet** vidi samo korisnik s `tire:create`, a server ponovo
@@ -870,8 +870,24 @@ Unos (`tire-set-create-form.tsx`) spaja strukturirane podatke s dodatnim
 poljima aktivne objavljene `TIRE_SET` forme i šalje njenu verziju. Nabavna
 cijena se iz KM pretvara u feninge; novi komplet uvijek nastaje kao
 „Na skladištu“. Ako objavljena forma ne postoji, ekran to jasno kaže i ne
-pokušava snimanje. Izmjena i brisanje kompleta još nisu dostupne akcije;
-montaža se radi iz profila vozila.
+pokušava snimanje. Montaža se radi iz profila vozila.
+
+Akcija **Uredi** prikazuje se samo uz `tire:update`. Panel
+(`tire-set-edit-form.tsx`) učitava `GET /tire-sets/:id` i definiciju
+**zapisne** verzije forme, ne trenutno aktivnu. Mijenjaju se strukturirani
+podaci, dozvoljeni ručni status i dodatna polja zapisne forme. Ekran šalje
+samo stvarne izmjene uz obaveznu verziju zapisa; obrisana opcionalna polja
+idu kao `null`. Kod `409 VERSION_CONFLICT` forma ostaje otvorena i unos se
+ne gubi — korisnik je zatvara i ponovo otvara da učita novu verziju. Ako
+zapis nema formu ili definiciju nije moguće učitati, dostupna su samo
+strukturirana polja i `formData` se ne šalje.
+
+Za montiran komplet status je zaključan i objašnjen uz link na vozilo, ali
+opisne ispravke ostaju dostupne. **Obriši** se prikazuje samo uz
+`tire:delete`, za montiran komplet je onemogućeno, a inače prvo traži
+potvrdu s objašnjenjem da je brisanje soft-delete kompleta i povezanih
+pojedinačnih guma te da historija montaža ostaje. Nakon izmjene/brisanja
+osvježavaju se lista kompleta, detalj i historije montaža.
 
 ### Montaža, demontaža i zamjena kompleta (Faza 4)
 

@@ -1,6 +1,6 @@
-/** Kompleti guma — serverski filtrirana evidencija i unos novog kompleta (W12). */
+/** Kompleti guma — serverski filtrirana evidencija, unos, izmjena i soft-delete (W12). */
 import { useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { TIRE_SEASONS, TIRE_STATUSES, formatMoney, statusLabel } from '@vfm/shared';
 import type { TireSetListResponse, TireSetView } from '@vfm/shared/schemas';
@@ -24,6 +24,7 @@ import { api, ApiError } from '../../lib/api.js';
 import { useSession } from '../auth/session.js';
 import { toQueryString } from '../vehicles/vehicles-model.js';
 import { TireSetCreateForm } from './tire-set-create-form.js';
+import { TireSetEditPanel } from './tire-set-edit-form.js';
 import { DEFAULT_TIRE_SET_FILTERS, buildTireSetQuery, type TireSetFilters } from './tire-sets-model.js';
 
 const PAGE_SIZE = 25;
@@ -38,7 +39,9 @@ export function TireSetsPage() {
   const [filters, setFilters] = useState<TireSetFilters>(DEFAULT_TIRE_SET_FILTERS);
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const query = useMemo(() => buildTireSetQuery(filters, page, PAGE_SIZE), [filters, page]);
   const list = useQuery({
@@ -47,6 +50,39 @@ export function TireSetsPage() {
   });
 
   const canCreate = hasPermission('tire:create');
+  const canUpdate = hasPermission('tire:update');
+  const canDelete = hasPermission('tire:delete');
+
+  const remove = useMutation({
+    mutationFn: (row: TireSetView) => api.delete<void>(`/tire-sets/${row.id}`),
+    onSuccess: async (_data, row) => {
+      if (editingId === row.id) setEditingId(null);
+      if ((list.data?.items.length ?? 0) <= 1 && page > 1) setPage(page - 1);
+      setMessage(`Komplet ${row.code} je obrisan. Historija montaža ostaje sačuvana.`);
+      setActionError(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tire-sets'] }),
+        queryClient.invalidateQueries({ queryKey: ['tire-set', row.id] }),
+        queryClient.invalidateQueries({ queryKey: ['tire-installations'] }),
+      ]);
+    },
+    onError: (error) =>
+      setActionError(
+        error instanceof ApiError || error instanceof Error ? error.message : 'Brisanje nije uspjelo.',
+      ),
+  });
+
+  const requestDelete = (row: TireSetView) => {
+    setMessage(null);
+    setActionError(null);
+    if (
+      window.confirm(
+        `Obrisati komplet ${row.code}? Komplet i njegove pojedinačne gume nestaju iz aktivne evidencije, a historija montaža ostaje.`,
+      )
+    ) {
+      remove.mutate(row);
+    }
+  };
   const filtered =
     filters.q !== '' ||
     filters.season !== '' ||
@@ -70,7 +106,15 @@ export function TireSetsPage() {
           </p>
         </div>
         {canCreate && !showCreate && (
-          <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setEditingId(null);
+              setActionError(null);
+              setShowCreate(true);
+            }}
+          >
             Novi komplet
           </Button>
         )}
@@ -80,6 +124,16 @@ export function TireSetsPage() {
         <Card>
           <CardContent>
             <p className="text-sm">{message}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {actionError && (
+        <Card>
+          <CardContent>
+            <p role="alert" className="text-sm text-[var(--danger)]">
+              {actionError}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -105,12 +159,30 @@ export function TireSetsPage() {
               onCancel={() => setShowCreate(false)}
               onCreated={async () => {
                 setShowCreate(false);
-                setMessage('Sačuvano.');
+                setMessage('Novi komplet je sačuvan.');
+                setActionError(null);
                 await queryClient.invalidateQueries({ queryKey: ['tire-sets'] });
               }}
             />
           </CardContent>
         </Card>
+      )}
+
+      {editingId && canUpdate && (
+        <TireSetEditPanel
+          tireSetId={editingId}
+          onClose={() => setEditingId(null)}
+          onSaved={async (updated) => {
+            setEditingId(null);
+            setMessage(`Komplet ${updated.code} je izmijenjen.`);
+            setActionError(null);
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ['tire-sets'] }),
+              queryClient.invalidateQueries({ queryKey: ['tire-set', updated.id] }),
+              queryClient.invalidateQueries({ queryKey: ['tire-installations'] }),
+            ]);
+          }}
+        />
       )}
 
       <Card>
@@ -230,11 +302,26 @@ export function TireSetsPage() {
                   <TH>Nabavka</TH>
                   <TH>Lokacija / vozilo</TH>
                   <TH>Napomena</TH>
+                  {(canUpdate || canDelete) && <TH align="right">Akcije</TH>}
                 </TR>
               </THead>
               <TBody>
                 {list.data.items.map((row) => (
-                  <TireSetRow key={row.id} row={row} />
+                  <TireSetRow
+                    key={row.id}
+                    row={row}
+                    canUpdate={canUpdate}
+                    canDelete={canDelete}
+                    isEditing={editingId === row.id}
+                    isDeleting={remove.isPending && remove.variables?.id === row.id}
+                    onEdit={() => {
+                      setShowCreate(false);
+                      setMessage(null);
+                      setActionError(null);
+                      setEditingId((current) => (current === row.id ? null : row.id));
+                    }}
+                    onDelete={() => requestDelete(row)}
+                  />
                 ))}
               </TBody>
             </Table>
@@ -265,9 +352,26 @@ export function TireSetsPage() {
   );
 }
 
-function TireSetRow({ row }: { row: TireSetView }) {
+function TireSetRow({
+  row,
+  canUpdate,
+  canDelete,
+  isEditing,
+  isDeleting,
+  onEdit,
+  onDelete,
+}: {
+  row: TireSetView;
+  canUpdate: boolean;
+  canDelete: boolean;
+  isEditing: boolean;
+  isDeleting: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const deleteBlocked = row.status === 'MOUNTED' || row.mountedVehicleId !== null;
   return (
-    <TR>
+    <TR className={isEditing ? 'bg-[var(--hover)]' : undefined}>
       <TD>
         <p className="font-medium">{row.code}</p>
         <p>{[row.brand, row.model].filter(Boolean).join(' ') || '—'}</p>
@@ -299,6 +403,30 @@ function TireSetRow({ row }: { row: TireSetView }) {
         )}
       </TD>
       <TD>{row.notes ?? '—'}</TD>
+      {(canUpdate || canDelete) && (
+        <TD align="right">
+          <div className="flex flex-wrap justify-end gap-2">
+            {canUpdate && (
+              <Button size="sm" variant="secondary" onClick={onEdit}>
+                {isEditing ? 'Zatvori' : 'Uredi'}
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={deleteBlocked || isDeleting}
+                loading={isDeleting}
+                title={deleteBlocked ? 'Montiran komplet prvo demontirajte.' : undefined}
+                aria-label={`Obriši komplet ${row.code}`}
+                onClick={onDelete}
+              >
+                Obriši
+              </Button>
+            )}
+          </div>
+        </TD>
+      )}
     </TR>
   );
 }

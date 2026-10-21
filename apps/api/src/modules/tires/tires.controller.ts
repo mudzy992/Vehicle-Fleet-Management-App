@@ -1,10 +1,25 @@
-/** Faza 4 — evidencija kompleta guma. */
-import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
+/** Faza 4 — evidencija i životni ciklus kompleta guma. */
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import {
   createTireSetSchema,
   tireSetListQuerySchema,
+  updateTireSetSchema,
+  uuidSchema,
   type CreateTireSetInput,
   type TireSetListQuery,
+  type UpdateTireSetInput,
 } from '@vfm/shared/schemas';
 import { AuditContext } from '../../common/audit/audit.types.js';
 import { Audit, CurrentUser, RequirePermissions } from '../../common/decorators/auth.decorators.js';
@@ -37,5 +52,47 @@ export class TireSetsController {
       .setResource('TireSet')
       .set('code', result.data.code);
     return result.data;
+  }
+
+  @Get(':id')
+  @RequirePermissions('tire:view')
+  getSet(@Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string) {
+    return this.tires.getSet(id);
+  }
+
+  @Patch(':id')
+  @RequirePermissions('tire:update')
+  @Audit('UPDATE', { severity: 'INFO', resource: 'TireSet' })
+  async updateSet(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @Body(new ZodValidationPipe(updateTireSetSchema, 'body')) input: UpdateTireSetInput,
+    @Req() request: VfmRequest,
+  ) {
+    const result = await this.tires.updateSet(id, input);
+    AuditContext.from(request)
+      .setEntityId(id)
+      .setBefore(result.before)
+      .setAfter(result.after)
+      .setResource('TireSet')
+      .set('code', result.data.code);
+    return result.data;
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions('tire:delete')
+  @Audit('DELETE', { severity: 'CRITICAL', resource: 'TireSet' })
+  async removeSet(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ): Promise<void> {
+    const result = await this.tires.removeSet(id, actor?.id);
+    AuditContext.from(request)
+      .setEntityId(id)
+      .setBefore(result.before)
+      .setAfter(result.after)
+      .setResource('TireSet')
+      .set('code', result.before.code);
   }
 }

@@ -326,12 +326,28 @@ nabavke, stvarna validacija dodatnih polja forme, granice strict DTO-a te
 permisije/audit kontrolera. Statički registar Prisma selecta dopunjen je za
 `TIRE_SET_SELECT`.
 
-`apps/web/src/features/tires/tire-sets-model.test.ts` — 3 testa query gradnje,
-izostavljanja praznih opcionalnih polja i pretvaranja nabavne cijene iz KM u
-feninge. Seed-form provjere sada imaju i eksplicitni test da `komplet_guma`
-nosi samo dobavljača, fakturu i napomenu bez normalizacije. Lažni Prisma
-klijent ne dokazuje stvarni PostgreSQL upit, jedinstveni indeks ni HTTP tok;
-to ostaje provjera na deployu/bazi.
+`apps/api/test/unit/tire-set-lifecycle.spec.ts` — 11 testova nad stateful
+lažnim transakcijskim klijentom: detalj s `formData` i aktivnim vozilom,
+soft-obrisan zapis kao 404, zaključavanje reda kompleta prije CAS upisa,
+izmjena zapisnom `RETIRED` formom bez promjene verzije forme i sinhronizacija
+statusa pojedinačnih guma. Negativni tokovi pokrivaju zastarjelu verziju,
+duplikat koda, nabavku nakon prve montaže, ručnu promjenu statusa i premali
+broj guma montiranog kompleta, terminalni `SCRAPPED`, legacy zapis bez forme
+i konkurentno `P2002`. Brisanje je blokirano aktivnom montažom, a uspješno
+soft-briše komplet i gume bez brisanja historije. Dodatno se provjeravaju
+strict update DTO te odvojene `tire:view/update/delete` permisije i audit
+težine. Fake ne dokazuje stvarni PostgreSQL `FOR UPDATE`, rollback ni HTTP.
+
+`apps/web/src/features/tires/tire-sets-model.test.ts` — 9 testova query
+gradnje, izostavljanja praznih opcionalnih polja i pretvaranja nabavne cijene
+iz KM u feninge te izmjene: početne vrijednosti detalja, dozvoljene statusne
+opcije, PATCH samo sa stvarnim izmjenama, brisanje opcionalnih polja kroz
+`null`, izostavljanje neizmijenjenog `formData`, montiran komplet,
+nekonzistentan `MOUNTED`, terminalni `SCRAPPED` i legacy zapis bez forme.
+Seed-form provjere sada imaju i eksplicitni test da `komplet_guma` nosi samo
+dobavljača, fakturu i napomenu bez normalizacije. Lažni Prisma klijent ne
+dokazuje stvarni PostgreSQL upit, jedinstveni indeks ni HTTP tok; to ostaje
+provjera na deployu/bazi.
 
 ### Montaža, demontaža i zamjena guma — Faza 4
 

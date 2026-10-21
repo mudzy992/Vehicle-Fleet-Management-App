@@ -2519,3 +2519,35 @@ export const tireSetListResponseSchema = z
   })
   .strict();
 export type TireSetListResponse = z.output<typeof tireSetListResponseSchema>;
+
+export const tireSetDetailSchema = tireSetViewSchema
+  .extend({
+    /** Dodatna polja zapisne verzije forme; lista ih namjerno ne vraća. */
+    formData: z.record(z.string(), z.unknown()),
+  })
+  .strict();
+export type TireSetDetail = z.output<typeof tireSetDetailSchema>;
+
+/** Ručno se status ne može postaviti na MOUNTED — to radi samo montaža. */
+export const tireSetManualStatusSchema = z.enum(['IN_STOCK', 'IN_REPAIR', 'RETIRED', 'SCRAPPED']);
+export type TireSetManualStatus = z.output<typeof tireSetManualStatusSchema>;
+
+export const updateTireSetSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    code: z.string().trim().min(1).max(60).optional(),
+    brand: z.string().trim().max(120).nullable().optional(),
+    model: z.string().trim().max(120).nullable().optional(),
+    size: z.string().trim().max(40).nullable().optional(),
+    season: tireSeasonSchema.optional(),
+    tireCount: z.number().int().min(1).max(8).optional(),
+    purchaseDate: z.iso.date().nullable().optional(),
+    purchasePrice: z.number().int().min(0).max(2147483647).nullable().optional(),
+    currentLocation: z.string().trim().max(200).nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+    status: tireSetManualStatusSchema.optional(),
+    formData: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 1, { message: 'Nema šta mijenjati.' });
+export type UpdateTireSetInput = z.output<typeof updateTireSetSchema>;
