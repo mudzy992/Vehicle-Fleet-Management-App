@@ -30,6 +30,7 @@ import { RecordsListPage } from '../features/records/records-list-page.js';
 import { DriverCreatePage } from '../features/drivers/driver-create-page.js';
 import { DriverDetailPage } from '../features/drivers/driver-detail-page.js';
 import { VehicleDetailPage } from '../features/vehicles/vehicle-detail-page.js';
+import { TireSetsPage } from '../features/tires/tire-sets-page.js';
 import { NAV_ITEMS } from './nav.js';
 
 export const router = createBrowserRouter([
@@ -161,14 +162,12 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        // W12 — evidencija kompleta; montaža i zamjena dolaze kao transakcijske akcije.
         path: 'gume',
         element: (
-          <PlaceholderPage
-            title="Gume"
-            code="W14"
-            phase="Faza 4"
-            description="Kompleti guma, ciklusi montaže i kilometraža po setu."
-          />
+          <RequirePermission permission="tire:view">
+            <TireSetsPage />
+          </RequirePermission>
         ),
       },
       {

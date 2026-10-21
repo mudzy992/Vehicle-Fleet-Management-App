@@ -37,6 +37,8 @@ import {
   FUEL_TYPES,
   ODOMETER_SOURCES,
   OWNERSHIP_TYPES,
+  TIRE_SEASONS,
+  TIRE_STATUSES,
   VEHICLE_STATUSES,
 } from './enums.js';
 import type { ClientType } from './enums.js';
@@ -2384,3 +2386,72 @@ export const tireInstallationListResponseSchema = z
   })
   .strict();
 export type TireInstallationListResponse = z.output<typeof tireInstallationListResponseSchema>;
+
+/** Faza 4 — evidencija kompleta guma. Status se ne zadaje unosom: nov komplet je na skladištu. */
+export const tireSeasonSchema = z.enum(TIRE_SEASONS);
+export const tireStatusSchema = z.enum(TIRE_STATUSES);
+
+export const tireSetListQuerySchema = paginationQuerySchema
+  .extend({
+    season: tireSeasonSchema.optional(),
+    status: tireStatusSchema.optional(),
+    /** Samo kompleti na skladištu i bez aktivne montaže. */
+    availableOnly: z.enum(['true', 'false']).optional(),
+  })
+  .strict();
+export type TireSetListQuery = z.output<typeof tireSetListQuerySchema>;
+
+export const createTireSetSchema = z
+  .object({
+    code: z.string().trim().min(1).max(60),
+    brand: z.string().trim().max(120).nullable().optional(),
+    model: z.string().trim().max(120).nullable().optional(),
+    size: z.string().trim().max(40).nullable().optional(),
+    season: tireSeasonSchema,
+    tireCount: z.number().int().min(1).max(8).default(4),
+    purchaseDate: z.iso.date().nullable().optional(),
+    /** Nabavna cijena cijelog kompleta u feningama. */
+    purchasePrice: z.number().int().min(0).max(2147483647).nullable().optional(),
+    currentLocation: z.string().trim().max(200).nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+    formSchemaVersionId: uuidSchema.optional(),
+    formData: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type CreateTireSetInput = z.output<typeof createTireSetSchema>;
+
+export const tireSetViewSchema = z
+  .object({
+    id: uuidSchema,
+    code: z.string(),
+    brand: z.string().nullable(),
+    model: z.string().nullable(),
+    size: z.string().nullable(),
+    season: tireSeasonSchema,
+    tireCount: z.number().int().min(1).max(8),
+    purchaseDate: z.iso.date().nullable(),
+    purchasePrice: z.number().int().nonnegative().nullable(),
+    currency: z.string().length(3),
+    status: tireStatusSchema,
+    currentLocation: z.string().nullable(),
+    notes: z.string().nullable(),
+    mountedVehicleId: uuidSchema.nullable(),
+    mountedVehicleInternalNo: z.string().nullable(),
+    mountedVehiclePlateNumber: z.string().nullable(),
+    version: z.number().int().nonnegative(),
+    formSchemaId: uuidSchema.nullable(),
+    formSchemaVersionId: uuidSchema.nullable(),
+  })
+  .strict();
+export type TireSetView = z.output<typeof tireSetViewSchema>;
+
+export const tireSetListResponseSchema = z
+  .object({
+    items: z.array(tireSetViewSchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type TireSetListResponse = z.output<typeof tireSetListResponseSchema>;

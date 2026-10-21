@@ -46,6 +46,20 @@ describe('SEED_FORMS', () => {
     expect(genericTaskForms[0]?.key).toBe('pranje_vozila');
   });
 
+  it('forma kompleta guma nosi samo dodatne podatke nabavke', () => {
+    const tireSet = SEED_FORMS.find((form) => form.key === 'komplet_guma');
+    expect(tireSet).toBeDefined();
+    expect(tireSet?.subject).toBe('TIRE_SET');
+
+    const parsed = parseDefinition(tireSet!.definition);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const keys = parsed.definition.sections.flatMap((section) => section.fields.map((field) => field.key));
+    expect(keys).toEqual(['supplier', 'invoiceNumber', 'napomena']);
+    expect(parsed.definition.normalizedName).toEqual([]);
+  });
+
   it('forma vozila pokriva obavezne kolone iz seed-a', () => {
     const vehicle = SEED_FORMS.find((form) => form.key === 'vehicle');
     expect(vehicle).toBeDefined();

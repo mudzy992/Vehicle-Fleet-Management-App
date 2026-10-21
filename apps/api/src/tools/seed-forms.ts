@@ -359,6 +359,58 @@ function insuranceForm(): Record<string, unknown> {
   };
 }
 
+/**
+ * Forma kompleta guma (Faza 4).
+ *
+ * Kod, dimenzija, sezona, nabavka i lokacija su strukturirane kolone API-ja.
+ * Za `TIRE_SET` nema normalizacionog mapiranja, pa forma nosi samo dodatne
+ * podatke nabavke, a zapis ipak pamti objavljenu verziju kojom je unesen.
+ */
+function tireSetForm(): Record<string, unknown> {
+  return {
+    $schema: 'vfm-form/1',
+    meta: {
+      title: 'Komplet guma',
+      description: 'Dodatni podaci o nabavci kompleta',
+      subject: 'TIRE_SET',
+      language: 'bs',
+      estimatedMinutes: 2,
+    },
+    layout: { columns: 1, sectionsCollapsible: true, stickySubmit: true },
+    sections: [
+      {
+        key: 'nabavka',
+        title: 'Nabavka',
+        order: 1,
+        fields: [
+          {
+            key: 'supplier',
+            type: 'TEXT',
+            label: 'Dobavljač',
+            order: 1,
+            validation: { maxLength: 120 },
+          },
+          {
+            key: 'invoiceNumber',
+            type: 'TEXT',
+            label: 'Broj fakture',
+            order: 2,
+            validation: { maxLength: 60 },
+          },
+          {
+            key: 'napomena',
+            type: 'TEXTAREA',
+            label: 'Napomena',
+            order: 3,
+            validation: { maxLength: 500 },
+          },
+        ],
+      },
+    ],
+    normalizedName: [],
+  };
+}
+
 /** Redoslijed je bitan samo za log; sve forme su nezavisne. */
 export const SEED_FORMS: readonly SeedForm[] = [
   {
@@ -434,5 +486,13 @@ export const SEED_FORMS: readonly SeedForm[] = [
     description: 'Registracija i troškovi registracije.',
     ownerModule: 'registrations',
     definition: registrationForm(),
+  },
+  {
+    key: 'komplet_guma',
+    name: 'Komplet guma',
+    subject: 'TIRE_SET',
+    description: 'Dodatni podaci o nabavci kompleta.',
+    ownerModule: 'tires',
+    definition: tireSetForm(),
   },
 ];

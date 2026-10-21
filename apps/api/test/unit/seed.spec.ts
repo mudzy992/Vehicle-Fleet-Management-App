@@ -62,9 +62,10 @@ describe('seed', () => {
       'pranje_vozila',
       'osiguranje_vozila',
       'registracija_vozila',
+      'komplet_guma',
     ]);
-    expect(fake.formSchemas.size).toBe(6);
-    expect(fake.formSchemaVersions).toHaveLength(6);
+    expect(fake.formSchemas.size).toBe(7);
+    expect(fake.formSchemaVersions).toHaveLength(7);
     expect(fake.formSchemaVersions.every((version) => version.status === 'PUBLISHED')).toBe(true);
     expect(
       fake.formSchemaVersions.every((version) => /^[0-9a-f]{64}$/u.test(version.contentHash ?? '')),

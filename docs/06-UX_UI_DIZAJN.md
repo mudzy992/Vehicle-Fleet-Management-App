@@ -727,6 +727,12 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 | Vozač — profil (W08) | `/vozaci/:driverId` | `features/drivers/driver-detail-page.tsx` | PII sekcija (telefon, e-mail, adresa, datum rođenja, broj dozvole) označena je kad server vrati `piiRedacted` (nema `driver:view_pii`); rok dozvole i kategorije nisu PII; tab **Kategorije** ima dodavanje i brisanje (kategorija se ne mijenja — briše se i dodaje), uz `PATCH .../license-categories/:id` za datume; arhiviranje/vraćanje traži `driver:archive` |
 | Novi vozač (W08) | `/vozaci/novi` | `features/drivers/driver-create-page.tsx` | iste strukturirane kolone kao API (`firstName`, `lastName`, PII, dozvola) + dinamička `DRIVER` forma kroz `buildRenderModel`; greške servera idu uz tačno polje (`formData.<key>`); bez objavljene forme ekran objašnjava zašto zapis ne može nastati (P10) |
 
+**Status (Faza 4, implementirano):**
+
+| Ekran | Ruta | Fajl | Napomena |
+|---|---|---|---|
+| Kompleti guma (W12) | `/gume` | `features/tires/tire-sets-page.tsx`, `tire-set-create-form.tsx` | server filteri `q`/sezona/status/dostupnost, sortiranje i paginacija; unos uz `tire:create` kroz objavljenu `TIRE_SET` formu; aktivna montaža linkuje na vozilo; montaža, demontaža i zamjena još nisu akcije na ekranu |
+
 Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);
 sidebar filtrira stavke prema `/auth/me` (`visibleNavItems`), ali **server ostaje
 autoritet** (P14) — ručni unos URL-a bez prava prikazuje ekran „Nemate pristup"
@@ -847,3 +853,20 @@ status/pozicije, montaža i demontaža (datum/km), korištenje (km/dani),
 skladište i razlog. Filter „Samo trenutno montirani kompleti“ vraća stranicu
 na 1. Paginacija je serverska po 25. Posebna stanja učitavanja, greške i prazne
 liste; nepoznati brojači prikazani su crticom. Mutacije slijede odvojeno.
+
+### Kompleti guma — evidencija i unos (Faza 4)
+
+`/gume`, `features/tires/tire-sets-page.tsx`, uz `RequirePermission(tire:view)`;
+dugme **Novi komplet** vidi samo korisnik s `tire:create`, a server ponovo
+provjerava pravo. Filteri pretražuju kod, proizvođača, model, dimenziju i
+lokaciju te filtriraju sezonu, status i dostupnost za montažu. Sortiranje je
+ograničeno na kod, proizvođača, nabavku i datum unosa; paginacija je serverska
+po 25. Tabela prikazuje sezonu/status, broj guma, datum i cijenu nabavke,
+lokaciju ili link na vozilo aktivne montaže te napomenu.
+
+Unos (`tire-set-create-form.tsx`) spaja strukturirane podatke s dodatnim
+poljima aktivne objavljene `TIRE_SET` forme i šalje njenu verziju. Nabavna
+cijena se iz KM pretvara u feninge; novi komplet uvijek nastaje kao
+„Na skladištu“. Ako objavljena forma ne postoji, ekran to jasno kaže i ne
+pokušava snimanje. Montaža, demontaža, zamjena, izmjena i brisanje kompleta
+još nisu dostupne akcije.

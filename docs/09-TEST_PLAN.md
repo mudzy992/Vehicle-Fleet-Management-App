@@ -287,7 +287,7 @@ prije provjere km/upisa, referenca očitanja i audit snapshot, bez km, regresija
 arhiva/nepostojeće vozilo, povučena forma, budući datum, propagacija greške očitanja,
 rok iz najnovijeg servisa i granice DTO-a. Testovi koriste lažni transakcijski
 klijent; stvarni rollback i paralelni upisi na PostgreSQL-u nisu ovim dokazani.
-Seed testovi očekuju 6 formi i provjeravaju idempotentnost drugog prolaza.
+Seed testovi očekuju 7 formi i provjeravaju idempotentnost drugog prolaza.
 
 ### Stavke servisa — Faza 4
 
@@ -314,3 +314,21 @@ filteri i paginacija, soft-delete, boolean true/false, validacija UUID/query,
 whitelist sortiranja, null brojači i datumi, prazna lista i `tire:view`.
 DI provjera dopunjena servisom i kontrolerom guma (+2 testa).
 Testovi su s lažnim Prisma klijentom, ne dokazuju DB konkurenciju/montažu.
+
+### Kompleti guma — Faza 4
+
+`apps/api/test/unit/tire-sets.spec.ts` — 10 testova: serverski filteri
+pretrage/sezone/statusa/dostupnosti, sort whitelist i paginacija, serijalizacija
+datuma i vozila aktivne montaže, unos kroz objavljenu `TIRE_SET` formu uz
+početni status `IN_STOCK`, duplikat aktivnog koda prije upisa i mapiranje
+konkurentnog `P2002` na `409 DUPLICATE_ENTRY`, povučena forma, budući datum
+nabavke, stvarna validacija dodatnih polja forme, granice strict DTO-a te
+permisije/audit kontrolera. Statički registar Prisma selecta dopunjen je za
+`TIRE_SET_SELECT`.
+
+`apps/web/src/features/tires/tire-sets-model.test.ts` — 3 testa query gradnje,
+izostavljanja praznih opcionalnih polja i pretvaranja nabavne cijene iz KM u
+feninge. Seed-form provjere sada imaju i eksplicitni test da `komplet_guma`
+nosi samo dobavljača, fakturu i napomenu bez normalizacije. Lažni Prisma
+klijent ne dokazuje stvarni PostgreSQL upit, jedinstveni indeks ni HTTP tok;
+to ostaje provjera na deployu/bazi.

@@ -647,7 +647,37 @@ servisna evidencija/arhivirano vozilo → validacijska greška. Verzija raste i
 štiti od konkurentnog uređivanja stavki računa. Nema novih migracija/ENV/Redis
 ključeva. Provjera sa stvarnom bazom nije izvršena iz sandboxa.
 
-### 7.5 Gume — pregled historije montaža (prva cjelina)
+### 7.5 Gume — kompleti i pregled historije montaža
+
+Implementirani su:
+
+| Metoda i ruta | Permisija | Ugovor |
+|---|---|---|
+| `GET /tire-sets` | `tire:view` | lista neobrisanih kompleta `{items,page,pageSize,total,totalPages}` |
+| `POST /tire-sets` | `tire:create` | unos kompleta kroz objavljenu `TIRE_SET` formu; audit `CREATE` na `TireSet` |
+| `GET /tire-installations` | `tire:view` | historija montaža, kako je opisano niže |
+
+`GET /tire-sets` prihvata standardnu paginaciju te `q`, `season`, `status` i
+`availableOnly=true|false`. Pretraga obuhvata kod, proizvođača, model,
+dimenziju i lokaciju bez razlikovanja velikih/malih slova. Samo
+`availableOnly=true` dodatno zahtijeva `IN_STOCK` i nijednu aktivnu montažu.
+Sort whitelist je `code`, `brand`, `purchaseDate`, `purchasePrice`, `createdAt`;
+default je kod uzlazno, a ID je stabilni drugi ključ. Zapis nosi strukturirane
+podatke kompleta, `version`, ID-jeve forme/verzije i — ako postoji aktivna
+montaža — ID, interni broj i registarsku oznaku vozila.
+
+`POST /tire-sets` ima strict DTO: obavezan `code` (1–60 znakova) i `season`,
+opcionalni proizvođač/model/dimenzija, `tireCount` 1–8 (default 4), datum i
+cijena nabavke u feningama, lokacija, napomena, `formSchemaVersionId` i
+`formData`. Status se **ne** može zadati zahtjevom: novi zapis uvijek dobija
+`IN_STOCK` i valutu `BAM`. Datum nabavke ne smije biti u budućnosti.
+Jedinstvenost aktivnog koda provjerava se prije upisa, a konkurentno kršenje
+jedinstvenog indeksa takođe se vraća kao `409 DUPLICATE_ENTRY`. Nov zapis mora
+koristiti objavljenu `TIRE_SET` verziju; bez eksplicitnog ID-ja bira se
+trenutno objavljena. Za ovaj subject nema normalizacijskog mapiranja u kolone,
+pa forma nosi dodatne podatke, dok zapis pamti tačne `formSchemaId`,
+`formSchemaVersionId` i validirani `formData`. Idempotentni seed osigurava
+početnu formu `komplet_guma`; bez nje/objavljene zamjene unos nije moguć.
 
 Implementiran `GET /tire-installations` uz `tire:view`. Query: standardna
 paginacija, `vehicleId`, `setId`, `q` (kod kompleta), `activeOnly=true|false`.
@@ -660,7 +690,8 @@ demontaže, pozicije, sačuvane `kmDriven`/`daysInUse`, skladište/razlog,
 verziju i opcionu zapisnu verziju forme. Null brojači ostaju null; nema
 računanja pretpostavljene kilometraže aktivne montaže.
 
-Pregled nije mutacija: nema audita, outboxa, novih ENV/Redis ključeva niti
-migracija. Unos kompleta, montaža, demontaža i zamjena iz §2.8 još nisu
-implementirani. Globalni auth/RBAC ostaje obavezan; produkcijski HTTP test
-s pravom bazom nije izvršen u sandboxu.
+Pregledi nisu mutacije i nemaju audit; unos kompleta ima audit `CREATE`.
+Nema outboxa, novih ENV/Redis ključeva niti migracija. Izmjena/brisanje
+kompleta, pojedinačne gume, montaža, demontaža, zamjena i usage pregled iz
+§2.8 još nisu implementirani. Globalni auth/RBAC ostaje obavezan;
+produkcijski HTTP test s pravom bazom nije izvršen u sandboxu.
