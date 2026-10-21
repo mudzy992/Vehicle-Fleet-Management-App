@@ -362,6 +362,40 @@ function insuranceForm(): Record<string, unknown> {
 /** Redoslijed je bitan samo za log; sve forme su nezavisne. */
 export const SEED_FORMS: readonly SeedForm[] = [
   {
+    key: 'servis_vozila',
+    name: 'Servis vozila',
+    subject: 'SERVICE',
+    ownerModule: 'services',
+    description: 'Servisna evidencija i dodatni podaci.',
+    definition: {
+      $schema: 'vfm-form/1',
+      meta: { title: 'Servis vozila', subject: 'SERVICE', language: 'bs', estimatedMinutes: 3 },
+      layout: { columns: 1, sectionsCollapsible: true, stickySubmit: true },
+      sections: [
+        {
+          key: 'servis',
+          title: 'Servis',
+          order: 1,
+          fields: [
+            { key: 'serviceDate', type: 'DATE', label: 'Datum servisa', required: true, order: 1 },
+            {
+              key: 'totalCost',
+              type: 'MONEY',
+              label: 'Ukupni trošak',
+              required: true,
+              order: 2,
+              validation: { min: 0, max: 2147483647, currency: 'BAM' },
+            },
+          ],
+        },
+      ],
+      normalizedName: [
+        { fieldKey: 'serviceDate', column: 'serviceDate', transform: 'TO_DATE' },
+        { fieldKey: 'totalCost', column: 'totalCost', transform: 'MONEY_TO_FENINZI' },
+      ],
+    },
+  },
+  {
     key: 'vehicle',
     name: 'Vozilo',
     subject: 'VEHICLE',

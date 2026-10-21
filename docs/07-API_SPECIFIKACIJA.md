@@ -262,11 +262,12 @@ sistem, `ARCHIVED` je arhiva evidencije.
 Odgovor liste: `{items, page, pageSize, total, totalPages}`; zapis nosi
 `formSchemaId`, `formSchemaVersionId`, `version`, datum, kilometražu, vrstu,
 radionicu, opis, trošak u feningama i sljedeći rok (datum/km). Bez mutacija.
-Stavke računa i puna dinamička forma još nisu dio odgovora.
+Stavke računa i puna dinamička forma još nisu dio odgovora pregleda.
+`POST /services` je naknadno implementiran; ugovor i transakcija su u §7.2.
 
 **Planirano u narednim cjelinama (nije još dostupno):**
 
-`GET/POST /services`, `GET/PATCH/DELETE /services/:id`, `GET/POST/PATCH/DELETE /services/:id/items`,
+`PATCH/DELETE /services/:id`, `GET/POST/PATCH/DELETE /services/:id/items`,
 `POST /services/:id/attachments`. Pri kreiranju se opciono upisuje `OdometerReading` (ista
 transakcija) i ažurira `Vehicle.nextServiceDue*`.
 
@@ -585,3 +586,21 @@ Zod DTO i UUID validacija, whitelist sortiranja, stabilna paginacija i
 PII, novih ENV/Redis ključeva, outbox događaja niti novih migracija.
 Jedinični testovi i Nest DI provjera prolaze; produkcijski HTTP smoke-test
 sa stvarnom bazom i korisničkim permisijama nije izvršen u sandboxu.
+
+### 7.2 Unos servisa — druga cjelina Faze 4
+
+Implementiran `POST /services` uz `service:create` i audit `CREATE` (`ServiceRecord`).
+Tijelo: `vehicleId`, `serviceDate` (ne u budućnosti), `serviceType`, `totalCost`
+(feninzi); opciono `workshopName`, `description`, `odometerKm`,
+`nextServiceDueDate`, `nextServiceDueKm`, `formData`, `formSchemaVersionId`.
+Nova evidencija zahtijeva objavljenu SERVICE formu; seed idempotentno dodaje
+`servis_vozila`, bez izmjene postojećih objavljenih verzija.
+
+Vozilo se zaključava `SELECT … FOR UPDATE` u transakciji: provjera trenutne km,
+servis, `OdometerReading.source=SERVICE` s referencom, ažuriranje km/roka/verzije
+vozila. Manja km → `422 ODOMETER_REGRESSION`; korekcija ide kroz zaseban auditovani
+endpoint vozila, ne kroz servis. Arhivirana vozila odbijaju unos. Rok se uzima iz
+najnovijeg aktivnog servisa po datumu, vremenu unosa i ID-u, pa historijski servis
+ne prepisuje rok novijeg. Bez km nema očitanja niti promjene kilometraže.
+Nema novih ENV, Redis ključeva ni migracija. Jedinični testovi nisu dokaz
+konkurencije/rollbacka na pravom PostgreSQL-u; taj smoke-test još nije izvršen.

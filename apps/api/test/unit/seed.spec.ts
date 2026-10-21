@@ -54,16 +54,17 @@ describe('seed', () => {
     expect(new Set(fake.rolePermissions.map((grant) => grant.scope))).toEqual(new Set(['ALL', 'OWN']));
 
     expect(summary.formSchemaCreated).toBe(true);
-    // Tri početne forme iz `SEED_FORMS`, svaka s objavljenom verzijom 1.
+    // Početne forme iz `SEED_FORMS`, svaka s objavljenom verzijom 1.
     expect(summary.forms.created).toEqual([
+      'servis_vozila',
       'vehicle',
       'vozac',
       'pranje_vozila',
       'osiguranje_vozila',
       'registracija_vozila',
     ]);
-    expect(fake.formSchemas.size).toBe(5);
-    expect(fake.formSchemaVersions).toHaveLength(5);
+    expect(fake.formSchemas.size).toBe(6);
+    expect(fake.formSchemaVersions).toHaveLength(6);
     expect(fake.formSchemaVersions.every((version) => version.status === 'PUBLISHED')).toBe(true);
     expect(
       fake.formSchemaVersions.every((version) => /^[0-9a-f]{64}$/u.test(version.contentHash ?? '')),

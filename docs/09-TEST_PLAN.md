@@ -279,3 +279,12 @@ Sigurnost: gitleaks ✅ · pnpm audit ✅ · trivy ✅
 Nesavršenosti/tehnički dug: …
 Blokira sljedeću fazu: DA/NE
 ```
+
+### Unos servisa — Faza 4
+
+`apps/api/test/unit/services-create.spec.ts` — 10 testova: redoslijed zaključavanja
+prije provjere km/upisa, referenca očitanja i audit snapshot, bez km, regresija km,
+arhiva/nepostojeće vozilo, povučena forma, budući datum, propagacija greške očitanja,
+rok iz najnovijeg servisa i granice DTO-a. Testovi koriste lažni transakcijski
+klijent; stvarni rollback i paralelni upisi na PostgreSQL-u nisu ovim dokazani.
+Seed testovi očekuju 6 formi i provjeravaju idempotentnost drugog prolaza.

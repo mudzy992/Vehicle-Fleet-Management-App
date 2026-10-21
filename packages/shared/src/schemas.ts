@@ -2272,3 +2272,29 @@ export const serviceListResponseSchema = z
   })
   .strict();
 export type ServiceListResponse = z.output<typeof serviceListResponseSchema>;
+
+/** Unos servisa: novac je cijeli broj feninga, km ne smije nazad. */
+export const createServiceSchema = z
+  .object({
+    vehicleId: uuidSchema,
+    serviceDate: z.iso.date(),
+    serviceType: z.string().trim().min(1).max(120),
+    workshopName: z.string().trim().max(200).nullable().optional(),
+    description: z.string().trim().max(2000).nullable().optional(),
+    odometerKm: z.number().int().min(0).max(2147483647).optional(),
+    totalCost: z.number().int().min(0).max(2147483647),
+    nextServiceDueDate: z.iso.date().nullable().optional(),
+    nextServiceDueKm: z.number().int().min(0).max(2147483647).nullable().optional(),
+    formSchemaVersionId: uuidSchema.optional(),
+    formData: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict()
+  .refine((v) => !v.nextServiceDueDate || v.nextServiceDueDate >= v.serviceDate, {
+    path: ['nextServiceDueDate'],
+    message: 'Sljedeći servis ne može prethoditi ovom servisu.',
+  })
+  .refine(
+    (v) => v.odometerKm === undefined || v.nextServiceDueKm == null || v.nextServiceDueKm >= v.odometerKm,
+    { path: ['nextServiceDueKm'], message: 'Sljedeći servis ne može biti na manjoj kilometraži.' },
+  );
+export type CreateServiceInput = z.output<typeof createServiceSchema>;

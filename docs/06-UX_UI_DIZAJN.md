@@ -797,3 +797,13 @@ vremena u 24-h formatu, izbjegavati pasiv („Sistem je odbio zahtjev" → „Za
    `RefreshControl`, optimistic mutations kroz TanStack Query.
 10. Testiranje dizajna: Chromatic/Storybook (opciono) + snapshot testovi `DynamicForm` fixture seta
     (isti fixture za web i mobilnu → garantuje paritet).
+
+### Unos servisa — dopuna Faze 4
+
+Profil vozila → Servisi → **Novi servis** uz `service:create`.
+`features/services/service-create-form.tsx` prikazuje osnovna polja i dodatna
+polja aktivne SERVICE forme kroz form-renderer (bez ponavljanja osnovnih polja).
+Trošak se unosi u KM i šalje kao feninge; opcioni km je cijeli nenegativan broj.
+Greške se prikazuju bez brisanja unosa. Nakon uspjeha se osvježavaju servisne
+liste, vozilo, lista vozila i očitanja. Otkazivanje ne upisuje ništa.
+Stavke računa, izmjena i brisanje servisa još nisu implementirani.

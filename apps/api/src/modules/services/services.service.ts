@@ -1,3 +1,11 @@
+import { randomUUID } from 'node:crypto';
+import { createServiceSchema, type CreateServiceInput } from '@vfm/shared/schemas';
+import {
+  resolveFormVersion,
+  mergeCoreValues,
+  validateRecordValues,
+} from '../../common/form-record-support.js';
+import { toDatabaseDate } from '../../common/dates.js';
 /** Pregled servisa: bez izmjene historije i bez pristupa obrisanim zapisima. */
 import { Injectable } from '@nestjs/common';
 import { toLocalDateString } from '@vfm/shared';
@@ -65,6 +73,111 @@ export class ServicesService {
       pageSize: query.pageSize,
       totalPages: Math.ceil(total / query.pageSize),
     };
+  }
+
+  /** Vozilo se zaključava prije provjere km; svaki upis je u istoj transakciji. */
+  async create(input: CreateServiceInput, actorId?: string) {
+    const version = await resolveFormVersion(this.prisma as never, {
+      subject: 'SERVICE',
+      versionId: input.formSchemaVersionId,
+      entityLabel: 'servis',
+    });
+    const values = mergeCoreValues(version.definition, input.formData, {
+      serviceDate: input.serviceDate,
+      odometerKm: input.odometerKm,
+      totalCost: { amount: input.totalCost, currency: 'BAM' },
+      workshopName: input.workshopName,
+      nextServiceDueDate: input.nextServiceDueDate,
+      nextServiceDueKm: input.nextServiceDueKm,
+    });
+    const validated = validateRecordValues({
+      subject: 'SERVICE',
+      definition: version.definition,
+      versionId: version.id,
+      versionNumber: version.version,
+      status: version.status,
+      values,
+      isNew: true,
+    });
+    // Mapirane vrijednosti prolaze iste granice kao statična polja, ne zaobilaze DTO.
+    const parsed = createServiceSchema.safeParse({ ...input, ...validated.normalized });
+    if (!parsed.success) {
+      throw new VfmException(
+        'FORM_VALIDATION_FAILED',
+        'Mapirane vrijednosti servisa nisu ispravne.',
+        parsed.error.issues.map((issue) => ({ path: issue.path.map(String), message: issue.message })),
+      );
+    }
+    const data = parsed.data;
+    if (data.serviceDate > toLocalDateString(new Date())) {
+      throw new VfmException('VALIDATION_ERROR', 'Datum servisa ne može biti u budućnosti.');
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const vehicles = await tx.$queryRaw<Array<{ id: string; odometerKm: number; status: string }>>`
+        SELECT "id", "odometerKm", "status" FROM "Vehicle"
+        WHERE "id" = ${data.vehicleId}::uuid AND "deletedAt" IS NULL FOR UPDATE`;
+      const vehicle = vehicles[0];
+      if (!vehicle) throw new VfmException('NOT_FOUND', 'Vozilo nije pronađeno.');
+      if (vehicle.status === 'ARCHIVED')
+        throw new VfmException('VALIDATION_ERROR', 'Arhiviranom vozilu se ne dodaje servis.');
+      if (data.odometerKm !== undefined && data.odometerKm < vehicle.odometerKm) {
+        throw new VfmException(
+          'ODOMETER_REGRESSION',
+          'Kilometraža je manja od trenutne. Koristite zasebnu auditovanu korekciju kilometraže.',
+        );
+      }
+      const row = await tx.serviceRecord.create({
+        data: {
+          id: randomUUID(),
+          vehicleId: data.vehicleId,
+          serviceDate: toDatabaseDate(data.serviceDate)!,
+          serviceType: data.serviceType,
+          workshopName: data.workshopName ?? null,
+          description: data.description ?? null,
+          totalCost: data.totalCost,
+          odometerKm: data.odometerKm ?? null,
+          nextServiceDueDate: toDatabaseDate(data.nextServiceDueDate),
+          nextServiceDueKm: data.nextServiceDueKm ?? null,
+          attachmentIds: [],
+          formSchemaId: version.formSchemaId,
+          formSchemaVersionId: version.id,
+          formData: validated.values as Prisma.InputJsonObject,
+          createdById: actorId ?? null,
+        },
+        select: SERVICE_SELECT,
+      });
+      const now = new Date();
+      if (data.odometerKm !== undefined) {
+        await tx.odometerReading.create({
+          data: {
+            id: randomUUID(),
+            vehicleId: data.vehicleId,
+            valueKm: data.odometerKm,
+            source: 'SERVICE',
+            referenceType: 'ServiceRecord',
+            referenceId: row.id,
+            readingAt: now,
+            recordedById: actorId ?? null,
+          },
+        });
+      }
+      // Historijski servis ne smije prepisati rok novijeg servisa.
+      const latest = await tx.serviceRecord.findFirst({
+        where: { vehicleId: data.vehicleId, deletedAt: null, status: 'ACTIVE' },
+        orderBy: [{ serviceDate: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+        select: { nextServiceDueDate: true, nextServiceDueKm: true },
+      });
+      await tx.vehicle.update({
+        where: { id: data.vehicleId },
+        data: {
+          ...(data.odometerKm !== undefined ? { odometerKm: data.odometerKm, odometerUpdatedAt: now } : {}),
+          nextServiceDueDate: latest?.nextServiceDueDate ?? null,
+          nextServiceDueKm: latest?.nextServiceDueKm ?? null,
+          version: { increment: 1 },
+        },
+      });
+      return { data: serialize(row), after: { ...serialize(row), previousOdometerKm: vehicle.odometerKm } };
+    });
   }
 
   async get(id: string) {

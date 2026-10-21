@@ -1,5 +1,9 @@
-/** Faza 4 — pregled servisnih evidencija (unos se uvodi odvojeno). */
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { createServiceSchema, type CreateServiceInput } from '@vfm/shared/schemas';
+import { Audit, CurrentUser } from '../../common/decorators/auth.decorators.js';
+import { AuditContext } from '../../common/audit/audit.types.js';
+import type { AuthenticatedUser, VfmRequest } from '../../common/types/authenticated-user.js';
+/** Faza 4 — pregled i auditovani unos servisnih evidencija. */
+import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { serviceListQuerySchema, uuidSchema, type ServiceListQuery } from '@vfm/shared/schemas';
 import { RequirePermissions } from '../../common/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
@@ -12,6 +16,22 @@ export class ServicesController {
   @RequirePermissions('service:view')
   list(@Query(new ZodValidationPipe(serviceListQuerySchema, 'query')) query: ServiceListQuery) {
     return this.services.list(query);
+  }
+  @Post()
+  @RequirePermissions('service:create')
+  @Audit('CREATE', { severity: 'INFO', resource: 'ServiceRecord' })
+  async create(
+    @Body(new ZodValidationPipe(createServiceSchema, 'body')) input: CreateServiceInput,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ) {
+    const result = await this.services.create(input, actor?.id);
+    AuditContext.from(request)
+      .setEntityId(result.data.id)
+      .setAfter(result.after)
+      .setResource('ServiceRecord')
+      .set('vehicleId', result.data.vehicleId);
+    return result.data;
   }
   @Get(':id')
   @RequirePermissions('service:view')

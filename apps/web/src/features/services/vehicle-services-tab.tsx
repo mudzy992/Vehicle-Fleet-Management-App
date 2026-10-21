@@ -1,4 +1,7 @@
-/** Pregled servisa vozila; unos i stavke računa slijede u narednoj cjelini. */
+import { ServiceCreateForm } from './service-create-form.js';
+import { useSession } from '../auth/session.js';
+import { useQueryClient } from '@tanstack/react-query';
+/** Pregled i unos servisa vozila; stavke računa slijede odvojeno. */
 import { useQuery } from '@tanstack/react-query';
 import { statusLabel } from '@vfm/shared';
 import type { ServiceListResponse } from '@vfm/shared/schemas';
@@ -19,6 +22,9 @@ import {
 import { api, ApiError } from '../../lib/api.js';
 
 export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
+  const client = useQueryClient();
+  const { hasPermission } = useSession();
+  const [adding, setAdding] = useState(false);
   const [page, setPage] = useState(1);
   const query = useQuery({
     queryKey: ['services', vehicleId, page],
@@ -27,6 +33,27 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
         `/services?vehicleId=${encodeURIComponent(vehicleId)}&page=${page}&pageSize=25`,
       ),
   });
+  if (adding && hasPermission('service:create'))
+    return (
+      <ServiceCreateForm
+        vehicleId={vehicleId}
+        onCancel={() => setAdding(false)}
+        onCreated={async () => {
+          await Promise.all([
+            client.invalidateQueries({ queryKey: ['services'] }),
+            client.invalidateQueries({ queryKey: ['vehicle', vehicleId] }),
+            client.invalidateQueries({ queryKey: ['vehicles'] }),
+            client.invalidateQueries({ queryKey: ['odometer', vehicleId] }),
+          ]);
+          setAdding(false);
+        }}
+      />
+    );
+  const addButton = hasPermission('service:create') ? (
+    <Button size="sm" onClick={() => setAdding(true)}>
+      Novi servis
+    </Button>
+  ) : null;
   if (query.isPending) return <p>Učitavanje servisa…</p>;
   if (query.error)
     return (
@@ -36,13 +63,17 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
     );
   if (!query.data?.items.length)
     return (
-      <EmptyState
-        title="Nema servisnih evidencija"
-        description="Pregled je spreman. Unos servisa i stavke računa bit će dostupni u narednom koraku Faze 4."
-      />
+      <div className="space-y-4">
+        {addButton}
+        <EmptyState
+          title="Nema servisnih evidencija"
+          description="Dodajte servisnu evidenciju. Stavke računa slijede u narednoj cjelini."
+        />
+      </div>
     );
   return (
     <div className="space-y-4">
+      {addButton}
       <Card>
         <CardContent>
           <Table>
