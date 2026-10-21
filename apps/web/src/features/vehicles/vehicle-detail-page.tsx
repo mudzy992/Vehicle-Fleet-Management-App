@@ -16,8 +16,10 @@ import { statusLabel } from '@vfm/shared';
 import type {
   AttachmentListResponse,
   InsuranceListResponse,
+  InsuranceRecord,
   OdometerListResponse,
   RegistrationListResponse,
+  RegistrationRecord,
   VehicleDetail,
 } from '@vfm/shared/schemas';
 import {
@@ -39,6 +41,7 @@ import {
 } from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
 import { VehicleRecordForm } from './record-form.js';
+import { VehicleRecordEditForm } from './record-edit-form.js';
 import { useSession } from '../auth/session.js';
 import { deadlineLabel, deadlineTone, toQueryString } from './vehicles-model.js';
 
@@ -295,6 +298,7 @@ function Deadline({ date }: { date: string | null }) {
 function RegistrationsTab({ vehicleId, onChanged }: { vehicleId: string; onChanged: () => Promise<void> }) {
   const { hasPermission } = useSession();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<RegistrationRecord | null>(null);
   const query = useQuery({
     queryKey: ['registrations', vehicleId],
     queryFn: () =>
@@ -302,6 +306,20 @@ function RegistrationsTab({ vehicleId, onChanged }: { vehicleId: string; onChang
         `/registrations?${toQueryString({ vehicleId, page: 1, pageSize: 25 })}`,
       ),
   });
+
+  if (editing) {
+    return (
+      <VehicleRecordEditForm
+        kind="REGISTRATION"
+        record={editing}
+        onDone={async () => {
+          setEditing(null);
+          await onChanged();
+        }}
+        onCancel={() => setEditing(null)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -339,6 +357,7 @@ function RegistrationsTab({ vehicleId, onChanged }: { vehicleId: string; onChang
                   <TH>Status</TH>
                   <TH align="right">Cijena</TH>
                   <TH>Izdavao</TH>
+                  <TH> </TH>
                 </TR>
               </THead>
               <TBody>
@@ -355,6 +374,13 @@ function RegistrationsTab({ vehicleId, onChanged }: { vehicleId: string; onChang
                       {item.costAmount === null ? '—' : `${(item.costAmount / 100).toFixed(2)} KM`}
                     </TD>
                     <TD>{item.issuedBy ?? '—'}</TD>
+                    <TD>
+                      {hasPermission('registration:update') && (
+                        <Button size="sm" variant="ghost" onClick={() => setEditing(item)}>
+                          Uredi
+                        </Button>
+                      )}
+                    </TD>
                   </TR>
                 ))}
               </TBody>
@@ -369,11 +395,26 @@ function RegistrationsTab({ vehicleId, onChanged }: { vehicleId: string; onChang
 function InsurancesTab({ vehicleId, onChanged }: { vehicleId: string; onChanged: () => Promise<void> }) {
   const { hasPermission } = useSession();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<InsuranceRecord | null>(null);
   const query = useQuery({
     queryKey: ['insurances', vehicleId],
     queryFn: () =>
       api.get<InsuranceListResponse>(`/insurances?${toQueryString({ vehicleId, page: 1, pageSize: 25 })}`),
   });
+
+  if (editing) {
+    return (
+      <VehicleRecordEditForm
+        kind="INSURANCE"
+        record={editing}
+        onDone={async () => {
+          setEditing(null);
+          await onChanged();
+        }}
+        onCancel={() => setEditing(null)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -411,6 +452,7 @@ function InsurancesTab({ vehicleId, onChanged }: { vehicleId: string; onChanged:
                   <TH>Period</TH>
                   <TH>Status</TH>
                   <TH align="right">Premija</TH>
+                  <TH> </TH>
                 </TR>
               </THead>
               <TBody>
@@ -426,6 +468,13 @@ function InsurancesTab({ vehicleId, onChanged }: { vehicleId: string; onChanged:
                     </TD>
                     <TD align="right">
                       {item.premiumAmount === null ? '—' : `${(item.premiumAmount / 100).toFixed(2)} KM`}
+                    </TD>
+                    <TD>
+                      {hasPermission('insurance:update') && (
+                        <Button size="sm" variant="ghost" onClick={() => setEditing(item)}>
+                          Uredi
+                        </Button>
+                      )}
                     </TD>
                   </TR>
                 ))}

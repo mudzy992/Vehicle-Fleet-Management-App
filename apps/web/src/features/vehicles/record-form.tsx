@@ -18,66 +18,16 @@ import type { RenderModel } from '@vfm/form-renderer';
 import { buildRenderModel } from '@vfm/form-renderer';
 import { Button, Card, CardContent, CardHeader } from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
-import { CoreFields, FormFields, type CoreFieldSpec } from '../forms/form-fields.js';
+import { CoreFields, FormFields } from '../forms/form-fields.js';
 import { sarajevoToday } from '../forms/forms-preview-values.js';
-import { defaultPeriod, isPeriodOverlap, moneyToFeninzi } from './records-model.js';
-
-export type RecordKind = 'REGISTRATION' | 'INSURANCE';
-
-interface FieldSpec extends CoreFieldSpec {
-  /** Polje je iznos u KM koje se u API šalje u feningama. */
-  readonly money?: boolean;
-}
-
-const COMMON_FIELDS: readonly FieldSpec[] = [
-  { key: 'validFrom', label: 'Važi od', kind: 'DATE', required: true },
-  { key: 'validUntil', label: 'Važi do', kind: 'DATE', required: true, hint: 'Uključivo.' },
-  { key: 'notes', label: 'Napomena', kind: 'MULTILINE' },
-];
-
-const FIELDS: Readonly<Record<RecordKind, readonly FieldSpec[]>> = {
-  REGISTRATION: [
-    { key: 'registrationNumber', label: 'Registarski broj', kind: 'TEXT', required: true },
-    ...COMMON_FIELDS,
-    { key: 'issuedBy', label: 'Izdavao', kind: 'TEXT' },
-    { key: 'costAmount', label: 'Trošak (KM)', kind: 'TEXT', money: true },
-  ],
-  INSURANCE: [
-    { key: 'policyNumber', label: 'Broj police', kind: 'TEXT' },
-    { key: 'insuranceCompany', label: 'Osiguravajuća kuća', kind: 'TEXT' },
-    { key: 'type', label: 'Vrsta pokrića', kind: 'TEXT', hint: 'npr. KASKO, ODGOVORNOST' },
-    ...COMMON_FIELDS,
-    { key: 'premiumAmount', label: 'Premija (KM)', kind: 'TEXT', money: true },
-    { key: 'deductibleAmount', label: 'Franšiza (KM)', kind: 'TEXT', money: true },
-  ],
-};
-
-const ENDPOINT: Readonly<Record<RecordKind, string>> = {
-  REGISTRATION: '/registrations',
-  INSURANCE: '/insurances',
-};
-
-/** Vrijednosti iz forme jesu stringovi; prazna polja se ne šalju. */
-function buildPayload(
-  kind: RecordKind,
-  vehicleId: string,
-  core: Readonly<Record<string, string>>,
-  formData: Readonly<Record<string, unknown>>,
-  formSchemaVersionId: string,
-): Record<string, unknown> {
-  const fields = FIELDS[kind];
-  const payload: Record<string, unknown> = { vehicleId, formData, formSchemaVersionId };
-  for (const field of fields) {
-    const raw = (core[field.key] ?? '').trim();
-    if (field.money) {
-      const amount = moneyToFeninzi(raw);
-      if (amount !== null) payload[field.key] = amount;
-      continue;
-    }
-    if (raw !== '') payload[field.key] = raw;
-  }
-  return payload;
-}
+import { defaultPeriod, isPeriodOverlap } from './records-model.js';
+import {
+  RECORD_ENDPOINT,
+  RECORD_FIELDS,
+  buildCreatePayload,
+  recordHiddenKeys,
+  type RecordKind,
+} from './records-fields.js';
 
 export function VehicleRecordForm({
   kind,
@@ -121,8 +71,8 @@ export function VehicleRecordForm({
   const submit = useMutation({
     mutationFn: () =>
       api.post<unknown>(
-        ENDPOINT[kind],
-        buildPayload(kind, vehicleId, core, values, form.data!.formSchemaVersionId),
+        RECORD_ENDPOINT[kind],
+        buildCreatePayload(kind, vehicleId, core, values, form.data!.formSchemaVersionId),
       ),
     onSuccess: async () => {
       setCore({ validFrom: period.validFrom, validUntil: period.validUntil });
@@ -188,7 +138,7 @@ export function VehicleRecordForm({
           }}
         >
           <CoreFields
-            fields={FIELDS[kind]}
+            fields={RECORD_FIELDS[kind]}
             values={core}
             errors={errors}
             idPrefix={`${kind.toLowerCase()}-`}
@@ -196,7 +146,7 @@ export function VehicleRecordForm({
           />
           <FormFields
             model={model}
-            hiddenKeys={FIELDS[kind].map((field) => field.key)}
+            hiddenKeys={recordHiddenKeys(kind)}
             errors={errors}
             idPrefix={kind.toLowerCase()}
             onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))}

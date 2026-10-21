@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { addDays, defaultPeriod, feninziToInput, isPeriodOverlap, moneyToFeninzi } from './records-model.js';
+import { buildUpdatePayload, recordToCoreValues } from './records-fields.js';
 
 describe('moneyToFeninzi', () => {
   it('pretvara KM u feninge, uključujući decimalni zarez', () => {
@@ -64,5 +65,73 @@ describe('isPeriodOverlap', () => {
     expect(isPeriodOverlap('PERIOD_OVERLAP')).toBe(true);
     expect(isPeriodOverlap('VALIDATION_ERROR')).toBe(false);
     expect(isPeriodOverlap(undefined)).toBe(false);
+  });
+});
+
+describe('buildUpdatePayload', () => {
+  const record = { id: 'r1', version: 3, status: 'ACTIVE' };
+
+  it('šalje `version` i sva polja; prazno opciono polje je `null` (može se obrisati)', () => {
+    expect(
+      buildUpdatePayload('INSURANCE', record, {
+        policyNumber: '  ',
+        insuranceCompany: 'Sarajevo osiguranje',
+        type: '',
+        validFrom: '2026-10-20',
+        validUntil: '2027-10-19',
+        premiumAmount: '250,00',
+        deductibleAmount: '',
+        notes: '',
+      }),
+    ).toEqual({
+      version: 3,
+      policyNumber: null,
+      insuranceCompany: 'Sarajevo osiguranje',
+      type: null,
+      validFrom: '2026-10-20',
+      validUntil: '2027-10-19',
+      premiumAmount: 25_000,
+      deductibleAmount: null,
+      notes: null,
+    });
+  });
+
+  it('obavezna polja šalje samo kad su popunjena (prazno = ne diraj, ne `null`)', () => {
+    const payload = buildUpdatePayload('REGISTRATION', record, {
+      registrationNumber: '',
+      validFrom: '2026-10-20',
+      validUntil: '2027-10-19',
+      costAmount: '100',
+    });
+    expect(payload).not.toHaveProperty('registrationNumber');
+    expect(payload.costAmount).toBe(10_000);
+  });
+
+  it('`status` šalje samo kad je promijenjen', () => {
+    const core = { registrationNumber: 'A1', validFrom: '2026-10-20', validUntil: '2027-10-19' };
+    expect(buildUpdatePayload('REGISTRATION', record, core, 'ACTIVE')).not.toHaveProperty('status');
+    expect(buildUpdatePayload('REGISTRATION', record, core, 'EXPIRED').status).toBe('EXPIRED');
+  });
+});
+
+describe('recordToCoreValues', () => {
+  it('`null` → prazno, novac u feningama → KM, ostalo tekst', () => {
+    expect(
+      recordToCoreValues('REGISTRATION', {
+        registrationNumber: '12-A-345',
+        validFrom: '2026-10-20',
+        validUntil: '2027-10-19',
+        issuedBy: null,
+        costAmount: 4550,
+        notes: undefined,
+      }),
+    ).toEqual({
+      registrationNumber: '12-A-345',
+      validFrom: '2026-10-20',
+      validUntil: '2027-10-19',
+      issuedBy: '',
+      costAmount: '45.50',
+      notes: '',
+    });
   });
 });
