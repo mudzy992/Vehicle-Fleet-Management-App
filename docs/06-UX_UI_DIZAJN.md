@@ -838,3 +838,12 @@ kilometraža, rokovi i trošak ovdje ne mijenjaju. Verzijski konflikt čuva unos
 u otvorenoj formi; zatvaranje i ponovno otvaranje učitava novu verziju.
 Nakon uspjeha osvježavaju se lista servisa i verzija stavki računa.
 Potpuna izmjena datum/km/rokovi i brisanje servisa još nisu implementirani.
+
+### Gume vozila — pregled (Faza 4)
+
+`/vozila/:vehicleId` → **Gume**, `features/tires/vehicle-tires-tab.tsx`.
+Tab se skriva i ne šalje upit bez `tire:view`. Tabela: komplet i sezona,
+status/pozicije, montaža i demontaža (datum/km), korištenje (km/dani),
+skladište i razlog. Filter „Samo trenutno montirani kompleti“ vraća stranicu
+na 1. Paginacija je serverska po 25. Posebna stanja učitavanja, greške i prazne
+liste; nepoznati brojači prikazani su crticom. Mutacije slijede odvojeno.

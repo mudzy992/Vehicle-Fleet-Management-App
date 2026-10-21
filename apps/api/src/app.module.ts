@@ -1,3 +1,4 @@
+import { TiresModule } from './modules/tires/tires.module.js';
 /**
  * Korijenski Nest modul (Faza 0).
  *
@@ -66,6 +67,7 @@ import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
     // Registracije i osiguranje (docs/07 §2.6) — historija perioda (B-10).
     RegistrationsModule,
     ServicesModule,
+    TiresModule,
     InsurancesModule,
     // Podsjetnici (docs/07 §2.14) — idempotentni skener (P-07).
     RemindersModule,

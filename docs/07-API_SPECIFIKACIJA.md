@@ -646,3 +646,21 @@ vozilo. Zastarjela verzija → 409, nepostojeći/obrisan zapis → 404, neaktivn
 servisna evidencija/arhivirano vozilo → validacijska greška. Verzija raste i
 štiti od konkurentnog uređivanja stavki računa. Nema novih migracija/ENV/Redis
 ključeva. Provjera sa stvarnom bazom nije izvršena iz sandboxa.
+
+### 7.5 Gume — pregled historije montaža (prva cjelina)
+
+Implementiran `GET /tire-installations` uz `tire:view`. Query: standardna
+paginacija, `vehicleId`, `setId`, `q` (kod kompleta), `activeOnly=true|false`.
+Samo `true` ograničava na `dismountedAt IS NULL`. Uvijek `deletedAt IS NULL`;
+historija ostaje čitljiva i ako je komplet naknadno arhiviran/obrisan.
+Sort whitelist: `mountedAt`, `dismountedAt`, `createdAt`; default montaža
+opadajuće, ID kao stabilni drugi ključ. Odgovor `{items,page,pageSize,total,totalPages}`.
+Zapis nosi komplet (kod, marka/model/dimenzija/sezona), datume i km montaže/
+demontaže, pozicije, sačuvane `kmDriven`/`daysInUse`, skladište/razlog,
+verziju i opcionu zapisnu verziju forme. Null brojači ostaju null; nema
+računanja pretpostavljene kilometraže aktivne montaže.
+
+Pregled nije mutacija: nema audita, outboxa, novih ENV/Redis ključeva niti
+migracija. Unos kompleta, montaža, demontaža i zamjena iz §2.8 još nisu
+implementirani. Globalni auth/RBAC ostaje obavezan; produkcijski HTTP test
+s pravom bazom nije izvršen u sandboxu.

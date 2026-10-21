@@ -2340,3 +2340,47 @@ export const updateServiceSchema = z
   .strict()
   .refine((value) => Object.keys(value).length > 1, { message: 'Nema šta mijenjati.' });
 export type UpdateServiceInput = z.output<typeof updateServiceSchema>;
+
+/** Faza 4 — historija montaža guma. */
+export const tireInstallationListQuerySchema = paginationQuerySchema
+  .extend({
+    vehicleId: uuidSchema.optional(),
+    setId: uuidSchema.optional(),
+    activeOnly: z.enum(['true', 'false']).optional(),
+  })
+  .strict();
+export type TireInstallationListQuery = z.output<typeof tireInstallationListQuerySchema>;
+export const tireInstallationViewSchema = z
+  .object({
+    id: uuidSchema,
+    vehicleId: uuidSchema,
+    setId: uuidSchema,
+    setCode: z.string(),
+    brand: z.string().nullable(),
+    model: z.string().nullable(),
+    size: z.string().nullable(),
+    season: z.string(),
+    mountedAt: z.iso.date(),
+    mountedOdometerKm: z.number().int(),
+    dismountedAt: z.iso.date().nullable(),
+    dismountedOdometerKm: z.number().int().nullable(),
+    positions: z.array(z.string()),
+    kmDriven: z.number().int().nullable(),
+    daysInUse: z.number().int().nullable(),
+    storageLocationOnDismount: z.string().nullable(),
+    reason: z.string().nullable(),
+    version: z.number().int(),
+    formSchemaVersionId: uuidSchema.nullable(),
+  })
+  .strict();
+export type TireInstallationView = z.output<typeof tireInstallationViewSchema>;
+export const tireInstallationListResponseSchema = z
+  .object({
+    items: z.array(tireInstallationViewSchema),
+    page: z.number().int(),
+    pageSize: z.number().int(),
+    total: z.number().int(),
+    totalPages: z.number().int(),
+  })
+  .strict();
+export type TireInstallationListResponse = z.output<typeof tireInstallationListResponseSchema>;

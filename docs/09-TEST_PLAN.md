@@ -308,3 +308,9 @@ CAS, zapisna RETIRED forma, audit snapshot, očuvanje km/datuma/rokova/troška,
 zastarjela verzija prije upisa i konkurentna promjena tokom validacije,
 404, blokada neaktivnog servisa/arhiviranog vozila, strict DTO i permisija.
 Transakcijski fake ne dokazuje stvarni PostgreSQL rollback/konkurenciju.
+
+`apps/api/test/unit/tires-service.spec.ts` — 7 testova pregleda montaža:
+filteri i paginacija, soft-delete, boolean true/false, validacija UUID/query,
+whitelist sortiranja, null brojači i datumi, prazna lista i `tire:view`.
+DI provjera dopunjena servisom i kontrolerom guma (+2 testa).
+Testovi su s lažnim Prisma klijentom, ne dokazuju DB konkurenciju/montažu.
