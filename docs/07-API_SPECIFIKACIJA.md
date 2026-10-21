@@ -647,7 +647,7 @@ servisna evidencija/arhivirano vozilo → validacijska greška. Verzija raste i
 štiti od konkurentnog uređivanja stavki računa. Nema novih migracija/ENV/Redis
 ključeva. Provjera sa stvarnom bazom nije izvršena iz sandboxa.
 
-### 7.5 Gume — kompleti i ciklusi montaže
+### 7.5 Gume — kompleti, pojedinačne gume i ciklusi montaže
 
 Implementirani su:
 
@@ -656,6 +656,8 @@ Implementirani su:
 | `GET /tire-sets` | `tire:view` | lista neobrisanih kompleta `{items,page,pageSize,total,totalPages}` |
 | `POST /tire-sets` | `tire:create` | unos kompleta kroz objavljenu `TIRE_SET` formu; audit `CREATE` na `TireSet` |
 | `GET /tire-sets/:id` | `tire:view` | detalj kompleta i `formData`; lista `formData` ne vraća |
+| `GET /tire-sets/:id/tires` | `tire:view` | pojedinačne gume kompleta `{items}`, bez paginacije |
+| `POST /tire-sets/:id/tires` | `tire:create` | transakcijski unos pojedinačne gume; audit `CREATE` na `Tire` |
 | `PATCH /tire-sets/:id` | `tire:update` | zaključana CAS izmjena strukturiranih podataka, ručnog statusa i opcionalnog `formData`; audit `UPDATE` |
 | `DELETE /tire-sets/:id` | `tire:delete` | soft-delete kompleta i povezanih guma, `204`; audit `DELETE`/`CRITICAL` |
 | `GET /tire-installations` | `tire:view` | historija montaža, kako je opisano niže |
@@ -700,7 +702,8 @@ duplikat aktivnog koda, pa radi CAS upis. Zastarjela verzija vraća
 `409 VERSION_CONFLICT` s `currentVersion`, duplikat
 `409 DUPLICATE_ENTRY`. Montiran komplet smije dobiti opisnu ispravku, ali
 ručna promjena statusa vraća `409 TIRE_ALREADY_MOUNTED`, a `tireCount` ne
-smije pasti ispod broja aktivnih pozicija.
+smije pasti ispod broja aktivnih pozicija ni broja već evidentiranih
+pojedinačnih guma.
 
 Ručni `status` prihvata samo `IN_STOCK`, `IN_REPAIR`, `RETIRED` i
 `SCRAPPED`; `MOUNTED` postavlja isključivo montaža. Dozvoljene su promjene
@@ -723,6 +726,31 @@ aktivne montaže takođe blokira brisanje radi očuvanja konzistentnosti.
 Inače se u jednoj transakciji postavljaju `deletedAt` i nova verzija na
 kompletu te `deletedAt` na svim njegovim neobrisanim gumama. Historija
 montaža se ne briše. Odgovor je `204 No Content`.
+
+`GET /tire-sets/:id/tires` vraća `{items}` s neobrisanim gumama samo tog
+kompleta; komplet je mali ograničen skup, pa nema paginacije. Nepostojeći ili
+soft-obrisan komplet vraća `404 NOT_FOUND`. Redoslijed je kanonski
+`FL`, `FR`, `RL`, `RR`, `SPARE`, zatim gume bez pozicije prema vremenu unosa.
+Pogled nosi serijski broj, DOT, sedmicu/godinu proizvodnje, poziciju, status,
+datum i cijenu nabavke u feningama te napomenu. Dubina profila je
+`treadDepthTenthsMm`, cijeli broj desetinki milimetra (`75` = 7,5 mm), da
+ugovor ne zavisi od decimalnog zapisa baze.
+
+`POST /tire-sets/:id/tires` ima strict DTO s najmanje jednim stvarnim
+podatkom među `serialNumber`, `dot`, `productionWeek` (1–53),
+`productionYear` (1900–2100), `position`, `treadDepthTenthsMm` (0–9999),
+`purchaseDate`, `purchasePrice` i `notes`. `setId`, `status` i `formData` se
+ne primaju: pripadnost određuje ruta, pojedinačna guma nema dinamičku formu,
+a status izvodi server. Datum nabavke ne smije biti u budućnosti ni prije
+godine proizvodnje kad su oba podatka poslana. Transakcija zaključava red
+kompleta, pa istovremeno provjerava da broj zapisa ne prelazi deklarisani
+`tireCount` i da aktivna pozicija nije već zauzeta. Zauzeta pozicija,
+uključujući konkurentno kršenje djelimično jedinstvenog indeksa, vraća
+`409 DUPLICATE_ENTRY`. Ako komplet ima aktivnu montažu, guma na aktivnoj
+poziciji dobija `MOUNTED`, a ostale `IN_STOCK`; bez aktivne montaže status
+prati komplet, pri čemu se nekonzistentan `MOUNTED` kompleta za novu gumu
+tretira kao `IN_STOCK`. Odgovor je kreirani `TireView`. Izmjena i brisanje
+pojedinačne gume nisu dio ove cjeline.
 
 Montaža ima strict DTO `{setId,vehicleId,mountedAt,mountedOdometerKm,
 positions,formSchemaVersionId?,formData}`. Pozicije su 1–5 jedinstvenih

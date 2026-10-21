@@ -326,24 +326,40 @@ nabavke, stvarna validacija dodatnih polja forme, granice strict DTO-a te
 permisije/audit kontrolera. Statički registar Prisma selecta dopunjen je za
 `TIRE_SET_SELECT`.
 
-`apps/api/test/unit/tire-set-lifecycle.spec.ts` — 11 testova nad stateful
+`apps/api/test/unit/tire-set-lifecycle.spec.ts` — 12 testova nad stateful
 lažnim transakcijskim klijentom: detalj s `formData` i aktivnim vozilom,
 soft-obrisan zapis kao 404, zaključavanje reda kompleta prije CAS upisa,
 izmjena zapisnom `RETIRED` formom bez promjene verzije forme i sinhronizacija
 statusa pojedinačnih guma. Negativni tokovi pokrivaju zastarjelu verziju,
-duplikat koda, nabavku nakon prve montaže, ručnu promjenu statusa i premali
-broj guma montiranog kompleta, terminalni `SCRAPPED`, legacy zapis bez forme
+duplikat koda, nabavku nakon prve montaže, ručnu promjenu statusa, premali
+broj guma montiranog kompleta i deklarisani broj ispod već evidentiranih
+pojedinačnih guma, terminalni `SCRAPPED`, legacy zapis bez forme
 i konkurentno `P2002`. Brisanje je blokirano aktivnom montažom, a uspješno
 soft-briše komplet i gume bez brisanja historije. Dodatno se provjeravaju
 strict update DTO te odvojene `tire:view/update/delete` permisije i audit
 težine. Fake ne dokazuje stvarni PostgreSQL `FOR UPDATE`, rollback ni HTTP.
 
-`apps/web/src/features/tires/tire-sets-model.test.ts` — 9 testova query
+`apps/api/test/unit/tires-individual.spec.ts` — 10 testova nad stateful
+lažnim klijentom: lista isključuje obrisane i tuđe gume, sortira po kanonskoj
+poziciji i decimalnu dubinu profila pretvara u desetinke milimetra; obrisan
+komplet je 404 bez čitanja guma. Unos zaključava komplet, nasljeđuje status,
+u aktivnoj montaži razlikuje montiranu poziciju od rezerve te ispravlja
+nekonzistentan `MOUNTED` bez montaže. Pokriveni su deklarisani limit
+kompleta, zauzeta pozicija i konkurentno `P2002` kao `DUPLICATE_ENTRY`,
+budući datum nabavke, strict DTO bez ručnog statusa/`setId`/`formData` te
+`tire:view/create` i audit. Statički registar Prisma selecta dopunjen je za
+`TIRE_SELECT`. Fake ne dokazuje stvarni PostgreSQL lock, djelimično
+jedinstveni indeks ni Decimal zapis.
+
+`apps/web/src/features/tires/tire-sets-model.test.ts` — 12 testova query
 gradnje, izostavljanja praznih opcionalnih polja i pretvaranja nabavne cijene
 iz KM u feninge te izmjene: početne vrijednosti detalja, dozvoljene statusne
 opcije, PATCH samo sa stvarnim izmjenama, brisanje opcionalnih polja kroz
 `null`, izostavljanje neizmijenjenog `formData`, montiran komplet,
 nekonzistentan `MOUNTED`, terminalni `SCRAPPED` i legacy zapis bez forme.
+Za pojedinačne gume pokriveni su kanonske slobodne pozicije, pretvaranje
+dubine profila i cijene u cijele API jedinice, lokalizovan prikaz milimetara
+te odbijanje praznog unosa, zauzete pozicije i vrijednosti izvan opsega.
 Seed-form provjere sada imaju i eksplicitni test da `komplet_guma` nosi samo
 dobavljača, fakturu i napomenu bez normalizacije. Lažni Prisma klijent ne
 dokazuje stvarni PostgreSQL upit, jedinstveni indeks ni HTTP tok; to ostaje

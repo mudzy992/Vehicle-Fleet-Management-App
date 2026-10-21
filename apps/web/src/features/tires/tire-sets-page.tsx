@@ -1,4 +1,4 @@
-/** Kompleti guma — serverski filtrirana evidencija, unos, izmjena i soft-delete (W12). */
+/** Kompleti guma — evidencija, životni ciklus i pojedinačne gume (W12). */
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
@@ -25,6 +25,7 @@ import { useSession } from '../auth/session.js';
 import { toQueryString } from '../vehicles/vehicles-model.js';
 import { TireSetCreateForm } from './tire-set-create-form.js';
 import { TireSetEditPanel } from './tire-set-edit-form.js';
+import { TireSetTiresPanel } from './tire-set-tires-panel.js';
 import { DEFAULT_TIRE_SET_FILTERS, buildTireSetQuery, type TireSetFilters } from './tire-sets-model.js';
 
 const PAGE_SIZE = 25;
@@ -40,6 +41,7 @@ export function TireSetsPage() {
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedSet, setSelectedSet] = useState<TireSetView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -57,6 +59,7 @@ export function TireSetsPage() {
     mutationFn: (row: TireSetView) => api.delete<void>(`/tire-sets/${row.id}`),
     onSuccess: async (_data, row) => {
       if (editingId === row.id) setEditingId(null);
+      if (selectedSet?.id === row.id) setSelectedSet(null);
       if ((list.data?.items.length ?? 0) <= 1 && page > 1) setPage(page - 1);
       setMessage(`Komplet ${row.code} je obrisan. Historija montaža ostaje sačuvana.`);
       setActionError(null);
@@ -64,6 +67,7 @@ export function TireSetsPage() {
         queryClient.invalidateQueries({ queryKey: ['tire-sets'] }),
         queryClient.invalidateQueries({ queryKey: ['tire-set', row.id] }),
         queryClient.invalidateQueries({ queryKey: ['tire-installations'] }),
+        queryClient.invalidateQueries({ queryKey: ['tire-set-tires', row.id] }),
       ]);
     },
     onError: (error) =>
@@ -111,6 +115,7 @@ export function TireSetsPage() {
             size="sm"
             onClick={() => {
               setEditingId(null);
+              setSelectedSet(null);
               setActionError(null);
               setShowCreate(true);
             }}
@@ -184,6 +189,8 @@ export function TireSetsPage() {
           }}
         />
       )}
+
+      {selectedSet && <TireSetTiresPanel tireSet={selectedSet} onClose={() => setSelectedSet(null)} />}
 
       <Card>
         <CardHeader title="Filteri" description="Pretraga i paginacija rade se na serveru." />
@@ -302,7 +309,7 @@ export function TireSetsPage() {
                   <TH>Nabavka</TH>
                   <TH>Lokacija / vozilo</TH>
                   <TH>Napomena</TH>
-                  {(canUpdate || canDelete) && <TH align="right">Akcije</TH>}
+                  <TH align="right">Akcije</TH>
                 </TR>
               </THead>
               <TBody>
@@ -313,9 +320,18 @@ export function TireSetsPage() {
                     canUpdate={canUpdate}
                     canDelete={canDelete}
                     isEditing={editingId === row.id}
+                    isViewingTires={selectedSet?.id === row.id}
                     isDeleting={remove.isPending && remove.variables?.id === row.id}
+                    onViewTires={() => {
+                      setShowCreate(false);
+                      setEditingId(null);
+                      setMessage(null);
+                      setActionError(null);
+                      setSelectedSet((current) => (current?.id === row.id ? null : row));
+                    }}
                     onEdit={() => {
                       setShowCreate(false);
+                      setSelectedSet(null);
                       setMessage(null);
                       setActionError(null);
                       setEditingId((current) => (current === row.id ? null : row.id));
@@ -357,7 +373,9 @@ function TireSetRow({
   canUpdate,
   canDelete,
   isEditing,
+  isViewingTires,
   isDeleting,
+  onViewTires,
   onEdit,
   onDelete,
 }: {
@@ -365,13 +383,15 @@ function TireSetRow({
   canUpdate: boolean;
   canDelete: boolean;
   isEditing: boolean;
+  isViewingTires: boolean;
   isDeleting: boolean;
+  onViewTires: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const deleteBlocked = row.status === 'MOUNTED' || row.mountedVehicleId !== null;
   return (
-    <TR className={isEditing ? 'bg-[var(--hover)]' : undefined}>
+    <TR className={isEditing || isViewingTires ? 'bg-[var(--hover)]' : undefined}>
       <TD>
         <p className="font-medium">{row.code}</p>
         <p>{[row.brand, row.model].filter(Boolean).join(' ') || '—'}</p>
@@ -403,30 +423,36 @@ function TireSetRow({
         )}
       </TD>
       <TD>{row.notes ?? '—'}</TD>
-      {(canUpdate || canDelete) && (
-        <TD align="right">
-          <div className="flex flex-wrap justify-end gap-2">
-            {canUpdate && (
-              <Button size="sm" variant="secondary" onClick={onEdit}>
-                {isEditing ? 'Zatvori' : 'Uredi'}
-              </Button>
-            )}
-            {canDelete && (
-              <Button
-                size="sm"
-                variant="danger"
-                disabled={deleteBlocked || isDeleting}
-                loading={isDeleting}
-                title={deleteBlocked ? 'Montiran komplet prvo demontirajte.' : undefined}
-                aria-label={`Obriši komplet ${row.code}`}
-                onClick={onDelete}
-              >
-                Obriši
-              </Button>
-            )}
-          </div>
-        </TD>
-      )}
+      <TD align="right">
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-label={`Pojedinačne gume kompleta ${row.code}`}
+            onClick={onViewTires}
+          >
+            {isViewingTires ? 'Zatvori gume' : 'Pojedinačne'}
+          </Button>
+          {canUpdate && (
+            <Button size="sm" variant="secondary" onClick={onEdit}>
+              {isEditing ? 'Zatvori' : 'Uredi'}
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={deleteBlocked || isDeleting}
+              loading={isDeleting}
+              title={deleteBlocked ? 'Montiran komplet prvo demontirajte.' : undefined}
+              aria-label={`Obriši komplet ${row.code}`}
+              onClick={onDelete}
+            >
+              Obriši
+            </Button>
+          )}
+        </div>
+      </TD>
     </TR>
   );
 }

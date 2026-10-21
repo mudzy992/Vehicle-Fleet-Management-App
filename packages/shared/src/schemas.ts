@@ -2551,3 +2551,59 @@ export const updateTireSetSchema = z
   .strict()
   .refine((value) => Object.keys(value).length > 1, { message: 'Nema šta mijenjati.' });
 export type UpdateTireSetInput = z.output<typeof updateTireSetSchema>;
+
+/**
+ * Pojedinačne gume kompleta. Dubina profila putuje kao cijeli broj desetinki
+ * milimetra (`75` = 7,5 mm), da API ne zavisi od decimalnog zapisa baze.
+ * Status se ne zadaje unosom — izvodi se iz kompleta i aktivne montaže.
+ */
+export const createTireSchema = z
+  .object({
+    serialNumber: z.string().trim().max(120).nullable().optional(),
+    dot: z.string().trim().max(30).nullable().optional(),
+    productionWeek: z.number().int().min(1).max(53).nullable().optional(),
+    productionYear: z.number().int().min(1900).max(2100).nullable().optional(),
+    position: tirePositionSchema.nullable().optional(),
+    treadDepthTenthsMm: z.number().int().min(0).max(9999).nullable().optional(),
+    purchaseDate: z.iso.date().nullable().optional(),
+    /** Nabavna cijena pojedinačne gume u feningama. */
+    purchasePrice: z.number().int().min(0).max(2147483647).nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+  })
+  .strict()
+  .refine(
+    (value) => Object.values(value).some((item) => item !== undefined && item !== null && item !== ''),
+    { message: 'Unesite bar jedan podatak o gumi.' },
+  )
+  .refine(
+    (value) =>
+      !value.purchaseDate ||
+      !value.productionYear ||
+      Number(value.purchaseDate.slice(0, 4)) >= value.productionYear,
+    {
+      message: 'Datum nabavke ne može biti prije godine proizvodnje.',
+      path: ['purchaseDate'],
+    },
+  );
+export type CreateTireInput = z.output<typeof createTireSchema>;
+
+export const tireViewSchema = z
+  .object({
+    id: uuidSchema,
+    setId: uuidSchema.nullable(),
+    serialNumber: z.string().nullable(),
+    dot: z.string().nullable(),
+    productionWeek: z.number().int().min(1).max(53).nullable(),
+    productionYear: z.number().int().min(1900).max(2100).nullable(),
+    position: tirePositionSchema.nullable(),
+    treadDepthTenthsMm: z.number().int().min(0).max(9999).nullable(),
+    status: tireStatusSchema,
+    purchaseDate: z.iso.date().nullable(),
+    purchasePrice: z.number().int().nonnegative().nullable(),
+    notes: z.string().nullable(),
+  })
+  .strict();
+export type TireView = z.output<typeof tireViewSchema>;
+
+export const tireListResponseSchema = z.object({ items: z.array(tireViewSchema) }).strict();
+export type TireListResponse = z.output<typeof tireListResponseSchema>;

@@ -1,4 +1,4 @@
-/** Faza 4 — evidencija i životni ciklus kompleta guma. */
+/** Faza 4 — evidencija kompleta i pojedinačnih guma. */
 import {
   Body,
   Controller,
@@ -13,10 +13,12 @@ import {
   Req,
 } from '@nestjs/common';
 import {
+  createTireSchema,
   createTireSetSchema,
   tireSetListQuerySchema,
   updateTireSetSchema,
   uuidSchema,
+  type CreateTireInput,
   type CreateTireSetInput,
   type TireSetListQuery,
   type UpdateTireSetInput,
@@ -58,6 +60,30 @@ export class TireSetsController {
   @RequirePermissions('tire:view')
   getSet(@Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string) {
     return this.tires.getSet(id);
+  }
+
+  @Get(':id/tires')
+  @RequirePermissions('tire:view')
+  listTires(@Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string) {
+    return this.tires.listTires(id);
+  }
+
+  @Post(':id/tires')
+  @RequirePermissions('tire:create')
+  @Audit('CREATE', { severity: 'INFO', resource: 'Tire' })
+  async createTire(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @Body(new ZodValidationPipe(createTireSchema, 'body')) input: CreateTireInput,
+    @Req() request: VfmRequest,
+  ) {
+    const result = await this.tires.createTire(id, input);
+    AuditContext.from(request)
+      .setEntityId(result.data.id)
+      .setAfter(result.after)
+      .setResource('Tire')
+      .set('tireSetId', id)
+      .set('tireSetCode', result.setCode);
+    return result.data;
   }
 
   @Patch(':id')

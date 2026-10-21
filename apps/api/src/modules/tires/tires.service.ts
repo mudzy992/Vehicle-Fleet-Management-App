@@ -1,12 +1,20 @@
 /** Evidencija i životni ciklus kompleta guma. */
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import { TIRE_SET_MANUAL_STATUS_TRANSITIONS, toLocalDateString, type TireStatus } from '@vfm/shared';
+import {
+  TIRE_POSITIONS,
+  TIRE_SET_MANUAL_STATUS_TRANSITIONS,
+  toLocalDateString,
+  type TirePosition,
+  type TireStatus,
+} from '@vfm/shared';
 import type {
+  CreateTireInput,
   CreateTireSetInput,
   TireSetDetail,
   TireSetListQuery,
   TireSetView,
+  TireView,
   UpdateTireSetInput,
 } from '@vfm/shared/schemas';
 import { toDatabaseDate } from '../../common/dates.js';
@@ -51,6 +59,24 @@ type TireSetSelectWithMount = typeof TIRE_SET_SELECT & {
 type TireSetRow = Prisma.TireSetGetPayload<{ select: TireSetSelectWithMount }>;
 type TireSetDetailSelect = TireSetSelectWithMount & { formData: true };
 type TireSetDetailRow = Prisma.TireSetGetPayload<{ select: TireSetDetailSelect }>;
+
+const TIRE_SELECT = {
+  id: true,
+  setId: true,
+  serialNumber: true,
+  dot: true,
+  productionWeek: true,
+  productionYear: true,
+  position: true,
+  treadDepthMm: true,
+  status: true,
+  purchaseDate: true,
+  purchasePrice: true,
+  notes: true,
+  createdAt: true,
+} as const satisfies Prisma.TireSelect;
+
+type TireRow = Prisma.TireGetPayload<{ select: typeof TIRE_SELECT }>;
 type Tx = Prisma.TransactionClient;
 
 interface LockedTireSetRow {
@@ -104,6 +130,41 @@ function serializeTireSetDetail(row: TireSetDetailRow): TireSetDetail {
         ? (row.formData as Record<string, unknown>)
         : {},
   };
+}
+
+const TIRE_POSITION_ORDER = new Map<TirePosition, number>(
+  TIRE_POSITIONS.map((position, index) => [position, index]),
+);
+
+function serializeTire(row: TireRow): TireView {
+  return {
+    id: row.id,
+    setId: row.setId,
+    serialNumber: row.serialNumber,
+    dot: row.dot,
+    productionWeek: row.productionWeek,
+    productionYear: row.productionYear,
+    position: row.position,
+    treadDepthTenthsMm: row.treadDepthMm === null ? null : Math.round(row.treadDepthMm.toNumber() * 10),
+    status: row.status,
+    purchaseDate: row.purchaseDate ? toLocalDateString(row.purchaseDate) : null,
+    purchasePrice: row.purchasePrice,
+    notes: row.notes,
+  };
+}
+
+function compareTires(left: TireRow, right: TireRow): number {
+  const leftOrder = left.position ? (TIRE_POSITION_ORDER.get(left.position) ?? 99) : 99;
+  const rightOrder = right.position ? (TIRE_POSITION_ORDER.get(right.position) ?? 99) : 99;
+  if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+  const byCreatedAt = left.createdAt.getTime() - right.createdAt.getTime();
+  return byCreatedAt !== 0 ? byCreatedAt : left.id.localeCompare(right.id);
+}
+
+function duplicateTirePosition(): VfmException {
+  return new VfmException('DUPLICATE_ENTRY', 'Pozicija je već evidentirana u ovom kompletu.', [
+    detail('position', 'Pozicija je već evidentirana u ovom kompletu.'),
+  ]);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -303,6 +364,18 @@ export class TiresService {
           [detail('tireCount', `Trenutno je montirano ${active.positions.length} pozicija.`)],
         );
       }
+      if (input.tireCount !== undefined) {
+        const recordedTireCount = await tx.tire.count({
+          where: { setId: id, deletedAt: null },
+        });
+        if (input.tireCount < recordedTireCount) {
+          throw new VfmException(
+            'VALIDATION_ERROR',
+            'Broj guma ne može biti manji od broja evidentiranih pojedinačnih guma.',
+            [detail('tireCount', `Već je evidentirano ${recordedTireCount} pojedinačnih guma.`)],
+          );
+        }
+      }
       if (input.status !== undefined && input.status !== current.status) {
         if (active) {
           throw new VfmException(
@@ -490,6 +563,111 @@ export class TiresService {
         before,
         after: { id, deletedAt: deletedAt.toISOString(), deletedById: actorId ?? null },
       };
+    });
+  }
+
+  /** Pojedinačne gume jednog kompleta, u kanonskom redoslijedu pozicija. */
+  async listTires(setId: string) {
+    const set = await this.prisma.tireSet.findFirst({
+      where: { id: setId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!set) throw new VfmException('NOT_FOUND', 'Komplet guma nije pronađen.');
+
+    const rows = await this.prisma.tire.findMany({
+      where: { setId, deletedAt: null },
+      select: TIRE_SELECT,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return { items: [...rows].sort(compareTires).map(serializeTire) };
+  }
+
+  /**
+   * Unos pojedinačne gume pod zaključanim redom kompleta.
+   *
+   * Zaključavanje serijalizuje provjere deklarisanog broja i zauzete pozicije.
+   * Status se ne prima iz zahtjeva: aktivna pozicija je montirana, ostale
+   * gume montiranog kompleta ostaju na skladištu, a bez aktivne montaže
+   * status prati komplet (uz ispravku nekonzistentnog `MOUNTED` u skladište).
+   */
+  async createTire(setId: string, input: CreateTireInput) {
+    if (input.purchaseDate && input.purchaseDate > toLocalDateString(new Date())) {
+      throw new VfmException('VALIDATION_ERROR', 'Datum nabavke ne može biti u budućnosti.', [
+        detail('purchaseDate', 'Datum nabavke ne može biti u budućnosti.'),
+      ]);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockSet(tx, setId);
+      const set = await tx.tireSet.findFirst({
+        where: { id: setId, deletedAt: null },
+        select: { code: true, tireCount: true, status: true },
+      });
+      if (!set) throw new VfmException('NOT_FOUND', 'Komplet guma nije pronađen.');
+
+      const [recordedTireCount, active] = await Promise.all([
+        tx.tire.count({ where: { setId, deletedAt: null } }),
+        tx.tireInstallation.findFirst({
+          where: { setId, dismountedAt: null, deletedAt: null },
+          select: { positions: true },
+        }),
+      ]);
+      if (recordedTireCount >= set.tireCount) {
+        throw new VfmException(
+          'VALIDATION_ERROR',
+          `Komplet ${set.code} već ima evidentiran deklarisani broj guma.`,
+          [
+            detail(
+              'tireCount',
+              `Evidentirano je ${recordedTireCount} od najviše ${set.tireCount} guma u kompletu.`,
+            ),
+          ],
+        );
+      }
+
+      if (input.position) {
+        const duplicate = await tx.tire.findFirst({
+          where: { setId, position: input.position, deletedAt: null },
+          select: { id: true },
+        });
+        if (duplicate) throw duplicateTirePosition();
+      }
+
+      const status: TireStatus = active
+        ? input.position && active.positions.includes(input.position)
+          ? 'MOUNTED'
+          : 'IN_STOCK'
+        : set.status === 'MOUNTED'
+          ? 'IN_STOCK'
+          : set.status;
+
+      try {
+        const row = await tx.tire.create({
+          data: {
+            id: randomUUID(),
+            setId,
+            serialNumber: input.serialNumber ?? null,
+            dot: input.dot ?? null,
+            productionWeek: input.productionWeek ?? null,
+            productionYear: input.productionYear ?? null,
+            position: input.position ?? null,
+            treadDepthMm:
+              input.treadDepthTenthsMm === undefined || input.treadDepthTenthsMm === null
+                ? null
+                : (input.treadDepthTenthsMm / 10).toFixed(1),
+            status,
+            purchaseDate: toDatabaseDate(input.purchaseDate),
+            purchasePrice: input.purchasePrice ?? null,
+            notes: input.notes ?? null,
+          },
+          select: TIRE_SELECT,
+        });
+        const data = serializeTire(row);
+        return { data, after: data, setCode: set.code };
+      } catch (error) {
+        if (isUniqueViolation(error)) throw duplicateTirePosition();
+        throw error;
+      }
     });
   }
 

@@ -219,6 +219,10 @@ function setup({
       }),
     },
     tire: {
+      count: vi.fn(
+        async (args: { where: UnknownRecord }) =>
+          tires.filter((tire) => tire.setId === args.where.setId && tire.deletedAt === null).length,
+      ),
       updateMany: vi.fn(async (args: { where: UnknownRecord; data: UnknownRecord }) => {
         let count = 0;
         for (const tire of tires) {
@@ -328,6 +332,15 @@ describe('Kompleti guma — detalj, izmjena i brisanje', () => {
     await expect(count.svc.updateSet(setId, { version: 2, tireCount: 2 })).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
     });
+  });
+
+  it('deklarisani broj ne može pasti ispod broja evidentiranih pojedinačnih guma', async () => {
+    const state = setup();
+    await expect(state.svc.updateSet(setId, { version: 2, tireCount: 1 })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    expect(state.tx.tire.count).toHaveBeenCalledWith({ where: { setId, deletedAt: null } });
+    expect(state.tx.tireSet.updateMany).not.toHaveBeenCalled();
   });
 
   it('SCRAPPED je terminalan, a nekonzistentan MOUNTED bez aktivne montaže može se ispraviti', async () => {

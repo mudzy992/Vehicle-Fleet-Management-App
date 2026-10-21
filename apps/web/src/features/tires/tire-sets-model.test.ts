@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import type { TireSetDetail } from '@vfm/shared/schemas';
 import {
   DEFAULT_TIRE_SET_FILTERS,
+  availableTirePositions,
+  buildTirePayload,
   buildTireSetPayload,
   buildTireSetQuery,
   buildTireSetUpdatePayload,
+  formatTreadDepth,
   tireSetCoreValues,
   tireSetStatusOptions,
 } from './tire-sets-model.js';
@@ -199,5 +202,58 @@ describe('Kompleti guma — model ekrana', () => {
     expect(() =>
       buildTireSetUpdatePayload(legacy, { ...core, brand: 'Legacy' }, { supplier: 'Novi' }),
     ).toThrow('nema zapisnu verziju');
+  });
+
+  it('slobodne pozicije čuvaju kanonski redoslijed i isključuju već evidentirane gume', () => {
+    expect(availableTirePositions([{ position: 'RR' }, { position: null }, { position: 'FL' }])).toEqual([
+      'FR',
+      'RL',
+      'SPARE',
+    ]);
+  });
+
+  it('pojedinačna guma dubinu profila i cijenu prevodi u cijele API jedinice', () => {
+    expect(
+      buildTirePayload(
+        {
+          serialNumber: ' SN-001 ',
+          dot: ' DOT-1225 ',
+          productionWeek: '12',
+          productionYear: '2025',
+          position: 'FL',
+          treadDepthMm: '7,5',
+          purchaseDate: '2025-10-01',
+          purchasePrice: '150,00',
+          notes: ' Nova guma ',
+        },
+        ['FR', null],
+      ),
+    ).toEqual({
+      serialNumber: 'SN-001',
+      dot: 'DOT-1225',
+      productionWeek: 12,
+      productionYear: 2025,
+      position: 'FL',
+      treadDepthTenthsMm: 75,
+      purchaseDate: '2025-10-01',
+      purchasePrice: 15000,
+      notes: 'Nova guma',
+    });
+    expect(formatTreadDepth(75)).toBe('7,5 mm');
+    expect(formatTreadDepth(80)).toBe('8,0 mm');
+    expect(formatTreadDepth(null)).toBe('—');
+  });
+
+  it('pojedinačna guma odbija prazan unos, zauzetu poziciju i brojke izvan opsega', () => {
+    expect(() => buildTirePayload({})).toThrow('bar jedan podatak');
+    expect(() => buildTirePayload({ position: 'FL' }, ['FL'])).toThrow('već evidentirana');
+    expect(() => buildTirePayload({ productionWeek: '54' })).toThrow('Sedmica proizvodnje');
+    expect(() => buildTirePayload({ productionYear: '1899' })).toThrow('Godina proizvodnje');
+    expect(() => buildTirePayload({ treadDepthMm: '7,55' })).toThrow('Dubina profila');
+    expect(() => buildTirePayload({ treadDepthMm: '1000' })).toThrow('izvan dozvoljenog');
+    expect(() => buildTirePayload({ purchasePrice: '-1' })).toThrow('cijenu');
+    expect(() => buildTirePayload({ productionYear: '2026', purchaseDate: '2025-12-31' })).toThrow(
+      'prije godine proizvodnje',
+    );
   });
 });

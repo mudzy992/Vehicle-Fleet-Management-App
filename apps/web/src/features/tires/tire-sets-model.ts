@@ -1,6 +1,12 @@
-/** Čista logika liste, unosa i izmjene kompleta guma; server ostaje autoritet. */
-import { TIRE_SEASONS, TIRE_SET_MANUAL_STATUS_TRANSITIONS, type TireStatus } from '@vfm/shared';
-import type { TireSetDetail } from '@vfm/shared/schemas';
+/** Čista logika liste, unosa i izmjene kompleta te pojedinačnih guma; server ostaje autoritet. */
+import {
+  TIRE_POSITIONS,
+  TIRE_SEASONS,
+  TIRE_SET_MANUAL_STATUS_TRANSITIONS,
+  type TirePosition,
+  type TireStatus,
+} from '@vfm/shared';
+import type { TireSetDetail, TireView } from '@vfm/shared/schemas';
 import { feninziToInput, moneyToFeninzi } from '../vehicles/records-model.js';
 
 export interface TireSetFilters {
@@ -209,5 +215,100 @@ export function buildTireSetUpdatePayload(
   }
 
   if (Object.keys(payload).length === 1) throw new Error('Nema izmjena za snimanje.');
+  return payload;
+}
+
+/** Pozicije koje u kompletu još nemaju evidentiranu pojedinačnu gumu. */
+export function availableTirePositions(
+  tires: readonly Pick<TireView, 'position'>[],
+): readonly TirePosition[] {
+  const occupied = new Set(tires.map((tire) => tire.position).filter(Boolean));
+  return TIRE_POSITIONS.filter((position) => !occupied.has(position));
+}
+
+function parseOptionalInteger(
+  raw: string | undefined,
+  label: string,
+  min: number,
+  max: number,
+): number | null {
+  const text = (raw ?? '').trim();
+  if (!text) return null;
+  if (!/^\d+$/u.test(text)) throw new Error(`${label} mora biti cijeli broj od ${min} do ${max}.`);
+  const value = Number(text);
+  if (value < min || value > max) throw new Error(`${label} mora biti cijeli broj od ${min} do ${max}.`);
+  return value;
+}
+
+function parseTreadDepthTenths(raw: string | undefined): number | null {
+  const text = (raw ?? '').trim().replace(',', '.');
+  if (!text) return null;
+  if (!/^\d+(?:\.\d)?$/u.test(text)) {
+    throw new Error('Dubina profila mora biti nenegativan broj s najviše jednom decimalom.');
+  }
+  const tenths = Math.round(Number(text) * 10);
+  if (tenths > 9999) throw new Error('Dubina profila je izvan dozvoljenog opsega.');
+  return tenths;
+}
+
+/** Desetinke milimetra iz API-ja → lokalizovan prikaz u milimetrima. */
+export function formatTreadDepth(tenths: number | null): string {
+  if (tenths === null) return '—';
+  return `${new Intl.NumberFormat('bs-BA', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(tenths / 10)} mm`;
+}
+
+/**
+ * Kontrole pojedinačne gume → strict API DTO.
+ *
+ * Prazna polja se izostavljaju, cijena ide u feninge, a dubina profila u
+ * desetinke milimetra. Zauzete pozicije ekran odbija odmah, ali server istu
+ * provjeru ponavlja pod zaključanim kompletom.
+ */
+export function buildTirePayload(
+  values: Readonly<Record<string, string>>,
+  occupiedPositions: readonly (TirePosition | null)[] = [],
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+
+  for (const key of ['serialNumber', 'dot', 'purchaseDate', 'notes'] as const) {
+    const value = (values[key] ?? '').trim();
+    if (value) payload[key] = value;
+  }
+
+  const position = (values.position ?? '').trim();
+  if (position) {
+    if (!TIRE_POSITIONS.includes(position as TirePosition)) {
+      throw new Error('Odaberite ispravnu poziciju gume.');
+    }
+    if (occupiedPositions.includes(position as TirePosition)) {
+      throw new Error('Pozicija je već evidentirana u ovom kompletu.');
+    }
+    payload.position = position;
+  }
+
+  const productionWeek = parseOptionalInteger(values.productionWeek, 'Sedmica proizvodnje', 1, 53);
+  if (productionWeek !== null) payload.productionWeek = productionWeek;
+
+  const productionYear = parseOptionalInteger(values.productionYear, 'Godina proizvodnje', 1900, 2100);
+  if (productionYear !== null) payload.productionYear = productionYear;
+
+  const treadDepthTenthsMm = parseTreadDepthTenths(values.treadDepthMm);
+  if (treadDepthTenthsMm !== null) payload.treadDepthTenthsMm = treadDepthTenthsMm;
+
+  const purchasePrice = parsePurchasePrice(values.purchasePrice);
+  if (purchasePrice !== null) payload.purchasePrice = purchasePrice;
+
+  if (
+    typeof payload.purchaseDate === 'string' &&
+    productionYear !== null &&
+    Number(payload.purchaseDate.slice(0, 4)) < productionYear
+  ) {
+    throw new Error('Datum nabavke ne može biti prije godine proizvodnje.');
+  }
+
+  if (Object.keys(payload).length === 0) throw new Error('Unesite bar jedan podatak o gumi.');
   return payload;
 }
