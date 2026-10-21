@@ -57,6 +57,12 @@ export interface FakeFieldKeyRow {
   updatedAt: Date;
 }
 
+export interface FakeTaskTypeRow {
+  id: string;
+  formSchemaId: string | null;
+  deletedAt: Date | null;
+}
+
 /** Delegate za modele zapisa: broj zapisa po verziji + čitanje/izmjena zapisa. */
 interface RecordDelegate {
   groupBy: (args: {
@@ -115,6 +121,7 @@ export class FakeFormPrisma {
   readonly schemas = new Map<string, FakeSchemaRow>();
   readonly versions = new Map<string, FakeVersionRow>();
   readonly fieldKeys = new Map<string, FakeFieldKeyRow>();
+  readonly taskTypes = new Map<string, FakeTaskTypeRow>();
   readonly migrationJobs = new Map<string, FakeMigrationJobRow>();
   readonly migrationItems = new Map<string, FakeMigrationItemRow>();
   /** Zapisi po modelu (`task`, `vehicle`, …) — migracija ih čita i mijenja. */
@@ -300,6 +307,19 @@ export class FakeFormPrisma {
       return { ...row };
     },
   };
+
+  readonly taskType = {
+    findFirst: async (args: { where?: { id?: string; deletedAt?: null } }) => {
+      const row = args.where?.id ? this.taskTypes.get(args.where.id) : undefined;
+      if (!row) return null;
+      if (args.where?.deletedAt === null && row.deletedAt !== null) return null;
+      return { ...row };
+    },
+  };
+
+  addTaskType(row: Partial<FakeTaskTypeRow> & { id: string }): void {
+    this.taskTypes.set(row.id, { formSchemaId: null, deletedAt: null, ...row });
+  }
 
   readonly fieldKeyRegistry = {
     findUnique: async (args: { where: { key: string } }) => {

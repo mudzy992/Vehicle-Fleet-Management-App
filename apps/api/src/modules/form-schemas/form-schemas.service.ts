@@ -179,14 +179,39 @@ export class FormSchemasService {
   async active(query: ActiveFormSchemaQuery): Promise<ActiveFormSchema> {
     const base = { deletedAt: null, subject: query.subject, currentPublishedVersionId: { not: null } };
 
-    let row = query.taskTypeId
-      ? await this.prisma.formSchema.findFirst({ where: { ...base, taskTypeId: query.taskTypeId } })
-      : await this.prisma.formSchema.findFirst({ where: { ...base, taskTypeId: null } });
+    let row: Awaited<ReturnType<PrismaService['formSchema']['findFirst']>> = null;
+    if (query.subject === 'TASK' && query.taskTypeId) {
+      // Kanonički prioritet za zadatak je isti kao u vrstama zadataka i pri
+      // kreiranju zadatka: eksplicitna zadana forma vrste, zatim objavljena
+      // forma vezana za vrstu. Generička TASK forma se namjerno ne koristi
+      // kao fallback jer može nositi polja druge vrste zadatka.
+      const taskType = await this.prisma.taskType.findFirst({
+        where: { id: query.taskTypeId, deletedAt: null },
+        select: { formSchemaId: true },
+      });
 
-    // Fallback: generička forma za subject kad tip zadatka nema svoju.
-    if (!row && query.taskTypeId) {
+      if (taskType?.formSchemaId) {
+        const explicit = await this.prisma.formSchema.findFirst({
+          where: { ...base, id: taskType.formSchemaId },
+        });
+        if (explicit && (explicit.taskTypeId === null || explicit.taskTypeId === query.taskTypeId)) {
+          row = explicit;
+        }
+      } else if (taskType) {
+        row = await this.prisma.formSchema.findFirst({
+          where: { ...base, taskTypeId: query.taskTypeId },
+          orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+        });
+      }
+    } else if (query.taskTypeId) {
+      row = await this.prisma.formSchema.findFirst({ where: { ...base, taskTypeId: query.taskTypeId } });
+      if (!row) {
+        row = await this.prisma.formSchema.findFirst({ where: { ...base, taskTypeId: null } });
+      }
+    } else {
       row = await this.prisma.formSchema.findFirst({ where: { ...base, taskTypeId: null } });
     }
+
     if (!row || !row.currentPublishedVersionId) {
       throw VfmErrors.notFound('Nema aktivne forme za traženi subjekt.');
     }

@@ -353,14 +353,14 @@ Detaljan implementirani ugovor je u §7.6.
 
 | Metoda | Put | P | Napomena |
 |---|---|---|---|
-| GET | `/tasks` | `task:view` / `task:view_all` | filteri: `status`, `vehicleId`, `taskTypeId`, `assigneeUserId`, `createdById`, `dueAt`, `priority`, `mine=true` |
-| POST | `/tasks` `Idem` | `task:create` | snapshot aktivne verzije forme + outbox `TASK_CREATED` |
-| GET | `/tasks/:id` | `task:view` (+ scope) | uključuje `assignments`, `events`, `attachments`, `comments`, `formSchemaVersion` |
-| PATCH | `/tasks/:id` | `task:update` | samo dok je `OPEN` (ili admin) |
+| GET | `/tasks` | `task:view` / `task:view_all` | implementirano; filteri: `status`, `vehicleId`, `taskTypeId`, `assigneeUserId`, `createdById`, `dueFrom`, `dueTo`, `priority`, `mine`, `overdueOnly`, `q` |
+| POST | `/tasks` `Idem` | `task:create` | implementirano; snapshot efektivne objavljene TASK verzije + DB outbox `TASK_CREATED` |
+| GET | `/tasks/:id` | `task:view` / `task:view_all` (+ scope) | implementirano; uključuje `assignments`, `events`, `attachmentIds`, `commentCount`, `formSchemaVersion` |
+| PATCH | `/tasks/:id` | `task:update` | implementirano; CAS `version`, vlastiti zadatak dok je `OPEN` ili puni opseg |
 | **POST** | **`/tasks/:id/claim`** `Idem` | `task:claim` | **atomski**; `409 TASK_ALREADY_CLAIMED` s `{assignee: {name, claimedAt}}` ako korisnik ima pravo vidjeti |
 | POST | `/tasks/:id/complete` `Idem` | `task:complete` (izvršilac) ili `task:complete_override` | `{formValues, attachmentIds, comment, odometerKm?}` |
-| POST | `/tasks/:id/cancel` | `task:cancel` | `{reason}` obavezno |
-| POST | `/tasks/:id/reopen` | `task:reopen` | auditovan |
+| POST | `/tasks/:id/cancel` | `task:cancel` | implementirano; `{version,reason}` (`reason` obavezno) |
+| POST | `/tasks/:id/reopen` | `task:reopen` | implementirano; `{version,reason?,dueAt?}`, audit + DB outbox |
 | POST | `/tasks/:id/release` | `task:release` | vraća među slobodne + obavijest pozvanima |
 | POST | `/tasks/:id/assign` | `task:assign` | `{userIds[], mode}` |
 | GET/POST | `/tasks/:id/comments` | `task:view` / `task:comment` | |
@@ -375,6 +375,11 @@ Detaljan implementirani ugovor je u §7.6.
   "details": { "assigneeName": "Emina H.", "claimedAt": "2026-10-19T09:29:10Z", "taskId": "…" },
   "requestId": "…" } }
 ```
+
+Detaljan implementirani ugovor jezgre zadataka je u §7.7. Claim, završetak,
+release, naknadna dodjela, komentari i `/available` ostaju zasebne cjeline;
+u ovoj cjelini se DB outbox redovi zapisuju, ali worker/FCM isporuka još nije
+dio ugovora.
 
 ### 2.12 Prilozi (`/attachments`)
 
@@ -519,10 +524,10 @@ Idempotency-Key: 7b1f…-uuid
   "description": "Vanjsko i unutrašnje pranje", "priority": "NORMAL",
   "assignMode": "OPEN_CLAIM", "invitedUserIds": ["…","…"],
   "dueAt": "2026-10-19T16:00:00Z",
-  "formValues": { "washType": "FULL", "photosAfter": ["<attachmentId>"] }
+  "formData": { "washType": "FULL" }
 }
 ```
-`201` → `{ "data": { "id": "…", "code": "Z-2026-0118", "status": "OPEN",
+`201` → `{ "data": { "id": "…", "code": "Z-2026-000118", "status": "OPEN",
 "formSchemaVersionId": "…", "formSchemaVersion": 3, "assignments": […], "createdAt": "…" } }`
 
 ### 3.3 Preuzimanje (atomski)
@@ -955,8 +960,9 @@ zahtjeve. Efektivna forma je prvo `TaskType.formSchemaId`, a bez nje
 objavljena TASK forma vezana za tu vrstu. Kad efektivna forma postoji, ključ
 mora postojati u trenutno objavljenoj definiciji i `minPhotos > 0` mora
 pokazivati na `PHOTO` polje. Bez efektivne forme ključevi se zasad smiju
-konfigurisati unaprijed; kreiranje/završetak zadatka u sljedećoj cjelini
-mora ih ponovo provjeriti prema snapshotovanoj verziji forme.
+konfigurisati unaprijed; jezgra zadataka iz §7.7 pri kreiranju provjerava
+`ON_CREATE` zahtjeve prema snapshotovanoj verziji, dok će završetak u
+zasebnoj cjelini provjeriti cijelu formu i ostale faze.
 
 Idempotentni seed dodaje `WASH`, `INTERIOR_CLEANING`, `FUEL_REFILL`,
 `SERVICE_VISIT`, `TIRE_CHANGE`, `TECHNICAL_INSPECTION`, `REGISTRATION` i
@@ -965,3 +971,101 @@ Idempotentni seed dodaje `WASH`, `INTERIOR_CLEANING`, `FUEL_REFILL`,
 `formSchemaId=null`. Nema novih ENV varijabli, Redis ključeva/redova,
 migracija ni outbox događaja u ovoj cjelini. Jedinice s lažnim klijentom ne
 dokazuju stvarni PostgreSQL `FOR UPDATE`, rollback ni produkcijski HTTP tok.
+
+### 7.7 Jezgra zadataka — druga cjelina Faze 5
+
+Implementirani su:
+
+| Metoda i ruta | Permisija | Odgovor i audit |
+|---|---|---|
+| `GET /tasks` | `task:view` ili `task:view_all` | `{items,total,page,pageSize,totalPages}`; bez audita |
+| `POST /tasks` | `task:create` | `201 TaskDetail`; audit `CREATE`/`INFO` na `Task` |
+| `GET /tasks/:id` | `task:view` ili `task:view_all` | `TaskDetail`; bez audita |
+| `PATCH /tasks/:id` | `task:update` | `TaskDetail`; audit `UPDATE`/`INFO` prije/poslije |
+| `POST /tasks/:id/cancel` | `task:cancel` | `TaskDetail`; audit `CANCEL`/`WARN`, DB outbox `TASK_CANCELLED` |
+| `POST /tasks/:id/reopen` | `task:reopen` | `TaskDetail`; audit `REOPEN`/`WARN`, DB outbox `TASK_REOPENED` |
+
+Lista isključuje soft-deleted zadatke, koristi standardnu paginaciju i
+server-side `q` nad kodom/naslovom/opisom te filtere `status`, `vehicleId`,
+`taskTypeId`, `assigneeUserId`, `createdById`, `priority`, `dueFrom`,
+`dueTo`, `mine` i `overdueOnly`. Sort whitelist je `dueAt`, `createdAt`,
+`updatedAt`, `priority`, `title`, `code`; default je rok rastuće, kreiranje
+opadajuće i stabilan kod/ID. Korisnik s `task:view_all` ili `task:view` u
+opsegu `ALL` vidi sve. Ostali vide zadatke koje su kreirali, koje izvršavaju
+ili su završili, aktivne dodjele/pozive/posmatranja i otvorene `BROADCAST`
+zadatke. `mine=true` dodatno uklanja broadcast zadatke bez lične veze.
+Detalj izvan opsega je `404 NOT_FOUND`, bez otkrivanja da zapis postoji.
+
+Kreiranje je strict DTO `{taskTypeId,vehicleId?,title?,description?,priority?,
+assignMode?,dueAt?,invitedUserIds,assigneeUserId?,observerUserIds,formData}`.
+Vrsta mora biti aktivna. Ako vrsta zahtijeva vozilo, `vehicleId` je obavezan;
+vozilo ne smije biti obrisano ni arhivirano. Bez naslova server koristi naziv
+vrste i interni broj vozila. Prioritet, način dodjele i rok nasljeđuju
+konfiguraciju vrste; eksplicitni `dueAt:null` ukida zadani rok, a izvedeni
+`dueDate` je lokalni datum roka u `Europe/Sarajevo`. Kod je
+`Z-YYYY-000001` po lokalnoj godini i dodjeljuje se pod transakcijskim
+PostgreSQL advisory lockom, uz jedinstveni indeks kao drugu zaštitu.
+
+Načini dodjele imaju tačnu semantiku:
+
+- `OPEN_CLAIM`: `invitedUserIds` su kandidati; prazna lista znači da zasad
+  nema kandidata osim kreatora i korisnika koji zadatak i inače smiju vidjeti.
+- `ASSIGN_DIRECT`: tačno jedan `assigneeUserId`, bez pozvanih. Zadatak ostaje
+  `OPEN`, `claimedAt` je `null`, a `Task.assigneeUserId` i jedinstveni aktivni
+  `TaskAssignment(role=ASSIGNEE)` označavaju odabranog izvršioca do claim-a.
+  Sam `assigneeUserId` bez `assignMode` također znači direktnu dodjelu.
+- `BROADCAST`: nema listu pozvanih; budući notification worker primaoce
+  dinamički bira među aktivnim korisnicima s `task:claim`.
+
+Svi primaoci moraju postojati i biti `ACTIVE`. Pozvani i direktni izvršilac
+moraju imati `task:claim`, a posmatrač `task:view` ili `task:view_all`;
+duplikati i preklapanje uloga istog korisnika su `400 VALIDATION_ERROR`.
+
+Efektivna forma pri kreiranju je kanonički: `TaskType.formSchemaId`, zatim
+objavljena TASK forma čiji je `taskTypeId` odabrana vrsta. Isti prioritet
+koristi i `GET /form-schemas/active?subject=TASK&taskTypeId=…`. Generička TASK
+forma nije fallback. Od seedovanih vrsta zato je trenutno odmah upotrebljiv
+samo `WASH`; ostale vraćaju `409 FORM_VERSION_NOT_PUBLISHED` dok im se ne
+poveže i ne objavi odgovarajuća TASK forma. Transakcija zaključava vrstu i
+formu te u `Task.formSchemaId/formSchemaVersionId` sprema tačan snapshot.
+Početni `formData` je nacrt: nepoznata polja i pogrešni tipovi/vrijednosti
+poslanih polja su `422 FORM_VALIDATION_FAILED`, dok se obavezna polja forme
+još ne traže u cijelosti. Obavezni `ON_CREATE` zahtjevi vrste primjenjuju se
+odmah, uključujući `minPhotos`. Puna validacija i normalizacija pripadaju
+završetku u sljedećoj cjelini.
+
+U istoj DB transakciji nastaju zadatak, `TaskAssignment` redovi,
+immutabilni `TaskEvent` (`CREATED` te po potrebi `INVITED` ili `ASSIGNED`) i
+`OutboxEvent(TASK_CREATED)` s ključem `task:{taskId}:TASK_CREATED:v0`.
+Payload nosi kod/status/aktera i primaoce; za broadcast je `broadcast:true` i
+prazna lista primaoca. Postojeći in-memory `OutboxService.publish()` se ne
+koristi kao trajna garancija. Globalni `Idempotency-Key` mehanizam iz §1.4
+štiti ponovljeni POST od drugog izvršenja handlera.
+
+`PATCH` prima obaveznu CAS `version` i samo `title`, `description`,
+`priority`, `dueAt`, `formData`. Vrsta, vozilo, način dodjele, izvršilac i
+snapshot forme se ne mijenjaju. Korisnik s `task:update` u `OWN` opsegu smije
+mijenjati samo zadatak koji je kreirao ili mu je direktno dodijeljen i samo
+dok je `OPEN`; puni `ALL` opseg može mijenjati i `IN_PROGRESS`. `COMPLETED`
+i `CANCELLED` daju `409 INVALID_TASK_TRANSITION`, zastarjela verzija
+`409 VERSION_CONFLICT` s `currentVersion`, a nedovoljan opseg
+`403 SCOPE_DENIED`. Novi `formData` zamjenjuje nacrt prema snapshotovanoj
+verziji (i kad je naknadno `RETIRED`) istim djelimičnim pravilima i trenutnim
+`ON_CREATE` zahtjevima. Uspjeh povećava verziju i upisuje `TaskEvent(UPDATED)`.
+
+Otkazivanje prima `{version,reason}`; dozvoljeno je iz `OPEN` i
+`IN_PROGRESS` kreatoru s OWN opsegom ili korisniku s punim opsegom. Polja
+izvršioca i claim vremena ostaju kao historijski trag. Reopen prima
+`{version,reason?,dueAt?}` i radi `CANCELLED → OPEN` ili
+`COMPLETED → IN_PROGRESS`. Kod otkazanog `OPEN_CLAIM`/`BROADCAST` zadatka
+izvršilac se uklanja i aktivni `ASSIGNEE` red opoziva; kod direktne dodjele
+izvršilac ostaje, ali `claimedAt` postaje `null`. Kod završenog zadatka
+izvršilac i `claimedAt` ostaju, a `completedAt`, `completedById` i trajanje
+se brišu. Obje akcije zaključavaju red, rade CAS na verziji/statusu, pišu
+događaj i DB outbox s novom verzijom u idempotency ključu.
+
+Nema novih ENV varijabli, Redis ključeva/redova ni migracija. Claim,
+završetak/override, release, naknadna dodjela, komentari, zasebna historija,
+`/tasks/available`, outbox worker i FCM/SSE isporuka nisu implementirani u
+ovoj cjelini. Jedinični lažni klijent ne dokazuje stvarni PostgreSQL advisory
+lock, `FOR UPDATE`, rollback ni puni HTTP lanac na Coolifyu.

@@ -38,7 +38,10 @@ import {
   ODOMETER_SOURCES,
   OWNERSHIP_TYPES,
   TASK_ASSIGN_MODES,
+  TASK_ASSIGNMENT_ROLES,
+  TASK_EVENT_ACTIONS,
   TASK_PRIORITIES,
+  TASK_STATUSES,
   TIRE_DISMOUNT_REASONS,
   TIRE_POSITIONS,
   TIRE_SEASONS,
@@ -2922,3 +2925,285 @@ export const taskCompletionRequirementsResponseSchema = z
   })
   .strict();
 export type TaskCompletionRequirementsResponse = z.output<typeof taskCompletionRequirementsResponseSchema>;
+
+// -----------------------------------------------------------------------------
+//  Zadaci (docs/07 §2.11, docs/03 §3.6)
+// -----------------------------------------------------------------------------
+
+export const taskIdSchema = uuidSchema;
+export const taskStatusSchema = z.enum(TASK_STATUSES);
+export const taskAssignmentRoleSchema = z.enum(TASK_ASSIGNMENT_ROLES);
+export const taskEventActionSchema = z.enum(TASK_EVENT_ACTIONS);
+
+function duplicatedIndexes(values: readonly string[]): number[] {
+  const seen = new Set<string>();
+  const duplicates: number[] = [];
+  values.forEach((value, index) => {
+    if (seen.has(value)) duplicates.push(index);
+    seen.add(value);
+  });
+  return duplicates;
+}
+
+/**
+ * Kreiranje zadatka.
+ *
+ * `priority`, `assignMode` i rok bez eksplicitne vrijednosti nasljeđuju
+ * konfiguraciju vrste. Sam `assigneeUserId` bez `assignMode` znači direktnu
+ * dodjelu; status ostaje `OPEN` dok izvršilac zadatak ne preuzme. `BROADCAST`
+ * nema listu pozvanih — primaoci su svi aktivni korisnici s `task:claim`.
+ * Početni `formData` je nacrt prema snapshotovanoj verziji forme, pa se pri
+ * kreiranju provjeravaju tipovi poslanih polja i `ON_CREATE` zahtjevi, a puna
+ * obavezna polja tek pri završetku.
+ */
+export const createTaskSchema = z
+  .object({
+    taskTypeId: uuidSchema,
+    vehicleId: uuidSchema.nullable().optional(),
+    title: z.string().trim().min(2).max(160).optional(),
+    description: z.string().trim().max(2000).nullable().optional(),
+    priority: taskPrioritySchema.optional(),
+    assignMode: taskAssignModeSchema.optional(),
+    dueAt: z.iso.datetime().nullable().optional(),
+    invitedUserIds: z.array(uuidSchema).max(100).default([]),
+    assigneeUserId: uuidSchema.nullable().optional(),
+    observerUserIds: z.array(uuidSchema).max(100).default([]),
+    formData: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    for (const index of duplicatedIndexes(value.invitedUserIds)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['invitedUserIds', index],
+        message: 'Pozvani korisnik se ponavlja.',
+      });
+    }
+    for (const index of duplicatedIndexes(value.observerUserIds)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['observerUserIds', index],
+        message: 'Posmatrač se ponavlja.',
+      });
+    }
+
+    const invited = new Set(value.invitedUserIds);
+    value.observerUserIds.forEach((userId, index) => {
+      if (invited.has(userId)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['observerUserIds', index],
+          message: 'Korisnik ne može istovremeno biti pozvan i posmatrač.',
+        });
+      }
+    });
+
+    if (value.assigneeUserId) {
+      if (invited.has(value.assigneeUserId)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['assigneeUserId'],
+          message: 'Direktni izvršilac ne može biti i pozvan korisnik.',
+        });
+      }
+      if (value.observerUserIds.includes(value.assigneeUserId)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['assigneeUserId'],
+          message: 'Direktni izvršilac ne može biti i posmatrač.',
+        });
+      }
+      if (value.invitedUserIds.length > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['invitedUserIds'],
+          message: 'Direktna dodjela nema listu pozvanih korisnika.',
+        });
+      }
+    }
+
+    if (value.assignMode === 'ASSIGN_DIRECT' && !value.assigneeUserId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['assigneeUserId'],
+        message: 'Direktna dodjela zahtijeva izvršioca.',
+      });
+    }
+    if (value.assignMode && value.assignMode !== 'ASSIGN_DIRECT' && value.assigneeUserId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['assigneeUserId'],
+        message: 'Izvršilac se može navesti samo za direktnu dodjelu.',
+      });
+    }
+    if (value.assignMode === 'BROADCAST' && value.invitedUserIds.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['invitedUserIds'],
+        message: 'Broadcast zadatak nema listu pozvanih korisnika.',
+      });
+    }
+  });
+export type CreateTaskInput = z.output<typeof createTaskSchema>;
+
+/**
+ * Djelimična izmjena metapodataka i nacrta forme. Vrsta, vozilo, način dodjele
+ * i snapshot forme se ne mijenjaju kroz PATCH; dodjela ima zaseban tok.
+ */
+export const updateTaskSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    title: z.string().trim().min(2).max(160).optional(),
+    description: z.string().trim().max(2000).nullable().optional(),
+    priority: taskPrioritySchema.optional(),
+    dueAt: z.iso.datetime().nullable().optional(),
+    formData: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 1, { message: 'Nema šta mijenjati.' });
+export type UpdateTaskInput = z.output<typeof updateTaskSchema>;
+
+export const cancelTaskSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict();
+export type CancelTaskInput = z.output<typeof cancelTaskSchema>;
+
+export const reopenTaskSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    reason: z.string().trim().min(3).max(500).optional(),
+    dueAt: z.iso.datetime().nullable().optional(),
+  })
+  .strict();
+export type ReopenTaskInput = z.output<typeof reopenTaskSchema>;
+
+export const taskListQuerySchema = paginationQuerySchema
+  .extend({
+    status: taskStatusSchema.optional(),
+    vehicleId: uuidSchema.optional(),
+    taskTypeId: uuidSchema.optional(),
+    assigneeUserId: uuidSchema.optional(),
+    createdById: uuidSchema.optional(),
+    priority: taskPrioritySchema.optional(),
+    dueFrom: z.iso.datetime().optional(),
+    dueTo: z.iso.datetime().optional(),
+    mine: queryBoolean.default(false),
+    overdueOnly: queryBoolean.default(false),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.dueFrom && value.dueTo && value.dueTo < value.dueFrom) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dueTo'],
+        message: 'Kraj roka ne može biti prije početka roka.',
+      });
+    }
+  });
+export type TaskListQuery = z.output<typeof taskListQuerySchema>;
+
+export const taskAssignmentViewSchema = z
+  .object({
+    id: uuidSchema,
+    userId: uuidSchema,
+    userName: z.string(),
+    role: taskAssignmentRoleSchema,
+    assignedById: uuidSchema.nullable(),
+    assignedAt: z.iso.datetime(),
+    revokedAt: z.iso.datetime().nullable(),
+    note: z.string().nullable(),
+  })
+  .strict();
+export type TaskAssignmentView = z.output<typeof taskAssignmentViewSchema>;
+
+export const taskEventViewSchema = z
+  .object({
+    id: uuidSchema,
+    action: taskEventActionSchema,
+    actorId: uuidSchema.nullable(),
+    actorName: z.string().nullable(),
+    actorRole: z.string().nullable(),
+    at: z.iso.datetime(),
+    clientType: clientTypeSchema.nullable(),
+    requestId: z.string().nullable(),
+    data: z.record(z.string(), z.unknown()).nullable(),
+    formSchemaVersionId: uuidSchema.nullable(),
+  })
+  .strict();
+export type TaskEventView = z.output<typeof taskEventViewSchema>;
+
+export const taskViewSchema = z
+  .object({
+    id: uuidSchema,
+    code: z.string(),
+    title: z.string(),
+    description: z.string().nullable(),
+    vehicleId: uuidSchema.nullable(),
+    vehicleInternalNo: z.string().nullable(),
+    vehicleMake: z.string().nullable(),
+    vehicleModel: z.string().nullable(),
+    vehiclePlateNumber: z.string().nullable(),
+    taskTypeId: uuidSchema,
+    taskTypeCode: z.string(),
+    taskTypeName: z.string(),
+    taskTypeIconName: z.string().nullable(),
+    taskTypeColorHex: z.string().nullable(),
+    priority: taskPrioritySchema,
+    status: taskStatusSchema,
+    assignMode: taskAssignModeSchema,
+    createdById: uuidSchema,
+    createdByName: z.string(),
+    assigneeUserId: uuidSchema.nullable(),
+    assigneeName: z.string().nullable(),
+    claimedAt: z.iso.datetime().nullable(),
+    completedAt: z.iso.datetime().nullable(),
+    completedById: uuidSchema.nullable(),
+    dueAt: z.iso.datetime().nullable(),
+    dueDate: z.iso.date().nullable(),
+    isOverdue: z.boolean(),
+    cancelledAt: z.iso.datetime().nullable(),
+    cancelReason: z.string().nullable(),
+    reopenedAt: z.iso.datetime().nullable(),
+    releasedAt: z.iso.datetime().nullable(),
+    durationMinutes: z.number().int().nonnegative().nullable(),
+    odometerKm: z.number().int().nonnegative().nullable(),
+    totalCost: z.number().int().nullable(),
+    fuelLiters: z.number().nonnegative().nullable(),
+    fuelAmount: z.number().int().nullable(),
+    fuelConsumptionL100: z.number().nonnegative().nullable(),
+    formSchemaId: uuidSchema,
+    formSchemaKey: z.string(),
+    formSchemaName: z.string(),
+    formSchemaVersionId: uuidSchema,
+    formSchemaVersion: z.number().int().positive(),
+    version: z.number().int().nonnegative(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export type TaskView = z.output<typeof taskViewSchema>;
+
+export const taskDetailSchema = taskViewSchema
+  .extend({
+    formData: z.record(z.string(), z.unknown()),
+    assignments: z.array(taskAssignmentViewSchema),
+    events: z.array(taskEventViewSchema),
+    attachmentIds: z.array(uuidSchema),
+    commentCount: z.number().int().nonnegative(),
+  })
+  .strict();
+export type TaskDetail = z.output<typeof taskDetailSchema>;
+
+export const taskListResponseSchema = z
+  .object({
+    items: z.array(taskViewSchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type TaskListResponse = z.output<typeof taskListResponseSchema>;

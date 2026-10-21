@@ -6,7 +6,7 @@
  * - `PUBLISHED`/`RETIRED` se ne mijenjaju (`FORM_VERSION_IMMUTABLE`);
  * - objava je atomska: stara verzija → `RETIRED`, nova → `PUBLISHED`, forma
  *   pokazuje na novu, registar ključeva se dopunjuje;
- * - `active` vraća tačno jednu aktivnu verziju (i fallback na generičku formu);
+ * - `active` vraća tačno jednu aktivnu verziju, a za TASK poštuje zadanu formu vrste;
  * - `validateValues` odbija `DRAFT` i vraća greške po polju za objavljenu formu.
  */
 import { describe, expect, it } from 'vitest';
@@ -331,12 +331,29 @@ describe('FormSchemasService — aktivna forma i keširanje', () => {
     ).data;
     await service.publish(specific.id, specific.versions[0]!.id, { changeNote: 'Specifična' }, ACTOR);
 
+    prisma.addTaskType({ id: taskTypeId });
     expect((await service.active({ subject: 'TASK', taskTypeId })).formSchemaId).toBe(specific.id);
-    // Nepostojeći tip zadatka pada na generičku formu.
+
+    // Eksplicitno zadana forma vrste ima prednost pred formom vezanom za vrstu.
+    const explicitTypeId = '018f0000-0000-7000-8000-0000000000d2';
+    prisma.addTaskType({ id: explicitTypeId, formSchemaId: generic.id });
+    expect((await service.active({ subject: 'TASK', taskTypeId: explicitTypeId })).formSchemaId).toBe(
+      generic.id,
+    );
+
+    // Poznata vrsta bez vlastite forme i nepostojeća vrsta ne padaju na generičku.
+    const withoutFormTypeId = '018f0000-0000-7000-8000-0000000000d3';
+    prisma.addTaskType({ id: withoutFormTypeId });
     expect(
-      (await service.active({ subject: 'TASK', taskTypeId: '018f0000-0000-7000-8000-0000000000d9' }))
-        .formSchemaId,
-    ).toBe(generic.id);
+      (await errorOf(() => service.active({ subject: 'TASK', taskTypeId: withoutFormTypeId }))).code,
+    ).toBe('NOT_FOUND');
+    expect(
+      (
+        await errorOf(() =>
+          service.active({ subject: 'TASK', taskTypeId: '018f0000-0000-7000-8000-0000000000d9' }),
+        )
+      ).code,
+    ).toBe('NOT_FOUND');
     expect(prisma.schemas.size).toBe(2);
   });
 

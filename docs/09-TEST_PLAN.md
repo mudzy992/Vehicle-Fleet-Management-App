@@ -488,3 +488,37 @@ PostgreSQL `FOR UPDATE`, jedinstveni indeks pod konkurencijom, Nest HTTP
 guard/interceptor redoslijed ni prikaz u browseru. P4–P8 ostaju za zadatke,
 claim, završetak, outbox i obavijesti u sljedećim cjelinama; produkcijska
 provjera ide kroz Coolify deploy i seed.
+
+### Jezgra zadataka — druga cjelina Faze 5
+
+`apps/api/test/unit/tasks.spec.ts` — 20 testova nad stateful lažnim
+transakcijskim klijentom i lažnim RBAC servisom: kod `Z-YYYY-000001`,
+snapshot eksplicitne i vezane objavljene TASK verzije, lokalni `dueDate`,
+pozvani/posmatrači, `CREATED`/`INVITED` događaji i DB outbox
+`TASK_CREATED`; `ON_CREATE` zahtjevi i djelimična validacija nacrta bez
+odbijanja ostalih obaveznih polja forme; vrsta bez efektivne forme kao
+`409 FORM_VERSION_NOT_PUBLISHED` bez generičkog fallbacka; neaktivna vrsta,
+obavezno/arhivirano vozilo te nepostojeći, neaktivni i primaoci bez
+`task:claim`; direktna dodjela koja ostaje `OPEN` s jednim `ASSIGNEE` redom;
+broadcast payload i vidljivost; serverski filteri, `mine`, `overdueOnly`,
+pretraga i 404 za detalj izvan opsega; PATCH opseg/status, CAS i neispravan
+nacrt; otkazivanje i reopen kroz statusnu mašinu, uključujući opoziv
+izvršioca kod otkazanog `OPEN_CLAIM`, očuvanje direktnog izvršioca i
+`COMPLETED → IN_PROGRESS`; permisije, audit i `201` metadata kontrolera.
+
+`packages/shared/test/schemas.spec.ts` — 5 novih testova za create/PATCH/
+cancel/reopen/list DTO-e, preklapanja uloga i načina dodjele, CAS verziju te
+strict `TaskDetail`/`TaskListResponse`; fajl sada ima 31 test.
+
+`apps/api/test/unit/form-schemas-service.spec.ts` — aktivna TASK forma sada
+dokazuje kanonički prioritet eksplicitna forma vrste pa forma vezana za
+vrstu te da poznata vrsta bez forme i nepostojeća vrsta ne padaju na
+generičku formu. DI regresija je dopunjena `TasksService` i
+`TasksController` (+2), a registar Prisma selecta za `TASK_SELECT`,
+`TASK_ASSIGNMENT_SELECT` i `TASK_EVENT_SELECT`.
+
+Lažni klijent izvršava transakcijski callback bez rollbacka i ne dokazuje
+stvarni PostgreSQL advisory lock za kod, `FOR UPDATE`, jedinstvenost pod
+konkurencijom, puni Nest HTTP lanac ni Coolify bazu. Atomski claim, završetak
+i P4–P8 ostaju zasebne cjeline; ova cjelina dokazuje samo upis DB outbox
+redova, ne worker, FCM ni SSE isporuku.

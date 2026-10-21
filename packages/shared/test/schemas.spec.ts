@@ -20,8 +20,15 @@ import {
   refreshSchema,
   resetPasswordSchema,
   archiveTaskTypeSchema,
+  cancelTaskSchema,
+  createTaskSchema,
   createTaskTypeSchema,
+  reopenTaskSchema,
   replaceTaskCompletionRequirementsSchema,
+  taskDetailSchema,
+  taskListQuerySchema,
+  taskListResponseSchema,
+  updateTaskSchema,
   taskCompletionRequirementInputSchema,
   taskCompletionRequirementsResponseSchema,
   taskTypeDetailSchema,
@@ -430,6 +437,193 @@ describe('vrste zadataka i zahtjevi završetka (docs/07 §7.6)', () => {
     expect(
       taskTypeDetailSchema.safeParse({ ...view, completionRequirements: [], deletedAt: null }).success,
     ).toBe(false);
+  });
+});
+
+describe('zadaci (docs/07 §2.11)', () => {
+  const taskId = '11111111-1111-4111-8111-111111111111';
+  const taskTypeId = '22222222-2222-4222-8222-222222222222';
+  const vehicleId = '33333333-3333-4333-8333-333333333333';
+  const invitedId = '44444444-4444-4444-8444-444444444444';
+  const observerId = '55555555-5555-4555-8555-555555555555';
+  const assigneeId = '66666666-6666-4666-8666-666666666666';
+  const formSchemaId = '77777777-7777-4777-8777-777777777777';
+  const formSchemaVersionId = '88888888-8888-4888-8888-888888888888';
+
+  it('kreiranje trimuje tekst, daje prazne liste/formu i čuva direktnog izvršioca', () => {
+    const open = createTaskSchema.parse({
+      taskTypeId,
+      vehicleId,
+      title: '  Pranje vozila  ',
+      description: '  Vanjsko pranje  ',
+      invitedUserIds: [invitedId],
+      observerUserIds: [observerId],
+    });
+    expect(open).toMatchObject({
+      title: 'Pranje vozila',
+      description: 'Vanjsko pranje',
+      invitedUserIds: [invitedId],
+      observerUserIds: [observerId],
+      formData: {},
+    });
+
+    const direct = createTaskSchema.parse({ taskTypeId, assigneeUserId: assigneeId });
+    expect(direct.assignMode).toBeUndefined();
+    expect(direct.assigneeUserId).toBe(assigneeId);
+    expect(direct.invitedUserIds).toEqual([]);
+  });
+
+  it('kreiranje odbija duplikate, preklapanja uloga i nespojive načine dodjele', () => {
+    const base = { taskTypeId };
+    for (const patch of [
+      { invitedUserIds: [invitedId, invitedId] },
+      { observerUserIds: [observerId, observerId] },
+      { invitedUserIds: [invitedId], observerUserIds: [invitedId] },
+      { assigneeUserId: assigneeId, invitedUserIds: [invitedId] },
+      { assigneeUserId: assigneeId, observerUserIds: [assigneeId] },
+      { assignMode: 'ASSIGN_DIRECT' },
+      { assignMode: 'OPEN_CLAIM', assigneeUserId: assigneeId },
+      { assignMode: 'BROADCAST', invitedUserIds: [invitedId] },
+      { title: 'x' },
+      { dueAt: 'nije-datum' },
+      { status: 'COMPLETED' },
+    ]) {
+      expect(createTaskSchema.safeParse({ ...base, ...patch }).success).toBe(false);
+    }
+  });
+
+  it('PATCH, otkazivanje i reopen nose CAS verziju i ne primaju serverska polja', () => {
+    expect(updateTaskSchema.parse({ version: 2, title: ' Novi naslov ', dueAt: null })).toEqual({
+      version: 2,
+      title: 'Novi naslov',
+      dueAt: null,
+    });
+    expect(updateTaskSchema.safeParse({ version: 2 }).success).toBe(false);
+    expect(updateTaskSchema.safeParse({ version: 2, status: 'CANCELLED' }).success).toBe(false);
+    expect(updateTaskSchema.safeParse({ version: -1, title: 'Naslov' }).success).toBe(false);
+
+    expect(cancelTaskSchema.parse({ version: 0, reason: ' Vozilo je na servisu ' })).toEqual({
+      version: 0,
+      reason: 'Vozilo je na servisu',
+    });
+    expect(cancelTaskSchema.safeParse({ version: 0, reason: 'x' }).success).toBe(false);
+    expect(reopenTaskSchema.parse({ version: 3 })).toEqual({ version: 3 });
+    expect(reopenTaskSchema.safeParse({ version: 3, status: 'OPEN' }).success).toBe(false);
+  });
+
+  it('lista parsira filtere i odbija obrnut interval roka', () => {
+    expect(
+      taskListQuerySchema.parse({
+        status: 'OPEN',
+        vehicleId,
+        taskTypeId,
+        mine: 'true',
+        overdueOnly: 'false',
+        dueFrom: '2026-10-21T00:00:00Z',
+        dueTo: '2026-10-22T00:00:00Z',
+        page: '2',
+      }),
+    ).toMatchObject({ status: 'OPEN', mine: true, overdueOnly: false, page: 2 });
+    expect(
+      taskListQuerySchema.safeParse({
+        dueFrom: '2026-10-22T00:00:00Z',
+        dueTo: '2026-10-21T00:00:00Z',
+      }).success,
+    ).toBe(false);
+    expect(taskListQuerySchema.safeParse({ includeDeleted: 'true' }).success).toBe(false);
+  });
+
+  it('odgovori zadatka su strict i nose snapshot forme, dodjele i događaje', () => {
+    const detail = {
+      id: taskId,
+      code: 'Z-2026-000001',
+      title: 'Pranje vozila',
+      description: null,
+      vehicleId,
+      vehicleInternalNo: 'V-001',
+      vehicleMake: 'Škoda',
+      vehicleModel: 'Octavia',
+      vehiclePlateNumber: 'A01-A-001',
+      taskTypeId,
+      taskTypeCode: 'WASH',
+      taskTypeName: 'Pranje vozila',
+      taskTypeIconName: 'car-wash',
+      taskTypeColorHex: '#2563EB',
+      priority: 'NORMAL',
+      status: 'OPEN',
+      assignMode: 'OPEN_CLAIM',
+      createdById: observerId,
+      createdByName: 'Amina Administrator',
+      assigneeUserId: null,
+      assigneeName: null,
+      claimedAt: null,
+      completedAt: null,
+      completedById: null,
+      dueAt: '2026-10-22T10:00:00.000Z',
+      dueDate: '2026-10-22',
+      isOverdue: false,
+      cancelledAt: null,
+      cancelReason: null,
+      reopenedAt: null,
+      releasedAt: null,
+      durationMinutes: null,
+      odometerKm: null,
+      totalCost: null,
+      fuelLiters: null,
+      fuelAmount: null,
+      fuelConsumptionL100: null,
+      formSchemaId,
+      formSchemaKey: 'pranje_vozila',
+      formSchemaName: 'Pranje vozila',
+      formSchemaVersionId,
+      formSchemaVersion: 1,
+      version: 0,
+      createdAt: '2026-10-21T10:00:00.000Z',
+      updatedAt: '2026-10-21T10:00:00.000Z',
+      formData: { washType: 'FULL' },
+      assignments: [
+        {
+          id: formSchemaVersionId,
+          userId: invitedId,
+          userName: 'Emina Pozvana',
+          role: 'INVITED',
+          assignedById: observerId,
+          assignedAt: '2026-10-21T10:00:00.000Z',
+          revokedAt: null,
+          note: null,
+        },
+      ],
+      events: [
+        {
+          id: formSchemaId,
+          action: 'CREATED',
+          actorId: observerId,
+          actorName: 'Amina Administrator',
+          actorRole: 'ADMINISTRATOR',
+          at: '2026-10-21T10:00:00.000Z',
+          clientType: 'WEB',
+          requestId: 'req-1',
+          data: { code: 'Z-2026-000001' },
+          formSchemaVersionId,
+        },
+      ],
+      attachmentIds: [],
+      commentCount: 0,
+    };
+
+    expect(taskDetailSchema.parse(detail).assignments).toHaveLength(1);
+    const {
+      formData: _formData,
+      assignments: _assignments,
+      events: _events,
+      attachmentIds: _attachmentIds,
+      commentCount: _commentCount,
+      ...view
+    } = detail;
+    expect(
+      taskListResponseSchema.parse({ items: [view], page: 1, pageSize: 25, total: 1, totalPages: 1 }).items,
+    ).toHaveLength(1);
+    expect(taskDetailSchema.safeParse({ ...detail, deletedAt: null }).success).toBe(false);
   });
 });
 

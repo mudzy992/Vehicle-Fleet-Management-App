@@ -8,6 +8,9 @@ import { ServicesService } from '../../src/modules/services/services.service.js'
 import { ServicesController } from '../../src/modules/services/services.controller.js';
 import { TaskTypesService } from '../../src/modules/task-types/task-types.service.js';
 import { TaskTypesController } from '../../src/modules/task-types/task-types.controller.js';
+import { TasksService } from '../../src/modules/tasks/tasks.service.js';
+import { TasksController } from '../../src/modules/tasks/tasks.controller.js';
+import { PermissionsService } from '../../src/modules/auth/permissions/permissions.service.js';
 /**
  * DI wiring — regresija za pad u produkciji (Faza 3).
  *
@@ -44,6 +47,7 @@ import { RemindersService } from '../../src/modules/reminders/reminders.service.
 import { RemindersController } from '../../src/modules/reminders/reminders.controller.js';
 
 const prismaProvider: Provider = { provide: PrismaService, useValue: {} };
+const permissionsProvider: Provider = { provide: PermissionsService, useValue: {} };
 
 const services = [
   ['TireInstallationsService', TireInstallationsService],
@@ -51,6 +55,7 @@ const services = [
   ['ServiceItemsService', ServiceItemsService],
   ['ServicesService', ServicesService],
   ['TaskTypesService', TaskTypesService],
+  ['TasksService', TasksService],
   ['AttachmentsService', AttachmentsService],
   ['VehiclesService', VehiclesService],
   ['DriversService', DriversService],
@@ -65,6 +70,7 @@ const controllers = [
   ['ServiceItemsController', ServiceItemsController, ServiceItemsService],
   ['ServicesController', ServicesController, ServicesService],
   ['TaskTypesController', TaskTypesController, TaskTypesService],
+  ['TasksController', TasksController, TasksService],
   ['AttachmentsController', AttachmentsController, AttachmentsService],
   ['VehiclesController', VehiclesController, VehiclesService],
   ['DriversController', DriversController, DriversService],
@@ -76,7 +82,7 @@ const controllers = [
 describe('DI wiring (Faza 3)', () => {
   it.each(services)('%s se može instancirati kroz Nest', async (_name, service) => {
     const moduleRef = await Test.createTestingModule({
-      providers: [service as never, prismaProvider],
+      providers: [service as never, prismaProvider, permissionsProvider],
     }).compile();
 
     expect(moduleRef.get(service as never)).toBeTruthy();
