@@ -17,6 +17,7 @@ import { useMutation } from '@tanstack/react-query';
 import { RECORD_STATUSES, statusLabel } from '@vfm/shared';
 import { Button, Card, CardContent, CardHeader, Field, inputClassName } from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
+import { useSession } from '../auth/session.js';
 import { CoreFields } from '../forms/form-fields.js';
 import { isPeriodOverlap } from './records-model.js';
 import {
@@ -45,6 +46,8 @@ export function VehicleRecordEditForm({
   onDone: () => Promise<void> | void;
   onCancel: () => void;
 }) {
+  const { hasPermission } = useSession();
+  const canDelete = hasPermission(kind === 'REGISTRATION' ? 'registration:delete' : 'insurance:delete');
   const [core, setCore] = useState<Record<string, string>>(() => recordToCoreValues(kind, record));
   const [status, setStatus] = useState(record.status);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -149,20 +152,22 @@ export function VehicleRecordEditForm({
             <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
               Odustani
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="danger"
-              loading={remove.isPending}
-              onClick={() => {
-                // Soft-delete je `CRITICAL` u audit logu — potvrda je obavezna.
-                if (window.confirm(`Obrisati ${label}? Zapis ostaje u historiji (soft-delete).`)) {
-                  remove.mutate();
-                }
-              }}
-            >
-              Obriši
-            </Button>
+            {canDelete && (
+              <Button
+                type="button"
+                size="sm"
+                variant="danger"
+                loading={remove.isPending}
+                onClick={() => {
+                  // Soft-delete je `CRITICAL` u audit logu — potvrda je obavezna.
+                  if (window.confirm(`Obrisati ${label}? Zapis ostaje u historiji (soft-delete).`)) {
+                    remove.mutate();
+                  }
+                }}
+              >
+                Obriši
+              </Button>
+            )}
           </div>
         </form>
       </CardContent>
