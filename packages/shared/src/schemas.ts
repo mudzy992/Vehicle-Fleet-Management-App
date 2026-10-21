@@ -2232,3 +2232,43 @@ export const attachmentSignedUrlSchema = z
   })
   .strict();
 export type AttachmentSignedUrl = z.output<typeof attachmentSignedUrlSchema>;
+
+/** Faza 4 — pregled servisnih evidencija. Iznosi su u feningama. */
+export const serviceListQuerySchema = paginationQuerySchema
+  .extend({
+    vehicleId: uuidSchema.optional(),
+    status: recordStatusSchema.optional(),
+    serviceType: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict();
+export type ServiceListQuery = z.output<typeof serviceListQuerySchema>;
+export const serviceRecordSchema = z
+  .object({
+    id: uuidSchema,
+    vehicleId: uuidSchema,
+    serviceDate: z.iso.date(),
+    serviceType: z.string(),
+    workshopName: z.string().nullable(),
+    description: z.string().nullable(),
+    odometerKm: z.number().int().nullable(),
+    totalCost: z.number().int(),
+    currency: z.string(),
+    nextServiceDueDate: z.iso.date().nullable(),
+    nextServiceDueKm: z.number().int().nullable(),
+    status: recordStatusSchema,
+    formSchemaId: uuidSchema,
+    formSchemaVersionId: uuidSchema,
+    version: z.number().int(),
+  })
+  .strict();
+export type ServiceRecord = z.output<typeof serviceRecordSchema>;
+export const serviceListResponseSchema = z
+  .object({
+    items: z.array(serviceRecordSchema),
+    page: z.number().int(),
+    pageSize: z.number().int(),
+    total: z.number().int(),
+    totalPages: z.number().int(),
+  })
+  .strict();
+export type ServiceListResponse = z.output<typeof serviceListResponseSchema>;

@@ -252,6 +252,20 @@ sistem, `ARCHIVED` je arhiva evidencije.
 
 ### 2.7 Servisi (`/services`)
 
+**Implementirano — prva cjelina Faze 4:**
+
+| Metoda | Put | Permisija | Napomena |
+|---|---|---|---|
+| GET | `/services` | `service:view` | `vehicleId`, `status`, `serviceType`, `q` (vrsta/radionica/opis), paginacija; sortiranje `serviceDate`, `totalCost`, `createdAt`, `serviceType`; default datum opadajuće, stabilni ID kao drugi ključ |
+| GET | `/services/:id` | `service:view` | pregled osnovne evidencije; nepostojeći/soft-delete → `404 NOT_FOUND` |
+
+Odgovor liste: `{items, page, pageSize, total, totalPages}`; zapis nosi
+`formSchemaId`, `formSchemaVersionId`, `version`, datum, kilometražu, vrstu,
+radionicu, opis, trošak u feningama i sljedeći rok (datum/km). Bez mutacija.
+Stavke računa i puna dinamička forma još nisu dio odgovora.
+
+**Planirano u narednim cjelinama (nije još dostupno):**
+
 `GET/POST /services`, `GET/PATCH/DELETE /services/:id`, `GET/POST/PATCH/DELETE /services/:id/items`,
 `POST /services/:id/attachments`. Pri kreiranju se opciono upisuje `OdometerReading` (ista
 transakcija) i ažurira `Vehicle.nextServiceDue*`.
@@ -562,3 +576,12 @@ Odgovor: `429` + `Retry-After: <sekunde>` + `{ "error": { "code": "RATE_LIMITED"
 - [ ] Swagger dekoratori (`@ApiOperation`, `@ApiResponse`, primjeri).
 - [ ] Testovi: happy path + 401 + 403 + 422 + (409 ako ima stanja).
 - [ ] Ako uvodi novu env varijablu → `.env.example`; ako dira Redis → `REDIS_ACL.md`.
+
+### 7.1 Provjera pregleda servisa — prva cjelina Faze 4
+
+`GET /services` i `GET /services/:id`: postojeća `service:view`, zajednički
+Zod DTO i UUID validacija, whitelist sortiranja, stabilna paginacija i
+`deletedAt: null`. Globalni auth/RBAC guardovi ostaju obavezni. Nema mutacija,
+PII, novih ENV/Redis ključeva, outbox događaja niti novih migracija.
+Jedinični testovi i Nest DI provjera prolaze; produkcijski HTTP smoke-test
+sa stvarnom bazom i korisničkim permisijama nije izvršen u sandboxu.

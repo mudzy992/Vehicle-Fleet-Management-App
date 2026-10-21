@@ -35,6 +35,7 @@ const SELECT_REGISTRY: ReadonlyArray<{ file: string; constant: string; model: st
     constant: 'SELECT',
     model: 'RegistrationRecord',
   },
+  { file: 'modules/services/services.service.ts', constant: 'SERVICE_SELECT', model: 'ServiceRecord' },
   { file: 'modules/reminders/reminders.service.ts', constant: 'SELECT', model: 'ScheduledReminder' },
   { file: 'modules/users/users.service.ts', constant: 'USER_SELECT', model: 'User' },
   { file: 'modules/vehicles/vehicles.service.ts', constant: 'VEHICLE_SELECT', model: 'Vehicle' },
@@ -60,7 +61,10 @@ function schemaFields(): Map<string, Set<string>> {
 /** Ključevi `const <NAME> = { … } as const;` (samo `true` polja, ne `select`). */
 function selectKeys(file: string, constant: string): string[] {
   const source = readFileSync(join(API_ROOT, 'src', file), 'utf8');
-  const pattern = new RegExp(`const ${constant} = \\{([\\s\\S]*?)\\n\\} as const;`, 'u');
+  const pattern = new RegExp(
+    `const ${constant} = \\{([\\s\\S]*?)\\n\\} as const(?: satisfies [\\w.]+)?;`,
+    'u',
+  );
   const match = pattern.exec(source);
   expect(match, `Konstanta ${constant} nije nađena u ${file}`).not.toBeNull();
   return [...(match?.[1] ?? '').matchAll(/^\s+(\w+):/gmu)].map((item) => item[1]!);

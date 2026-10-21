@@ -28,6 +28,7 @@ import { FormSchemasModule } from './modules/form-schemas/form-schemas.module.js
 import { FormMigrationsModule } from './modules/form-migrations/form-migrations.module.js';
 import { VehiclesModule } from './modules/vehicles/vehicles.module.js';
 import { DriversModule } from './modules/drivers/drivers.module.js';
+import { ServicesModule } from './modules/services/services.module.js';
 import { RegistrationsModule } from './modules/registrations/registrations.module.js';
 import { InsurancesModule } from './modules/insurances/insurances.module.js';
 import { RemindersModule } from './modules/reminders/reminders.module.js';
@@ -64,6 +65,7 @@ import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
     DriversModule,
     // Registracije i osiguranje (docs/07 §2.6) — historija perioda (B-10).
     RegistrationsModule,
+    ServicesModule,
     InsurancesModule,
     // Podsjetnici (docs/07 §2.14) — idempotentni skener (P-07).
     RemindersModule,

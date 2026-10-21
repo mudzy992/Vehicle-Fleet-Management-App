@@ -1,3 +1,4 @@
+import { VehicleServicesTab } from '../services/vehicle-services-tab.js';
 /**
  * Detalji vozila (W06, docs/06 §5.5; docs/07 §2.5).
  *
@@ -45,7 +46,7 @@ import { VehicleRecordEditForm } from './record-edit-form.js';
 import { useSession } from '../auth/session.js';
 import { deadlineLabel, deadlineTone, toQueryString } from './vehicles-model.js';
 
-type Tab = 'osnovno' | 'registracije' | 'osiguranje' | 'kilometraza' | 'prilozi';
+type Tab = 'osnovno' | 'registracije' | 'osiguranje' | 'kilometraza' | 'prilozi' | 'servisi';
 
 const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'osnovno', label: 'Osnovno' },
@@ -53,10 +54,10 @@ const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'osiguranje', label: 'Osiguranje' },
   { id: 'kilometraza', label: 'Kilometraža' },
   { id: 'prilozi', label: 'Prilozi' },
+  { id: 'servisi', label: 'Servisi' },
 ];
 
 const PHASE_LATER: ReadonlyArray<{ label: string; phase: string }> = [
-  { label: 'Servisi', phase: 'Faza 4' },
   { label: 'Gume', phase: 'Faza 4' },
   { label: 'Zadaci', phase: 'Faza 5' },
   { label: 'Historija', phase: 'Faza 5' },
@@ -173,7 +174,7 @@ export function VehicleDetailPage() {
       {actionMessage && <p className="text-sm">{actionMessage}</p>}
 
       <div className="flex flex-wrap gap-1 border-b border-[var(--border)] pb-1">
-        {TABS.map((item) => (
+        {TABS.filter((item) => item.id !== 'servisi' || hasPermission('service:view')).map((item) => (
           <button
             key={item.id}
             type="button"
@@ -203,6 +204,9 @@ export function VehicleDetailPage() {
       {tab === 'registracije' && <RegistrationsTab vehicleId={vehicle.id} onChanged={invalidate} />}
       {tab === 'osiguranje' && <InsurancesTab vehicleId={vehicle.id} onChanged={invalidate} />}
       {tab === 'kilometraza' && <OdometerTab vehicle={vehicle} onChanged={invalidate} />}
+      {tab === 'servisi' && hasPermission('service:view') && (
+        <VehicleServicesTab key={vehicle.id} vehicleId={vehicle.id} />
+      )}
       {tab === 'prilozi' && <AttachmentsTab vehicleId={vehicle.id} />}
     </div>
   );

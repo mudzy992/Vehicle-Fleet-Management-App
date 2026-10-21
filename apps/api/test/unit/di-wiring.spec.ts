@@ -1,3 +1,5 @@
+import { ServicesService } from '../../src/modules/services/services.service.js';
+import { ServicesController } from '../../src/modules/services/services.controller.js';
 /**
  * DI wiring — regresija za pad u produkciji (Faza 3).
  *
@@ -33,6 +35,7 @@ import { RemindersController } from '../../src/modules/reminders/reminders.contr
 const prismaProvider: Provider = { provide: PrismaService, useValue: {} };
 
 const services = [
+  ['ServicesService', ServicesService],
   ['AttachmentsService', AttachmentsService],
   ['VehiclesService', VehiclesService],
   ['DriversService', DriversService],
@@ -42,6 +45,7 @@ const services = [
 ] as const;
 
 const controllers = [
+  ['ServicesController', ServicesController, ServicesService],
   ['AttachmentsController', AttachmentsController, AttachmentsService],
   ['VehiclesController', VehiclesController, VehiclesService],
   ['DriversController', DriversController, DriversService],
