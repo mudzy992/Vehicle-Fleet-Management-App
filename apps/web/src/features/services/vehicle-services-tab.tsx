@@ -1,3 +1,5 @@
+import { ServiceEditForm } from './service-edit-form.js';
+import type { ServiceRecord } from '@vfm/shared/schemas';
 import { ServiceItemsPanel } from './service-items-panel.js';
 import { ServiceCreateForm } from './service-create-form.js';
 import { useSession } from '../auth/session.js';
@@ -25,6 +27,7 @@ import { api, ApiError } from '../../lib/api.js';
 export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
   const client = useQueryClient();
   const { hasPermission } = useSession();
+  const [editing, setEditing] = useState<ServiceRecord | null>(null);
   const [itemsId, setItemsId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [page, setPage] = useState(1);
@@ -35,6 +38,8 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
         `/services?vehicleId=${encodeURIComponent(vehicleId)}&page=${page}&pageSize=25`,
       ),
   });
+  if (editing && hasPermission('service:update'))
+    return <ServiceEditForm key={editing.id} record={editing} onClose={() => setEditing(null)} />;
   if (itemsId) return <ServiceItemsPanel serviceId={itemsId} onClose={() => setItemsId(null)} />;
   if (adding && hasPermission('service:create'))
     return (
@@ -88,7 +93,7 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
                 <TH align="right">Trošak</TH>
                 <TH>Sljedeći servis</TH>
                 <TH>Status</TH>
-                <TH>Stavke računa</TH>
+                <TH>Radnje</TH>
               </TR>
             </THead>
             <TBody>
@@ -121,6 +126,11 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
                     <Button size="sm" variant="ghost" onClick={() => setItemsId(row.id)}>
                       Stavke
                     </Button>
+                    {hasPermission('service:update') && row.status === 'ACTIVE' && (
+                      <Button size="sm" variant="ghost" onClick={() => setEditing(row)}>
+                        Uredi servis
+                      </Button>
+                    )}
                   </TD>
                 </TR>
               ))}

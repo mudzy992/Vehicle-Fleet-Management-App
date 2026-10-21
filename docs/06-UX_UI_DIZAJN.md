@@ -828,3 +828,13 @@ decimalni zarez i dvije decimale, ukupni sačuvani trošak je izdvojen u zaglavl
 Na uskom ekranu tabela ima horizontalno pomjeranje umjesto prelamanja iznosa.
 Forma koristi zasebne blokove po stavci i prilagodljivi raspored 1/2/3 kolone;
 količina/cijena otvaraju decimalnu tastaturu. API ugovor se ne mijenja.
+
+### Opisna izmjena servisa — Faza 4
+
+Profil vozila → Servisi → **Uredi servis** uz `service:update` na aktivnom redu.
+`features/services/service-edit-form.tsx` uređuje vrstu, radionicu i opis.
+Prazna radionica/opis šalju se kao `null`. Forma jasno navodi da se datum,
+kilometraža, rokovi i trošak ovdje ne mijenjaju. Verzijski konflikt čuva unos
+u otvorenoj formi; zatvaranje i ponovno otvaranje učitava novu verziju.
+Nakon uspjeha osvježavaju se lista servisa i verzija stavki računa.
+Potpuna izmjena datum/km/rokovi i brisanje servisa još nisu implementirani.

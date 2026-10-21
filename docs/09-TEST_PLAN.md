@@ -302,3 +302,9 @@ servisom/kontrolerom stavki (+2). Fake transakcija ne dokazuje stvarni DB rollba
 lokalizovanog prikaza novca i količina: feninzi → KM, decimalni zarez, dvije
 decimale cijene, razdvajanje hiljada i izostavljanje suvišnih nula količine.
 Vizuelna provjera na korisničkom deployu ostaje potrebna; testovi ne porede screenshotove.
+
+`apps/api/test/unit/services-update.spec.ts` — 8 testova opisne izmjene:
+CAS, zapisna RETIRED forma, audit snapshot, očuvanje km/datuma/rokova/troška,
+zastarjela verzija prije upisa i konkurentna promjena tokom validacije,
+404, blokada neaktivnog servisa/arhiviranog vozila, strict DTO i permisija.
+Transakcijski fake ne dokazuje stvarni PostgreSQL rollback/konkurenciju.

@@ -630,3 +630,19 @@ uređivanje ide kroz ovu verzionisanu zamjenu cijelog računa.
 
 Nema novih ENV/Redis ključeva ni migracija. Jedinični i DI testovi su dodani;
 HTTP smoke-test sa stvarnom bazom i konkurentnim upisima nije izvršen u sandboxu.
+
+### 7.4 Opisna izmjena servisa — Faza 4
+
+`PATCH /services/:id` uz `service:update`, audit `UPDATE` prije/poslije.
+Tijelo: `version` i barem jedno od `serviceType` (neprazan tekst),
+`workshopName` ili `description` (tekst ili `null` za brisanje).
+Odgovor je osnovna servisna evidencija kao na GET-u. Svako drugo polje je
+odbijeno zajedničkim strict Zod DTO-om — km, datum, rokovi i trošak se ne mijenjaju.
+
+Čitanje, validacija zapisne forme i CAS upis su u istoj transakciji. Verzija
+forme ostaje ista (uključujući RETIRED), mapirana radionica se usklađuje s formData.
+CAS provjerava verziju, soft-delete, aktivni servis i nearhivirano/neobrisano
+vozilo. Zastarjela verzija → 409, nepostojeći/obrisan zapis → 404, neaktivna
+servisna evidencija/arhivirano vozilo → validacijska greška. Verzija raste i
+štiti od konkurentnog uređivanja stavki računa. Nema novih migracija/ENV/Redis
+ključeva. Provjera sa stvarnom bazom nije izvršena iz sandboxa.

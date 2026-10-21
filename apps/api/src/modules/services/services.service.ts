@@ -1,3 +1,4 @@
+import type { UpdateServiceInput } from '@vfm/shared/schemas';
 import { randomUUID } from 'node:crypto';
 import { createServiceSchema, type CreateServiceInput } from '@vfm/shared/schemas';
 import {
@@ -177,6 +178,82 @@ export class ServicesService {
         },
       });
       return { data: serialize(row), after: { ...serialize(row), previousOdometerKm: vehicle.odometerKm } };
+    });
+  }
+
+  /** Metapodaci ne smiju prepisati stavke računa ili očitanja kilometraže. */
+  async update(id: string, input: UpdateServiceInput) {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.serviceRecord.findFirst({ where: { id, deletedAt: null } });
+      if (!current) throw new VfmException('NOT_FOUND', 'Servisna evidencija nije pronađena.');
+      if (current.version !== input.version)
+        throw new VfmException('VERSION_CONFLICT', 'Servis je izmijenjen. Ponovo učitajte evidenciju.');
+      const version = await resolveFormVersion(tx as never, {
+        subject: 'SERVICE',
+        versionId: current.formSchemaVersionId,
+        entityLabel: 'servis',
+      });
+      const values = { ...(current.formData as Record<string, unknown>) };
+      if (input.workshopName !== undefined) {
+        // Zapis ostaje na svojoj verziji; radionica se usklađuje i s mapiranim poljem.
+        for (const mapping of version.definition.normalizedName ?? []) {
+          if (mapping.column === 'workshopName') values[mapping.fieldKey] = input.workshopName;
+        }
+        const hasCore = version.definition.sections.some((section) =>
+          section.fields.some((field) => field.key === 'workshopName'),
+        );
+        if (hasCore) values.workshopName = input.workshopName;
+      }
+      const validated = validateRecordValues({
+        subject: 'SERVICE',
+        definition: version.definition,
+        versionId: version.id,
+        versionNumber: version.version,
+        status: version.status,
+        values,
+        isNew: false,
+      });
+      if (
+        input.workshopName !== undefined &&
+        validated.normalized.workshopName !== undefined &&
+        validated.normalized.workshopName !== input.workshopName
+      ) {
+        throw new VfmException('NORMALIZATION_MISMATCH', 'Mapirana radionica se razlikuje od unosa.');
+      }
+      const changed = await tx.serviceRecord.updateMany({
+        where: {
+          id,
+          version: input.version,
+          deletedAt: null,
+          status: 'ACTIVE',
+          vehicle: { deletedAt: null, status: { not: 'ARCHIVED' } },
+        },
+        data: {
+          ...(input.serviceType !== undefined ? { serviceType: input.serviceType } : {}),
+          ...(input.workshopName !== undefined ? { workshopName: input.workshopName } : {}),
+          ...(input.description !== undefined ? { description: input.description } : {}),
+          formData: validated.values as Prisma.InputJsonObject,
+          version: { increment: 1 },
+        },
+      });
+      if (!changed.count) {
+        const latest = await tx.serviceRecord.findFirst({ where: { id, deletedAt: null } });
+        if (!latest) throw new VfmException('NOT_FOUND', 'Servisna evidencija nije pronađena.');
+        if (latest.version !== input.version)
+          throw new VfmException('VERSION_CONFLICT', 'Servis je izmijenjen. Ponovo učitajte evidenciju.');
+        throw new VfmException('VALIDATION_ERROR', 'Mijenja se samo aktivni servis nearhiviranog vozila.');
+      }
+      const updated = await tx.serviceRecord.findUniqueOrThrow({ where: { id }, select: SERVICE_SELECT });
+      return {
+        data: serialize(updated),
+        before: {
+          serviceType: current.serviceType,
+          workshopName: current.workshopName,
+          description: current.description,
+          version: current.version,
+        },
+        after: serialize(updated),
+      };
     });
   }
 

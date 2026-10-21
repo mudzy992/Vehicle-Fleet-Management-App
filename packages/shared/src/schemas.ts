@@ -2328,3 +2328,15 @@ export const serviceItemsResponseSchema = z
   })
   .strict();
 export type ServiceItemsResponse = z.output<typeof serviceItemsResponseSchema>;
+
+/** Izmjena opisa servisa ne mijenja km, rokove, formu ni zbir računa. */
+export const updateServiceSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    serviceType: z.string().trim().min(1).max(120).optional(),
+    workshopName: z.string().trim().max(200).nullable().optional(),
+    description: z.string().trim().max(2000).nullable().optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 1, { message: 'Nema šta mijenjati.' });
+export type UpdateServiceInput = z.output<typeof updateServiceSchema>;
