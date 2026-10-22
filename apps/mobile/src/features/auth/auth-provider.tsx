@@ -5,7 +5,7 @@ interface AuthContextValue {
   user: MobileUser | null;
   loading: boolean;
   error: string | null;
-  signIn(email: string, password: string): Promise<void>;
+  signIn(email: string, password: string): Promise<MobileUser>;
   signOut(): Promise<void>;
   retryRestore(): Promise<void>;
 }
@@ -36,7 +36,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const signIn = useCallback(async (email: string, password: string) => {
     setError(null);
     try {
-      setUser(await mobileApi.login(email.trim(), password));
+      const profile = await mobileApi.login(email.trim(), password);
+      setUser(profile);
+      return profile;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Prijava nije uspjela.';
       setError(message);

@@ -763,7 +763,7 @@ i ne pokreće nijedan upit. Ostali ekrani su placeholderi s oznakom faze.
 | M7 | Vozila — lista | 6 | `vehicle:view` | ✅ `apps/mobile/app/(tabs)/vehicles.tsx`, online lista, pull-to-refresh i statusni pregled |
 | M8 | Vozilo — profil (read-only) | 6 | `vehicle:view` | ✅ `apps/mobile/app/vehicle/[id].tsx`, osnovni podaci, VIN i rokovi |
 | M9 | Obavijesti — lista + read | 6 | `notification:view` | ⏳ API ruta nije implementirana |
-| M10 | Profil — sesije, lozinka, postavke obavijesti, logout | 6 | `auth:login` | ⚠️ osnovni profil i odjava; sesije/lozinka/postavke nisu dodane |
+| M10 | Profil — sesije, lozinka, postavke obavijesti, logout | 6 | `auth:login` | ⚠️ osnovni profil, odjava i obavezna promjena privremene lozinke; sesije/postavke obavijesti nisu dodane |
 | M11 | Sistem: offline/greška/403 stanja | 6 | — | ⚠️ mrežna greška i retry; nema uređajskog UAT-a |
 
 ---

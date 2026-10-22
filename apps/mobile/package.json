@@ -10,15 +10,16 @@
     "check:expo": "expo-doctor"
   },
   "dependencies": {
-    "expo": "57.0.30",
     "@expo/metro-runtime": "57.0.17",
+    "@expo/vector-icons": "15.0.2",
+    "expo": "57.0.30",
     "expo-constants": "~57.0.22",
     "expo-device": "57.0.2",
     "expo-document-picker": "57.0.3",
     "expo-image-manipulator": "57.0.21",
     "expo-image-picker": "57.0.20",
-    "expo-notifications": "57.0.23",
     "expo-linking": "~57.0.13",
+    "expo-notifications": "57.0.23",
     "expo-router": "~57.0.28",
     "expo-secure-store": "57.0.4",
     "expo-status-bar": "57.0.1",

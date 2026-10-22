@@ -19,7 +19,7 @@ export default function ProfileScreen() {
         <Text style={styles.email}>{user?.email}</Text>
         {user?.roles.map((role) => <Text key={role.id} style={styles.role}>{role.name}</Text>)}
       </View>
-      {user?.mustChangePassword ? <View style={styles.notice}><Text style={styles.noticeTitle}>Promjena lozinke je obavezna</Text><Text style={styles.email}>Promijenite lozinku kroz web portal prije nastavka korištenja.</Text></View> : null}
+      {user?.mustChangePassword ? <View style={styles.notice}><Text style={styles.noticeTitle}>Promjena lozinke je obavezna</Text><Text style={styles.email}>Promijenite lozinku kroz aplikaciju prije nastavka korištenja.</Text></View> : null}
       <View style={styles.info}><Text style={styles.infoLabel}>Uloga</Text><Text style={styles.infoValue}>Pristup i dozvole se provjeravaju na serveru.</Text></View>
       <Pressable accessibilityRole="button" onPress={() => void logout()} disabled={signingOut} style={({ pressed }) => [styles.logout, pressed && styles.pressed]}>
         {signingOut ? <ActivityIndicator color={colors.danger} /> : <Text style={styles.logoutText}>Odjavi se</Text>}

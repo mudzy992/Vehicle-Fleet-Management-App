@@ -17,8 +17,8 @@ export default function LoginScreen() {
     setSubmitting(true);
     setLocalError(null);
     try {
-      await signIn(email, password);
-      router.replace('/(tabs)/tasks');
+      const user = await signIn(email, password);
+      router.replace(user.mustChangePassword ? '/(auth)/change-password' : '/(tabs)/tasks');
     } catch (cause) {
       setLocalError(cause instanceof Error ? cause.message : 'Prijava nije uspjela.');
     } finally {
