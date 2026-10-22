@@ -142,8 +142,60 @@ async function request<T>(path: string, init?: RequestInit, allowRetry = true): 
   return (success && 'data' in success ? success.data : (payload as T)) ?? (undefined as T);
 }
 
+async function requestBlob(path: string, allowRetry = true): Promise<Blob> {
+  const headers: Record<string, string> = {
+    Accept: '*/*',
+    'X-Client-Type': CLIENT_TYPE,
+  };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
+    headers,
+  });
+
+  if (response.status === 401 && allowRetry) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) return requestBlob(path, false);
+    sessionExpiredHandler?.();
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as unknown;
+    if (payload && isApiFailure(payload as never)) {
+      const error = (payload as { error: ApiErrorBody }).error;
+      throw new ApiError(error.code, error.message, response.status, error.details, error.requestId);
+    }
+    throw new ApiError(
+      'INTERNAL_ERROR',
+      `Preuzimanje nije uspjelo (HTTP ${response.status}).`,
+      response.status,
+    );
+  }
+
+  return response.blob();
+}
+
+async function downloadUrl(url: string): Promise<Blob> {
+  const origin = typeof window === 'undefined' ? 'http://vfm.invalid' : window.location.origin;
+  let parsed: URL;
+  try {
+    parsed = new URL(url, origin);
+  } catch {
+    throw new ApiError('VALIDATION_ERROR', 'Potpisani URL nije valjan.', 400);
+  }
+
+  if (parsed.origin !== origin || !parsed.pathname.startsWith(`${API_BASE}/`)) {
+    throw new ApiError('VALIDATION_ERROR', 'Potpisani URL mora pripadati ovom API-ju.', 400);
+  }
+
+  const path = `${parsed.pathname.slice(API_BASE.length)}${parsed.search}`;
+  return requestBlob(path);
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
+  downloadUrl,
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) }),
   upload: <T>(path: string, formData: FormData) => request<T>(path, { method: 'POST', body: formData }),

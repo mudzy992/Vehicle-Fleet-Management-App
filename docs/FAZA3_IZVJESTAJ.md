@@ -36,7 +36,7 @@ Ne koristiti produkcijski URL: test obavlja probne upise, iako ih završava roll
 
 P14 je i dalje otvoren: `docs/09-TEST_PLAN.md` traži OpenAPI-wide provjeru dozvola, uključujući sadržaj priloga i potpisane URL-ove, a pronađen je samo pending označeni E2E zadatak. Ovaj audit nije pokrenuo probu za sve rute i uloge.
 
-Poznato ponašanje priloga: `GET /attachments/:id/url` traži `attachment:view` i provjerava opseg; isporuka preko sesijske rute `.../content` također provjerava opseg. `.../content/:token` je javna bearer ruta: HMAC token s rokom važenja daje pristup bez sesijskog headera. To je navedeno u API kodu/specifikaciji i podržava potpisane URL-ove, ali je u napetosti s doslovnim P14 slučajem „bez permisije → 403 iako URL validan“. Ne mijenjati ovaj ugovor jednostrano: prije zatvaranja P14 treba uskladiti očekivanje (bearer URL koji se izdaje tek nakon autorizacije ili autorizacija korisnika i pri svakom preuzimanju) i dodati regresijske testove.
+Audit je potvrdio razliku prema doslovnom P14 očekivanju: potpisani URL je ranije radio kao javni bearer token bez sesije. Ispravljena je zaštita: izdavanje URL-a i preuzimanje sada traže `attachment:view`; ruta s tokenom više nije javna, ponovo provjerava opseg priloga, a HMAC potpis veže token za ID korisnika i rok važenja. Web klijent preuzima bajtove uz memorijski access token umjesto otvaranja javnog linka. Dodani su regresijski testovi za metapodatke permisije, vezivanje tokena za korisnika i autentifikovano preuzimanje; puna P14 matrica svih OpenAPI ruta i dalje nije izvršena.
 
 Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view`/list endpoint ne smije se smatrati ekvivalentom prava nad konkretnim vozilom, vozačem ili prilogom. P14 treba provjeriti efektivni opseg na svakom endpointu, ne samo prisustvo permission dekoratora.
 
@@ -44,12 +44,14 @@ Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view
 
 - `corepack pnpm --filter @vfm/api exec vitest run --config vitest.integration.config.ts` — prolaz alata; jedan integracijski fajl i oba testa preskočena zbog nedostajućeg `PHASE3_TEST_DATABASE_URL`.
 - `corepack pnpm --filter @vfm/api typecheck` — prolaz.
-- `corepack pnpm --filter @vfm/api test` — prolaz: 57 fajlova, 924 jedinična testa.
+- `corepack pnpm --filter @vfm/api test` — prolaz: 58 fajlova, 925 jediničnih testova.
+- `corepack pnpm --filter @vfm/web test` — prolaz: 23 fajla, 166 testova.
+- API i web `typecheck` — prolaz; ESLint nad izmijenjenim API/web fajlovima — prolaz.
 - Nije pokrenuta živa DB/API provjera. Raniji korisnički izvještaj o uspješnom redeployu i DB/HTTP provjeri ostaje korisnički prijavljen rezultat, ne nezavisna provjera ovog audita.
 
 ## Sljedeći koraci
 
 1. Pokrenuti novi integracijski test na izolovanoj testnoj bazi i dopuniti P13 testovima pragova raspoređivanja, DST-a i historije servisa/guma.
-2. Izvesti P14 matricu svih OpenAPI ruta × uloge/opseg, uz posebne slučajeve za priloge, potpisane URL-ove i PII; zatvoriti ugovornu nejasnoću iznad prije implementacijske promjene.
+2. Izvesti P14 matricu svih OpenAPI ruta × uloge/opseg, uz posebne slučajeve za priloge, potpisane URL-ove i PII; potvrditi da nedozvoljene uloge dobijaju 401/403 na svakoj ruti.
 3. Završiti audit web tokova prema Fazi 3 i dopuniti regresijske testove za potvrđene nedostatke.
 4. Tek nakon dokaza ažurirati DoD u `docs/PLAN_IMPLEMENTACIJE.md`; do tada Faza 3 ostaje otvorena.

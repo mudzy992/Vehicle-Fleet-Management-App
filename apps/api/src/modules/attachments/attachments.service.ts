@@ -15,8 +15,9 @@
  *    upload istog sadržaja za istog vlasnika vraća **postojeći** zapis umjesto
  *    duplikata (mobilna aplikacija smije ponoviti zahtjev).
  * 5. **Potpisani URL.** `GET /url` daje token `exp.sig` (HMAC-SHA256 nad
- *    `id|exp`, tajna `FILE_SIGNING_SECRET`); ruta za sadržaj s tokenom ne traži
- *    sesiju, ali **traži** važeći potpis. Svaki pristup se audituje.
+ *    `id|actorId|exp`, tajna `FILE_SIGNING_SECRET`); ruta za sadržaj traži
+ *    sesiju, `attachment:view`, opseg nad prilogom i token vezan za isti korisnik.
+ *    Svaki pristup se audituje.
  * 6. **Fajl se nikad ne servira s diska direktno** (B-15) — samo kroz servis,
  *    uz provjeru da `storageKey` ne izlazi iz korijena storage-a.
  */
@@ -327,10 +328,10 @@ export class AttachmentsService {
 
   // --- Potpisani URL ---------------------------------------------------------
 
-  /** Token `exp.sig` — `exp` u sekundama, `sig` = HMAC-SHA256(`id|exp`). */
-  signUrl(id: string, now: Date = new Date()): AttachmentSignedUrl {
+  /** Token `exp.sig` — `exp` u sekundama, `sig` = HMAC-SHA256(`id|actorId|exp`). */
+  signUrl(id: string, actorId: string, now: Date = new Date()): AttachmentSignedUrl {
     const exp = Math.floor(now.getTime() / 1000) + this.options.signedUrlTtlSeconds;
-    const sig = this.signature(id, exp);
+    const sig = this.signature(id, actorId, exp);
     const token = `${exp}.${sig}`;
     return {
       url: `${this.options.publicPrefix}/attachments/${id}/content/${token}`,
@@ -340,14 +341,16 @@ export class AttachmentsService {
   }
 
   /** Provjera tokena (bez bacanja — pozivalac odlučuje šta dalje). */
-  verifySignedToken(id: string, token: string, now: Date = new Date()): boolean {
-    const [expPart, sigPart] = token.split('.');
+  verifySignedToken(id: string, token: string, actorId: string, now: Date = new Date()): boolean {
+    const parts = token.split('.');
+    if (parts.length !== 2) return false;
+    const [expPart, sigPart] = parts;
     if (!expPart || !sigPart || !/^\d+$/u.test(expPart)) return false;
 
     const exp = Number(expPart);
     if (!Number.isFinite(exp) || exp * 1000 <= now.getTime()) return false;
 
-    const expected = Buffer.from(this.signature(id, exp));
+    const expected = Buffer.from(this.signature(id, actorId, exp));
     const actual = Buffer.from(sigPart);
     return expected.length === actual.length && timingSafeEqual(expected, actual);
   }
@@ -446,8 +449,10 @@ export class AttachmentsService {
     );
   }
 
-  private signature(id: string, exp: number): string {
-    return createHmac('sha256', this.options.signingSecret).update(`${id}|${exp}`).digest('base64url');
+  private signature(id: string, actorId: string, exp: number): string {
+    return createHmac('sha256', this.options.signingSecret)
+      .update(`${id}|${actorId}|${exp}`)
+      .digest('base64url');
   }
 
   private absolutePath(storageKey: string): string {

@@ -9,13 +9,13 @@
  * | `GET /attachments/:id`                   | `attachment:view`   | —              |
  * | `GET /attachments/:id/url`               | `attachment:view`   | —              |
  * | `GET /attachments/:id/content`           | `attachment:view`   | FILE_ACCESS    |
- * | `GET /attachments/:id/content/:token`    | potpis (HMAC)       | FILE_ACCESS    |
+ * | `GET /attachments/:id/content/:token`    | `attachment:view`  | FILE_ACCESS     |
  * | `POST /attachments/:id/replace`          | `attachment:upload` | UPDATE         |
  * | `DELETE /attachments/:id`                | `attachment:delete` | DELETE         |
  *
- * Potpisana ruta (`/content/:token`) je jedina **javna** ruta modula: token nosi
- * `exp` i HMAC potpis, pa `<img>`/preuzimanje rade bez `Authorization` headera
- * (mobilna i web galerija). Sve ostalo ide kroz sesiju i permisije.
+ * Ruta sa potpisom i dalje traži sesiju i `attachment:view`. HMAC veže token za
+ * korisnika koji ga je izdao, pa kopirani URL ne daje pristup drugom nalogu.
+ * Sadržaj se preuzima preko API klijenta koji šalje access token.
  */
 import {
   Body,
@@ -42,7 +42,7 @@ import type {
 import { attachmentListQuerySchema, completeAttachmentSchema, uuidSchema } from '@vfm/shared/schemas';
 import { MAX_FILE_SIZE_BYTES } from '@vfm/shared';
 import { AuditContext } from '../../common/audit/audit.types.js';
-import { Audit, CurrentUser, Public, RequirePermissions } from '../../common/decorators/auth.decorators.js';
+import { Audit, CurrentUser, RequirePermissions } from '../../common/decorators/auth.decorators.js';
 import { VfmException } from '../../common/errors/vfm-error.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import type { AuthenticatedUser, VfmRequest } from '../../common/types/authenticated-user.js';
@@ -112,21 +112,22 @@ export class AttachmentsController {
   ): Promise<AttachmentSignedUrl> {
     // Postojanje i opseg se provjeravaju prije potpisa — URL se ne dijeli slijepo.
     await this.attachments.get(id, actor);
-    return this.attachments.signUrl(id);
+    return this.attachments.signUrl(id, actor.id);
   }
 
   @Get(':id/content/:token')
-  @Public()
+  @RequirePermissions('attachment:view')
   @Audit('FILE_ACCESS', { severity: 'INFO', resource: 'Attachment' })
   async signedContent(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Param('token') token: string,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<StreamableFile> {
-    if (!this.attachments.verifySignedToken(id, token)) {
-      throw new VfmException('UNAUTHENTICATED', 'Potpisani URL je istekao ili nije valjan.');
+    if (!this.attachments.verifySignedToken(id, token, actor.id)) {
+      throw new VfmException('UNAUTHENTICATED', 'Potpisani URL je istekao ili nije valjan za ovu sesiju.');
     }
-    return this.send(id, request);
+    return this.send(id, request, actor);
   }
 
   @Get(':id/content')

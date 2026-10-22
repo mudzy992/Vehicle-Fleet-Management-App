@@ -690,15 +690,22 @@ function AttachmentsTab({ vehicleId }: { vehicleId: string }) {
                 <TD align="right">{(item.sizeBytes / 1024).toFixed(0)} kB</TD>
                 <TD>{formatDateTime(item.createdAt)}</TD>
                 <TD>
-                  {/* Preuzimanje ide kroz **potpisani URL** — `<a href>` ne nosi
-                      access token iz memorije, a `/content` ga traži. */}
+                  {/* Potpisani URL je vezan za korisnika i preuzima se uz access token. */}
                   <button
                     type="button"
                     className="text-sm hover:underline"
                     onClick={async () => {
                       try {
                         const signed = await api.get<{ url: string }>(`/attachments/${item.id}/url`);
-                        window.open(signed.url, '_blank', 'noopener');
+                        const blob = await api.downloadUrl(signed.url);
+                        const objectUrl = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = objectUrl;
+                        link.download = item.fileName;
+                        document.body.append(link);
+                        link.click();
+                        link.remove();
+                        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
                       } catch (cause) {
                         setError(cause instanceof ApiError ? cause.message : 'Preuzimanje nije uspjelo.');
                       }

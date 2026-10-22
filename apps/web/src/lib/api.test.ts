@@ -103,6 +103,22 @@ describe('api klijent', () => {
     await expect(refreshAccessToken()).resolves.toBe(false);
   });
 
+  it('preuzima potpisani sadržaj uz access token i odbija URL drugog origin-a', async () => {
+    setAccessToken('download-token');
+    const payload = { size: 4, type: 'application/pdf' } as Blob;
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, blob: async () => payload }) as Response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const blob = await api.downloadUrl('/api/v1/attachments/a/content/123.sig');
+
+    expect(blob).toBe(payload);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/v1/attachments/a/content/123.sig');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer download-token');
+    await expect(api.downloadUrl('https://attacker.example/file')).rejects.toMatchObject({ status: 400 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('multipart upload ne postavlja ručno Content-Type zaglavlje', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ data: { id: 'attachment-1' } }));
     vi.stubGlobal('fetch', fetchMock);

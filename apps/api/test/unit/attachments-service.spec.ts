@@ -318,19 +318,25 @@ describe('AttachmentsService', () => {
 
   it('potpisani URL: važeći token prolazi, istekao i izmijenjen ne', async () => {
     const uploaded = await svc.upload(file(JPEG), USER);
-    const signed = svc.signUrl(uploaded.id, new Date('2026-10-20T08:00:00.000Z'));
+    const signed = svc.signUrl(uploaded.id, USER.id, new Date('2026-10-20T08:00:00.000Z'));
 
-    expect(svc.verifySignedToken(uploaded.id, signed.token, new Date('2026-10-20T08:00:30.000Z'))).toBe(true);
-    expect(svc.verifySignedToken(uploaded.id, signed.token, new Date('2026-10-20T08:02:00.000Z'))).toBe(
-      false,
-    );
-    expect(svc.verifySignedToken(uploaded.id, `${signed.token}x`, new Date('2026-10-20T08:00:30.000Z'))).toBe(
-      false,
-    );
+    expect(
+      svc.verifySignedToken(uploaded.id, signed.token, USER.id, new Date('2026-10-20T08:00:30.000Z')),
+    ).toBe(true);
+    expect(
+      svc.verifySignedToken(uploaded.id, signed.token, USER.id, new Date('2026-10-20T08:02:00.000Z')),
+    ).toBe(false);
+    expect(
+      svc.verifySignedToken(uploaded.id, `${signed.token}x`, USER.id, new Date('2026-10-20T08:00:30.000Z')),
+    ).toBe(false);
+    expect(
+      svc.verifySignedToken(uploaded.id, signed.token, OTHER.id, new Date('2026-10-20T08:00:30.000Z')),
+    ).toBe(false);
     expect(
       svc.verifySignedToken(
         '018f0000-0000-7000-8000-000000000009',
         signed.token,
+        USER.id,
         new Date('2026-10-20T08:00:30.000Z'),
       ),
     ).toBe(false);

@@ -393,11 +393,10 @@ nije dio ugovora.
 | POST | `/attachments` (multipart) `Idem` | `attachment:upload` | vraća `{id, sha256, sizeBytes, mimeType}`; magic-byte provjera |
 | POST | `/attachments/complete` | `attachment:upload` | vezuje upload na vlasnika (`ownerType/ownerId/stage/fieldKey`) |
 | GET | `/attachments/:id` | `attachment:view` | metapodaci |
-| GET | `/attachments/:id/content` | `attachment:view` | stream uz provjeru; `Content-Disposition: attachment` |
+| GET | `/attachments/:id/content` | `attachment:view` | stream uz provjeru opsega; `Content-Disposition: attachment`; audit `FILE_ACCESS` |
 | GET | `/attachments?ownerType=&ownerId=&page=` | `attachment:view` | lista priloga jednog zapisa; bez `ALL` opsega samo vlastiti upload-i |
-| GET | `/attachments/:id/url` | `attachment:view` | potpisani URL (TTL `FILE_SIGNED_URL_TTL_SECONDS`) |
-| GET | `/attachments/:id/content` | `attachment:view` | stream; `Content-Disposition: attachment`; audit `FILE_ACCESS` |
-| GET | `/attachments/:id/content/:token` | **potpis (HMAC)** | jedina javna ruta modula — `<img>` bez `Authorization`; token = `exp.sig` nad `id|exp` |
+| GET | `/attachments/:id/url` | `attachment:view` | HMAC potpisani URL (TTL `FILE_SIGNED_URL_TTL_SECONDS`), vezan za korisnika |
+| GET | `/attachments/:id/content/:token` | `attachment:view` | stream uz sesiju, provjeru opsega i korisnički vezan potpis; audit `FILE_ACCESS` |
 | POST | `/attachments/:id/replace` | `attachment:upload` | nova verzija (stara ostaje u historiji, soft-delete) |
 | DELETE | `/attachments/:id` | `attachment:delete` | soft delete (fajl ostaje na disku) |
 
