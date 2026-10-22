@@ -41,7 +41,7 @@
 | Kanonski JSON + `contentHash` (SHA-256) | `src/canonical.ts` | isti hash u seed-u, API-ju i `ETag`-u |
 | Sigurni izrazi (lexer → parser → evaluator) | `src/expression/` | bez `eval`; whitelist funkcija; limiti dubine/dužine; `COMPUTED_TIMEOUT` |
 | Uslovi vidljivosti (`visibleWhen`) | `src/conditions.ts` | isti kod u validaciji, rendereru i pregledu |
-| **P11** validacija zapisa prema verziji | `src/record-validation.ts` | 20 testova; trim, tipovi, opcije, prilozi, `COMPUTED`, normalizacija |
+| **P11** validacija zapisa prema verziji | `src/record-validation.ts` | 23 testova; trim, tipovi, opcije, prilozi, `COMPUTED`, normalizacija |
 | Provjere pri objavi + strukturni diff | `src/publish-checks.ts`, `src/diff.ts` | 10 kodova problema (`CHANGE_NOTE_REQUIRED` … `NORMALIZED_FIELD_REMOVED`) |
 
 ### 2.2 `@vfm/form-renderer` (headless, jedan model za web i mobilnu)
@@ -72,14 +72,14 @@ Plan (`PLAN_IMPLEMENTACIJE.md` §Faza 2, tačka 8) predviđa i `POST .../version
 §2.9 ga **ne definiše**, pa nije implementiran — pregled obavlja web Builder (isti render model) uz
 `POST .../validate` za serversku validaciju.
 
-17 unit testova (`test/unit/form-schemas-service.spec.ts`), fake Prisma bez baze.
+20 unit testova (`test/unit/form-schemas-service.spec.ts`), fake Prisma bez baze.
 
 ### 2.4 API — `/form-migrations` (P12)
 
 `GET ?formSchemaId=` · `POST` · `GET /:id` · `POST /:id/preview` · `POST /:id/apply` · `POST /:id/rollback`.
 Izvor i cilj su **verzije iste forme**, izvor ≠ `DRAFT`, cilj `PUBLISHED`; preview je čist (ne piše),
 `apply` mijenja zapise u serijama po 500, neuspjeh pojedinačnog zapisa → `SKIPPED` (ne ruši posao),
-`rollback` vraća prethodno stanje. 9 testova.
+`rollback` vraća prethodno stanje. 13 testova.
 
 ### 2.5 Seed (chunk G)
 
@@ -112,10 +112,10 @@ Jedna ruta `/forme`, tri panela: katalog → verzije → editor. Detalji u [`06`
 
 | # | Kriterij | Dokaz | Status |
 |---|---|---|---|
-| **P9** | Forma: kreirati, validirati, preview, objaviti | `form-schemas-service.spec.ts` (17) — `create` → `DRAFT`, `validate` → P11, `publish` bez bilješke → 422, s bilješkom → `PUBLISHED` + prethodna `RETIRED`; web pregled kroz `buildRenderModel` | ✅ unit + UI |
+| **P9** | Forma: kreirati, validirati, preview, objaviti | `form-schemas-service.spec.ts` (20) — `create` → `DRAFT`, `validate` → P11, `publish` bez bilješke → 422, s bilješkom → `PUBLISHED` + prethodna `RETIRED`; web pregled kroz `buildRenderModel` | ✅ unit + UI |
 | **P10** | Imutabilnost objavljene verzije; zapis renderuje **svoju** verziju | `PUT`/`DELETE` nad `PUBLISHED` → `409 FORM_VERSION_IMMUTABLE`; **DB trigger** `trg_form_version_immutable` u `2_manual`; `buildRenderModel({ formSchemaVersionId, version })` nosi verziju zapisa; `GET /:id/versions/:vid` + `ETag` | ✅ unit + renderer + SQL (trigger nije primijenjen u sandboxu) |
-| **P11** | Validacija zapisa prema verziji | `record-validation.spec.ts` (20) + `POST .../validate`; nepoznato/skriveno polje, obavezno, tipovi, opcije, prilozi, `COMPUTED`, normalizacija | ✅ unit |
-| **P12** | Migracija zapisa između verzija | `form-migrations-service.spec.ts` (9) — preview bez pisanja, `apply` u serijama 500, `SKIPPED`, `rollback` | ✅ unit |
+| **P11** | Validacija zapisa prema verziji | `record-validation.spec.ts` (23) + resolver unit test; nepoznato/skriveno polje, obavezno, tipovi, static/dynamic opcije, prilozi, `COMPUTED`, normalizacija | ⚠️ lokalno unit; permission scope/live HTTP preostaju |
+| **P12** | Migracija zapisa između verzija | `form-migrations-service.spec.ts` (13) — preview bez pisanja, `apply` u serijama 500, `SKIPPED`, `rollback` | ✅ unit |
 | **DoD: isti render na web i mobilnom** | jedan `@vfm/form-renderer` model; web pregled ga koristi; mobilna aplikacija **ne postoji** | `render-model.spec.ts` (13) | ⚠️ djelimično — vidi §6 |
 
 Integration/E2E varijante (P9–P12 preko HTTP-a na živoj bazi) ostaju planirane: traže PostgreSQL i
@@ -222,8 +222,8 @@ Ovaj odjeljak je aktuelan za aktivnu granu `arena/d46d9ae6-vehicle-fleet-managem
 |---|---|---|
 | P9 — kreiranje, validacija, preview i publish bez izmjene koda | API unit testovi `FormSchemasService`; Builder create/edit/preview/publish model/UI; publish bilješka je obavezna. Namjenski HTTP preview endpoint nije definisan u `docs/07` niti implementiran; pregled je UI/headless model. | **Djelimično pokriven**: unit + UI postoje, ali nema live HTTP/E2E toka; vidi F2-O1. |
 | P10 — zapis otvara historijsku verziju | Zapis čuva `formSchemaVersionId`; web vozila/gume/zadaci i mobilna task forma učitavaju eksplicitni snapshot ID i prosljeđuju verziju rendereru. API version read vraća konkretnu verziju. | **Implementacija postoji**; testovi unit/UI, bez live DB/E2E potvrde immutable triggera i historijskog zapisa. |
-| P11 — server odbija neispravan payload | `validateRecord` je zajednički pozvan iz API zapisnih modula; meta-shema, tipovi, required, nepoznata/skrivena polja, static options i computed su pokriveni testovima; ciljane schema/migration suites. | **Djelimično pokriven**: dinamički `LIST`/`QUERY` članstvo nije potvrđeno server-side (F2-O1). |
-| P12 — preview, eksplicitni apply, audit/snapshot i rollback | Migration service unit testovi; dodatni testovi za normalized snapshot restore, zabranu apply bez `PREVIEW`, konkurentni apply claim i rollback djelimične/potpune serije. | **Lokalno unit-pokriven**; concurrency/trigger/native DB semantika nije potvrđena na PostgreSQL-u. |
+| P11 — server odbija neispravan payload | `validateRecord` je zajednički pozvan iz API zapisnih modula; meta-shema, tipovi, required, nepoznata/skrivena polja, static options i computed su pokriveni testovima; ciljane schema/migration suites. | **Djelimično pokriven**: lokalni unit pokriva fail-closed ponašanje i resolver; korisnički permission scope, živa PostgreSQL semantika i HTTP/E2E nisu potvrđeni. |
+| P12 — preview, eksplicitni apply, audit/snapshot i rollback | Migration service unit testovi; normalized snapshot restore, apply samo nakon `PREVIEW`, concurrent worker claim, optimistic CAS zapisa, `FAILED` recovery rollback i djelimični/potpuni rollback. | **Lokalno unit-pokriven**; PostgreSQL isolation/trigger/native DB semantika nije potvrđena uživo. |
 | Bez proizvoljnog JavaScripta | Lexer/parser/AST evaluator bez `eval`/`Function`; depth/length/timeout limiti; test suite. | **Lokalno pokriven**; build warnings su navedeni u §9.3. |
 | Isti renderer za web/mobile | Jedan `@vfm/form-renderer` model; web builder i zapisne ekrane ga koriste; `apps/mobile` ima dinamički task form koji koristi isti model. | **Djelimično**: mobile pokriva task flow, nema adapterskih snapshot/E2E testova ni dokaza pariteta svih 17 tipova. |
 
@@ -237,6 +237,8 @@ Ovaj odjeljak je aktuelan za aktivnu granu `arena/d46d9ae6-vehicle-fleet-managem
 | Paralelni publish mogao je ostaviti više `PUBLISHED` verzija; U-16 konflikt je samo logovan. | CAS nad `currentPublishedVersionId`; `syncFieldKeys` sada je unutar iste transakcije i tipni konflikt odbija publish (seed takođe odbija U-16 konflikt). | Test paralelnog publish i test U-16 conflict; fake transakcija, nije live DB concurrency dokaz. |
 | Regex odbacivao je lookaround/backreference, ali nije dovoljno branio složene/ambiguous repeticije i dug tekst. | `safe-regex2@5.1.2` + dodatne heuristike za ponavljane alternacije/wildcarde; pattern ulaz limitiran na 4096 znakova. | Regresijski pattern/input limit testovi prolaze; i dalje je to ograničeni regex subset, ne matematički dokaz odsustva svih DoS obrazaca. |
 | `REFERENCE_RECORD.entityType` nije bio zatvoren niti runtime vrijednost upoređena s tipom polja. | Definicija zahtijeva dozvoljeni entity type; payload provjerava whitelist, tip i UUID. | Schema + payload regresijski testovi prolaze. |
+| Migracija je mogla prepisati izmjenu koju je korisnik napravio nakon što je batch pročitao zapis. | Batch update sada radi CAS po `id`, `version` i `formSchemaVersionId`, te inkrementira `version`; promijenjeni zapisi dobijaju `SKIPPED` i traže novi preview. | Regresijski test simulira konkurentnu izmjenu; zapis ostaje netaknut i migration item se preskače. |
+| Greška tokom batch apply-a ostavljala je job u `RUNNING`, pa rollback nije bio dozvoljen. | Uhvatanje greške označava job `FAILED`; rollback prihvata `FAILED` job i može vratiti već primijenjene stavke. | Unit test simulira DB grešku i potvrđuje `FAILED` stanje. |
 | `CURRENCY`/`MONEY` su mogli prihvatiti whitelistan-neugrađenu ISO valutu; INTEGER/MONEY nisu ograničili cijeli broj na `Number.isSafeInteger`. | Ograničenje na `FORM_CURRENCIES` (`BAM`, `EUR`), konfiguraciju valute provjerava meta-shema, iznos je safe integer. | Testovi JPY odbijanja i overflow cijelog broja prolaze. |
 | Evaluator komentar/timeout poruka govorili su 10 ms, a runtime/docs 100 ms. | Komentar i poruka usklađeni na 100 ms. | Typecheck/test/build prolaze; nema posebnog timeout-message testa. |
 
@@ -244,24 +246,20 @@ Ovaj odjeljak je aktuelan za aktivnu granu `arena/d46d9ae6-vehicle-fleet-managem
 
 | Komanda / gate | Rezultat | Ograničenje |
 |---|---|---|
-| `pnpm --filter @vfm/form-engine exec vitest run` | **10 fajlova, 150/150 testova** | Unit only. |
-| API targeted: `form-schemas-service` + `form-migrations-service` | **2 fajla, 31/31** (20 + 11) | Fake Prisma; ne dokazuje PostgreSQL transakcije/concurrency. |
-| `pnpm test` (Turbo) | **11/11 taskova**; API 920, shared 250, form-engine 150, renderer 13, web 163; ukupno **1496** testova | Cijeli lokalni unit suite; nije HTTP/DB/Redis/E2E. |
-| `pnpm lint` | **7/7 taskova uspješno** | Nije production runtime test. |
-| `pnpm typecheck` | **11/11 taskova uspješno** | Prisma generate task bio Turbo cache hit. |
-| `pnpm build` | **7/7 taskova uspješno** | Build izdaje postojeće upozorenje: `node:crypto` externalized u browser bundle i web JS chunk ~917 kB. Runtime posljedica nije utvrđena. |
+| `pnpm --filter @vfm/form-engine exec vitest run` | **10 fajlova, 151/151 testova** | Unit only. |
+| API targeted: `form-schemas-service` + `form-migrations-service` + `form-option-values` | **3 fajla, 34/34** (20 + 13 + 1) | Fake Prisma; ne dokazuje PostgreSQL transakcije/concurrency. |
+| Turbo `lint typecheck test build` | **25/25 taskova**; API 923, shared 250, form-engine 151, renderer 13, web 163; ukupno **1500** testova | Cijeli lokalni gate; nije HTTP/DB/Redis/E2E. |
 | `git diff --check` | Prošao | Samo whitespace/diff provjera. |
 
 Komande su izvršene uz `PRISMA_SCHEMA_ENGINE_BINARY=/bin/true` sandbox workaround i Turbo lokalni pnpm shim. Ovaj workaround nije Prisma native engine, ne dokazuje svježi engine download/generate, migraciju niti rad protiv žive baze. Coverage u §1 je historijski rezultat baznog audita; **coverage nije ponovo pokrenut** u ovoj reviziji.
 
 ### 9.4 Otvoreni nalazi / odluke za završetak Faze 2
 
-- **F2-O1 — dynamic options (P1 za integritet, blokira puni P11/DoD):** engine server-side provjerava vrijednosti `STATIC`, ali nije dobio resolver/context za `LIST` i `QUERY`. Web API options ruta prima `listCode`; mobile task UI razrješava nekoliko izvora preko svojih API metoda, ali klijent nije autoritet. Nevalidan/inaktivan ID ili vrijednost izvan aktuelnog šifarnika može se poslati direktno API-ju i biti sačuvana kao forma vrijednost. Potrebno je server-side resolver/allowlist za `ACTIVE_VEHICLES`, `ACTIVE_DRIVERS`, `OPEN_TASK_TYPES`, `WORKSHOPS`, `TIRE_SETS_BY_VEHICLE` i `LIST`, te integracija u sve `validateRecord` write call-siteove uz testove.
+- **F2-O1 — dinamičke opcije (P1 integritet):** implementiran je fiksni Prisma resolver za `ACTIVE_VEHICLES`, `ACTIVE_DRIVERS`, `OPEN_TASK_TYPES`, `WORKSHOPS`, `TIRE_SETS_BY_VEHICLE`, `LIST` i `REFERENCE_RECORD`; resolver se koristi u form-record write helperu, vozilima/vozačima, task formama, P11 preview i migracijskom preview/apply. Engine odbija odsutan server allowlist (`DYNAMIC_OPTIONS_UNAVAILABLE`) i provjerava membership. Regresijski testovi pokrivaju engine, query/list mapiranje i migracijski CAS. Preostalo: permission/scope filtriranje referentnih kandidata (resolver trenutno provjerava aktivnost/deletedAt, ali ne koristi korisnički permission context), kao i live PostgreSQL/HTTP provjera. Web prikaz dinamičkih opcija treba zasebno potvrditi; klijentska lista nije autoritet za P11.
 - **F2-O2 — web dynamic options:** renderer/builder pregledi ne dobijaju generički server resolver za QUERY/LIST; ne tvrditi da su svi definisani izvori podržani samo zato što schema whitelist postoji. Mobile task form ima ograničenu client-side pokrivenost.
 - **F2-O3 — formalni P9 preview endpoint:** UI preview postoji i koristi headless renderer, ali zasebni `POST .../versions/:vid/preview` iz plana tačke 8 nije implementiran. Plan/API specifikacija moraju usaglasiti da li je UI preview dovoljan ili endpoint obavezan.
-- **F2-O4 — security/concurrency/live gates:** PostgreSQL migracije/trigger, API HTTP flows, Redis integracija i browser/mobile E2E nisu pokrenuti; sve su i dalje release gateovi. Apply koji prekine proces nakon claim-a može ostaviti job u `RUNNING`; nema potvrđenog resume/recovery toka. `PRISMA_SCHEMA_ENGINE_BINARY=/bin/true` ne smije se tretirati kao dokaz ovih gateova.
-- **F2-O5 — konkurentni zapis tokom apply:** claim štiti od drugog migracijskog worker-a, ali zapis se čita prije batch transakcije i update trenutno cilja ID bez optimistic concurrency provjere nad izmijenjenim zapisom. Potrebna je live concurrency odluka/test ili CAS po verziji entiteta prije produkcijske migracije.
+- **F2-O4 — security/concurrency/live gates:** PostgreSQL migracije/trigger, API HTTP flows, Redis integracija i browser/mobile E2E nisu pokrenuti; ostaju release gateovi. Batch apply sada štiti svaki zapis CAS-om; uhvaćena greška označava job `FAILED` i omogućava rollback već primijenjenih stavki. Abrupt process termination može i dalje ostaviti `RUNNING` job bez lease/reaper recovery mehanizma. `PRISMA_SCHEMA_ENGINE_BINARY=/bin/true` ne smije se tretirati kao dokaz ovih gateova.
 
 ### 9.5 Aktuelni zaključak
 
-Kodna i lokalna test-kapija su zelene, a potvrđeni bugovi iz §9.2 imaju regresijske testove. **Faza 2 nije proglašena DoD-complete/release-ready** dok F2-O1 dinamički options server validation, F2-O3 odluka/API i F2-O4 live integration/E2E gateovi nisu zatvoreni ili eksplicitno prihvaćeni kao odstupanje od DoD.
+Kodna i lokalna test-kapija su zelene, a potvrđeni bugovi iz §9.2 imaju regresijske testove. **Faza 2 nije proglašena DoD-complete/release-ready** dok F2-O1 permission scope i live verification, F2-O3 odluka/API i F2-O4 live integration/E2E gateovi nisu zatvoreni ili eksplicitno prihvaćeni kao odstupanje od DoD.

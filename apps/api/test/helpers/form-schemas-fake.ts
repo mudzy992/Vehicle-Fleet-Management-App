@@ -77,6 +77,10 @@ interface RecordDelegate {
     skip?: number;
   }) => Promise<FakeRecordRow[]>;
   update: (args: { where: { id: string }; data: Record<string, unknown> }) => Promise<FakeRecordRow>;
+  updateMany: (args: {
+    where: Record<string, unknown>;
+    data: Record<string, unknown>;
+  }) => Promise<{ count: number }>;
 }
 
 export interface FakeMigrationJobRow {
@@ -142,9 +146,11 @@ export class FakeFormPrisma {
   private readonly recordCounts = new Map<string, number>();
 
   /** Ubacuje zapis (npr. `task`) u store. */
+  beforeNextRecordUpdateMany: (() => void) | null = null;
+
   addRecord(model: string, row: FakeRecordRow): void {
     const rows = this.records.get(model) ?? [];
-    rows.push(row);
+    rows.push({ version: 0, ...row });
     this.records.set(model, rows);
   }
 
@@ -407,6 +413,24 @@ export class FakeFormPrisma {
           })
           .sort((a, b) => a.id.localeCompare(b.id))
           .map((row) => ({ ...row }));
+      },
+
+      updateMany: async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        this.beforeNextRecordUpdateMany?.();
+        this.beforeNextRecordUpdateMany = null;
+        const rows = this.records.get(model) ?? [];
+        const row = rows.find((candidate) =>
+          Object.entries(args.where).every(([key, expected]) => candidate[key] === expected),
+        );
+        if (!row) return { count: 0 };
+        const data = { ...args.data };
+        const version = data['version'];
+        if (typeof version === 'object' && version !== null && 'increment' in version) {
+          data['version'] =
+            Number(row['version'] ?? 0) + Number((version as { increment: unknown }).increment);
+        }
+        Object.assign(row, data);
+        return { count: 1 };
       },
 
       update: async (args) => {

@@ -125,6 +125,45 @@ describe('validateRecord — odbijanja (§9 tačka 3)', () => {
     expect(result.errors).toEqual([{ key: 'photosAfter', code: 'REQUIRED', message: 'Polje je obavezno.' }]);
   });
 
+  it('dinamičke opcije se odbijaju bez server rezolucije i provjeravaju po membership-u', () => {
+    const dynamicDefinition = definitionOf({
+      $schema: 'vfm-form/1',
+      meta: { title: 'Izbor vozila', subject: 'TASK' },
+      sections: [
+        {
+          key: 'osnovno',
+          title: 'Osnovno',
+          order: 1,
+          fields: [
+            {
+              key: 'vozilo',
+              type: 'DROPDOWN',
+              label: 'Vozilo',
+              order: 1,
+              optionsSource: { kind: 'QUERY', queryId: 'ACTIVE_VEHICLES' },
+            },
+          ],
+        },
+      ],
+    });
+    const selected = '018f0000-0000-7000-8000-0000000000a1';
+    const base = {
+      version: version({ definition: dynamicDefinition }),
+      values: { vozilo: selected },
+      today: TODAY,
+    };
+
+    expect(validateRecord(base).errors.map((error) => error.code)).toContain('DYNAMIC_OPTIONS_UNAVAILABLE');
+    expect(validateRecord({ ...base, optionValues: new Map([['vozilo', new Set([selected])]]) }).ok).toBe(
+      true,
+    );
+    expect(
+      validateRecord({ ...base, optionValues: new Map([['vozilo', new Set(['other'])]]) }).errors.map(
+        (error) => error.code,
+      ),
+    ).toContain('OPTION');
+  });
+
   it('tip, min/max i opcije', () => {
     expect(codes({ ...VALID_WASH, washDurationMin: '30' })).toEqual(['TYPE']);
     expect(codes({ ...VALID_WASH, washDurationMin: 0 })).toEqual(['MIN']);

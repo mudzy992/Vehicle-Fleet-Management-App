@@ -21,6 +21,8 @@ import {
 } from '@vfm/form-engine';
 import type { ApiErrorDetail } from '@vfm/shared';
 import { VfmException } from './errors/vfm-error.js';
+import type { PrismaService } from '../prisma/prisma.service.js';
+import { resolveFormOptionValues } from './form-option-values.js';
 
 export function detail(path: string, message: string): ApiErrorDetail {
   return { path: [path], message };
@@ -120,7 +122,8 @@ export function parseStoredDefinition(definition: unknown): FormDefinition {
  *
  * @returns `values` (ono što ide u `formData`) i `normalized` (kolone tabele).
  */
-export function validateRecordValues(args: {
+export async function validateRecordValues(args: {
+  prisma: PrismaService;
   subject: string;
   definition: FormDefinition;
   versionId: string;
@@ -128,7 +131,7 @@ export function validateRecordValues(args: {
   status: 'DRAFT' | 'PUBLISHED' | 'RETIRED';
   values: Record<string, unknown>;
   isNew: boolean;
-}): { values: Record<string, unknown>; normalized: Record<string, unknown> } {
+}): Promise<{ values: Record<string, unknown>; normalized: Record<string, unknown> }> {
   const result = validateRecord({
     version: {
       id: args.versionId,
@@ -139,6 +142,7 @@ export function validateRecordValues(args: {
     values: args.values,
     isNew: args.isNew,
     today: toLocalDateString(new Date()),
+    optionValues: await resolveFormOptionValues(args.prisma, args.definition),
   });
 
   if (result.versionError) {

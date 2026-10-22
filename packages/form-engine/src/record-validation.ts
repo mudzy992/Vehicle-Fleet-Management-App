@@ -43,6 +43,7 @@ export const RECORD_ERROR_CODES = [
   'PRECISION',
   'STEP',
   'OPTION',
+  'DYNAMIC_OPTIONS_UNAVAILABLE',
   'MIN_SELECT',
   'MAX_SELECT',
   'DUPLICATE_OPTION',
@@ -102,6 +103,8 @@ export interface ValidateRecordOptions {
   readonly today?: string;
   /** Poznati prilozi (id → mime/veličina); bez mape se prisustvo ne provjerava. */
   readonly attachments?: ReadonlyMap<string, AttachmentFacts>;
+  /** Trenutne vrijednosti iz dinamičkih LIST/QUERY/REFERENCE izvora (server-side). */
+  readonly optionValues?: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
 export interface RecordValidationResult {
@@ -174,6 +177,19 @@ function staticOptionValues(field: FieldDefinition): Set<string> | null {
   const source = field.optionsSource;
   if (!source || source.kind !== 'STATIC') return null;
   return new Set(source.items.map((item) => item.value));
+}
+
+function dynamicOptionValues(
+  ctx: Ctx,
+  field: FieldDefinition,
+  options: ValidateRecordOptions,
+): ReadonlySet<string> | null {
+  const source = field.optionsSource;
+  if (!source || source.kind === 'STATIC') return null;
+  const resolved = options.optionValues?.get(field.key);
+  if (resolved) return resolved;
+  fail(ctx, field.key, 'DYNAMIC_OPTIONS_UNAVAILABLE', 'Dinamički izvor opcija nije provjeren na serveru.');
+  return new Set();
 }
 
 function decimalPlaces(value: number): number {
@@ -356,7 +372,7 @@ function checkFieldValue(
         return undefined;
       }
       const text = checkText(ctx, field, key, value);
-      const allowed = staticOptionValues(field);
+      const allowed = staticOptionValues(field) ?? dynamicOptionValues(ctx, field, options);
       if (allowed && !allowed.has(text)) {
         fail(ctx, key, 'OPTION', 'Vrijednost nije među ponuđenim opcijama.');
       }
@@ -435,7 +451,7 @@ function checkFieldValue(
       if (maxSelect !== undefined && items.length > maxSelect) {
         fail(ctx, key, 'MAX_SELECT', `Odaberi najviše ${maxSelect}.`);
       }
-      const allowed = staticOptionValues(field);
+      const allowed = staticOptionValues(field) ?? dynamicOptionValues(ctx, field, options);
       if (allowed) {
         for (const item of items) {
           if (!allowed.has(item)) fail(ctx, key, 'OPTION', `Opcija "${item}" nije dozvoljena.`);
@@ -451,6 +467,14 @@ function checkFieldValue(
       if (typeof value !== 'string' || !UUID_PATTERN.test(value)) {
         fail(ctx, key, 'TYPE', 'Referenca mora biti UUID.');
         return undefined;
+      }
+      if (field.type === 'REFERENCE_VEHICLE' || field.type === 'REFERENCE_DRIVER') {
+        const allowed = options.optionValues?.get(key);
+        if (!allowed) {
+          fail(ctx, key, 'DYNAMIC_OPTIONS_UNAVAILABLE', 'Referentni zapis nije provjeren na serveru.');
+        } else if (!allowed.has(value)) {
+          fail(ctx, key, 'OPTION', 'Odabrani zapis ne postoji ili nije dostupan.');
+        }
       }
       return value;
     }
@@ -473,6 +497,12 @@ function checkFieldValue(
           `Referenca mora biti { entityType: ${expectedType ?? 'dozvoljeni tip'}, entityId: UUID }.`,
         );
         return undefined;
+      }
+      const allowed = options.optionValues?.get(key);
+      if (!allowed) {
+        fail(ctx, key, 'DYNAMIC_OPTIONS_UNAVAILABLE', 'Referentni zapis nije provjeren na serveru.');
+      } else if (!allowed.has(entityId)) {
+        fail(ctx, key, 'OPTION', 'Odabrani zapis ne postoji ili nije dostupan.');
       }
       return { entityType, entityId };
     }

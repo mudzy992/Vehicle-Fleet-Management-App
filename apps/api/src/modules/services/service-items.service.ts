@@ -87,7 +87,8 @@ export class ServiceItemsService {
             mapping.transform === 'MONEY_TO_FENINZI' ? { amount, currency: 'BAM' } : amount;
         }
       }
-      const validated = validateRecordValues({
+      const validated = await validateRecordValues({
+        prisma: this.prisma,
         subject: 'SERVICE',
         definition: version.definition,
         versionId: version.id,

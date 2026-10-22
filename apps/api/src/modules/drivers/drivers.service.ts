@@ -50,6 +50,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user.js
 import { VfmException } from '../../common/errors/vfm-error.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { toDatabaseDate } from '../../common/dates.js';
+import { resolveFormOptionValues } from '../../common/form-option-values.js';
 
 /** Snapshot za audit (`before`/`after`) — kontroler ga predaje `AuditContext`. */
 export interface DriverMutation<T> {
@@ -251,7 +252,7 @@ export class DriversService {
 
   async create(input: CreateDriverInput, actor?: AuthenticatedUser): Promise<DriverMutation<DriverDetail>> {
     const version = await this.resolveFormVersion(input.formSchemaVersionId);
-    const { values } = this.validateFormData({
+    const { values } = await this.validateFormData({
       definition: version.definition,
       versionId: version.id,
       versionNumber: version.version,
@@ -357,7 +358,7 @@ export class DriversService {
       if (!version) throw new VfmException('NOT_FOUND', 'Verzija forme zapisa više ne postoji.');
 
       const definition = this.parseStored(version.definition);
-      const validated = this.validateFormData({
+      const validated = await this.validateFormData({
         definition,
         versionId: version.id,
         versionNumber: version.version,
@@ -615,14 +616,14 @@ export class DriversService {
    * P11 validacija + mapiranje na kolone. Za vozača whitelist nema kolona, pa
    * svako `normalizedName` mapiranje znači da su se forma i tabela razišle.
    */
-  private validateFormData(args: {
+  private async validateFormData(args: {
     definition: FormDefinition;
     versionId: string;
     versionNumber: number;
     status: 'DRAFT' | 'PUBLISHED' | 'RETIRED';
     values: Record<string, unknown>;
     isNew: boolean;
-  }): { normalized: Record<string, unknown>; values: Record<string, unknown> } {
+  }): Promise<{ normalized: Record<string, unknown>; values: Record<string, unknown> }> {
     const result = validateRecord({
       version: {
         id: args.versionId,
@@ -633,6 +634,7 @@ export class DriversService {
       values: args.values,
       isNew: args.isNew,
       today: toLocalDateString(new Date()),
+      optionValues: await resolveFormOptionValues(this.prisma, args.definition),
     });
 
     if (result.versionError) {

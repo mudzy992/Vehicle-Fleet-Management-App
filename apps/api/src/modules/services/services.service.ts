@@ -138,7 +138,8 @@ export class ServicesService {
       nextServiceDueDate: input.nextServiceDueDate,
       nextServiceDueKm: input.nextServiceDueKm,
     });
-    const validated = validateRecordValues({
+    const validated = await validateRecordValues({
+      prisma: this.prisma,
       subject: 'SERVICE',
       definition: version.definition,
       versionId: version.id,
@@ -320,7 +321,8 @@ export class ServicesService {
         nextServiceDueKm: effective.nextServiceDueKm,
       };
       syncServiceCoreValues(version.definition, values, coreByColumn);
-      const validated = validateRecordValues({
+      const validated = await validateRecordValues({
+        prisma: this.prisma,
         subject: 'SERVICE',
         definition: version.definition,
         versionId: version.id,

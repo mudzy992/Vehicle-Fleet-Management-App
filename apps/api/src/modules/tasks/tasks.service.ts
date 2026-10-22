@@ -55,6 +55,7 @@ import type {
 import { toDatabaseDate } from '../../common/dates.js';
 import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
 import { detail, parseStoredDefinition } from '../../common/form-record-support.js';
+import { resolveFormOptionValues } from '../../common/form-option-values.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { PermissionsService } from '../auth/permissions/permissions.service.js';
@@ -728,7 +729,7 @@ export class TasksService {
           values: input.formData,
           attachmentIds: [],
         });
-        const formData = this.validateDraftFormData({
+        const formData = await this.validateDraftFormData({
           form,
           values: input.formData,
           isNew: true,
@@ -927,12 +928,12 @@ export class TasksService {
           where: { taskTypeId: current.taskTypeId, stage: 'ON_CREATE' },
           select: { fieldKey: true, required: true, stage: true, minPhotos: true },
         });
-        data.formData = this.validateDraftFormData({
+        data.formData = (await this.validateDraftFormData({
           form,
           values: input.formData,
           isNew: false,
           requirements,
-        }) as Prisma.InputJsonObject;
+        })) as Prisma.InputJsonObject;
       }
 
       const changed = await tx.task.updateMany({
@@ -1456,7 +1457,7 @@ export class TasksService {
           },
           select: { fieldKey: true, required: true, stage: true, minPhotos: true },
         });
-        const formData = this.validateDraftFormData({
+        const formData = await this.validateDraftFormData({
           form,
           values: { ...plainRecord(current.formData), ...input.formData },
           isNew: false,
@@ -1635,7 +1636,7 @@ export class TasksService {
         values: mergedFormData,
         attachmentIds: input.attachmentIds,
       });
-      const validated = this.validateCompletionFormData({
+      const validated = await this.validateCompletionFormData({
         form,
         values: mergedFormData,
         requirements,
@@ -2630,14 +2631,14 @@ export class TasksService {
     return boundIds;
   }
 
-  private validateDraftFormData(args: {
+  private async validateDraftFormData(args: {
     form: ResolvedTaskForm;
     values: Record<string, unknown>;
     isNew: boolean;
     requirements: readonly RequirementRow[];
     stages?: readonly string[];
     attachments?: ReadonlyMap<string, AttachmentFacts>;
-  }): Record<string, unknown> {
+  }): Promise<Record<string, unknown>> {
     const result = validateRecord({
       version: {
         id: args.form.formSchemaVersionId,
@@ -2649,6 +2650,7 @@ export class TasksService {
       isNew: args.isNew,
       today: toLocalDateString(new Date()),
       attachments: args.attachments,
+      optionValues: await resolveFormOptionValues(this.prisma, args.form.definition),
     });
 
     if (result.versionError) {
@@ -2683,12 +2685,13 @@ export class TasksService {
    * `ON_CLAIM`, `ON_COMPLETE`). Normalizacija se primjenjuje samo na
    * mjerljive kolone rezultata.
    */
-  private validateCompletionFormData(args: {
+  private async validateCompletionFormData(args: {
     form: ResolvedTaskForm;
     values: Record<string, unknown>;
     requirements: readonly RequirementRow[];
     attachments: ReadonlyMap<string, AttachmentFacts>;
-  }): ValidatedCompletionForm {
+  }): Promise<ValidatedCompletionForm> {
+    const optionValues = await resolveFormOptionValues(this.prisma, args.form.definition);
     let result: ReturnType<typeof validateRecord>;
     try {
       result = validateRecord({
@@ -2702,6 +2705,7 @@ export class TasksService {
         isNew: false,
         today: toLocalDateString(new Date()),
         attachments: args.attachments,
+        optionValues,
       });
     } catch (error) {
       if (error instanceof VfmException) throw error;

@@ -41,6 +41,7 @@ import type {
   RunFormMigrationInput,
 } from '@vfm/shared/schemas';
 import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
+import { resolveFormOptionValues } from '../../common/form-option-values.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 
@@ -83,6 +84,7 @@ interface RecordRow {
   readonly formSchemaId: string;
   readonly formSchemaVersionId: string | null;
   readonly formData: Prisma.JsonValue;
+  readonly version: number;
   readonly createdAt: Date;
   readonly [column: string]: unknown;
 }
@@ -95,6 +97,10 @@ interface RecordDelegate {
     skip?: number;
     orderBy?: Record<string, 'asc' | 'desc'>;
   }) => Promise<RecordRow[]>;
+  updateMany: (args: {
+    where: Record<string, unknown>;
+    data: Record<string, unknown>;
+  }) => Promise<{ count: number }>;
   update: (args: { where: { id: string }; data: Record<string, unknown> }) => Promise<RecordRow>;
 }
 
@@ -196,6 +202,7 @@ export class FormMigrationsService {
     }
 
     const { fromVersion, toVersion, definition } = await this.loadVersionsOrThrow(job);
+    const optionValues = await resolveFormOptionValues(this.prisma, definition);
     const records = await this.loadCandidateRecords(job, fromVersion.id);
 
     const items: MigrationItemPreview[] = [];
@@ -203,7 +210,7 @@ export class FormMigrationsService {
     let failed = 0;
 
     for (const record of records) {
-      const result = this.evaluateRecord(definition, toVersion, record);
+      const result = this.evaluateRecord(definition, toVersion, record, optionValues);
       if (result.errors.length === 0) ok += 1;
       else failed += 1;
 
@@ -259,6 +266,7 @@ export class FormMigrationsService {
     }
 
     const { fromVersion, toVersion, definition } = await this.loadVersionsOrThrow(job);
+    const optionValues = await resolveFormOptionValues(this.prisma, definition);
     const target = MIGRATION_TARGETS[job.targetEntityType as MigrationTargetEntity];
     const records = await this.loadCandidateRecords(job, fromVersion.id);
 
@@ -277,15 +285,75 @@ export class FormMigrationsService {
     let ok = 0;
     let skipped = 0;
 
-    for (let offset = 0; offset < records.length; offset += MIGRATION_BATCH_SIZE) {
-      const batch = records.slice(offset, offset + MIGRATION_BATCH_SIZE);
+    try {
+      for (let offset = 0; offset < records.length; offset += MIGRATION_BATCH_SIZE) {
+        const batch = records.slice(offset, offset + MIGRATION_BATCH_SIZE);
 
-      await this.prisma.$transaction(async (tx) => {
-        for (const record of batch) {
-          const result = this.evaluateRecord(definition, toVersion, record);
+        await this.prisma.$transaction(async (tx) => {
+          for (const record of batch) {
+            const result = this.evaluateRecord(definition, toVersion, record, optionValues);
 
-          if (result.errors.length > 0) {
-            // Neuspjeli zapis ostaje na staroj verziji — nikad se ne gubi podatak.
+            if (result.errors.length > 0) {
+              // Neuspjeli zapis ostaje na staroj verziji — nikad se ne gubi podatak.
+              await tx.formMigrationItem.upsert({
+                where: { jobId_entityId: { jobId: job.id, entityId: record.id } },
+                create: {
+                  id: randomUUID(),
+                  jobId: job.id,
+                  entityId: record.id,
+                  before: asJson(this.snapshot(record, target)),
+                  status: 'SKIPPED',
+                  error: result.errors.map((error) => `${error.key}: ${error.code}`).join('; '),
+                  processedAt: new Date(),
+                },
+                update: {
+                  status: 'SKIPPED',
+                  error: result.errors.map((error) => `${error.key}: ${error.code}`).join('; '),
+                  processedAt: new Date(),
+                },
+              });
+              skipped += 1;
+              continue;
+            }
+
+            const txDelegate = (tx as unknown as Record<string, RecordDelegate>)[target.model]!;
+            const updated = await txDelegate.updateMany({
+              where: {
+                id: record.id,
+                version: record.version,
+                formSchemaVersionId: record.formSchemaVersionId,
+              },
+              data: {
+                formData: asJson(result.after),
+                formSchemaVersionId: toVersion.id,
+                version: { increment: 1 },
+                ...this.normalizedColumns(target, result.normalized),
+              },
+            });
+
+            if (updated.count !== 1) {
+              // Zapis se promijenio nakon čitanja; ne prepisujemo izmjene korisnika.
+              await tx.formMigrationItem.upsert({
+                where: { jobId_entityId: { jobId: job.id, entityId: record.id } },
+                create: {
+                  id: randomUUID(),
+                  jobId: job.id,
+                  entityId: record.id,
+                  before: asJson(this.snapshot(record, target)),
+                  status: 'SKIPPED',
+                  error: 'Zapis se promijenio tokom apply-a; pokrenite novi preview.',
+                  processedAt: new Date(),
+                },
+                update: {
+                  status: 'SKIPPED',
+                  error: 'Zapis se promijenio tokom apply-a; pokrenite novi preview.',
+                  processedAt: new Date(),
+                },
+              });
+              skipped += 1;
+              continue;
+            }
+
             await tx.formMigrationItem.upsert({
               where: { jobId_entityId: { jobId: job.id, entityId: record.id } },
               create: {
@@ -293,51 +361,36 @@ export class FormMigrationsService {
                 jobId: job.id,
                 entityId: record.id,
                 before: asJson(this.snapshot(record, target)),
-                status: 'SKIPPED',
-                error: result.errors.map((error) => `${error.key}: ${error.code}`).join('; '),
+                after: asJson({ formData: result.after, normalized: result.normalized }),
+                status: 'APPLIED',
                 processedAt: new Date(),
               },
               update: {
-                status: 'SKIPPED',
-                error: result.errors.map((error) => `${error.key}: ${error.code}`).join('; '),
+                status: 'APPLIED',
+                after: asJson({ formData: result.after, normalized: result.normalized }),
+                error: null,
                 processedAt: new Date(),
               },
             });
-            skipped += 1;
-            continue;
+            ok += 1;
           }
-
-          await tx.formMigrationItem.upsert({
-            where: { jobId_entityId: { jobId: job.id, entityId: record.id } },
-            create: {
-              id: randomUUID(),
-              jobId: job.id,
-              entityId: record.id,
-              before: asJson(this.snapshot(record, target)),
-              after: asJson({ formData: result.after, normalized: result.normalized }),
-              status: 'APPLIED',
-              processedAt: new Date(),
-            },
-            update: {
-              status: 'APPLIED',
-              after: asJson({ formData: result.after, normalized: result.normalized }),
-              error: null,
-              processedAt: new Date(),
-            },
-          });
-
-          const txDelegate = (tx as unknown as Record<string, RecordDelegate>)[target.model]!;
-          await txDelegate.update({
-            where: { id: record.id },
-            data: {
-              formData: asJson(result.after),
-              formSchemaVersionId: toVersion.id,
-              ...this.normalizedColumns(target, result.normalized),
-            },
-          });
-          ok += 1;
-        }
-      });
+        });
+      }
+    } catch (error) {
+      try {
+        await this.prisma.formMigrationJob.update({
+          where: { id: job.id },
+          data: {
+            status: 'FAILED',
+            finishedAt: new Date(),
+            notes: `${input.changeNote.trim()}\nApply nije dovršen; djelimično primijenjeni zapisi se mogu vratiti rollback-om.`,
+            summary: asJson({ total: records.length, ok, failed: skipped + 1, skipped }),
+          },
+        });
+      } catch {
+        // Sačuvaj izvornu grešku; live recovery i dalje mora provjeriti job stanje.
+      }
+      throw error;
     }
 
     const summary: MigrationSummary = { total: records.length, ok, failed: skipped, skipped };
@@ -363,10 +416,10 @@ export class FormMigrationsService {
 
   async rollback(jobId: string, input: RollbackFormMigrationInput): Promise<FormMigrationJob> {
     const job = await this.loadJobOrThrow(jobId);
-    if (job.status !== 'COMPLETED') {
+    if (job.status !== 'COMPLETED' && job.status !== 'FAILED') {
       throw new VfmException(
         'VALIDATION_ERROR',
-        `Rollback je moguć samo za završenu migraciju (stanje: ${job.status}).`,
+        `Rollback je moguć samo za završenu ili neuspjelu migraciju (stanje: ${job.status}).`,
       );
     }
 
@@ -514,6 +567,7 @@ export class FormMigrationsService {
     definition: FormDefinition,
     toVersion: { id: string; version: number; status: 'DRAFT' | 'PUBLISHED' | 'RETIRED' },
     record: RecordRow,
+    optionValues: ReadonlyMap<string, ReadonlySet<string>>,
   ): {
     errors: readonly RecordFieldError[];
     after: Record<string, unknown>;
@@ -529,6 +583,7 @@ export class FormMigrationsService {
       values: asRecord(record.formData),
       isNew: false,
       today: toLocalDateString(new Date()),
+      optionValues,
     });
 
     return { errors: result.errors, after: { ...result.values }, normalized: { ...result.normalized } };

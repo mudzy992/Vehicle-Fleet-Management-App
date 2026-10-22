@@ -189,7 +189,8 @@ export class InsurancesService {
         : {}),
     });
 
-    const validated = validateRecordValues({
+    const validated = await validateRecordValues({
+      prisma: this.prisma,
       subject: 'INSURANCE',
       definition: version.definition,
       versionId: version.id,
@@ -296,7 +297,8 @@ export class InsurancesService {
       });
       if (!version) throw new VfmException('NOT_FOUND', 'Verzija forme zapisa više ne postoji.');
 
-      const validated = validateRecordValues({
+      const validated = await validateRecordValues({
+        prisma: this.prisma,
         subject: 'INSURANCE',
         definition: (
           await resolveFormVersion(this.prisma as never, {

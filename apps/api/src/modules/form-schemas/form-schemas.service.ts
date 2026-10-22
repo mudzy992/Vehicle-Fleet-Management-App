@@ -54,6 +54,7 @@ import type {
 import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
 import { syncFieldKeys, type FieldKeyRegistryClient } from './field-key-registry.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { resolveFormOptionValues } from '../../common/form-option-values.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 
 /** Rezultat mutacije + `before`/`after` za `AuditContext`. */
@@ -617,6 +618,7 @@ export class FormSchemasService {
       values: input.values,
       isNew: input.isNew,
       today: toLocalDateString(new Date()),
+      optionValues: await resolveFormOptionValues(this.prisma, definition),
     });
 
     return {

@@ -311,7 +311,8 @@ export class TiresService {
       ...(input.currentLocation !== undefined ? { currentLocation: input.currentLocation } : {}),
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
     });
-    const validated = validateRecordValues({
+    const validated = await validateRecordValues({
+      prisma: this.prisma,
       subject: 'TIRE_SET',
       definition: version.definition,
       versionId: version.id,
@@ -628,7 +629,8 @@ export class TiresService {
           { ...asRecord(current.formData), ...(input.formData ?? {}) },
           effective,
         );
-        const validated = validateRecordValues({
+        const validated = await validateRecordValues({
+          prisma: this.prisma,
           subject: 'TIRE_SET',
           definition: version.definition,
           versionId: version.id,

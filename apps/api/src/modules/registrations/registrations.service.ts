@@ -188,7 +188,8 @@ export class RegistrationsService {
         : {}),
     });
 
-    const validated = validateRecordValues({
+    const validated = await validateRecordValues({
+      prisma: this.prisma,
       subject: 'REGISTRATION',
       definition: version.definition,
       versionId: version.id,
@@ -287,7 +288,8 @@ export class RegistrationsService {
       });
       if (!version) throw new VfmException('NOT_FOUND', 'Verzija forme zapisa više ne postoji.');
 
-      const validated = validateRecordValues({
+      const validated = await validateRecordValues({
+        prisma: this.prisma,
         subject: 'REGISTRATION',
         definition: (
           await resolveFormVersion(this.prisma as never, {

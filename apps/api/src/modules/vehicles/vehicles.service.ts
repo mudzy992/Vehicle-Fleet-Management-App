@@ -47,6 +47,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { VfmException } from '../../common/errors/vfm-error.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { toDatabaseDate } from '../../common/dates.js';
+import { resolveFormOptionValues } from '../../common/form-option-values.js';
 
 /** Snapshot za audit (`before`/`after`) — kontroler ga predaje `AuditContext`. */
 export interface VehicleMutation<T> {
@@ -247,7 +248,7 @@ export class VehiclesService {
 
   async create(input: CreateVehicleInput, actorId?: string): Promise<VehicleMutation<VehicleDetail>> {
     const version = await this.resolveFormVersion(input.formSchemaVersionId);
-    const validated = this.validateFormData({
+    const validated = await this.validateFormData({
       definition: version.definition,
       versionId: version.id,
       versionNumber: version.version,
@@ -372,7 +373,7 @@ export class VehiclesService {
         },
       );
 
-      const validated = this.validateFormData({
+      const validated = await this.validateFormData({
         definition,
         versionId: version.id,
         versionNumber: version.version,
@@ -695,14 +696,14 @@ export class VehiclesService {
    * P11 validacija + mapiranje na kolone. Vraća samo kolone s whitelist-a;
    * greške idu po polju forme (`formData.<fieldKey>`), pa ih UI može prikazati.
    */
-  private validateFormData(args: {
+  private async validateFormData(args: {
     definition: FormDefinition;
     versionId: string;
     versionNumber: number;
     status: 'DRAFT' | 'PUBLISHED' | 'RETIRED';
     values: Record<string, unknown>;
     isNew: boolean;
-  }): { normalized: Record<string, unknown>; values: Record<string, unknown> } {
+  }): Promise<{ normalized: Record<string, unknown>; values: Record<string, unknown> }> {
     const result = validateRecord({
       version: {
         id: args.versionId,
@@ -713,6 +714,7 @@ export class VehiclesService {
       values: args.values,
       isNew: args.isNew,
       today: toLocalDateString(new Date()),
+      optionValues: await resolveFormOptionValues(this.prisma, args.definition),
     });
 
     if (result.versionError) {

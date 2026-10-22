@@ -354,7 +354,8 @@ export class TireInstallationsService {
       mountedOdometerKm: input.mountedOdometerKm,
       positions: input.positions,
     });
-    const validated = validateRecordValues({
+    const validated = await validateRecordValues({
+      prisma: this.prisma,
       subject: 'TIRE_INSTALLATION',
       definition: version.definition,
       versionId: version.id,
@@ -392,7 +393,8 @@ export class TireInstallationsService {
       mountedOdometerKm: input.odometerKm,
       positions: input.positions,
     });
-    const validated = validateRecordValues({
+    const validated = await validateRecordValues({
+      prisma: this.prisma,
       subject: 'TIRE_INSTALLATION',
       definition: version.definition,
       versionId: version.id,
@@ -463,7 +465,8 @@ export class TireInstallationsService {
         ? { storageLocationOnDismount: input.storageLocationOnDismount }
         : {}),
     });
-    const validated = validateRecordValues({
+    const validated = await validateRecordValues({
+      prisma: this.prisma,
       subject: 'TIRE_INSTALLATION',
       definition: version.definition,
       versionId: version.id,
