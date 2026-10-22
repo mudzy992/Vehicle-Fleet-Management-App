@@ -259,7 +259,9 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
       const isList = source?.kind === 'LIST';
       const isWorkshopQuery = source?.kind === 'QUERY' && source.queryId === 'WORKSHOPS';
       const isTireSetQuery = source?.kind === 'QUERY' && source.queryId === 'TIRE_SETS_BY_VEHICLE';
-      if (!isVehicle && !isDriver && !isTaskType && !isList && !isWorkshopQuery && !isTireSetQuery) { setLoadedOptions([]); return; }
+      const entityType = typeof field.validation['entityType'] === 'string' ? field.validation['entityType'] : '';
+      const isRecordReference = field.type === 'REFERENCE_RECORD' && entityType.length > 0;
+      if (!isVehicle && !isDriver && !isTaskType && !isList && !isWorkshopQuery && !isTireSetQuery && !isRecordReference) { setLoadedOptions([]); return; }
       setLoadingOptions(true);
       try {
         let resolved: Array<{ value: string; label: string }> = [];
@@ -282,6 +284,9 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
             const result = await mobileApi.tireSets();
             resolved = result.items.filter((item) => item.mountedVehicleId === vehicleId).map((item) => ({ value: item.id, label: `${item.code} · ${item.brand ?? ''} ${item.model ?? ''} ${item.size ?? ''}`.trim() }));
           }
+        } else if (field.type === 'REFERENCE_RECORD' && typeof field.validation['entityType'] === 'string') {
+          const records = await mobileApi.recordOptions(field.validation['entityType']);
+          resolved = records.map((record) => ({ value: record.entityId, label: record.label }));
         }
         if (active) setLoadedOptions(resolved);
       } catch { if (active) setLoadedOptions([]); }
@@ -308,9 +313,12 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
         <Switch value={value === true} onValueChange={onChange} disabled={disabled} trackColor={{ true: colors.primary }} />
       ) : field.widget === 'SELECT' || multiple || reference ? (
         renderedOptions.length ? <View style={styles.options}>{renderedOptions.map((option) => {
-          const active = multiple ? selected.includes(option.value) : value === option.value;
-          return <Pressable key={option.value} onPress={() => onChange(multiple ? (active ? selected.filter((item) => item !== option.value) : [...selected, option.value]) : active ? undefined : option.value)} disabled={disabled || ('disabled' in option && option.disabled === true)} style={[styles.option, active && styles.optionActive]}><Text style={[styles.optionText, active && styles.optionTextActive]}>{option.label}</Text></Pressable>;
-        })}</View> : <Text style={styles.help}>{loadingOptions ? 'Učitavanje izbora…' : reference ? field.type === 'REFERENCE_RECORD' ? 'Ova vrsta povezane reference još nije podržana u mobilnom obrascu.' : 'Nema dostupnih zapisa ili nedostaje dozvola za pregled.' : field.optionsSourceKind === 'LIST' || (field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'WORKSHOPS') ? 'Šifarnik je prazan ili nije dostupan.' : field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'TIRE_SETS_BY_VEHICLE' ? 'Nema kompleta guma za vozilo. Podesite params.vehicleId i dozvolu tire:view.' : 'Ovaj QUERY izvor još nije podržan u mobilnom obrascu.'}</Text>
+          const recordRef = field.type === 'REFERENCE_RECORD';
+          const currentEntityId = recordRef && typeof value === 'object' && value !== null && typeof (value as { entityId?: unknown }).entityId === 'string' ? (value as { entityId: string }).entityId : value;
+          const active = multiple ? selected.includes(option.value) : currentEntityId === option.value;
+          const nextValue = recordRef ? { entityType: field.validation['entityType'], entityId: option.value } : option.value;
+          return <Pressable key={option.value} onPress={() => onChange(multiple ? (active ? selected.filter((item) => item !== option.value) : [...selected, option.value]) : active ? undefined : nextValue)} disabled={disabled || ('disabled' in option && option.disabled === true)} style={[styles.option, active && styles.optionActive]}><Text style={[styles.optionText, active && styles.optionTextActive]}>{option.label}</Text></Pressable>;
+        })}</View> : <Text style={styles.help}>{loadingOptions ? 'Učitavanje izbora…' : reference ? field.type === 'REFERENCE_RECORD' ? 'Povezani zapisi nisu dostupni; provjerite entityType i dozvolu za pregled.' : 'Nema dostupnih zapisa ili nedostaje dozvola za pregled.' : field.optionsSourceKind === 'LIST' || (field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'WORKSHOPS') ? 'Šifarnik je prazan ili nije dostupan.' : field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'TIRE_SETS_BY_VEHICLE' ? 'Nema kompleta guma za vozilo. Podesite params.vehicleId i dozvolu tire:view.' : 'Ovaj QUERY izvor još nije podržan u mobilnom obrascu.'}</Text>
       ) : field.widget === 'PHOTO' || field.widget === 'FILE' ? (
         <View style={styles.uploadBox}>
           <Text style={styles.help}>Dodano fajlova: {stringArray(value).length}{uploading ? ' · Upload u toku…' : ''}</Text>
