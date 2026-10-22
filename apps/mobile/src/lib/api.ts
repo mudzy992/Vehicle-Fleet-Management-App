@@ -259,6 +259,32 @@ export const mobileApi = {
   activeTaskForm: (taskTypeId: string) => request<ActiveTaskForm>(`/form-schemas/active?subject=TASK&taskTypeId=${encodeURIComponent(taskTypeId)}`),
   formOptions: (listCode: string) => request<Array<{ value: string; label: string }>>(`/form-schemas/options?listCode=${encodeURIComponent(listCode)}`),
   tireSets: () => request<{ items: Array<{ id: string; code: string; brand: string | null; model: string | null; size: string | null; mountedVehicleId: string | null }> }>('/tire-sets?page=1&pageSize=100'),
+  recordOptions: async (entityType: string) => {
+    const paths: Record<string, string> = {
+      VEHICLE: '/vehicles?page=1&pageSize=100&status=ACTIVE',
+      DRIVER: '/drivers?page=1&pageSize=100&status=ACTIVE',
+      REGISTRATION: '/registrations?page=1&pageSize=100',
+      INSURANCE: '/insurances?page=1&pageSize=100',
+      SERVICE: '/services?page=1&pageSize=100',
+      TIRE_SET: '/tire-sets?page=1&pageSize=100',
+      TIRE_INSTALLATION: '/tire-installations?page=1&pageSize=100',
+      TASK: '/tasks?mine=true&page=1&pageSize=50&sortBy=updatedAt&sortOrder=desc',
+    };
+    const path = paths[entityType];
+    if (!path) throw new ApiError(`Reference entiteta ${entityType} nije podržan.`, 400, 'UNSUPPORTED_REFERENCE');
+    const response = await request<{ items: Array<Record<string, unknown>> }>(path);
+    return response.items.flatMap((item) => {
+      if (typeof item['id'] !== 'string') return [];
+      const personLabel = [item['firstName'], item['lastName']].filter((part): part is string => typeof part === 'string').join(' ');
+      const label = [
+        item['displayName'], item['internalNo'], item['code'], item['registrationNumber'],
+        item['policyNumber'], item['setCode'], item['serviceType'], item['taskTypeName'], item['title'], item['name'],
+      ].find((part): part is string => typeof part === 'string' && part.length > 0)
+        ?? (personLabel || item['id']);
+      const suffix = [item['validUntil'], item['serviceDate'], item['mountedAt']].find((part): part is string => typeof part === 'string');
+      return [{ entityId: item['id'], label: suffix ? `${label} · ${suffix}` : label }];
+    });
+  },
   users: () => request<{ items: UserSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/users?status=ACTIVE&page=1&pageSize=100'),
   createTask: (input: { taskTypeId: string; vehicleId: string | null; title?: string; description?: string | null; priority?: string; assignMode: 'OPEN_CLAIM' | 'ASSIGN_DIRECT' | 'BROADCAST'; assigneeUserId?: string; invitedUserIds?: string[]; observerUserIds?: string[]; dueAt?: string | null; formData: Record<string, unknown> }) =>
     request<TaskDetail>('/tasks', { method: 'POST', body: JSON.stringify(input) }),

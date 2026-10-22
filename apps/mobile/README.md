@@ -46,6 +46,6 @@ Privatni **service-account JSON** je drugi fajl: nikad ga ne stavljati u `apps/m
 
 ## Planirani nastavak
 
-- Podržani su `LIST` šifarnici, `REFERENCE_VEHICLE`/`REFERENCE_DRIVER` i svi whitelist QUERY izvori. `WORKSHOPS` koristi šifarnik `WORKSHOP`; `TIRE_SETS_BY_VEHICLE` filtrira prema `params.vehicleId` i traži `tire:view`. `REFERENCE_RECORD` i test na fizičkom uređaju ostaju otvoreni.
+- Podržani su `LIST` šifarnici, `REFERENCE_VEHICLE`/`REFERENCE_DRIVER`, `REFERENCE_RECORD` za VEHICLE, DRIVER, REGISTRATION, INSURANCE, SERVICE, TIRE_SET, TIRE_INSTALLATION i TASK, te svi whitelist QUERY izvori. `WORKSHOPS` koristi šifarnik `WORKSHOP`; `TIRE_SETS_BY_VEHICLE` filtrira prema `params.vehicleId` i traži `tire:view`. VEHICLE_HANDOVER/OTHER reference i test na fizičkom uređaju ostaju otvoreni.
 - Obavijesti, FCM token registracija i API slanje push poruka.
 - Expo/EAS Android development build i test na fizičkom uređaju.
