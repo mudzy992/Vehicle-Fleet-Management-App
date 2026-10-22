@@ -11,6 +11,7 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="task/[id]" options={{ headerShown: true, title: 'Zadatak', headerBackTitle: 'Nazad' }} />
+        <Stack.Screen name="vehicle/[id]" options={{ headerShown: true, title: 'Vozilo', headerBackTitle: 'Nazad' }} />
       </Stack>
     </AuthProvider>
   );

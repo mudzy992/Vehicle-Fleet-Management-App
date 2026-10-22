@@ -10,6 +10,7 @@ export default function TabsLayout() {
   return (
     <Tabs screenOptions={{ headerTitleStyle: { color: colors.ink, fontWeight: '700' }, tabBarActiveTintColor: colors.primary, tabBarInactiveTintColor: colors.muted, tabBarStyle: { height: 64, paddingTop: 6, paddingBottom: 8 }, tabBarLabelStyle: { fontSize: 12, fontWeight: '600' } }}>
       <Tabs.Screen name="tasks" options={{ title: 'Moji zadaci', tabBarLabel: 'Zadaci', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>✓</Text> }} />
+      {user?.permissions.includes('vehicle:view') ? <Tabs.Screen name="vehicles" options={{ title: 'Vozila', tabBarLabel: 'Vozila', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>▰</Text> }} /> : null}
       <Tabs.Screen name="profile" options={{ title: 'Profil', tabBarLabel: 'Profil', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>●</Text> }} />
     </Tabs>
   );
