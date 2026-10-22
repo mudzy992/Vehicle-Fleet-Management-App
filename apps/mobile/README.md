@@ -44,6 +44,20 @@ Firebase Android aplikaciju registruj s package name **`ba.ba101.voznipark`**. P
 
 Privatni **service-account JSON** je drugi fajl: nikad ga ne stavljati u `apps/mobile`, Git ili Expo bundle. Na produkcijskom hostu ide u `/etc/vfm/secrets/firebase-service-account.json`, montiran read-only u API/worker na `/run/secrets/vfm/firebase-service-account.json`; `FIREBASE_SERVICE_ACCOUNT_HOST_DIR=/etc/vfm/secrets`. Coolify ENV koristi `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_PATH` i tek nakon završene FCM integracije `FIREBASE_ENABLED=true`. Upute za host mount: `docs/08-DOCKER_COOLIFY_DEPLOYMENT.md` §4.4.
 
+## EAS Android build
+
+`eas.json` definiše `preview` (interni APK za uređajski UAT) i `production` (Android App Bundle). Oba profila koriste javni HTTPS API URL; nijedan ne koristi `localhost`. Expo projekat još treba povezati s vlasnikovim Expo nalogom — ne dodavati izmišljeni `projectId` ili nalog u repozitorij.
+
+Iz `apps/mobile` nakon prijave u Expo:
+
+```bash
+corepack pnpm dlx eas-cli@latest login
+corepack pnpm dlx eas-cli@latest init
+corepack pnpm dlx eas-cli@latest build --platform android --profile preview
+```
+
+Za Play Store paket koristi profil `production`. EAS signing credentials konfigurišu se kroz Expo/EAS; ne čuvati ih u repozitoriju. Google Play submit još nije podešen.
+
 ## Planirani nastavak
 
 - Podržani su `LIST` šifarnici, `REFERENCE_VEHICLE`/`REFERENCE_DRIVER`, `REFERENCE_RECORD` za VEHICLE, DRIVER, REGISTRATION, INSURANCE, SERVICE, TIRE_SET, TIRE_INSTALLATION i TASK, te svi whitelist QUERY izvori. `WORKSHOPS` koristi šifarnik `WORKSHOP`; `TIRE_SETS_BY_VEHICLE` filtrira prema `params.vehicleId` i traži `tire:view`. VEHICLE_HANDOVER/OTHER reference i test na fizičkom uređaju ostaju otvoreni.
