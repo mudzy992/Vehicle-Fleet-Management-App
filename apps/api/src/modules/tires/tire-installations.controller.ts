@@ -25,8 +25,9 @@ export class TireInstallationsController {
   @RequirePermissions('tire:view')
   list(
     @Query(new ZodValidationPipe(tireInstallationListQuerySchema, 'query')) query: TireInstallationListQuery,
+    @CurrentUser() actor: AuthenticatedUser,
   ) {
-    return this.installations.list(query);
+    return this.installations.list(query, actor);
   }
 
   @Post()
@@ -34,10 +35,10 @@ export class TireInstallationsController {
   @Audit('CREATE', { severity: 'INFO', resource: 'TireInstallation' })
   async mount(
     @Body(new ZodValidationPipe(mountTireSetSchema, 'body')) input: MountTireSetInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ) {
-    const result = await this.installations.mount(input, actor?.id);
+    const result = await this.installations.mount(input, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(result.data.id)
       .setAfter(result.after)
@@ -52,10 +53,10 @@ export class TireInstallationsController {
   @Audit('UPDATE', { severity: 'INFO', resource: 'TireInstallation' })
   async swap(
     @Body(new ZodValidationPipe(swapTireSetSchema, 'body')) input: SwapTireSetInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ) {
-    const result = await this.installations.swap(input, actor?.id);
+    const result = await this.installations.swap(input, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(result.data.dismounted.id)
       .setBefore(result.before)
@@ -74,10 +75,10 @@ export class TireInstallationsController {
   async dismount(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(dismountTireSetSchema, 'body')) input: DismountTireSetInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ) {
-    const result = await this.installations.dismount(id, input, actor?.id);
+    const result = await this.installations.dismount(id, input, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(result.before)

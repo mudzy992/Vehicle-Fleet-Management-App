@@ -1,6 +1,7 @@
 /** Kompleti guma — lista, verzionisani unos, jedinstveni kod i permisije. */
 import 'reflect-metadata';
 import { describe, expect, it, vi } from 'vitest';
+import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import { createTireSetSchema, tireSetListQuerySchema, tireSetViewSchema } from '@vfm/shared/schemas';
 import { TireSetsController } from '../../src/modules/tires/tires.controller.js';
 import { TiresService } from '../../src/modules/tires/tires.service.js';
@@ -11,6 +12,25 @@ const actorId = '11111111-1111-4111-8111-111111111111';
 const formSchemaId = '22222222-2222-4222-8222-222222222222';
 const formVersionId = '33333333-3333-4333-8333-333333333333';
 const vehicleId = '44444444-4444-4444-8444-444444444444';
+const otherVehicleId = '66666666-6666-4666-8666-666666666666';
+
+function scopeActor(
+  permission: string,
+  scope: 'ALL' | 'OWN' | 'VEHICLE_IDS',
+  scopeVehicleIds: string[] = [],
+  id = actorId,
+): AuthenticatedUser {
+  return {
+    id,
+    isSuperAdmin: false,
+    permissions: {
+      isSuperAdmin: false,
+      list: [permission],
+      permissions: new Map([[permission, scope]]),
+      grants: [{ permission, scope, scopeVehicleIds }],
+    },
+  } as unknown as AuthenticatedUser;
+}
 
 function setup({ versionStatus = 'PUBLISHED' } = {}) {
   const row = {
@@ -77,6 +97,36 @@ function setup({ versionStatus = 'PUBLISHED' } = {}) {
 }
 
 describe('Gume — kompleti', () => {
+  it('spaja dostupnost s tire:view VEHICLE_IDS scope-om i ne vraća tuđe aktivno vozilo', async () => {
+    const { svc, tireSet } = setup();
+    const result = await svc.listSets(
+      tireSetListQuerySchema.parse({ availableOnly: 'true' }),
+      scopeActor('tire:view', 'VEHICLE_IDS', [otherVehicleId]),
+    );
+    const query = tireSet.findMany.mock.calls[0]?.[0];
+    expect(query.where.AND).toEqual([
+      { status: 'IN_STOCK' },
+      { installations: { none: { dismountedAt: null, deletedAt: null } } },
+      { installations: { some: { vehicleId: { in: [otherVehicleId] }, deletedAt: null } } },
+    ]);
+    expect(result.items[0]?.mountedVehicleId).toBeNull();
+  });
+
+  it('odbija kreiranje kompleta pod opsegom VEHICLE_IDS', async () => {
+    const { svc, input } = setup();
+    await expect(
+      svc.createSet(input, actorId, scopeActor('tire:create', 'VEHICLE_IDS', [vehicleId])),
+    ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
+  });
+
+  it('odbija čitanje guma ako korisnik nema pristup roditeljskom kompletu', async () => {
+    const { svc, tireSet, row } = setup();
+    tireSet.findFirst.mockResolvedValue({ ...row, createdById: actorId });
+    await expect(
+      svc.listTires(row.id, scopeActor('tire:view', 'OWN', [], otherVehicleId)),
+    ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
+  });
+
   it('filtrira pretragu, sezonu, status i dostupnost na serveru', async () => {
     const { svc, tireSet } = setup();
     await svc.listSets(

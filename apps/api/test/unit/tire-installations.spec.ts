@@ -1,6 +1,7 @@
 /** Montaže guma — zaključavanje, jedinstvena aktivna montaža, km i zamjena. */
 import 'reflect-metadata';
 import { describe, expect, it, vi } from 'vitest';
+import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import {
   dismountTireSetSchema,
   mountTireSetSchema,
@@ -23,6 +24,23 @@ const oldInstallationId = '77777777-7777-4777-8777-777777777777';
 const formSchemaId = '88888888-8888-4888-8888-888888888888';
 const formVersionId = '99999999-9999-4999-8999-999999999999';
 
+function scopeActor(
+  permission: string,
+  scope: 'ALL' | 'OWN' | 'VEHICLE_IDS',
+  scopeVehicleIds: string[] = [],
+): AuthenticatedUser {
+  return {
+    id: actorId,
+    isSuperAdmin: false,
+    permissions: {
+      isSuperAdmin: false,
+      list: [permission],
+      permissions: new Map([[permission, scope]]),
+      grants: [{ permission, scope, scopeVehicleIds }],
+    },
+  } as unknown as AuthenticatedUser;
+}
+
 type UnknownRecord = Record<string, unknown>;
 
 interface VehicleState {
@@ -34,6 +52,7 @@ interface VehicleState {
   status: string;
   version: number;
   deletedAt: Date | null;
+  createdById: string | null;
 }
 
 interface SetState {
@@ -92,6 +111,7 @@ function makeVehicle(overrides: Partial<VehicleState> = {}): VehicleState {
     status: 'ACTIVE',
     version: 3,
     deletedAt: null,
+    createdById: null,
     ...overrides,
   };
 }
@@ -234,6 +254,10 @@ function setup({
   };
 
   const tireInstallation = {
+    count: vi.fn(
+      async (args: { where?: unknown }) =>
+        [...installations.values()].filter((row) => matches(row, args.where)).length,
+    ),
     findFirst: vi.fn(
       async (args: { where?: unknown; select?: UnknownRecord; include?: unknown; orderBy?: unknown }) => {
         let rows = [...installations.values()].filter((row) => matches(row, args.where));
@@ -418,6 +442,28 @@ function setup({
 }
 
 describe('Gume — montaža, demontaža i zamjena', () => {
+  it('lista kombinuje query vehicleId sa VEHICLE_IDS scope-om', async () => {
+    const state = setup();
+    await state.svc.list(
+      { page: 1, pageSize: 25, sortOrder: 'desc', vehicleId } as never,
+      scopeActor('tire:view', 'VEHICLE_IDS', [otherVehicleId]),
+    );
+    expect(state.tx.tireInstallation.count).toHaveBeenCalledWith({
+      where: {
+        AND: [{ deletedAt: null, vehicleId }, { vehicleId: { in: [otherVehicleId] } }],
+      },
+    });
+  });
+
+  it('odbija montažu na vozilo izvan tire:mount scope-a prije upisa', async () => {
+    const state = setup();
+    await expect(
+      state.svc.mount(state.mountInput, actorId, scopeActor('tire:mount', 'VEHICLE_IDS', [otherVehicleId])),
+    ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
+    expect(state.calls).not.toContain('lock:TireSet:' + oldSetId);
+    expect(state.calls).not.toContain('create-installation');
+  });
+
   it('montaža zaključava vozilo pa komplet i u istoj transakciji piše km i outbox', async () => {
     const state = setup();
     const result = await state.svc.mount(state.mountInput, actorId);

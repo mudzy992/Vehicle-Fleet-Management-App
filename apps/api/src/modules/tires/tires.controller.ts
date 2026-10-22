@@ -35,8 +35,11 @@ export class TireSetsController {
 
   @Get()
   @RequirePermissions('tire:view')
-  listSets(@Query(new ZodValidationPipe(tireSetListQuerySchema, 'query')) query: TireSetListQuery) {
-    return this.tires.listSets(query);
+  listSets(
+    @Query(new ZodValidationPipe(tireSetListQuerySchema, 'query')) query: TireSetListQuery,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.tires.listSets(query, actor);
   }
 
   @Post()
@@ -44,10 +47,10 @@ export class TireSetsController {
   @Audit('CREATE', { severity: 'INFO', resource: 'TireSet' })
   async createSet(
     @Body(new ZodValidationPipe(createTireSetSchema, 'body')) input: CreateTireSetInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ) {
-    const result = await this.tires.createSet(input, actor?.id);
+    const result = await this.tires.createSet(input, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(result.data.id)
       .setAfter(result.after)
@@ -58,20 +61,29 @@ export class TireSetsController {
 
   @Get(':id')
   @RequirePermissions('tire:view')
-  getSet(@Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string) {
-    return this.tires.getSet(id);
+  getSet(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.tires.getSet(id, actor);
   }
 
   @Get(':id/usage')
   @RequirePermissions('tire:view')
-  getSetUsage(@Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string) {
-    return this.tires.getSetUsage(id);
+  getSetUsage(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.tires.getSetUsage(id, actor);
   }
 
   @Get(':id/tires')
   @RequirePermissions('tire:view')
-  listTires(@Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string) {
-    return this.tires.listTires(id);
+  listTires(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.tires.listTires(id, actor);
   }
 
   @Post(':id/tires')
@@ -80,9 +92,10 @@ export class TireSetsController {
   async createTire(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(createTireSchema, 'body')) input: CreateTireInput,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ) {
-    const result = await this.tires.createTire(id, input);
+    const result = await this.tires.createTire(id, input, actor);
     AuditContext.from(request)
       .setEntityId(result.data.id)
       .setAfter(result.after)
@@ -98,9 +111,10 @@ export class TireSetsController {
   async updateSet(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(updateTireSetSchema, 'body')) input: UpdateTireSetInput,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ) {
-    const result = await this.tires.updateSet(id, input);
+    const result = await this.tires.updateSet(id, input, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(result.before)
@@ -116,10 +130,10 @@ export class TireSetsController {
   @Audit('DELETE', { severity: 'CRITICAL', resource: 'TireSet' })
   async removeSet(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<void> {
-    const result = await this.tires.removeSet(id, actor?.id);
+    const result = await this.tires.removeSet(id, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(result.before)

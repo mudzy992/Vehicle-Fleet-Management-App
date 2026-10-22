@@ -7,7 +7,13 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import { toLocalDateString, type TireDismountReason, type TirePosition, type TireStatus } from '@vfm/shared';
+import {
+  toLocalDateString,
+  type Permission,
+  type TireDismountReason,
+  type TirePosition,
+  type TireStatus,
+} from '@vfm/shared';
 import {
   mountTireSetSchema,
   swapTireSetSchema,
@@ -18,7 +24,8 @@ import {
   type TireInstallationView,
 } from '@vfm/shared/schemas';
 import { toDatabaseDate } from '../../common/dates.js';
-import { VfmException } from '../../common/errors/vfm-error.js';
+import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user.js';
 import {
   detail,
   mergeCoreValues,
@@ -43,6 +50,7 @@ interface LockedVehicleRow {
   status: string;
   version: number;
   deletedAt: Date | null;
+  createdById: string | null;
 }
 
 interface LockedTireSetRow {
@@ -130,19 +138,23 @@ function derivedStatusAfterDismount(reason: TireDismountReason | null | undefine
 export class TireInstallationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(query: TireInstallationListQuery) {
+  async list(query: TireInstallationListQuery, actor?: AuthenticatedUser) {
     const where: Prisma.TireInstallationWhereInput = { deletedAt: null };
     if (query.vehicleId) where.vehicleId = query.vehicleId;
     if (query.setId) where.setId = query.setId;
     if (query.activeOnly === 'true') where.dismountedAt = null;
     if (query.q?.trim()) where.set = { code: { contains: query.q.trim(), mode: 'insensitive' } };
+    const permissionWhere = actor ? this.scopeWhere(actor, 'tire:view') : {};
+    const scopedWhere: Prisma.TireInstallationWhereInput = Object.keys(permissionWhere).length
+      ? { AND: [where, permissionWhere] }
+      : where;
     const sortBy = ['mountedAt', 'dismountedAt', 'createdAt'].includes(query.sortBy ?? '')
       ? query.sortBy!
       : 'mountedAt';
     const [total, rows] = await Promise.all([
-      this.prisma.tireInstallation.count({ where }),
+      this.prisma.tireInstallation.count({ where: scopedWhere }),
       this.prisma.tireInstallation.findMany({
-        where,
+        where: scopedWhere,
         include: INSTALLATION_INCLUDE,
         orderBy: [{ [sortBy]: query.sortBy ? query.sortOrder : 'desc' }, { id: 'asc' }],
         skip: (query.page - 1) * query.pageSize,
@@ -158,7 +170,7 @@ export class TireInstallationsService {
     };
   }
 
-  async mount(input: MountTireSetInput, actorId?: string) {
+  async mount(input: MountTireSetInput, actorId?: string, actor?: AuthenticatedUser) {
     const prepared = await this.prepareMountForm(input);
     const data = prepared.data;
     this.assertDateNotFuture(data.mountedAt, 'mountedAt', 'Datum montaže');
@@ -166,6 +178,12 @@ export class TireInstallationsService {
     return this.prisma.$transaction(async (tx) => {
       const now = new Date();
       const vehicle = await this.lockVehicle(tx, data.vehicleId);
+      if (actor)
+        this.assertScope(actor, 'tire:mount', {
+          id: vehicle.id,
+          vehicleId: vehicle.id,
+          createdById: vehicle.createdById,
+        });
       const set = await this.lockSet(tx, data.setId);
       await this.assertMountable(tx, { vehicle, set, data });
       this.assertOdometer(data.mountedOdometerKm, vehicle.odometerKm, 'mountedOdometerKm');
@@ -198,13 +216,14 @@ export class TireInstallationsService {
     });
   }
 
-  async dismount(id: string, input: DismountTireSetInput, actorId?: string) {
+  async dismount(id: string, input: DismountTireSetInput, actorId?: string, actor?: AuthenticatedUser) {
     this.assertDateNotFuture(input.dismountedAt, 'dismountedAt', 'Datum demontaže');
     const initial = await this.prisma.tireInstallation.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true, vehicleId: true, setId: true },
+      select: { id: true, vehicleId: true, setId: true, createdById: true },
     });
     if (!initial) throw new VfmException('NOT_FOUND', 'Montaža guma nije pronađena.');
+    if (actor) this.assertScope(actor, 'tire:dismount', initial);
 
     return this.prisma.$transaction(async (tx) => {
       const now = new Date();
@@ -240,20 +259,27 @@ export class TireInstallationsService {
   }
 
   /** Zamjena prvo validira oba kompleta; tek zatim u istoj transakciji radi upise. */
-  async swap(input: SwapTireSetInput, actorId?: string) {
+  async swap(input: SwapTireSetInput, actorId?: string, actor?: AuthenticatedUser) {
     const prepared = await this.prepareSwapForm(input);
     const data = prepared.data;
     this.assertDateNotFuture(data.swappedAt, 'swappedAt', 'Datum zamjene');
 
     const initial = await this.prisma.tireInstallation.findFirst({
       where: { id: data.currentInstallationId, deletedAt: null },
-      select: { id: true, vehicleId: true, setId: true },
+      select: { id: true, vehicleId: true, setId: true, createdById: true },
     });
     if (!initial) throw new VfmException('NOT_FOUND', 'Trenutna montaža guma nije pronađena.');
+    if (actor) this.assertScope(actor, 'tire:swap', initial);
 
     return this.prisma.$transaction(async (tx) => {
       const now = new Date();
       const vehicle = await this.lockVehicle(tx, data.vehicleId);
+      if (actor)
+        this.assertScope(actor, 'tire:swap', {
+          id: vehicle.id,
+          vehicleId: vehicle.id,
+          createdById: vehicle.createdById,
+        });
       const lockedSets = new Map<string, LockedTireSetRow>();
       for (const setId of [...new Set([initial.setId, data.newSetId])].sort()) {
         lockedSets.set(setId, await this.lockSet(tx, setId));
@@ -499,7 +525,7 @@ export class TireInstallationsService {
 
   private async lockVehicle(tx: Tx, id: string): Promise<LockedVehicleRow> {
     const rows = await tx.$queryRaw<LockedVehicleRow[]>`
-      SELECT "id", "internalNo", "plateNumber", "odometerKm", "status", "version", "deletedAt"
+      SELECT "id", "internalNo", "plateNumber", "odometerKm", "status", "version", "deletedAt", "createdById"
       FROM "Vehicle"
       WHERE "id" = ${id}::uuid
       FOR UPDATE`;
@@ -850,6 +876,45 @@ export class TireInstallationsService {
         version: { increment: 1 },
       },
     });
+  }
+
+  private scopeWhere(actor: AuthenticatedUser, permission: Permission): Record<string, unknown> {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return {};
+    if (scope === 'OWN') return { createdById: actor.id };
+    if (scope === 'VEHICLE_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      return { vehicleId: { in: ids ?? [] } };
+    }
+    if (scope === 'DRIVER_IDS') return { id: { in: [] } };
+    throw VfmErrors.scopeDenied([
+      { path: [permission], message: 'Nemate pristup ovom opsegu evidencije guma.', code: 'scope_denied' },
+    ]);
+  }
+
+  private assertScope(
+    actor: AuthenticatedUser,
+    permission: Permission,
+    row: { id?: string; vehicleId: string; createdById: string | null },
+  ): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return;
+    if (scope === 'OWN' && row.createdById === actor.id) return;
+    if (scope === 'VEHICLE_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      if (ids?.includes(row.vehicleId)) return;
+    }
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Nemate pristup ovom zapisu u okviru dodijeljenog opsega.',
+        code: 'scope_denied',
+      },
+    ]);
   }
 
   private async createOutbox(

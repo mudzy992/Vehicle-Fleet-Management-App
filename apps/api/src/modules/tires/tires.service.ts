@@ -6,6 +6,7 @@ import {
   TIRE_SET_MANUAL_STATUS_TRANSITIONS,
   toLocalDateString,
   type TirePosition,
+  type Permission,
   type TireStatus,
 } from '@vfm/shared';
 import type {
@@ -21,7 +22,8 @@ import type {
   UpdateTireSetInput,
 } from '@vfm/shared/schemas';
 import { toDatabaseDate } from '../../common/dates.js';
-import { VfmException } from '../../common/errors/vfm-error.js';
+import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user.js';
 import {
   detail,
   mergeCoreValues,
@@ -48,6 +50,7 @@ const TIRE_SET_SELECT = {
   formSchemaId: true,
   formSchemaVersionId: true,
   version: true,
+  createdById: true,
 } as const satisfies Prisma.TireSetSelect;
 
 type TireSetSelectWithMount = typeof TIRE_SET_SELECT & {
@@ -106,6 +109,7 @@ interface LockedTireSetRow {
   status: TireStatus;
   version: number;
   deletedAt: Date | null;
+  createdById: string | null;
 }
 
 const MANUAL_STATUSES = ['IN_STOCK', 'IN_REPAIR', 'RETIRED', 'SCRAPPED'] as const;
@@ -250,7 +254,7 @@ function isUniqueViolation(error: unknown): boolean {
 export class TiresService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listSets(query: TireSetListQuery) {
+  async listSets(query: TireSetListQuery, actor?: AuthenticatedUser) {
     const where: Prisma.TireSetWhereInput = { deletedAt: null };
     if (query.season) where.season = query.season;
     if (query.status) where.status = query.status;
@@ -271,6 +275,13 @@ export class TiresService {
       ];
     }
 
+    if (actor) {
+      const permissionWhere = this.scopeWhere(actor, 'tire:view');
+      if (Object.keys(permissionWhere).length) {
+        where.AND = [...(Array.isArray(where.AND) ? where.AND : []), permissionWhere];
+      }
+    }
+
     const allowed = ['code', 'brand', 'purchaseDate', 'purchasePrice', 'createdAt'] as const;
     const sortBy = allowed.find((key) => key === query.sortBy) ?? 'code';
     const [total, rows] = await Promise.all([
@@ -285,7 +296,9 @@ export class TiresService {
     ]);
 
     return {
-      items: rows.map(serializeTireSet),
+      items: rows.map((row) =>
+        serializeTireSet(actor ? this.visibleSetRow(row as TireSetRow, actor) : (row as TireSetRow)),
+      ),
       total,
       page: query.page,
       pageSize: query.pageSize,
@@ -294,7 +307,8 @@ export class TiresService {
   }
 
   /** Nov komplet uvijek počinje na skladištu; status ne dolazi iz zahtjeva. */
-  async createSet(input: CreateTireSetInput, actorId?: string) {
+  async createSet(input: CreateTireSetInput, actorId?: string, actor?: AuthenticatedUser) {
+    if (actor) this.assertCreateSetScope(actor, 'tire:create');
     const version = await resolveFormVersion(this.prisma as never, {
       subject: 'TIRE_SET',
       versionId: input.formSchemaVersionId,
@@ -364,8 +378,10 @@ export class TiresService {
       throw error;
     }
   }
-  async getSet(id: string): Promise<TireSetDetail> {
-    return serializeTireSetDetail(await this.loadSetDetail(this.prisma, id));
+  async getSet(id: string, actor?: AuthenticatedUser): Promise<TireSetDetail> {
+    const row = await this.loadSetDetail(this.prisma, id);
+    if (actor) await this.assertSetScope(actor, 'tire:view', id, row.createdById);
+    return serializeTireSetDetail(actor ? this.visibleSetRow(row, actor) : row);
   }
 
   /**
@@ -375,7 +391,7 @@ export class TiresService {
    * ciklus se prikazuje s početnim datumom/kilometražom, ali mu se trenutni
    * km i dani ne procjenjuju iz današnjeg stanja vozila.
    */
-  async getSetUsage(id: string): Promise<TireSetUsage> {
+  async getSetUsage(id: string, actor?: AuthenticatedUser): Promise<TireSetUsage> {
     const set = await this.prisma.tireSet.findFirst({
       where: { id, deletedAt: null },
       select: {
@@ -386,12 +402,21 @@ export class TiresService {
         size: true,
         season: true,
         status: true,
+        createdById: true,
       },
     });
     if (!set) throw new VfmException('NOT_FOUND', 'Komplet guma nije pronađen.');
+    if (actor) await this.assertSetScope(actor, 'tire:view', id, set.createdById);
 
+    const usageWhere: Prisma.TireInstallationWhereInput = { setId: id, deletedAt: null };
+    if (actor && actor.permissions?.permissions.get('tire:view') === 'VEHICLE_IDS') {
+      const ids = actor.permissions.grants
+        .filter((grant) => grant.permission === 'tire:view' && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      usageWhere.vehicleId = { in: ids };
+    }
     const rows = await this.prisma.tireInstallation.findMany({
-      where: { setId: id, deletedAt: null },
+      where: usageWhere,
       select: TIRE_SET_USAGE_SELECT,
       orderBy: [{ mountedAt: 'desc' }, { id: 'asc' }],
     });
@@ -501,7 +526,7 @@ export class TiresService {
    * ručno i broj guma ne smije pasti ispod broja aktivnih pozicija. Forma se
    * validira zapisnom verzijom, pa PATCH nikad ne prevodi zapis na novu formu.
    */
-  async updateSet(id: string, input: UpdateTireSetInput) {
+  async updateSet(id: string, input: UpdateTireSetInput, actor?: AuthenticatedUser) {
     if (input.purchaseDate && input.purchaseDate > toLocalDateString(new Date())) {
       throw new VfmException('VALIDATION_ERROR', 'Datum nabavke ne može biti u budućnosti.', [
         detail('purchaseDate', 'Datum nabavke ne može biti u budućnosti.'),
@@ -511,6 +536,7 @@ export class TiresService {
     return this.prisma.$transaction(async (tx) => {
       await this.lockSet(tx, id);
       const current = await this.loadSetDetail(tx, id);
+      if (actor) await this.assertSetScope(actor, 'tire:update', id, current.createdById, tx);
       if (current.version !== input.version) {
         throw new VfmException(
           'VERSION_CONFLICT',
@@ -694,10 +720,11 @@ export class TiresService {
   }
 
   /** Soft-delete kompleta: historija montaža ostaje, aktivna montaža blokira brisanje. */
-  async removeSet(id: string, actorId?: string) {
+  async removeSet(id: string, actorId?: string, actor?: AuthenticatedUser) {
     return this.prisma.$transaction(async (tx) => {
       const locked = await this.lockSet(tx, id);
       const current = await this.loadSetDetail(tx, id);
+      if (actor) await this.assertSetScope(actor, 'tire:delete', id, current.createdById, tx);
       const active = await tx.tireInstallation.findFirst({
         where: { setId: id, dismountedAt: null, deletedAt: null },
         select: {
@@ -758,12 +785,13 @@ export class TiresService {
   }
 
   /** Pojedinačne gume jednog kompleta, u kanonskom redoslijedu pozicija. */
-  async listTires(setId: string) {
+  async listTires(setId: string, actor?: AuthenticatedUser) {
     const set = await this.prisma.tireSet.findFirst({
       where: { id: setId, deletedAt: null },
-      select: { id: true },
+      select: { id: true, createdById: true },
     });
     if (!set) throw new VfmException('NOT_FOUND', 'Komplet guma nije pronađen.');
+    if (actor) await this.assertSetScope(actor, 'tire:view', setId, set.createdById);
 
     const rows = await this.prisma.tire.findMany({
       where: { setId, deletedAt: null },
@@ -781,7 +809,7 @@ export class TiresService {
    * gume montiranog kompleta ostaju na skladištu, a bez aktivne montaže
    * status prati komplet (uz ispravku nekonzistentnog `MOUNTED` u skladište).
    */
-  async createTire(setId: string, input: CreateTireInput) {
+  async createTire(setId: string, input: CreateTireInput, actor?: AuthenticatedUser) {
     if (input.purchaseDate && input.purchaseDate > toLocalDateString(new Date())) {
       throw new VfmException('VALIDATION_ERROR', 'Datum nabavke ne može biti u budućnosti.', [
         detail('purchaseDate', 'Datum nabavke ne može biti u budućnosti.'),
@@ -792,9 +820,10 @@ export class TiresService {
       await this.lockSet(tx, setId);
       const set = await tx.tireSet.findFirst({
         where: { id: setId, deletedAt: null },
-        select: { code: true, tireCount: true, status: true },
+        select: { code: true, tireCount: true, status: true, createdById: true },
       });
       if (!set) throw new VfmException('NOT_FOUND', 'Komplet guma nije pronađen.');
+      if (actor) await this.assertSetScope(actor, 'tire:create', setId, set.createdById, tx);
 
       const [recordedTireCount, active] = await Promise.all([
         tx.tire.count({ where: { setId, deletedAt: null } }),
@@ -862,9 +891,78 @@ export class TiresService {
     });
   }
 
+  private assertCreateSetScope(actor: AuthenticatedUser, permission: Permission): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL' || scope === 'OWN') return;
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Opseg dozvole ne dopušta kreiranje kompleta guma.',
+        code: 'scope_denied',
+      },
+    ]);
+  }
+
+  private scopeWhere(actor: AuthenticatedUser, permission: Permission): Record<string, unknown> {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return {};
+    if (scope === 'OWN') return { createdById: actor.id };
+    if (scope === 'VEHICLE_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      return { installations: { some: { vehicleId: { in: ids ?? [] }, deletedAt: null } } };
+    }
+    if (scope === 'DRIVER_IDS') return { id: { in: [] } };
+    throw VfmErrors.scopeDenied([
+      { path: [permission], message: 'Nemate pristup ovom opsegu kompleta guma.', code: 'scope_denied' },
+    ]);
+  }
+
+  private async assertSetScope(
+    actor: AuthenticatedUser,
+    permission: Permission,
+    setId: string,
+    createdById: string | null,
+    client: PrismaService | Tx = this.prisma,
+  ): Promise<void> {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return;
+    if (scope === 'OWN' && createdById === actor.id) return;
+    if (scope === 'VEHICLE_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      const installation = await (client as PrismaService).tireInstallation.findFirst({
+        where: { setId, vehicleId: { in: ids ?? [] }, deletedAt: null },
+        select: { id: true },
+      });
+      if (installation) return;
+    }
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Nemate pristup ovom kompletu guma u dodijeljenom opsegu.',
+        code: 'scope_denied',
+      },
+    ]);
+  }
+
+  private visibleSetRow<T extends TireSetRow | TireSetDetailRow>(row: T, actor: AuthenticatedUser): T {
+    if (actor.permissions?.permissions.get('tire:view') !== 'VEHICLE_IDS') return row;
+    const ids =
+      actor.permissions?.grants
+        .filter((grant) => grant.permission === 'tire:view' && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []) ?? [];
+    return {
+      ...row,
+      installations: row.installations.filter((installation) => ids.includes(installation.vehicleId)),
+    } as T;
+  }
+
   private async lockSet(tx: Tx, id: string): Promise<LockedTireSetRow> {
     const rows = await tx.$queryRaw<LockedTireSetRow[]>`
-      SELECT "id", "status", "version", "deletedAt"
+      SELECT "id", "status", "version", "deletedAt", "createdById"
       FROM "TireSet"
       WHERE "id" = ${id}::uuid
       FOR UPDATE`;
