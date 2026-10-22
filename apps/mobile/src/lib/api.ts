@@ -261,7 +261,8 @@ export const mobileApi = {
   createTask: (input: { taskTypeId: string; vehicleId: string | null; title?: string; description?: string | null; priority?: string; assignMode: 'OPEN_CLAIM' | 'ASSIGN_DIRECT' | 'BROADCAST'; assigneeUserId?: string; invitedUserIds?: string[]; observerUserIds?: string[]; dueAt?: string | null; formData: Record<string, unknown> }) =>
     request<TaskDetail>('/tasks', { method: 'POST', body: JSON.stringify(input) }),
   task: (id: string) => request<TaskDetail>(`/tasks/${encodeURIComponent(id)}`),
-  vehicles: () => request<{ items: VehicleSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/vehicles?page=1&pageSize=50'),
+  vehicles: () => request<{ items: VehicleSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/vehicles?page=1&pageSize=100&status=ACTIVE'),
+  drivers: () => request<{ items: Array<{ id: string; firstName: string; lastName: string; displayName: string | null; status: string }> }>('/drivers?page=1&pageSize=100&status=ACTIVE'),
   vehicle: (id: string) => request<VehicleDetail>(`/vehicles/${encodeURIComponent(id)}`),
   formVersion: (task: Pick<TaskSummary, 'formSchemaId' | 'formSchemaVersionId'>) =>
     request<FormVersionSnapshot>(`/form-schemas/${encodeURIComponent(task.formSchemaId)}/versions/${encodeURIComponent(task.formSchemaVersionId)}`),
