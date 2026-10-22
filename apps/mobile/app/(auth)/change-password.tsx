@@ -7,7 +7,8 @@ import { colors } from '@/lib/theme';
 
 export default function ChangePasswordScreen() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+  const isRequiredChange = user?.mustChangePassword === true;
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -42,11 +43,13 @@ export default function ChangePasswordScreen() {
     <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.card}>
         <Text style={styles.mark}>VP</Text>
-        <Text style={styles.title}>{changed ? 'Lozinka je promijenjena' : 'Promjena privremene lozinke'}</Text>
+        <Text style={styles.title}>
+          {changed ? 'Lozinka je promijenjena' : isRequiredChange ? 'Promjena privremene lozinke' : 'Promjena lozinke'}
+        </Text>
         <Text style={styles.help}>
           {changed
             ? 'Zbog sigurnosti su sesije zatvorene. Prijavite se ponovo novom lozinkom.'
-            : 'Prije nastavka postavite svoju lozinku. Mora imati najmanje 12 znakova i sadržavati znakove iz najmanje 3 grupe: mala slova, velika slova, cifre i simboli.'}
+            : `${isRequiredChange ? 'Prije nastavka postavite svoju lozinku. ' : 'Unesite trenutnu lozinku i postavite novu. '}Nova lozinka mora imati najmanje 12 znakova i sadržavati znakove iz najmanje 3 grupe: mala slova, velika slova, cifre i simboli.`}
         </Text>
         {changed ? (
           <Pressable accessibilityRole="button" onPress={() => router.replace('/(auth)/login')} style={styles.button}>
@@ -54,8 +57,8 @@ export default function ChangePasswordScreen() {
           </Pressable>
         ) : (
           <>
-            <Text style={styles.label}>Trenutna privremena lozinka</Text>
-            <TextInput value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry autoCapitalize="none" autoComplete="current-password" textContentType="password" accessibilityLabel="Trenutna privremena lozinka" style={styles.input} />
+            <Text style={styles.label}>{isRequiredChange ? 'Trenutna privremena lozinka' : 'Trenutna lozinka'}</Text>
+            <TextInput value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry autoCapitalize="none" autoComplete="current-password" textContentType="password" accessibilityLabel={isRequiredChange ? 'Trenutna privremena lozinka' : 'Trenutna lozinka'} style={styles.input} />
             <Text style={styles.label}>Nova lozinka</Text>
             <TextInput value={newPassword} onChangeText={setNewPassword} secureTextEntry autoCapitalize="none" autoComplete="new-password" textContentType="newPassword" accessibilityLabel="Nova lozinka" style={styles.input} />
             <Text style={styles.label}>Potvrda nove lozinke</Text>

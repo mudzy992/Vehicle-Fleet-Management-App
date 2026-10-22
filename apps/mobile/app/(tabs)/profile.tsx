@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Link } from 'expo-router';
 import { useAuth } from '@/features/auth/auth-provider';
 import { mobileApi, toUserMessage, type ActiveSession } from '@/lib/api';
 import { colors } from '@/lib/theme';
@@ -136,6 +137,11 @@ export default function ProfileScreen() {
         <Text style={styles.infoLabel}>Uloga</Text>
         <Text style={styles.infoValue}>Pristup i dozvole se provjeravaju na serveru.</Text>
       </View>
+      <Link href="/(auth)/change-password" asChild>
+        <Pressable accessibilityRole="button" style={styles.passwordButton}>
+          <Text style={styles.passwordButtonText}>Promijeni lozinku</Text>
+        </Pressable>
+      </Link>
 
       {canManageSessions ? (
         <View style={styles.sessionsCard}>
@@ -267,6 +273,16 @@ const styles = StyleSheet.create({
   info: { padding: 15, backgroundColor: colors.surface, borderRadius: 14, gap: 5 },
   infoLabel: { color: colors.muted, fontSize: 12, fontWeight: '700' },
   infoValue: { color: colors.ink, fontSize: 14 },
+  passwordButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  passwordButtonText: { color: colors.primary, fontSize: 14, fontWeight: '700' },
   sessionsCard: {
     padding: 16,
     backgroundColor: colors.surface,
