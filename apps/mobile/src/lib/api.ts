@@ -146,6 +146,21 @@ export interface TaskDetail extends TaskSummary {
   attachmentIds: string[];
 }
 
+export interface NotificationSummary {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  data: unknown;
+  linkToType: string | null;
+  linkToId: string | null;
+  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+  status: 'PENDING' | 'SENT' | 'READ' | 'FAILED';
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
 export interface UserSummary {
   id: string;
   firstName: string;
@@ -289,6 +304,8 @@ export const mobileApi = {
   createTask: (input: { taskTypeId: string; vehicleId: string | null; title?: string; description?: string | null; priority?: string; assignMode: 'OPEN_CLAIM' | 'ASSIGN_DIRECT' | 'BROADCAST'; assigneeUserId?: string; invitedUserIds?: string[]; observerUserIds?: string[]; dueAt?: string | null; formData: Record<string, unknown> }) =>
     request<TaskDetail>('/tasks', { method: 'POST', body: JSON.stringify(input) }),
   task: (id: string) => request<TaskDetail>(`/tasks/${encodeURIComponent(id)}`),
+  notifications: () => request<{ items: NotificationSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/notifications?page=1&pageSize=50&sortOrder=desc'),
+  markNotificationRead: (id: string) => request<NotificationSummary>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'POST', body: JSON.stringify({}) }),
   vehicles: () => request<{ items: VehicleSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/vehicles?page=1&pageSize=100&status=ACTIVE'),
   drivers: () => request<{ items: Array<{ id: string; firstName: string; lastName: string; displayName: string | null; status: string }> }>('/drivers?page=1&pageSize=100&status=ACTIVE'),
   vehicle: (id: string) => request<VehicleDetail>(`/vehicles/${encodeURIComponent(id)}`),
