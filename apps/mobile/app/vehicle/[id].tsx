@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { ApiError, mobileApi, type VehicleDetail } from '@/lib/api';
+import { mobileApi, toUserMessage, type VehicleDetail } from '@/lib/api';
 import { colors } from '@/lib/theme';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -43,7 +43,7 @@ export default function VehicleDetailScreen() {
     try {
       setVehicle(await mobileApi.vehicle(id));
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Podaci o vozilu se nisu mogli učitati.');
+      setError(toUserMessage(cause, 'Podaci o vozilu se nisu mogli učitati.'));
       setVehicle(null);
     } finally {
       setLoading(false);

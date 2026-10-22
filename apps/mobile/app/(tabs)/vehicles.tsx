@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Link } from 'expo-router';
-import { ApiError, mobileApi, type VehicleSummary } from '@/lib/api';
+import { mobileApi, toUserMessage, type VehicleSummary } from '@/lib/api';
 import { colors } from '@/lib/theme';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -35,7 +35,7 @@ export default function VehiclesScreen() {
       const result = await mobileApi.vehicles();
       setItems(result.items);
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Vozila se nisu mogla učitati.');
+      setError(toUserMessage(cause, 'Vozila se nisu mogla učitati.'));
     } finally {
       setLoading(false);
       setRefreshing(false);

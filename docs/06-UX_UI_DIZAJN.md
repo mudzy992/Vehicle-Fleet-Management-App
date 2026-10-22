@@ -763,8 +763,8 @@ i ne pokreće nijedan upit. Ostali ekrani su placeholderi s oznakom faze.
 | M7 | Vozila — lista | 6 | `vehicle:view` | ✅ `apps/mobile/app/(tabs)/vehicles.tsx`, online lista, pull-to-refresh i statusni pregled |
 | M8 | Vozilo — profil (read-only) | 6 | `vehicle:view` | ✅ `apps/mobile/app/vehicle/[id].tsx`, osnovni podaci, VIN i rokovi |
 | M9 | Obavijesti — lista + read | 6 | `notification:view`, `notification:mark_read` | ✅ API lista, unread count, pojedinačno i masovno označavanje pročitane; mobilni tab (permission-gated), deep-link zadatak/vozilo i refresh; ⏳ preferences/SSE/FCM i uređajski test |
-| M10 | Profil — sesije, lozinka, postavke obavijesti, logout | 6 | `auth:login` | 🟡 profil, odjava i obavezna promjena privremene lozinke; aktivne sesije, odjava pojedinog uređaja i odjava svih uređaja (prikaz/akcije samo uz `auth:manage_sessions`); postavke obavijesti i uređajski UAT ostaju otvoreni |
-| M11 | Sistem: offline/greška/403 stanja | 6 | — | ⚠️ mrežna greška i retry; nema uređajskog UAT-a |
+| M10 | Profil — sesije, lozinka, postavke obavijesti, logout | 6 | `auth:login` | 🟡 profil, odjava, ručna/obavezna promjena lozinke; aktivne sesije, odjava pojedinog uređaja i odjava svih uređaja (prikaz/akcije samo uz `auth:manage_sessions`); postavke obavijesti i uređajski UAT ostaju otvoreni |
+| M11 | Sistem: offline/greška/403 stanja | 6 | — | 🟡 standardizirane poruke za mrežu, istek sesije, 403/404/409/429/5xx, retry i automatski povratak na prijavu nakon isteka sesije; uređajski UAT ostaje otvoren |
 
 ---
 

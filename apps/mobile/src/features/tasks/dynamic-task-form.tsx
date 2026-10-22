@@ -5,7 +5,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { buildRenderModel, collectSubmitValues, type RenderField, type RenderModel } from '@vfm/form-renderer/render-model';
 import { parseDefinition } from '@vfm/form-engine/definition';
-import { ApiError, mobileApi, type TaskDetail } from '@/lib/api';
+import { ApiError, mobileApi, toUserMessage, type TaskDetail } from '@/lib/api';
 import { colors } from '@/lib/theme';
 
 interface Props {
@@ -110,7 +110,7 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
         setValues((current) => ({ ...current, [field.key]: [...ids] }));
       }
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Upload fajla nije uspio. Pokušajte ponovo.');
+      setError(toUserMessage(cause, 'Upload fajla nije uspio. Pokušajte ponovo.'));
     } finally {
       setActiveUpload(null);
     }
@@ -187,7 +187,7 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
       onTaskUpdated(updated);
     } catch (cause) {
       if (cause instanceof ApiError) {
-        setError(cause.message);
+        setError(toUserMessage(cause, 'Zadatak nije moguće ažurirati.'));
         setFieldErrors((cause.details ?? []).flatMap((detail) => {
           const path = detail.path.join('.');
           return path.startsWith('formData.') ? [{ key: path.slice('formData.'.length), code: cause.code, message: detail.message }] : [];

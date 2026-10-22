@@ -8,6 +8,7 @@ const REFRESH_KEY = 'vfm.refresh-token';
 let accessToken: string | null = null;
 let sessionId: string | null = null;
 let refreshFlight: Promise<boolean> | null = null;
+const authExpiredListeners = new Set<() => void>();
 
 export class ApiError extends Error {
   constructor(
@@ -23,6 +24,23 @@ export class ApiError extends Error {
 }
 
 type Envelope<T> = { data: T } | { error: { code?: string; message?: string; requestId?: string; details?: Array<{ path: string[]; message: string }> } };
+
+export function toUserMessage(cause: unknown, fallback: string): string {
+  if (!(cause instanceof ApiError)) return cause instanceof Error ? cause.message : fallback;
+  if (cause.status === 0 || cause.code === 'NETWORK_ERROR') return 'Nema mrežne veze. Provjerite internet i pokušajte ponovo.';
+  if (cause.status === 401 && cause.code !== 'INVALID_CREDENTIALS') return 'Sesija je istekla. Prijavite se ponovo da nastavite.';
+  if (cause.status === 403) return 'Server nije dozvolio pristup ovom sadržaju. Osvježite prikaz ili kontaktirajte administratora.';
+  if (cause.status === 404) return 'Traženi zapis više nije dostupan.';
+  if (cause.status === 409) return 'Podaci su se promijenili. Osvježite prikaz i pokušajte ponovo.';
+  if (cause.status === 429) return 'Previše je zahtjeva u kratkom vremenu. Sačekajte i pokušajte ponovo.';
+  if (cause.status >= 500) return 'Usluga trenutno nije dostupna. Pokušajte ponovo za nekoliko trenutaka.';
+  return cause.message || fallback;
+}
+
+export function onAuthExpired(listener: () => void): () => void {
+  authExpiredListeners.add(listener);
+  return () => { authExpiredListeners.delete(listener); };
+}
 
 export interface FormVersionSnapshot {
   id: string;
@@ -42,23 +60,32 @@ export interface AttachmentUploadResult {
 async function refresh(): Promise<boolean> {
   if (refreshFlight) return refreshFlight;
   const promise = (async () => {
+    const refreshToken = await SecureStore.getItemAsync(REFRESH_KEY);
+    if (!refreshToken) return false;
+    let response: Response;
     try {
-      const refreshToken = await SecureStore.getItemAsync(REFRESH_KEY);
-      if (!refreshToken) return false;
-      const response = await fetch(`${API_BASE}/auth/refresh`, {
+      response = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Client-Type': 'MOBILE_ANDROID' },
         body: JSON.stringify({ refreshToken, clientType: 'MOBILE_ANDROID' }),
       });
-      const body = (await response.json()) as Envelope<{ accessToken: string; refreshToken: string; sessionId: string }>;
-      if (!response.ok || !('data' in body) || !body.data.accessToken || !body.data.refreshToken) return false;
-      accessToken = body.data.accessToken;
-      sessionId = body.data.sessionId ?? null;
-      await SecureStore.setItemAsync(REFRESH_KEY, body.data.refreshToken);
-      return true;
+    } catch {
+      throw new ApiError('Nema mrežne veze. Provjerite internet i pokušajte ponovo.', 0, 'NETWORK_ERROR');
+    }
+    if (response.status === 429 || response.status >= 500) {
+      throw new ApiError('Usluga trenutno nije dostupna. Pokušajte ponovo za nekoliko trenutaka.', response.status, 'HTTP_ERROR');
+    }
+    let body: Envelope<{ accessToken: string; refreshToken: string; sessionId: string }>;
+    try {
+      body = (await response.json()) as Envelope<{ accessToken: string; refreshToken: string; sessionId: string }>;
     } catch {
       return false;
     }
+    if (!response.ok || !('data' in body) || !body.data.accessToken || !body.data.refreshToken) return false;
+    accessToken = body.data.accessToken;
+    sessionId = body.data.sessionId ?? null;
+    await SecureStore.setItemAsync(REFRESH_KEY, body.data.refreshToken);
+    return true;
   })();
   refreshFlight = promise;
   try {
@@ -85,11 +112,13 @@ async function request<T>(path: string, init: RequestInit = {}, mayRefresh = tru
     throw new ApiError('Nema mrežne veze. Provjerite internet i pokušajte ponovo.', 0, 'NETWORK_ERROR');
   }
 
-  if (response.status === 401 && mayRefresh && !path.startsWith('/auth/')) {
-    if (await refresh()) return request<T>(path, init, false);
+  const authRouteDoesNotUseBearer = ['/auth/login', '/auth/refresh', '/auth/logout'].includes(path);
+  if (response.status === 401 && !authRouteDoesNotUseBearer) {
+    if (mayRefresh && await refresh()) return request<T>(path, init, false);
     accessToken = null;
     sessionId = null;
     await SecureStore.deleteItemAsync(REFRESH_KEY);
+    authExpiredListeners.forEach((listener) => listener());
   }
 
   let body: Envelope<T> | null = null;
