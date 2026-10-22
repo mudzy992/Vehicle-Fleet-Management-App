@@ -264,7 +264,7 @@ export const baseEnvSchema = z.object({
   FIREBASE_PROJECT_ID: optionalString,
   FIREBASE_SERVICE_ACCOUNT_PATH: optionalString,
   FIREBASE_SERVICE_ACCOUNT_HOST_DIR: optionalString,
-  FCM_ANDROID_PACKAGE: z.string().min(1).default('ba.example.voznipark'),
+  FCM_ANDROID_PACKAGE: z.string().min(1).default('ba.ba101.voznipark'),
   FCM_MESSAGE_TTL_SECONDS: integer(86_400, (schema) => schema.min(0)),
   FCM_INVALID_TOKEN_THRESHOLD: integer(1, (schema) => schema.min(1)),
 
@@ -296,7 +296,7 @@ export const baseEnvSchema = z.object({
   EXPO_PUBLIC_API_URL: optionalUrl.transform((value) => value ?? DEFAULT_PUBLIC_API_URL),
   EXPO_PUBLIC_APP_ENV: z.string().min(1).default('production'),
   EAS_PROJECT_ID: optionalString,
-  ANDROID_PACKAGE: z.string().min(1).default('ba.example.voznipark'),
+  ANDROID_PACKAGE: z.string().min(1).default('ba.ba101.voznipark'),
   ANDROID_VERSION_CODE: integer(1, (schema) => schema.min(1)),
   ANDROID_VERSION_NAME: z.string().min(1).default('1.0.0'),
   GOOGLE_SERVICES_JSON_PATH: z.string().min(1).default('./apps/mobile/google-services.json'),

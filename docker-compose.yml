@@ -224,7 +224,7 @@ services:
       FIREBASE_ENABLED: ${FIREBASE_ENABLED:-false}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       FIREBASE_SERVICE_ACCOUNT_PATH: /run/secrets/vfm/firebase-service-account.json
-      FCM_ANDROID_PACKAGE: ${FCM_ANDROID_PACKAGE:-ba.example.voznipark}
+      FCM_ANDROID_PACKAGE: ${FCM_ANDROID_PACKAGE:-ba.ba101.voznipark}
       FCM_MESSAGE_TTL_SECONDS: ${FCM_MESSAGE_TTL_SECONDS:-86400}
       FCM_INVALID_TOKEN_THRESHOLD: ${FCM_INVALID_TOKEN_THRESHOLD:-1}
     volumes:
@@ -300,7 +300,7 @@ services:
       FIREBASE_ENABLED: ${FIREBASE_ENABLED:-false}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       FIREBASE_SERVICE_ACCOUNT_PATH: /run/secrets/vfm/firebase-service-account.json
-      FCM_ANDROID_PACKAGE: ${FCM_ANDROID_PACKAGE:-ba.example.voznipark}
+      FCM_ANDROID_PACKAGE: ${FCM_ANDROID_PACKAGE:-ba.ba101.voznipark}
       FCM_MESSAGE_TTL_SECONDS: ${FCM_MESSAGE_TTL_SECONDS:-86400}
       FCM_INVALID_TOKEN_THRESHOLD: ${FCM_INVALID_TOKEN_THRESHOLD:-1}
       # Worker ne servira HTTP, ali dijeli isti env validator

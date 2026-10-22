@@ -13,7 +13,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     version: process.env.ANDROID_VERSION_NAME ?? config.version ?? '1.0.0',
     android: {
       ...config.android,
-      package: process.env.ANDROID_PACKAGE ?? config.android?.package ?? 'ba.example.voznipark',
+      package: process.env.ANDROID_PACKAGE ?? config.android?.package ?? 'ba.ba101.voznipark',
       versionCode,
     },
   };
