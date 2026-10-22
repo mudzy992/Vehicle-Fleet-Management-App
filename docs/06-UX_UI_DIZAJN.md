@@ -740,7 +740,8 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 
 | Ekran | Ruta | Fajl | Napomena |
 |---|---|---|---|
-| Lista zadataka (W09, prva web cjelina) | `/zadaci` | `features/tasks/tasks-page.tsx`, `tasks-model.ts` | segmenti Slobodni/Moji/Svi; server paginacija; claim samo u Slobodni uz `task:claim`, mutation invalidira liste i prikazuje grešku/409 poruku; zadatak u toku se ne smatra preuzetim prije uspješnog odgovora servera. Detalj, završetak i wizard ostaju zasebne cjeline. |
+| Lista zadataka (W09, prva web cjelina) | `/zadaci` | `features/tasks/tasks-page.tsx`, `tasks-model.ts` | segmenti Slobodni/Moji/Svi; server paginacija; claim samo u Slobodni uz `task:claim`, mutation invalidira liste i prikazuje grešku/409 poruku; zadatak u toku se ne smatra preuzetim prije uspješnog odgovora servera. Završetak i wizard ostaju zasebne cjeline. |
+| Detalj zadatka (W09, druga web cjelina) | `/zadaci/:taskId` | `features/tasks/task-detail-page.tsx` | detalji i snapshot forme, učesnici, historija, komentari i unos komentara uz `task:comment`; prikazuje Claim samo na `OPEN` zadatku uz `task:claim`, bez lažnog optimističkog prelaza. Dinamički završetak ostaje zaseban. |
 | Vrste zadataka (W18) | `/vrste-zadataka` | `features/task-types/task-types-page.tsx`, `task-type-form.tsx`, `task-type-requirements-panel.tsx` | server pretraga, filteri aktivne/vozilo, sortiranje i paginacija; **Nova vrsta** uz `task_type:create`, **Uredi** i editor zahtjeva uz `task_type:update`, **Arhiviraj** uz `task_type:archive`; kod je pri izmjeni zaključan, zadana forma se bira među objavljenim generičkim/vlastitim TASK formama; zahtjevi se uređuju kao cijeli skup i, kad je efektivna forma dostupna, biraju iz njenih polja za unos. |
 
 Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);

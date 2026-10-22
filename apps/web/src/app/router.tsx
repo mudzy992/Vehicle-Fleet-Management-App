@@ -33,6 +33,7 @@ import { VehicleDetailPage } from '../features/vehicles/vehicle-detail-page.js';
 import { TireSetsPage } from '../features/tires/tire-sets-page.js';
 import { TaskTypesPage } from '../features/task-types/task-types-page.js';
 import { TasksPage } from '../features/tasks/tasks-page.js';
+import { TaskDetailPage } from '../features/tasks/task-detail-page.js';
 import { NAV_ITEMS } from './nav.js';
 
 export const router = createBrowserRouter([
@@ -158,6 +159,15 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission="task:view">
             <TasksPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        // W09 — detalj zadatka, historija i komentari.
+        path: 'zadaci/:taskId',
+        element: (
+          <RequirePermission permission="task:view">
+            <TaskDetailPage />
           </RequirePermission>
         ),
       },

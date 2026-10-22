@@ -617,3 +617,8 @@ Jedinični lažni klijent ne dokazuje rollback, HTTP retry ponašanje ni isporuk
 ### Web lista zadataka i claim — W09
 
 `apps/web/src/features/tasks/tasks-model.test.ts` provjerava da segmenti koriste odgovarajuće API rute/parametre i prikaz broja zadataka. `tasks-page.test.tsx` provjerava učitavanje slobodnog zadatka i uspješno pozivanje claim endpointa uz potvrdu poruke. Ručni browser/UAT tok, API 409 preko pravog servera i Coolify nisu dio ovog jediničnog testa.
+
+
+### Web detalj zadatka, historija i komentari — W09
+
+`apps/web/src/features/tasks/task-detail-page.test.tsx` provjerava detalje, historiju, sakrivanje Claim akcije bez `task:claim` i dodavanje komentara kroz API. `task-detail-page.tsx` koristi `GET /tasks/:id`, `GET /tasks/:id/comments` i `POST /tasks/:id/comments`; prikaz događaja dolazi iz detalja i ne uvodi zasebnu klijentsku kopiju. Browser UAT i API integracija nisu provedeni.

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { AuthUser, TaskListResponse, TaskView } from '@vfm/shared/schemas';
 import { setAccessToken, setSessionExpiredHandler } from '../../lib/api.js';
@@ -109,11 +110,13 @@ describe('TasksPage', () => {
     });
 
     render(
-      <QueryClientProvider client={client}>
-        <SessionProvider>
-          <TasksPage />
-        </SessionProvider>
-      </QueryClientProvider>,
+      <MemoryRouter>
+        <QueryClientProvider client={client}>
+          <SessionProvider>
+            <TasksPage />
+          </SessionProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
     );
 
     expect(await screen.findByText('Pranje vozila')).toBeTruthy();

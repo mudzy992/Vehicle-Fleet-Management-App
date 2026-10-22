@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { statusLabel } from '@vfm/shared';
 import type { TaskListResponse, TaskView } from '@vfm/shared/schemas';
 import { Badge, Button, Card, CardContent, EmptyState, StatusBadge } from '../../components/ui/index.js';
@@ -29,7 +30,9 @@ function TaskCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-semibold">{task.title}</h2>
+            <Link className="font-semibold text-[var(--primary)] hover:underline" to={`/zadaci/${task.id}`}>
+              {task.title}
+            </Link>
             <StatusBadge value={task.status} domain="taskStatus" />
           </div>
           <p className="mt-1 text-sm text-[var(--fg-muted)]">
