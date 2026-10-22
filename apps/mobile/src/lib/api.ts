@@ -146,6 +146,46 @@ export interface TaskDetail extends TaskSummary {
   attachmentIds: string[];
 }
 
+export interface VehicleSummary {
+  id: string;
+  internalNo: string;
+  make: string;
+  model: string;
+  year: number | null;
+  plateNumber: string | null;
+  fuelType: string;
+  status: string;
+  odometerKm: number;
+  odometerUpdatedAt: string | null;
+  registrationExpiresAt: string | null;
+  insuranceExpiresAt: string | null;
+  archivedAt: string | null;
+  version: number;
+  updatedAt: string;
+}
+
+export interface VehicleDetail extends VehicleSummary {
+  vin: string | null;
+  transmission: string | null;
+  color: string | null;
+  bodyType: string | null;
+  engineCcm: number | null;
+  enginePowerKw: number | null;
+  seats: number | null;
+  ownershipType: string;
+  acquisitionDate: string | null;
+  acquisitionPrice: number | null;
+  costCenter: string | null;
+  nextServiceDueDate: string | null;
+  nextServiceDueKm: number | null;
+  notes: string | null;
+  photoAttachmentId: string | null;
+  formSchemaId: string;
+  formSchemaVersionId: string;
+  formData: Record<string, unknown>;
+  createdAt: string;
+}
+
 export const mobileApi = {
   login: async (email: string, password: string) => {
     const deviceName = Device.modelName ?? 'Android uređaj';
@@ -177,6 +217,8 @@ export const mobileApi = {
   },
   tasks: () => request<{ items: TaskSummary[]; total: number }>('/tasks/available?page=1&pageSize=50'),
   task: (id: string) => request<TaskDetail>(`/tasks/${encodeURIComponent(id)}`),
+  vehicles: () => request<{ items: VehicleSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/vehicles?page=1&pageSize=50'),
+  vehicle: (id: string) => request<VehicleDetail>(`/vehicles/${encodeURIComponent(id)}`),
   formVersion: (task: Pick<TaskSummary, 'formSchemaId' | 'formSchemaVersionId'>) =>
     request<FormVersionSnapshot>(`/form-schemas/${encodeURIComponent(task.formSchemaId)}/versions/${encodeURIComponent(task.formSchemaVersionId)}`),
   claimTask: (id: string, formData: Record<string, unknown>) =>
