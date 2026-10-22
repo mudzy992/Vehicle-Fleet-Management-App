@@ -37,7 +37,7 @@ export interface SessionValue {
   readonly user: AuthUser | null;
   readonly status: SessionStatus;
   readonly login: (credentials: LoginCredentials) => Promise<AuthUser>;
-  readonly logout: () => Promise<void>;
+  readonly logout: (options?: { serverAlreadyRevoked?: boolean }) => Promise<void>;
   readonly reload: () => Promise<void>;
   /** UX provjera prava; server i dalje odlučuje (P14). */
   readonly hasPermission: (permission: string) => boolean;
@@ -108,9 +108,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return result.user;
   }, []);
 
-  const logout = useCallback(async (): Promise<void> => {
+  const logout = useCallback(async (options: { serverAlreadyRevoked?: boolean } = {}): Promise<void> => {
     try {
-      await api.post<void>('/auth/logout');
+      if (!options.serverAlreadyRevoked) await api.post<void>('/auth/logout');
     } catch (error) {
       // Odjava mora uspjeti lokalno i kad server nije dostupan.
       if (!(error instanceof ApiError)) throw error;

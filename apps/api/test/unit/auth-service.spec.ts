@@ -196,6 +196,15 @@ describe('AuthService.login — sretan put', () => {
     expect(claims.roles).toEqual(['ADMINISTRATOR']);
   });
 
+  it('P2: token izdat nakon globalne invalidacije nosi trenutni pv, ne samo DB role verziju', async () => {
+    for (let version = 0; version < 5; version += 1) await redis.incr('vfm:permver:global');
+
+    const result = await service.login(loginInput(), CONTEXT);
+
+    expect(tokens.decodeClaims(result.response.accessToken).pv).toBe(5);
+    expect(result.response.user.permissionsVersion).toBe(5);
+  });
+
   it('payload korisnika sadrži efektivna prava i dozvoljene tipove klijenta', async () => {
     const result = await service.login(loginInput(), CONTEXT);
 
@@ -302,6 +311,18 @@ describe('AuthService.login — odbijanja', () => {
     expect(sink.types).toEqual(['LOGIN_FAILED']);
   });
 
+  it('P2: paralelni neuspješni login-i ne gube inkremente lockout brojača', async () => {
+    const attempts = await Promise.allSettled(
+      Array.from({ length: 3 }, () =>
+        service.login(loginInput({ password: 'Pogresna!Sifra2026' }), CONTEXT),
+      ),
+    );
+
+    expect(attempts.every((attempt) => attempt.status === 'rejected')).toBe(true);
+    expect(prisma.users.get(USER_ADMIN)?.failedLoginCount).toBe(3);
+    expect(prisma.users.get(USER_ADMIN)?.lockedUntil).toBeInstanceOf(Date);
+  });
+
   it('nakon AUTH_MAX_FAILED_ATTEMPTS (3) → ACCOUNT_LOCKED s retryAfter i lockedUntil', async () => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       await captureError(service.login(loginInput({ password: 'Pogresna!Sifra2026' }), CONTEXT));
@@ -378,6 +399,18 @@ describe('AuthService.login — odbijanja', () => {
     expect(prisma.authAttempts.at(-1)).toMatchObject({ success: false, failureReason: 'CLIENT_TYPE_NOT_ALLOWED' });
   });
 
+  it('P1: dodatna mobilna rola ne proširuje Super Adminovu web-only zabranu', async () => {
+    loader.update(USER_SUPER, { allowedClientTypes: ['WEB', 'MOBILE_ANDROID'] });
+
+    const error = await captureError(
+      service.login(loginInput({ email: SUPER_EMAIL, clientType: 'MOBILE_ANDROID' }), CONTEXT),
+    );
+
+    expect(error.code).toBe('MOBILE_ACCESS_FORBIDDEN');
+    expect(prisma.sessions.size).toBe(0);
+    expect(sink.types).toContain('MOBILE_ACCESS_FORBIDDEN');
+  });
+
   it('uloga bez prava na dati tip klijenta → 403 MOBILE_SCOPE_NOT_ALLOWED', async () => {
     const error = await captureError(
       service.login(loginInput({ email: ADMIN_EMAIL, clientType: 'MOBILE_IOS' }), CONTEXT),
@@ -414,6 +447,21 @@ describe('AuthService.refresh — rotacija i reuse detection', () => {
     expect(newSession?.familyId).toBe(oldSession?.familyId);
     expect(rotated.refreshToken).not.toBe(login.refreshToken);
     expect(tokens.decodeClaims(rotated.response.accessToken).sid).toBe(rotated.response.sessionId);
+  });
+
+  it('P1: paralelna refresh zahtjeva ne mogu oba rotirati isti token', async () => {
+    const login = await service.login(loginInput(), CONTEXT);
+
+    const results = await Promise.allSettled([
+      service.refresh({}, CONTEXT, login.refreshToken),
+      service.refresh({}, CONTEXT, login.refreshToken),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(prisma.activeSessions(USER_ADMIN)).toHaveLength(0);
+    expect(prisma.sessions.get(login.response.sessionId)?.replacedById).toBeTruthy();
+    expect(sink.types).toContain('REFRESH_REUSE_DETECTED');
   });
 
   it('prihvata refresh token iz tijela (mobilni klijenti)', async () => {
@@ -805,6 +853,21 @@ describe('AuthService — reset lozinke tokenom', () => {
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
 
     expect(prisma.users.get(USER_ADMIN)?.passwordHash).toBe(before);
+  });
+
+  it('P1: dva istovremena zahtjeva atomarno potroše reset token samo jednom', async () => {
+    const token = issueToken(USER_ADMIN);
+    const beforeVersion = prisma.users.get(USER_ADMIN)?.tokenVersion;
+
+    const results = await Promise.allSettled([
+      service.resetPasswordWithToken({ token, newPassword: NEW_PASSWORD }, CONTEXT),
+      service.resetPasswordWithToken({ token, newPassword: 'Druga!Sifra2026y' }, CONTEXT),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(prisma.users.get(USER_ADMIN)?.tokenVersion).toBe((beforeVersion ?? 0) + 1);
+    expect(prisma.passwordResetTokens[0]?.usedAt).toBeInstanceOf(Date);
   });
 
   it('iskorišten token se ne može ponoviti', async () => {

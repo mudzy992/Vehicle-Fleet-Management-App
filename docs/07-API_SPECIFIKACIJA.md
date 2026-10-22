@@ -111,7 +111,7 @@ Legenda: 🔒 = autorizovano; **P** = potrebna permisija; `Idem` = podržava `Id
 | POST | `/auth/forgot-password` | javno | uvijek 200 (bez enumeracije) — ⏳ Faza 5 (treba Outbox/e-mail; token se u Fazi 1 izdaje adminu kroz `/users/:id/reset-password`) |
 | POST | `/auth/reset-password` | javno + limiter `login` | `{token, newPassword}` → 200 `{userId, email}`; token se poredi po SHA-256 hashu, važi 30 min i koristi se **jednom**; uspjeh: `mustChangePassword=false`, `tokenVersion++`, revoke **svih** sesija + brisanje RBAC keša |
 | GET | `/auth/sessions` | 🔒 `auth:manage_sessions` | lista aktivnih sesija/uređaja (ISO datumi, IP, UA, `deviceInfo`) |
-| DELETE | `/auth/sessions/:id` | 🔒 `auth:manage_sessions` | revokacija jedne sesije + `tokenVersion++`; tuđa sesija → `404 NOT_FOUND` |
+| DELETE | `/auth/sessions/:id` | 🔒 `auth:manage_sessions` | revokacija jedne sesije + `tokenVersion++`; odgovor `{currentSessionRevoked}`; kad je to trenutna sesija briše se refresh cookie; tuđa sesija → `404 NOT_FOUND` |
 
 **Stanje (Faza 1):** implementirano `login`, `refresh`, `logout`, `logout-all`, `me`,
 `change-password`, `reset-password`, `GET/DELETE /sessions`. Sve rute osim `login`/`refresh` prolaze lanac

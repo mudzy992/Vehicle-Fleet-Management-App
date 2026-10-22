@@ -32,6 +32,16 @@ export const REDACTED_FIELDS: readonly string[] = [
   'secret',
   'apiKey',
   'firebaseCredentials',
+  // Nazivi koje mogu emitovati integracije/klijenti ugniježđenim payload-ima.
+  'token',
+  'idToken',
+  'sessionToken',
+  'authorization',
+  'cookie',
+  'set-cookie',
+  'access_token',
+  'refresh_token',
+  'reset_token',
 ];
 
 /** Vrijednost koja zamjenjuje osjetljivo polje. */
@@ -153,9 +163,28 @@ export function redactRecord(
       result[key] = REDACTED_VALUE;
       continue;
     }
-    result[key] = entry;
+    if (Array.isArray(entry)) {
+      result[key] = entry.map((item) => redactNested(item));
+    } else if (isPlainRecord(entry)) {
+      result[key] = redactRecord(entry as Readonly<Record<string, unknown>>);
+    } else {
+      result[key] = entry;
+    }
   }
   return result;
+}
+
+/** Rekurzivno obrađuje JSON objekte i nizove, bez pretvaranja datuma. */
+function redactNested(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactNested);
+  if (isPlainRecord(value)) return redactRecord(value as Readonly<Record<string, unknown>>);
+  return value;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value instanceof Date) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 /** JSON-ekvivalentnost (null/undefined se ne razlikuju, redoslijed ključeva bitan). */

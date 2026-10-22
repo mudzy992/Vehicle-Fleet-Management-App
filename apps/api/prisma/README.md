@@ -80,7 +80,9 @@ direktoriji u `apps/api/prisma/migrations/` imenovani:
 |---|---|---|
 | `0_extensions` | `pgcrypto`, `citext`, `btree_gist` (+ opciono `pg_stat_statements`) i trigger **funkcije** (`vfm_guard_last_super_admin`, `vfm_reject_write`, `vfm_guard_published_form_version`) | ✅ commit-ovano |
 | `1_init` | sav DDL iz `schema.prisma` (45 modela, 30 enuma, 76 FK-ova, 36 unique indeksa) | ✅ commit-ovano (generisano s `migrate diff --from-empty`) |
-| `2_manual` | 18 CHECK-ova, 2 `EXCLUDE USING gist`, 9 partial unique indeksa, `AuditLog.id` kao IDENTITY, **popravljene trigger funkcije** i vezivanje 6 triggera na tabele (19 `// SQL:` markera iz `schema.prisma`) | ✅ commit-ovano |
+| `2_manual` | 18 CHECK-ova, 2 `EXCLUDE USING gist`, 9 partial unique indeksa, `AuditLog.id` kao IDENTITY, popravljene trigger funkcije i 6 zaštitnih triggera | ✅ commit-ovano |
+| `3_password_reset_tokens` | tabela `PasswordResetToken` (hash, jednokratno, istek 30 min) | ✅ commit-ovano |
+| `4_super_admin_guard_lock` | advisory transaction lock prije DB triggera za last-Super-Admin zaštitu (sprječava race između API instanci) | ✅ dodano; live DB verifier obavezan |
 
 `migration_lock.toml` (`provider = "postgresql"`) je commit-ovan — bez njega
 `prisma migrate deploy` odbija rad.
@@ -92,16 +94,16 @@ direktoriji u `apps/api/prisma/migrations/` imenovani:
 | 0 | `0_extensions` | `pgcrypto`, `citext`, `btree_gist` (NE mijenjati — checksum) | primijenjeno |
 | 1 | `1_init` | 45 tabela, indeksi, FK-ovi, enum tipovi | primijenjeno + verifier |
 | 2 | `2_manual` | partial unique indeksi, EXCLUDE constraint, triggeri, `last_admin` guard | primijenjeno + verifier |
-| 3 | `3_password_reset_tokens` | tabela `PasswordResetToken` (jednokratni reset tokeni, 30 min) | SQL ručno napisan (Prisma 7 `migrate diff` traži native engine — nema ga u sandboxu) |
+| 3 | `3_password_reset_tokens` | tabela `PasswordResetToken` (jednokratni reset tokeni, 30 min) | SQL ručno napisan; primjena nije izvršena u ovom sandboxu |
+| 4 | `4_super_admin_guard_lock` | serijalizuje paralelne izmjene koje bi uklonile posljednjeg Super Admina | SQL ručno napisan; primjena nije izvršena u ovom sandboxu |
 
-`1_init` i `2_manual` **postoje i provjerene su primjenom na pravom
-PostgreSQL-u** (`scripts/db-verify/`, 95 asertacija — vidi odjeljak D).
+`1_init` i `2_manual` ranije su **provjerene primjenom na pravom PostgreSQL-u** (`scripts/db-verify/`, 95 asertacija).
+Verifier je sada proširen da primjenjuje i migracije 3–4 te testira paralelnu zaštitu, ali taj gate nije izvršen u ovom sandboxu.
 
-> ⚠️ **`3_password_reset_tokens` nije provjeren primjenom u sandboxu** (nema
-> PostgreSQL-a ni native engine-a). SQL je pisan po istom obrascu kao `1_init`
-> (`UUID`, `TIMESTAMPTZ(6)`, imena constrainta po Prisma konvenciji), a prije
-> prve migracije na pravoj bazi obavezno pokreni `scripts/db-verify/` — on
-> hvata neusklađenost tipova i imena.
+> ⚠️ **`3_password_reset_tokens` i `4_super_admin_guard_lock` nisu primijenjene
+> nad bazom u ovom sandboxu.** Prije deploya obavezno pokreni `scripts/db-verify/`:
+> verifier sada provjerava migracije `0→4`, idempotentnost ručnih SQL-a i
+> konkurentni last-Super-Admin scenario.
 
 > ⚠️ **Popravka u `1_init`:** `Attachment."uploadedById"` i
 > `IdempotencyKey."userId"` generisali su se kao `TEXT`, a FK cilja
@@ -305,7 +307,7 @@ docker exec vfm-postgres psql -U vfm -d postgres -c 'CREATE DATABASE vfm_verify'
 # 2) Python 3.9+ i psycopg
 pip install "psycopg[binary]"          # ili: pipx / venv
 
-# 3) primjena migracija + katalog provjere (0 → 2_manual, dvaput radi idempotentnosti)
+# 3) primjena migracija + katalog provjere (0 → 4; ručne migracije idempotentno)
 python3 scripts/db-verify/apply_migrations.py
 python3 scripts/db-verify/behavior_tests.py
 ```
@@ -318,8 +320,8 @@ Oba skripta primaju DSN kao prvi argument (default
 
 | Skripta | Provjera |
 |---|---|
-| `apply_migrations.py` | `0_extensions` → `1_init` → `2_manual` prolaze; `2_manual` je idempotentan (2. primjena bez greške); broj tabela/`ux_` indeksa/`ck_` ograničenja/`EXCLUDE`/FK-ova/triggera; `AuditLog.id` = `GENERATED ALWAYS`; **svaki FK ima usklađene tipove kolona** |
-| `behavior_tests.py` | 95 asertacija: append-only `AuditLog`/`TaskEvent` (INSERT bez `id` radi, eksplicitan `id`/UPDATE/DELETE se odbijaju); `LAST_SUPER_ADMIN_PROTECTED` (deaktivacija, soft delete, hard delete, revokacija role) **i** da običan korisnik NIJE blokiran dok sistem nema Super Admina; `FORM_VERSION_IMMUTABLE` (DRAFT se mijenja, PUBLISHED ne, `RETIRED` samo s `retiredById`); partial unique na e-mail/`internalNo`/VIN/`code` seta; `ux_tire_installation_active`; `ux_task_assignment_assignee`; `ux_task_idempotency_key` (NULL se ponavlja); `EXCLUDE` preklapanje registracije (uklj. soft-deleted izuzetak); svi CHECK-ovi (vozilo, gume, zadatak, servis, forma, `NotificationDelivery.channel`) |
+| `apply_migrations.py` | `0_extensions` → `1_init` → `2_manual` → `3_password_reset_tokens` → `4_super_admin_guard_lock`; `2_manual` i `4` se ponovo primjenjuju radi idempotentnosti; katalozi uključuju ukupno 9 triggera; `AuditLog.id` = `GENERATED ALWAYS`; svaki FK ima usklađene tipove kolona |
+| `behavior_tests.py` | 96 asertacija uključujući append-only audit/event zapise, `LAST_SUPER_ADMIN_PROTECTED` za deaktivaciju/brisanje/revokaciju, scenarij bez admina, `FORM_VERSION_IMMUTABLE`, partial unique/EXCLUDE/CHECK-ove i **dva paralelna pokušaja deaktivacije** (tačno jedan smije uspjeti) |
 
 Verifier **nije** dio `pnpm turbo run …` gate-a (treba PostgreSQL i Python),
 ali je obavezan korak prije svakog `git push`-a koji mijenja `prisma/migrations/`

@@ -156,6 +156,7 @@ describe('RolesController — permisije po ruti (P14)', () => {
     const handler = (RolesController.prototype as unknown as Record<string, object>)[method];
     expect(handler).toBeDefined();
     expect(permissionsOf(handler as object)).toContain(permission);
+    expect(Reflect.getMetadata(REQUIRED_PERMISSIONS_KEY, handler as object)).toMatchObject({ scope: 'ALL' });
   });
 
   it('PermissionsController: katalog traži permission:view, sync traži permission:catalog_sync', () => {

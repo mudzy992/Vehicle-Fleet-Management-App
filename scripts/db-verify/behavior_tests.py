@@ -1,4 +1,4 @@
-"""Ponašajni testovi VFM migracija nad STVARNIM PostgreSQL-om (95 asertacija).
+"""Ponašajni testovi VFM migracija nad STVARNIM PostgreSQL-om (96 asertacija).
 
 Provjerava ono što se iz koda ne vidi: da DB triggeri zaista odbijaju izmjene
 (append-only AuditLog/TaskEvent, imutabilna PUBLISHED verzija forme, zaštita
@@ -14,6 +14,9 @@ Svaki case ide kroz SAVEPOINT, pa očekivana greška ne prekida ostatak testa.
 Zahtijeva: Python 3.9+ i `pip install "psycopg[binary]"`.
 """
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 import psycopg
 
@@ -265,6 +268,37 @@ ok('17.2 NotificationDelivery channel=FCM', f"""INSERT INTO "NotificationDeliver
 err('17.3 channel=SMS → CHECK', f"""INSERT INTO "NotificationDelivery" (id, "notificationId", channel) VALUES ('{ND1}','{NOTIF}','SMS')""", 'ck_notification_delivery_channel')
 
 conn.commit()
+
+# --- 18) Paralelna zaštita posljednjeg Super Admina --------------------------
+# A i B su oba aktivna nakon 3.7. Barijera + kratko zadržavanje prve transakcije
+# osiguravaju da druga izmjena pokuša provjeru dok prva još nije commit-ovana.
+barrier = Barrier(2)
+
+def concurrently_deactivate(uid):
+    with psycopg.connect(DSN, autocommit=False) as connection:
+        try:
+            barrier.wait(timeout=10)
+            connection.execute(
+                f'''UPDATE "User" SET status='DEACTIVATED', "updatedAt"=now() WHERE id='{uid}' '''
+            )
+            time.sleep(0.5)
+            connection.commit()
+            return ('ok', '')
+        except Exception as error:  # noqa: BLE001
+            connection.rollback()
+            return ('error', str(error))
+
+with ThreadPoolExecutor(max_workers=2) as pool:
+    outcomes = list(pool.map(concurrently_deactivate, (A, B)))
+succeeded = [result for status, result in outcomes if status == 'ok']
+rejected = [result for status, result in outcomes if status == 'error']
+if len(succeeded) == 1 and len(rejected) == 1 and 'LAST_SUPER_ADMIN_PROTECTED' in rejected[0]:
+    PASS.append('18.1 paralelna deaktivacija dva Super Admina: tačno jedan ostaje aktivan')
+else:
+    FAIL.append((
+        '18.1 paralelna deaktivacija dva Super Admina',
+        f'očekivan jedan uspjeh + LAST_SUPER_ADMIN_PROTECTED, dobijeno: {outcomes}',
+    ))
 
 print(f'\nPROŠLO: {len(PASS)}   PALO: {len(FAIL)}')
 for name in PASS: print('  ✅', name)

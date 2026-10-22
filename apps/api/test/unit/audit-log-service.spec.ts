@@ -11,6 +11,7 @@
  *   putanji daje `404` (nikad 500).
  */
 import { describe, expect, it } from 'vitest';
+import { evaluateEffectivePermissions } from '@vfm/shared';
 import type { AuditLogQuery } from '@vfm/shared/schemas';
 import { auditLogQuerySchema } from '@vfm/shared/schemas';
 import { VfmException } from '../../src/common/errors/vfm-error.js';
@@ -114,6 +115,22 @@ describe('AuditLogService — list', () => {
     const securityOnly = await service.list(query({ severity: 'SECURITY' }), actor);
     expect(securityOnly.items).toHaveLength(1);
     expect(securityOnly.items[0]?.action).toBe('LOGIN');
+  });
+
+  it('audit:view_security:OWN ne daje pristup cijeloj SECURITY kolekciji', async () => {
+    const { service } = build();
+    const ownScoped = evaluateEffectivePermissions({
+      roles: [],
+      grants: [{ permission: 'audit:view_security', scope: 'OWN' }],
+      status: 'ACTIVE',
+      clientType: 'WEB',
+    });
+
+    const result = await service.list(query(), auditor({ permissions: ownScoped }));
+
+    expect(result.securityHidden).toBe(true);
+    expect(result.items.every((item) => item.severity !== 'SECURITY')).toBe(true);
+    await expectCode(() => service.get('2', auditor({ permissions: ownScoped })), 'PERMISSION_DENIED');
   });
 
   it('SECURITY filter bez prava ne otkriva ništa (filter se ignoriše, redovi ostaju sakriveni)', async () => {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { AuthUser } from '@vfm/shared/schemas';
 import { api, setAccessToken, setSessionExpiredHandler } from '../../lib/api.js';
 import { SessionProvider, usePermission, useSession } from './session.js';
@@ -39,7 +39,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 /** Mala sonda koja ispisuje stanje sesije i prava. */
 function Probe() {
-  const { status, user } = useSession();
+  const { status, user, logout } = useSession();
   const canViewUsers = usePermission('user:view');
   const canManageRoles = usePermission('role:manage_permissions');
 
@@ -49,6 +49,9 @@ function Probe() {
       <span data-testid="user">{user?.email ?? '-'}</span>
       <span data-testid="users">{canViewUsers ? 'da' : 'ne'}</span>
       <span data-testid="roles">{canManageRoles ? 'da' : 'ne'}</span>
+      <button type="button" onClick={() => void logout({ serverAlreadyRevoked: true })}>
+        Odjava nakon revokacije
+      </button>
     </div>
   );
 }
@@ -100,6 +103,28 @@ describe('SessionProvider', () => {
     expect(screen.getByTestId('users').textContent).toBe('da');
     // Prava koja korisnik nema moraju biti `ne` — UI tada ne prikazuje akciju.
     expect(screen.getByTestId('roles').textContent).toBe('ne');
+  });
+
+  it('odjava nakon serverske revokacije ne šalje drugi refresh/logout zahtjev', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) return jsonResponse({ data: { accessToken: 'token-1' } });
+      if (url.endsWith('/auth/me')) return jsonResponse({ data: USER });
+      return jsonResponse({ data: null });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <SessionProvider>
+        <Probe />
+      </SessionProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('authenticated'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Odjava nakon revokacije' })));
+
+    expect(screen.getByTestId('status').textContent).toBe('anonymous');
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/auth/logout'))).toHaveLength(0);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/auth/refresh'))).toHaveLength(1);
   });
 
   it('Super Admin ima sve permisije (R-07)', async () => {

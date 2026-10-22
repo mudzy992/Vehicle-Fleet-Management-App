@@ -13,6 +13,7 @@
  * - **`DELETE` = anonimizacija** (audit trag ostaje konzistentan).
  */
 import { describe, expect, it } from 'vitest';
+import { evaluateEffectivePermissions } from '@vfm/shared';
 import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import { VfmException } from '../../src/common/errors/vfm-error.js';
 import { PermissionsService } from '../../src/modules/auth/permissions/permissions.service.js';
@@ -109,6 +110,24 @@ describe('UsersService — list', () => {
     const ana = result.items.find((item) => item.lastName === 'Anić');
     expect(ana).toMatchObject({ email: 'a***@vfm.test', phone: '•••••222', piiRedacted: true });
     expect(ana?.roles.map((role) => role.code)).toEqual(['ADMINISTRATOR']);
+  });
+
+  it('user:view_pii:OWN otkriva samo PII vlastitog reda', async () => {
+    const { prisma, users } = build();
+    seed(prisma);
+    const ownScoped = evaluateEffectivePermissions({
+      roles: [],
+      grants: [{ permission: 'user:view_pii', scope: 'OWN' }],
+      status: 'ACTIVE',
+      clientType: 'WEB',
+    });
+
+    const result = await users.list({ page: 1, pageSize: 20 }, actor({ isSuperAdmin: false, permissions: ownScoped }));
+    const ana = result.items.find((item) => item.lastName === 'Anić');
+
+    expect(ana).toMatchObject({ email: 'a***@vfm.test', piiRedacted: true });
+    const self = result.items.find((item) => item.id === USER_SUPER);
+    expect(self).toMatchObject({ email: 'super@vfm.test', piiRedacted: false });
   });
 
   it('Super Admin vidi pun e-mail (R-07) i nema redakcije', async () => {

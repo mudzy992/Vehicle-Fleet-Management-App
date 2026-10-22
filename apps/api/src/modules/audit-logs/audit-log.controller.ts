@@ -14,7 +14,7 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import type { AuditLogDetail, AuditLogListResponse, AuditLogQuery } from '@vfm/shared/schemas';
 import { auditLogQuerySchema } from '@vfm/shared/schemas';
-import { CurrentUser, RequirePermissions } from '../../common/decorators/auth.decorators.js';
+import { CurrentUser, RequireScope } from '../../common/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.js';
 import { AuditLogService } from './audit-log.service.js';
@@ -24,7 +24,7 @@ export class AuditLogController {
   constructor(private readonly auditLogs: AuditLogService) {}
 
   @Get()
-  @RequirePermissions('audit:view')
+  @RequireScope('audit:view', 'ALL')
   list(
     @Query(new ZodValidationPipe(auditLogQuerySchema, 'query')) query: AuditLogQuery,
     @CurrentUser() actor: AuthenticatedUser | undefined,
@@ -33,7 +33,7 @@ export class AuditLogController {
   }
 
   @Get(':id')
-  @RequirePermissions('audit:view')
+  @RequireScope('audit:view', 'ALL')
   get(
     // `AuditLog.id` je BIGINT → validira se kao cifre u servisu (404 za smeće).
     @Param('id') id: string,

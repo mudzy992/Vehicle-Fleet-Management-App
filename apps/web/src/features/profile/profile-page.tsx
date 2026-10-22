@@ -68,7 +68,7 @@ export function ProfilePage() {
     onSuccess: () => {
       setFeedback('Lozinka je promijenjena. Sve sesije su odjavljene — prijavite se ponovo.');
       // Server je revokovao sesije; lokalno stanje mora pasti.
-      void logout().finally(() => navigate('/prijava', { replace: true }));
+      void logout({ serverAlreadyRevoked: true }).finally(() => navigate('/prijava', { replace: true }));
     },
   });
 
@@ -76,13 +76,21 @@ export function ProfilePage() {
     mutationFn: () => api.post<{ revokedSessions: number }>('/auth/logout-all'),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['auth', 'sessions'] });
-      void logout().finally(() => navigate('/prijava', { replace: true }));
+      void logout({ serverAlreadyRevoked: true }).finally(() => navigate('/prijava', { replace: true }));
     },
   });
 
   const revokeOne = useMutation({
-    mutationFn: (id: string) => api.delete<void>(`/auth/sessions/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['auth', 'sessions'] }),
+    mutationFn: (id: string) => api.delete<{ currentSessionRevoked: boolean }>(`/auth/sessions/${id}`),
+    onSuccess: (result) => {
+      if (result.currentSessionRevoked) {
+        // Cookie je serverom obrisan; završimo lokalnu sesiju bez slanja
+        // refresh zahtjeva za sesiju koju smo upravo opozvali.
+        void logout({ serverAlreadyRevoked: true }).finally(() => navigate('/prijava', { replace: true }));
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: ['auth', 'sessions'] });
+    },
   });
 
   const mismatch = confirmPassword.length > 0 && confirmPassword !== newPassword;

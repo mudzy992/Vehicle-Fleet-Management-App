@@ -113,11 +113,16 @@ export class RateLimitService {
     }
 
     const key = this.redis.key('rateLimit', scope, sanitizeIdentity(identity));
+    let firstHit = false;
 
     try {
       const current = await client.incr(key);
       // Prozor počinje pri prvom zahtjevu; TTL se ne pomjera (bez "sliding" efekta).
-      if (current === 1) await client.pexpire(key, policy.windowSeconds * 1000);
+      if (current === 1) {
+        firstHit = true;
+        const expired = await client.pexpire(key, policy.windowSeconds * 1000);
+        if (expired !== 1) throw new Error('PEXPIRE nije postavio TTL na novi limiter ključ.');
+      }
 
       const ttlMs = await client.pttl(key);
       const retryAfterSeconds =
@@ -133,6 +138,18 @@ export class RateLimitService {
         degraded: false,
       };
     } catch (error) {
+      // Ako postavljanje prozora nije uspjelo, uklanjamo brojač koji bi inače
+      // ostao bez TTL-a i trajno zaključao identitet. Fail-open ostaje vidljiv
+      // kao degraded, a DB lockout je rezervna zaštita za login.
+      if (firstHit) {
+        try {
+          await client.del(key);
+        } catch (cleanupError) {
+          this.logger.error(
+            `Nije moguće ukloniti limiter ključ bez TTL-a (${scope}): ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+          );
+        }
+      }
       this.warnDegradedOnce(error instanceof Error ? error.message : String(error));
       return fallback(0);
     }

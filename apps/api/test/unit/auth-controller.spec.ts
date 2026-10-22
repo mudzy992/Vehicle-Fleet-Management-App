@@ -407,13 +407,21 @@ describe('AuthController.me / sessions', () => {
     expect(payload.email).toBe('ana.anic@vfm.test');
   });
 
-  it('sessions i revokeSession rade nad trenutnim korisnikom', async () => {
-    const user = authenticatedUser({ id: USER_PAYLOAD.id });
+  it('sessions i revokeSession rade nad trenutnim korisnikom; trenutna sesija briše cookie', async () => {
+    const user = authenticatedUser({ id: USER_PAYLOAD.id, sessionId: SESSION_ID });
+    const response = new FakeResponse();
 
     await controller.sessions(user);
-    await controller.revokeSession(SESSION_ID, user);
+    const current = await controller.revokeSession(SESSION_ID, user, response.asExpress());
+    const other = await controller.revokeSession('018f0000-0000-7000-8000-0000000000bb', user, response.asExpress());
 
     expect(authCalls.listActiveSessions?.[0]).toEqual([USER_PAYLOAD.id]);
-    expect(authCalls.revokeSession?.[0]).toEqual([USER_PAYLOAD.id, SESSION_ID]);
+    expect(authCalls.revokeSession).toEqual([
+      [USER_PAYLOAD.id, SESSION_ID],
+      [USER_PAYLOAD.id, '018f0000-0000-7000-8000-0000000000bb'],
+    ]);
+    expect(current).toEqual({ currentSessionRevoked: true });
+    expect(other).toEqual({ currentSessionRevoked: false });
+    expect(response.clearCalls).toEqual([{ name: COOKIE_NAME, options: expect.any(Object) }]);
   });
 });

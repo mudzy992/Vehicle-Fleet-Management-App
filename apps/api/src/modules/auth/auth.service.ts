@@ -226,14 +226,19 @@ export class AuthService {
 
     const passwordValid = await this.passwords.verify(user.passwordHash, input.password);
     if (!passwordValid) {
-      const failedLoginCount = user.failedLoginCount + 1;
-      const locked = failedLoginCount >= env.AUTH_MAX_FAILED_ATTEMPTS;
-      const lockedUntil = locked ? new Date(now.getTime() + env.AUTH_LOCKOUT_MINUTES * 60_000) : null;
-
-      await this.prisma.user.update({
+      // INCREMENT je DB-atomaran; koristiti brojač koji update vraća, ne
+      // apsolutni upis iz ranijeg SELECT-a koji bi izgubio paralelne pokušaje.
+      const updated = await this.prisma.user.update({
         where: { id: user.id },
-        data: { failedLoginCount, lockedUntil },
+        data: { failedLoginCount: { increment: 1 } },
+        select: { failedLoginCount: true },
       });
+      const failedLoginCount = updated.failedLoginCount;
+      const locked = failedLoginCount >= env.AUTH_MAX_FAILED_ATTEMPTS;
+      const lockedUntil = locked ? new Date(Date.now() + env.AUTH_LOCKOUT_MINUTES * 60_000) : null;
+      if (locked) {
+        await this.prisma.user.update({ where: { id: user.id }, data: { lockedUntil } });
+      }
 
       await this.recordAttempt({
         email: user.email,
@@ -421,21 +426,49 @@ export class AuthService {
       attemptReason: 'CLIENT_TYPE_NOT_ALLOWED',
     });
 
-    const next = await this.createSession({
-      userId: user.id,
-      clientType,
-      deviceInfo: asDeviceInfo(session.deviceInfo),
-      familyId: session.familyId,
-      context,
+    // CAS + kreiranje nasljedne sesije su u istoj DB transakciji. Samo jedan
+    // konkurent može potrošiti aktivni refresh red; ako je count=0, gubitnički
+    // zahtjev se tretira kao reuse i postojeća politika gasi sve sesije.
+    const rotated = await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const claimed = await tx.refreshSession.updateMany({
+        where: { id: session.id, revokedAt: null, expiresAt: { gt: now } },
+        data: { revokedAt: now, lastUsedAt: now },
+      });
+      if (claimed.count !== 1) return undefined;
+
+      const next = await this.createSession(
+        {
+          userId: user.id,
+          clientType,
+          deviceInfo: asDeviceInfo(session.deviceInfo),
+          familyId: session.familyId,
+          context,
+        },
+        tx,
+      );
+      await tx.refreshSession.update({
+        where: { id: session.id },
+        data: { replacedById: next.id },
+      });
+      return next;
     });
 
-    await this.prisma.refreshSession.update({
-      where: { id: session.id },
-      data: { revokedAt: new Date(), replacedById: next.id, lastUsedAt: new Date() },
-    });
-    await this.enforceMaxSessions(user.id, next.id);
+    if (!rotated) {
+      await this.revokeAllSessions(session.userId, 'REFRESH_REUSE');
+      await this.rotateTokenVersion(session.userId);
+      this.report({
+        type: 'REFRESH_REUSE_DETECTED',
+        userId: session.userId,
+        clientType: session.clientType,
+        reason: `KONKURENTNA_ROTACIJA_PORODICA_${session.familyId}`,
+        ...this.eventContext(context),
+      });
+      throw VfmErrors.refreshReuseDetected();
+    }
 
-    return this.issueTokens({ user, snapshot, session: next, clientType });
+    await this.enforceMaxSessions(user.id, rotated.id);
+    return this.issueTokens({ user, snapshot, session: rotated, clientType });
   }
 
   // ---------------------------------------------------------------------------
@@ -502,7 +535,11 @@ export class AuthService {
     const snapshot = await this.permissions.snapshot(userId);
     if (!snapshot) throw VfmErrors.unauthenticated('Prava korisnika nisu dostupna.');
 
-    return this.buildUserPayload(user, snapshot, clientType);
+    const permissionsVersion = await this.permissions.currentPermissionsVersion(
+      snapshot.roleIds,
+      snapshot.permissionsVersion,
+    );
+    return this.buildUserPayload(user, snapshot, clientType, undefined, permissionsVersion);
   }
 
   // ---------------------------------------------------------------------------
@@ -612,8 +649,21 @@ export class AuthService {
     this.passwords.assertPolicy(input.newPassword, { email: user.email });
     const passwordHash = await this.passwords.hash(input.newPassword);
 
-    // Jedna transakcija: nova lozinka + gašenje svih reset tokena korisnika.
+    // Potrošnja tokena je compare-and-set unutar iste transakcije s promjenom
+    // lozinke. UPDATE zaključava red u PostgreSQL-u; paralelni zahtjev će nakon
+    // čekanja dobiti count=0 i neće moći drugi put promijeniti lozinku.
     const updated = await this.prisma.$transaction(async (tx) => {
+      const consumedAt = new Date();
+      const consumed = await tx.passwordResetToken.updateMany({
+        where: { id: record.id, usedAt: null, expiresAt: { gt: consumedAt } },
+        data: { usedAt: consumedAt },
+      });
+      if (consumed.count !== 1) {
+        throw VfmErrors.validationError([
+          { path: ['token'], message: 'Token za reset nije važeći ili je istekao. Zatražite novi.' },
+        ]);
+      }
+
       const next = await tx.user.update({
         where: { id: user.id },
         data: {
@@ -629,7 +679,7 @@ export class AuthService {
 
       await tx.passwordResetToken.updateMany({
         where: { userId: user.id, usedAt: null },
-        data: { usedAt: now },
+        data: { usedAt: consumedAt },
       });
 
       return next;
@@ -723,17 +773,20 @@ export class AuthService {
   // ---------------------------------------------------------------------------
 
   /** Kreira `RefreshSession` i vraća ID + sirovi token (token se nikad ne čuva). */
-  private async createSession(options: {
-    userId: string;
-    clientType: ClientType;
-    deviceInfo: DeviceInfo | null;
-    familyId: string;
-    context: AuthRequestContext;
-  }): Promise<{ id: string; token: string }> {
+  private async createSession(
+    options: {
+      userId: string;
+      clientType: ClientType;
+      deviceInfo: DeviceInfo | null;
+      familyId: string;
+      context: AuthRequestContext;
+    },
+    database: Pick<PrismaService, 'refreshSession'> = this.prisma,
+  ): Promise<{ id: string; token: string }> {
     const generated = this.tokens.generateRefreshToken();
     const expiresAt = new Date(Date.now() + this.tokens.refreshTokenTtlSeconds() * 1000);
 
-    const session = await this.prisma.refreshSession.create({
+    const session = await database.refreshSession.create({
       data: {
         id: randomUUID(),
         userId: options.userId,
@@ -789,17 +842,27 @@ export class AuthService {
     lastLoginAt?: Date | null;
   }): Promise<AuthSessionResult> {
     const { user, snapshot, session, clientType } = options;
+    const permissionsVersion = await this.permissions.currentPermissionsVersion(
+      snapshot.roleIds,
+      snapshot.permissionsVersion,
+    );
 
     const signed = await this.tokens.signAccessToken({
       userId: user.id,
       roles: snapshot.roles,
       tokenVersion: snapshot.tokenVersion,
-      permissionsVersion: snapshot.permissionsVersion,
+      permissionsVersion,
       clientType,
       sessionId: session.id,
     });
 
-    const payload = await this.buildUserPayload(user, snapshot, clientType, options.lastLoginAt);
+    const payload = await this.buildUserPayload(
+      user,
+      snapshot,
+      clientType,
+      options.lastLoginAt,
+      permissionsVersion,
+    );
     // Mobilni klijenti ne mogu čuvati httpOnly cookie → token ide u tijelo.
     const includeInBody = clientType !== 'WEB';
 
@@ -825,6 +888,7 @@ export class AuthService {
     snapshot: UserPermissionsSnapshot,
     clientType: ClientType,
     lastLoginAtOverride?: Date | null,
+    permissionsVersionOverride?: number,
   ): Promise<AuthUser> {
     const effective = await this.permissions.effective(user.id, clientType);
     const activeRoles = await this.loadActiveRoles(user.id);
@@ -839,7 +903,7 @@ export class AuthService {
       // `authUserSchema.roles` je mutabilan niz (zod), loader vraća `readonly`.
       roles: activeRoles.map((role) => ({ ...role })),
       permissions: effective ? [...effective.list] : [],
-      permissionsVersion: snapshot.permissionsVersion,
+      permissionsVersion: permissionsVersionOverride ?? snapshot.permissionsVersion,
       tokenVersion: snapshot.tokenVersion,
       mustChangePassword: user.mustChangePassword,
       timezone: user.timezone,
@@ -886,21 +950,21 @@ export class AuthService {
     attemptReason: string;
   }): void {
     const { snapshot, clientType, userId, email, context } = options;
-    if (snapshot.allowedClientTypes.includes(clientType)) return;
-
     const isSuperAdmin = snapshot.roles.includes(SUPER_ADMIN_ROLE);
     const isMobile = clientType === 'MOBILE_ANDROID' || clientType === 'MOBILE_IOS';
 
-    void this.recordAttempt({
-      email,
-      userId,
-      success: false,
-      clientType,
-      reason: options.attemptReason,
-      context,
-    });
-
+    // Super Admin je web-only bez obzira na union ostalih rola. Provjera mora
+    // prethoditi `allowedClientTypes.includes`: druga rola ne smije proširiti
+    // ograničenje Super Admina.
     if (isSuperAdmin && isMobile) {
+      void this.recordAttempt({
+        email,
+        userId,
+        success: false,
+        clientType,
+        reason: options.attemptReason,
+        context,
+      });
       this.report({
         type: 'MOBILE_ACCESS_FORBIDDEN',
         userId,
@@ -912,6 +976,17 @@ export class AuthService {
       });
       throw VfmErrors.mobileAccessForbidden();
     }
+
+    if (snapshot.allowedClientTypes.includes(clientType)) return;
+
+    void this.recordAttempt({
+      email,
+      userId,
+      success: false,
+      clientType,
+      reason: options.attemptReason,
+      context,
+    });
 
     this.report({
       type: 'MOBILE_SCOPE_NOT_ALLOWED',

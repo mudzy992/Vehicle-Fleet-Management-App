@@ -30,7 +30,9 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 function allows(actor: AuthenticatedUser | undefined, permission: string): boolean {
   if (!actor) return false;
   if (actor.isSuperAdmin) return true;
-  return actor.permissions?.list.includes(permission) ?? false;
+  // SECURITY audit redovi nisu vezani za vlasništvo jednog korisnika; grant
+  // OWN ili ID-opsega ne smije otključati cijelu kolekciju.
+  return actor.permissions?.permissions.get(permission) === 'ALL';
 }
 
 /** Kolone za listu (bez `before`/`after`/`metadata`). */

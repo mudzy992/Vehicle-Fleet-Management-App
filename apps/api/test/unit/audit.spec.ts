@@ -160,6 +160,19 @@ describe('redactRecord', () => {
     });
   });
 
+  it('redaktuje osjetljiva polja i unutar ugniježđenih objekata i nizova', () => {
+    expect(
+      redactRecord({
+        result: { refreshToken: 'refresh-secret', nested: [{ access_token: 'access-secret' }] },
+      }),
+    ).toEqual({
+      result: {
+        refreshToken: REDACTED_VALUE,
+        nested: [{ access_token: REDACTED_VALUE }],
+      },
+    });
+  });
+
   it('undefined/null prolaze nepromijenjeni', () => {
     expect(redactRecord(undefined)).toBeUndefined();
   });

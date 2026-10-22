@@ -172,6 +172,7 @@ describe('UsersController — permisije po ruti (P14)', () => {
     const handler = (UsersController.prototype as unknown as Record<string, object | undefined>)[method];
     expect(handler).toBeDefined();
     expect(permissionsOf(handler as object)).toContain(permission);
+    expect(Reflect.getMetadata(REQUIRED_PERMISSIONS_KEY, handler as object)).toMatchObject({ scope: 'ALL' });
   });
 
   it('nijedna ruta nije javna', () => {

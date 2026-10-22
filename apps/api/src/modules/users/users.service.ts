@@ -83,10 +83,12 @@ export function maskPhone(phone: string | null): string | null {
 }
 
 /** Ima li akter pravo (Super Admin ima sve — R-07). */
-function allows(actor: AuthenticatedUser | undefined, permission: string): boolean {
+function canViewUserPii(actor: AuthenticatedUser | undefined, targetUserId: string): boolean {
   if (!actor) return false;
   if (actor.isSuperAdmin) return true;
-  return actor.permissions?.list.includes(permission) ?? false;
+  const scope = actor.permissions?.permissions.get('user:view_pii');
+  // OWN se primjenjuje na konkretan red; ID-opsezi nisu primjenjivi na User.
+  return scope === 'ALL' || (scope === 'OWN' && actor.id === targetUserId);
 }
 
 @Injectable()
@@ -132,10 +134,11 @@ export class UsersService {
     ]);
 
     const rolesByUser = await this.rolesFor(rows.map((row) => row.id));
-    const piiAllowed = allows(actor, 'user:view_pii');
 
     return {
-      items: rows.map((row) => this.toSummary(row, rolesByUser.get(row.id) ?? [], piiAllowed)),
+      items: rows.map((row) =>
+        this.toSummary(row, rolesByUser.get(row.id) ?? [], canViewUserPii(actor, row.id)),
+      ),
       page: query.page,
       pageSize: query.pageSize,
       total,
@@ -152,7 +155,7 @@ export class UsersService {
       }),
     ]);
 
-    return this.toDetail(user, rolesByUser.get(id) ?? [], allows(actor, 'user:view_pii'), activeSessions);
+    return this.toDetail(user, rolesByUser.get(id) ?? [], canViewUserPii(actor, user.id), activeSessions);
   }
 
   // ---------------------------------------------------------------------------
@@ -247,7 +250,11 @@ export class UsersService {
       ...(input.status !== undefined ? { status: input.status } : {}),
     };
 
-    await this.prisma.user.update({ where: { id: user.id }, data });
+    try {
+      await this.prisma.user.update({ where: { id: user.id }, data });
+    } catch (error) {
+      this.rethrowLastSuperAdminGuard(error);
+    }
 
     // Promjena statusa mijenja i prava (neaktivan nalog nema pristup) →
     // revokacija svih sesija, bez čekanja isteka tokena.
@@ -280,10 +287,14 @@ export class UsersService {
     }
 
     const archivedAt = new Date();
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { deletedAt: archivedAt, status: 'DEACTIVATED' },
-    });
+    try {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { deletedAt: archivedAt, status: 'DEACTIVATED' },
+      });
+    } catch (error) {
+      this.rethrowLastSuperAdminGuard(error);
+    }
     const revokedSessions = await this.revokeEverything(user.id);
 
     this.logger.log(
@@ -326,28 +337,32 @@ export class UsersService {
     const anonymizedAt = new Date();
     const anonymousEmail = `deleted-${user.id}@invalid`;
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: user.id },
-        data: {
-          email: anonymousEmail,
-          firstName: 'Obrisan',
-          lastName: 'korisnik',
-          displayName: null,
-          phone: null,
-          status: 'DEACTIVATED',
-          deletedAt: anonymizedAt,
-          // Lozinka postaje nemoguća za prijavu (hash slučajne vrijednosti).
-          passwordHash: await this.passwords.hashUnchecked(randomBytes(32).toString('hex')),
-          mustChangePassword: false,
-        },
-      });
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: user.id },
+          data: {
+            email: anonymousEmail,
+            firstName: 'Obrisan',
+            lastName: 'korisnik',
+            displayName: null,
+            phone: null,
+            status: 'DEACTIVATED',
+            deletedAt: anonymizedAt,
+            // Lozinka postaje nemoguća za prijavu (hash slučajne vrijednosti).
+            passwordHash: await this.passwords.hashUnchecked(randomBytes(32).toString('hex')),
+            mustChangePassword: false,
+          },
+        });
 
-      await tx.userRole.updateMany({
-        where: { userId: user.id },
-        data: { revokedAt: anonymizedAt },
+        await tx.userRole.updateMany({
+          where: { userId: user.id },
+          data: { revokedAt: anonymizedAt },
+        });
       });
-    });
+    } catch (error) {
+      this.rethrowLastSuperAdminGuard(error);
+    }
 
     const revokedSessions = await this.revokeEverything(user.id);
 
@@ -436,10 +451,14 @@ export class UsersService {
       }
     }
 
-    await this.prisma.userRole.update({
-      where: { id: assignment.id },
-      data: { revokedAt: new Date() },
-    });
+    try {
+      await this.prisma.userRole.update({
+        where: { id: assignment.id },
+        data: { revokedAt: new Date() },
+      });
+    } catch (error) {
+      this.rethrowLastSuperAdminGuard(error);
+    }
     await this.revokeEverything(user.id);
 
     this.logger.log(`Korisniku ${user.email} uklonjena rola ${assignment.role.code} — actor=${actor?.id ?? '-'}`);
@@ -611,6 +630,14 @@ export class UsersService {
 
     if (activeSuperAdmins <= 1) throw VfmErrors.lastSuperAdminProtected();
     this.logger.debug(`Provjera zadnjeg Super Admina: aktivnih=${activeSuperAdmins}, cilj=${userId}`);
+  }
+
+  /** Prevede DB trigger zaštitu u isti javni 409 kao preventivna provjera. */
+  private rethrowLastSuperAdminGuard(error: unknown): never {
+    if (error instanceof Error && error.message.includes('LAST_SUPER_ADMIN_PROTECTED')) {
+      throw VfmErrors.lastSuperAdminProtected();
+    }
+    throw error;
   }
 
   /** Briše RBAC keš + revokuje sesije + diže `tokenVersion` (DB pa Redis). */

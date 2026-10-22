@@ -148,6 +148,16 @@ describe('RateLimitService — consume (fiksni prozor)', () => {
     expect(redis.store.get('vfm:rl:global:ip-1.1.1.1')).toBe('3');
   });
 
+  it('PEXPIRE kvar uklanja prvi brojač da ne ostane trajni rate-limit key', async () => {
+    redis.failNextPexpire = true;
+
+    const result = await service.consume('login', 'ip-9.9.9.9');
+
+    expect(result).toMatchObject({ allowed: true, degraded: true });
+    expect(redis.store.has('vfm:rl:login:ip-9.9.9.9')).toBe(false);
+    expect(redis.pttls.has('vfm:rl:login:ip-9.9.9.9')).toBe(false);
+  });
+
   it('različiti identiteti imaju odvojene brojače', async () => {
     await service.consume('login', 'ip-1.1.1.1');
     await service.consume('login', 'ip-1.1.1.1');

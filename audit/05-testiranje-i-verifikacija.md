@@ -1,53 +1,54 @@
-# 05 — Testovi i verifikacija baseline-a
+# 05 — Testovi i verifikacija Faze 1
 
-**Datum izvršavanja:** 22.10.2026.<br>
-**Testni snapshot:** committed `HEAD 44ecf00`; pet lokalnih mobile diffs nije korišteno kao izmjena pod auditom.<br>
-**Važno:** ovo je lokalni sandbox rezultat; nije CI/GitHub Actions green check.
+**Datum posljednje provjere:** 22.10.2026.
+**Grana:** `arena/d46d9ae6-vehicle-fleet-management-app`; `HEAD 720c655` + necommitovane audit izmjene.
+**Važno:** lokalni sandbox rezultat, ne CI/GitHub Actions green check. Pet ranijih mobile diffs nije dio Faza 1 izmjena i ostaje zaštićeno.
 
 ## Rezultati
 
-| Provjera                        | Rezultat                      | Detalj                                                                                                                                |
-| ------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Root package install            | PASS                          | `corepack pnpm install --frozen-lockfile`                                                                                             |
-| Non-API unit/component          | PASS                          | Turbo paketi shared 250 + form-engine 147 + form-renderer 13 + web 162 = **572 testa**; API isključen zbog Prisma generate blokera    |
-| Non-API typecheck               | PASS                          | 9 Turbo taskova u config/shared/form-engine/form-renderer/web                                                                         |
-| Mobile typecheck                | PASS                          | Izvršeno iz `apps/mobile/` nakon workspace installa                                                                                   |
-| Non-API lint                    | PASS                          | 5 Turbo paketa config/shared/form-engine/form-renderer/web                                                                            |
-| API lint                        | PASS                          | `corepack pnpm --dir apps/api lint`                                                                                                   |
-| API unit test — direktni Vitest | PARTIAL/BLOCKED               | 18 od 56 suiteova / **332 testa prolaze**; 38 suiteova ne učitavaju se jer nedostaje `apps/api/src/generated/prisma/client.js`        |
-| API typecheck                   | BLOCKED                       | Prisma generated client/tipovi nedostaju; većina TS grešaka su posljedica tog nedostajućeg artifacta, ne potvrđeni source regressions |
-| Root Turbo full test            | BLOCKED                       | `prisma generate` pokušao engine/checksum download sa `binaries.prisma.sh`; TLS/network pristup hostu nije dostupan u sandboxu        |
-| API integration                 | NOT RUN                       | `apps/api/test/integration/` ne postoji; CI job ga preskače                                                                           |
-| E2E Playwright/Cypress/Maestro  | NOT RUN / nema infrastrukture | Nije pronađen runner ili E2E suite                                                                                                    |
-| Web production build            | PASS sa upozorenjima          | Vite build uspješan; oko 901 kB main JS chunk, upozorenje >500 kB i `node:crypto` externalized za browser                             |
-| Native Android build/device UAT | NOT RUN                       | EAS build, uređaj i credentials nisu korišteni; nema zaključka o runtime/device funkcionalnosti                                       |
+| Provjera | Rezultat | Detalj |
+|---|---|---|
+| Puna Turbo gate | PASS | `lint typecheck test build`: **25/25 taskova**, exit `0`; 21 task iz cache-a, 4 izvršena u ovom prolazu |
+| API puna unit suite | PASS | **56 fajlova / 916 testova**, sve prolaze u punom gate prolazu |
+| API ciljani regression subset | PASS | **8 fajlova / 197 testova** za auth, users, roles, audit, rate-limit |
+| API migration diagnostics | PASS | **22 testa**; očekivana lista uključuje `4_super_admin_guard_lock` |
+| Web session regression | PASS | **1 fajl / 5 testova**; trenutna sesija se lokalno čisti bez dodatnog logout/refresh poziva |
+| Python verifier sintaksa | PASS | `python3 -m py_compile scripts/db-verify/apply_migrations.py scripts/db-verify/behavior_tests.py`; generated `__pycache__` uklonjen |
+| Prisma Client task | PASS uz env/cache ograničenje | Turbo task iz cache-a; komanda je koristila `PRISMA_SCHEMA_ENGINE_BINARY=/bin/true`. Ovo nije dokaz native engine download/migrate deploy |
+| PostgreSQL migracije 3–4 + behavior verifier | NOT RUN | Migracije nisu primijenjene; DB concurrency verifier mora proći izoliranu PostgreSQL bazu prije deploya |
+| Redis live failure/integration | NOT RUN | PEXPIRE failure je pokriven unit fake-om; Redis ACL/timeout nije live-provjeren |
+| HTTP/API integration | NOT RUN | Repo nema izvršenu integration suite za ovaj prolaz |
+| E2E Playwright/Cypress/Maestro | NOT RUN | `audit/03-plan-E2E.md` je scenarijska specifikacija, ne runner |
+| Native Android build/device UAT | NOT RUN | Nema EAS builda, Android uređaja ni device runtime dokaza |
+| Coverage | NOT RUN u dopuni | Coverage brojke iz izvornog izvještaja 20.10.2026. nisu aktuelizovane |
+| ENV sync | NOT RUN u dopuni | Izvorno `0` upozorenja / 154 varijable (20.10) nije ponovljeno 22.10 |
 
-## Komande i reproducibilnost
+## Komanda pune gate
 
-Workspace `turbo` u ovom sandboxu nije našao direktni `pnpm` executable. Za lokalni test napravljen je privremeni shim u `/tmp/vfm-pnpm-bin/pnpm` koji prosljeđuje na `corepack pnpm`; nije upisan u repo.
-
-Provjere koje je moguće ponoviti (repo root):
+Repo root; shim je sandbox-only workaround za Turbo koji ne nalazi `pnpm` executable:
 
 ```bash
-corepack pnpm install --frozen-lockfile
-PATH="/tmp/vfm-pnpm-bin:$PATH" corepack pnpm exec turbo run test --filter='!@vfm/api'
-PATH="/tmp/vfm-pnpm-bin:$PATH" corepack pnpm exec turbo run typecheck --filter='!@vfm/api'
-PATH="/tmp/vfm-pnpm-bin:$PATH" corepack pnpm exec turbo run lint --filter='!@vfm/api'
-PATH="/tmp/vfm-pnpm-bin:$PATH" corepack pnpm exec turbo run build --filter='@vfm/web'
-corepack pnpm --dir apps/mobile typecheck
-corepack pnpm --dir apps/api lint
+PATH="/tmp/vfm-pnpm-bin:$PATH" PRISMA_SCHEMA_ENGINE_BINARY=/bin/true corepack pnpm exec turbo run lint typecheck test build
 ```
 
-Napomena: `/tmp/vfm-pnpm-bin/pnpm` je sandbox-local workaround; korisnik ga ne treba koristiti na svom uređaju. Za API pune testove potrebno je da Prisma generator preuzme/koristi engine u runneru koji ima podržan pristup i da se client generiše iz `apps/api/prisma/schema.prisma` prema postojećoj npm skripti. Nikad ne commitati generated client samo da bi ovaj sandbox prošao.
+API target subset i web session test su izvršeni zasebno prije pune gate:
 
-## Raniji rezultat i razlika baseline-a
+```bash
+PATH="/tmp/vfm-pnpm-bin:$PATH" PRISMA_SCHEMA_ENGINE_BINARY=/bin/true corepack pnpm --filter @vfm/api exec vitest run test/unit/auth-service.spec.ts test/unit/auth-controller.spec.ts test/unit/users-service.spec.ts test/unit/users-controller.spec.ts test/unit/roles-controller.spec.ts test/unit/audit-log-service.spec.ts test/unit/rate-limit.spec.ts test/unit/audit.spec.ts
+PATH="/tmp/vfm-pnpm-bin:$PATH" PRISMA_SCHEMA_ENGINE_BINARY=/bin/true corepack pnpm --filter @vfm/web exec vitest run src/features/auth/session.test.tsx
+```
 
-U prethodnom radnom stanju iz ranije sesije zabilježeno je da je API suite prošao sa 907 testova, ali nakon čistog install-a i ažuriranja local HEAD na `44ecf00`, puni API suite nije se mogao ponoviti zbog nedostupnog Prisma engine hosta. Zbog auditabilnosti, ovaj dokument koristi **trenutni reproducibilni rezultat** iz gornje tabele; historijski pass ne zamjenjuje novi full run/CI artifact.
+`/tmp/vfm-pnpm-bin/pnpm` nije upisan u repo. `PRISMA_SCHEMA_ENGINE_BINARY=/bin/true` je lokalan test workaround, nikad deploy postupak. Ne commitati generated client kao zaobilaženje native engine ograničenja.
 
-## Otvorene verifikacije
+## Prvo pokretanje i ponavljanje
 
-1. Pokrenuti Prisma generate + API lint/typecheck/unit u supported CI runneru i sačuvati log/artifact.
-2. Uvesti i pokrenuti DB/Redis integration suite; trenutno CI preskače.
-3. Dodati web E2E i native mobile smoke; u ovom paketu je scenarij plan, nije implementiran runner.
-4. Ponoviti browser build/runtime, provjeriti crypto putanju, route navigation, bundle transfer/gzip i console.
-5. Pokrenuti EAS build i Android UAT tek nakon odvojene odluke o lokalnim EAS config izmjenama.
+Prvi puni gate nakon audit izmjena završio je s jednom greškom u zastarjelom očekivanju `migrate-diagnostics.spec.ts` — očekivana lista nije sadržavala novu migraciju 4. Očekivanje i test naziv su ažurirani; taj fajl je prošao **22/22**, a zatim je ponovljena puna gate uspješno završila **25/25** i API **916/916**.
+
+## Otvorene provjere prije release-a
+
+1. Pokrenuti `scripts/db-verify/apply_migrations.py` i `behavior_tests.py` na **izoliranoj** PostgreSQL 16 verifier bazi, uključujući idempotentnost migracije 4 i parallel Super Admin removal test. Verifier je destruktivan; ne ciljati produkciju.
+2. Potvrditi refresh CAS, password-reset CAS i last-Super-Admin lock stvarnim PostgreSQL concurrency testovima.
+3. Pokrenuti Redis integration test za PEXPIRE timeout/ACL failure, cleanup i degraded mode.
+4. Dodati/pokrenuti HTTP i browser E2E za Super Admin WEB-only, scope `OWN`/`ALL`, PII, session revoke/logout, reset/refresh race i P1/P2/P3/P14.
+5. Pokrenuti Prisma native generation/build u supported CI; lokalni workaround/cache nije takva potvrda.
+6. Ponoviti coverage i ENV-sync ako se koriste za završni acceptance zapis.

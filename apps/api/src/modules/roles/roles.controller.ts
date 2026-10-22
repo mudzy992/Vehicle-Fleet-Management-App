@@ -42,7 +42,7 @@ import {
   updateRoleSchema,
 } from '@vfm/shared/schemas';
 import { AuditContext } from '../../common/audit/audit.types.js';
-import { Audit, CurrentUser, RequirePermissions } from '../../common/decorators/auth.decorators.js';
+import { Audit, CurrentUser, RequireScope } from '../../common/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import type { AuthenticatedUser, VfmRequest } from '../../common/types/authenticated-user.js';
 import { RolesService } from './roles.service.js';
@@ -52,21 +52,21 @@ export class RolesController {
   constructor(private readonly roles: RolesService) {}
 
   @Get()
-  @RequirePermissions('role:view')
+  @RequireScope('role:view', 'ALL')
   list(): Promise<RoleSummary[]> {
     return this.roles.list();
   }
 
   /** Matrica za editor (katalog + uloge + grantovi u jednom odgovoru). */
   @Get('matrix')
-  @RequirePermissions('role:view')
+  @RequireScope('role:view', 'ALL')
   matrix(): Promise<PermissionMatrixResponse> {
     return this.roles.matrix();
   }
 
   /** P2: bulk izmjena matrice u jednoj transakciji + bump verzije + audit diff. */
   @Put('matrix')
-  @RequirePermissions('role:manage_permissions')
+  @RequireScope('role:manage_permissions', 'ALL')
   @Audit('PERMISSION_CHANGE', { severity: 'SECURITY', resource: 'Role' })
   async updateMatrix(
     @Body(new ZodValidationPipe(roleMatrixUpdateSchema, 'body')) input: RoleMatrixUpdateInput,
@@ -90,7 +90,7 @@ export class RolesController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @RequirePermissions('role:create')
+  @RequireScope('role:create', 'ALL')
   @Audit('CREATE', { severity: 'INFO', resource: 'Role' })
   async create(
     @Body(new ZodValidationPipe(createRoleSchema, 'body')) input: CreateRoleInput,
@@ -104,13 +104,13 @@ export class RolesController {
   }
 
   @Get(':id')
-  @RequirePermissions('role:view')
+  @RequireScope('role:view', 'ALL')
   get(@Param('id', new ZodValidationPipe(roleIdSchema, 'params')) id: string): Promise<RoleDetail> {
     return this.roles.get(id);
   }
 
   @Patch(':id')
-  @RequirePermissions('role:update')
+  @RequireScope('role:update', 'ALL')
   @Audit('UPDATE', { severity: 'INFO', resource: 'Role' })
   async update(
     @Param('id', new ZodValidationPipe(roleIdSchema, 'params')) id: string,
@@ -134,7 +134,7 @@ export class RolesController {
 
   @Post(':id/archive')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @RequirePermissions('role:archive')
+  @RequireScope('role:archive', 'ALL')
   @Audit('ARCHIVE', { severity: 'INFO', resource: 'Role' })
   async archive(
     @Param('id', new ZodValidationPipe(roleIdSchema, 'params')) id: string,
@@ -159,14 +159,14 @@ export class PermissionsController {
 
   /** Katalog iz koda + status u bazi (`inDatabase` = da li je sync pokrenut). */
   @Get()
-  @RequirePermissions('permission:view')
+  @RequireScope('permission:view', 'ALL')
   catalog(): Promise<PermissionCatalogGroup[]> {
     return this.roles.catalog();
   }
 
   /** Deploy korak: usklađuje `Permission` redove s `PERMISSION_CATALOG`. */
   @Post('sync')
-  @RequirePermissions('permission:catalog_sync')
+  @RequireScope('permission:catalog_sync', 'ALL')
   @Audit('UPDATE', { severity: 'SECURITY', resource: 'Permission' })
   async sync(@Req() request: VfmRequest): Promise<PermissionSyncResult> {
     const result = await this.roles.syncCatalog();

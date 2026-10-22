@@ -271,6 +271,8 @@ export class FakePrismaClient {
 
   /** Autoincrement identitet (`AuditLog.id` je `BigInt @default(autoincrement())`). */
   private auditSequence = 0;
+  /** Serijalizacija transakcija u memorijskom fake-u (ograničeni DB lock model). */
+  private transactionTail: Promise<void> = Promise.resolve();
 
   /** Brojač za deterministički `createdAt` (redoslijed sesija je bitan). */
   private sequence = 0;
@@ -835,13 +837,15 @@ export class FakePrismaClient {
     },
 
     updateMany: async (args: {
-      where: { userId?: string; usedAt?: null };
+      where: { id?: string; userId?: string; usedAt?: null; expiresAt?: { gt?: Date } };
       data: { usedAt?: Date };
     }): Promise<{ count: number }> => {
       const rows = this.passwordResetTokens.filter(
         (entry) =>
+          (args.where.id === undefined || entry.id === args.where.id) &&
           (args.where.userId === undefined || entry.userId === args.where.userId) &&
-          (args.where.usedAt !== null || entry.usedAt === null),
+          (args.where.usedAt !== null || entry.usedAt === null) &&
+          (args.where.expiresAt?.gt === undefined || entry.expiresAt > args.where.expiresAt.gt),
       );
       for (const row of rows) {
         if (args.data.usedAt) row.usedAt = args.data.usedAt;
@@ -867,14 +871,23 @@ export class FakePrismaClient {
   // ---------------------------------------------------------------------------
 
   /**
-   * `$transaction` samo prosljeđuje isti fake kao `tx` — dovoljno da se provjeri
-   * redoslijed (delete → create → bump verzije) i da greška u callback-u prekine
-   * upis. Izolacija/rollback se ne simulira (pravi rollback pokriva integracioni
-   * test na PostgreSQL-u).
+   * `$transaction` koristi isti fake kao `tx` i serijalizira callback-e kako bi
+   * CAS/regresijski testovi modelirali osnovni red-lock redoslijed. Rollback i
+   * PostgreSQL izolacija i dalje se ne simuliraju; to traži live DB test.
    */
   readonly $transaction = async <T>(fn: (tx: FakePrismaClient) => Promise<T>): Promise<T> => {
     this.calls.transaction += 1;
-    return fn(this);
+    const previous = this.transactionTail;
+    let release!: () => void;
+    this.transactionTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await fn(this);
+    } finally {
+      release();
+    }
   };
 
   readonly role = {

@@ -116,8 +116,13 @@ def main() -> int:
             print("     ograničenjima (btree_gist nedostaje) — taj dio provjeri na serveru")
 
         run("2_manual", manual_path)
-        # Idempotentnost: 2_manual se mora moći primijeniti dvaput bez greške.
+        # Dodatne ručno pisane migracije ostaju dio istog stvarnog DB gate-a.
+        run("3_password_reset_tokens", MIGRATIONS / "3_password_reset_tokens" / "migration.sql")
+        concurrency_lock = MIGRATIONS / "4_super_admin_guard_lock" / "migration.sql"
+        run("4_super_admin_guard_lock", concurrency_lock)
+        # Idempotentnost ručnih SQL migracija.
         run("2_manual (2. put — idempotentnost)", manual_path)
+        run("4_super_admin_guard_lock (2. put — idempotentnost)", concurrency_lock)
         c.commit()
 
         # 2) Katalog

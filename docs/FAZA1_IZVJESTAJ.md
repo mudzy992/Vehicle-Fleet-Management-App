@@ -1,6 +1,6 @@
 # Faza 1 — Izvještaj: Identitet
 
-**Datum:** 20.10.2026. · **Grana:** `arena/d46d9ae6-vehicle-fleet-management-app` · **Baza:** `main` @ `3a8957a`
+**Izvorni izvještaj:** 20.10.2026. · **Dopuna:** 22.10.2026. · **Grana:** `arena/d46d9ae6-vehicle-fleet-management-app` · **HEAD:** `720c655` + necommitovane auditne izmjene
 
 > Ovaj dokument dokazuje šta je od **Definition of Done** iz [`PLAN_IMPLEMENTACIJE.md`](./PLAN_IMPLEMENTACIJE.md) §5
 > i prihvatnih kriterija **P1/P2/P3/P14** iz [`09-TEST_PLAN.md`](./09-TEST_PLAN.md) §2 ispunjeno, šta je
@@ -12,12 +12,11 @@
 
 | Stavka | Rezultat |
 |---|---|
-| Kvalitet-kapije | `pnpm turbo run lint typecheck test build` → **17/17 zeleno** ✅ |
-| Testovi | **776** (shared 234 · API **495** · web **47**) — 0 padajućih ✅ |
-| Coverage API | `75,25 / 65,37 / 79,05 / 76,56` (exit 0); `auth` **95 %/86 %**, `guards` **97 %/89 %**, `roles` **97 %/75 %**, `users` **95 %/71 %** ✅ |
-| Coverage web | `78,10 / 75,39 / 72,54 / 79,09` (exit 0; mjeri se nad logikom — vidi §6) ✅ |
-| ENV | `.env.example` ⇄ šema 1:1, `env-sync-check` **0 upozorenja** (154 varijable) ✅ |
-| Migracije | `0_extensions`, `1_init`, `2_manual`, **`3_password_reset_tokens`** ⚠️ (migracija 3 nije primijenjena u sandboxu) |
+| Kvalitet-kapije (22.10) | `corepack pnpm exec turbo run lint typecheck test build` → **25/25 taskova**, exit `0` ✅ |
+| Testovi (22.10) | API **916/916**; ciljani web session **5/5**; raniji ciljano izvršeni API subset **197/197** ✅ |
+| Coverage | **Nije ponovo izračunat** u dopuni 22.10; coverage brojevi izvornog izvještaja su historijski (20.10), ne aktuelni dokaz |
+| ENV | Izvorni izvještaj: `.env.example` ⇄ šema 1:1, `env-sync-check` **0 upozorenja** (154 varijable); nije ponovljeno 22.10 |
+| Migracije | `0_extensions`, `1_init`, `2_manual`, `3_password_reset_tokens`, `4_super_admin_guard_lock` ⚠️ migracije 3–4 **nisu primijenjene na živu bazu** |
 | Endpointi Faze 1 | `/api/v1/auth/*` (9 ruta), `/roles` (4), `/permissions` (2), `/users` (10), `/audit-logs` (2) ✅ |
 | Web ekrani | Prijava, Korisnici, Matrica prava, Audit log, Profil (+ guard-ovi, `usePermission`) ✅ |
 | Pokrenuti seed/bootstrap u sandboxu | ❌ — traži PostgreSQL (skripte su kompajlirane i unit-testirane, ali nisu izvršene nad pravom bazom) |
@@ -32,12 +31,15 @@
 |---|---|---|
 | `PrismaService` (`@Global`), Prisma 7 + `@prisma/adapter-pg` | `apps/api/src/prisma/` | `ping()` = stvarni `SELECT 1`; `/health/ready` ga prijavljuje |
 | Generator `prisma-client` (Rust-free) | `prisma/schema.prisma`, `prisma.config.ts` | `datasource.url` u konfiguraciji (Prisma 7 breaking change), `migrations.seed` |
-| Migracije | `prisma/migrations/{0,1,2,3}` | `1_init` = 45 tabela / 9 `ux_` / 18 `ck_` / 2 EXCLUDE / 76 FK / 6 triggera; `2_manual` = partial unique, EXCLUDE, guard triggeri |
+| Migracije | `prisma/migrations/{0,1,2,3,4}` | `1_init` = 45 tabela / 9 `ux_` / 18 `ck_` / 2 EXCLUDE / 76 FK / 6 triggera; `2_manual` = partial unique, EXCLUDE, guard triggeri; `4_super_admin_guard_lock` serijalizuje posljednjeg Super Admina |
 | `PasswordResetToken` | `3_password_reset_tokens` | SHA-256, 30 min, jednokratno (`usedAt`) |
 
 Provjereno **primjenom** na PostgreSQL 16 u ranijoj fazi (`scripts/db-verify/`: `0→1→2`, `behavior_tests.py` **95/95**).
-Migracija **3 je ručno napisan SQL** (Prisma 7 `migrate diff` traži native engine koji sandbox ne može preuzeti) —
-**prije deploya obavezno pokrenuti verifier** (`apps/api/prisma/README.md` §A).
+Migracije **3 i 4 su ručno napisani SQL** (Prisma 7 `migrate diff` traži native engine koji sandbox ne može preuzeti).
+Migracija 4 dodaje transaction advisory lock prije posljednjeg-Super-Admin guard triggera; `scripts/db-verify/` uključuje
+primjenu/idempotentnost migracije 4 i paralelni test deaktivacije dva Super Admina (očekivano jedan uspjeh, jedan `LAST_SUPER_ADMIN_PROTECTED`).
+Verifikator je **kompajliran, ali nije izvršen nad PostgreSQL-om**; prije deploya obavezno ga pokrenuti u izoliranoj bazi
+(`apps/api/prisma/README.md` §A), nikad direktno na produkciji.
 
 ### 2.2 Autentifikacija (`/api/v1/auth`)
 
@@ -49,7 +51,7 @@ Migracija **3 je ručno napisan SQL** (Prisma 7 `migrate diff` traži native eng
 | `GET /me` | profil + efektivna prava + `pv`/`tv` + `timezone`/`locale` |
 | `POST /change-password` | stara lozinka + politika; revoku sve sesije |
 | `POST /reset-password` | jednokratni token (hash u bazi), istek 30 min, revoku sve sesije |
-| `GET /sessions` · `DELETE /sessions/:id` | vlastiti uređaji; tuđa sesija → `404` |
+| `GET /sessions` · `DELETE /sessions/:id` | vlastiti uređaji; tuđa sesija → `404`; opoziv trenutne sesije označava `currentSessionRevoked` i briše web refresh cookie |
 
 Access token 10 min (`JWT_ACCESS_TTL`), refresh 30 dana; `tv` (tokenVersion) se provjerava u Redis-u na svakom zahtjevu
 (`vfm:tokenver:{userId}`), `pv` (permissionsVersion) daje `401 PERMISSIONS_STALE` → klijent osvježi prava.
@@ -58,8 +60,10 @@ Access token 10 min (`JWT_ACCESS_TTL`), refresh 30 dana; `tv` (tokenVersion) se 
 
 - `PermissionsGuard` + `@RequirePermissions` + evaluator opsega `ALL | OWN | VEHICLE_IDS | DRIVER_IDS`
   (`OWN < VEHICLE_IDS/DRIVER_IDS < ALL`), keš `vfm:perm:{userId}` TTL 60 s.
-- Invalidacija: `Role.permissionsVersion++` + `DEL vfm:perm:*` + preslikavanje `vfm:permver:role:{id}` na DB verziju
+- Invalidacija: `Role.permissionsVersion++` + `DEL vfm:perm:*` + preslikavanje `vfm:permver:role:{id}` na DB verziju;
+  globalna permission-version se čita i pri izdavanju tokena i `/me`, pa nov token ostaje poravnat s aktivnom verzijom.
   → revokacija važi za **postojeće** tokene bez ponovne prijave (P3).
+- Globalne administratorske user/role/permission/audit rute zahtijevaju scope `ALL`; `OWN`/ID scope sami po sebi ne otključavaju globalne kolekcije.
 - Redoslijed guard-ova: **RateLimit → Jwt → ClientType → Permissions**.
 - Super Admin: web-only na prijavi **i** na svakom zahtjevu (P1); mobilni → `403 MOBILE_ACCESS_FORBIDDEN` + SECURITY zapis.
 - Rate limit na Redis-u (`vfm:rl:{scope}:{identity}`): login 5/15 min, globalno 300/min, upload 30/min; fail-open
@@ -80,8 +84,8 @@ sistemske role se ne arhiviraju, rola s aktivnim korisnicima se ne arhivira, `40
 `GET/PATCH /users/:id`, `POST /users/:id/archive`, `DELETE /users/:id`, `POST /users/:id/roles`,
 `DELETE /users/:id/roles/:roleId`, `POST /users/:id/reset-password`, `POST /users/:id/force-logout`.
 
-- **PII**: `email`/`phone` maskirani bez `user:view_pii` (+ `piiRedacted`).
-- **Zaštita zadnjeg Super Admina** na svakoj radnji koja bi ga uklonila (u bazi isto čuva trigger).
+- **PII**: `email`/`phone` maskirani bez `user:view_pii` (+ `piiRedacted`); `user:view_pii:OWN` otkriva PII samo vlastitog korisničkog reda, `ALL` — sve.
+- **Zaštita zadnjeg Super Admina** na svakoj radnji koja bi ga uklonila; migracija 4 zaključava konkurentnu provjeru DB transakcijama. PostgreSQL verifier nije izvršen.
 - `DELETE` = **anonimizacija** PII-a (fizički `DELETE` bi pokidao immutabilni `AuditLog`).
 - Promjena statusa/rola i reset lozinke revokuju sesije i brišu RBAC keš.
 
@@ -239,7 +243,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://api.vehicle.ba101.top/api/v1/us
 
 | # | Stavka | Faza |
 |---|---|---|
-| 1 | Migracija 3 + seed + bootstrap nad pravom bazom (§5) | **odmah** |
+| 1 | Migracije 3–4 + seed + bootstrap nad izoliranom pravom bazom (§5; verifier briše/kreira bazu) | **prije deploya** |
 | 2 | E2E/integration testovi: P1 (HTTP), P2 (HTTP), P3 (mjerenje latencije), P14 sweep | 6 (uz Maestro/Playwright) |
 | 3 | `POST /auth/forgot-password` + slanje reset tokena e-mailom (Outbox) | 5 |
 | 4 | `XADD vfm:stream:audit` + SSE live audit (uz ACL izmjenu i upozorenje vlasniku) | 6 |
@@ -257,5 +261,7 @@ Faza 1 isporučuje **funkcionalan identitet i autorizaciju**: prijava s rotiraju
 (na prijavi i na svakom zahtjevu), konfigurabilni RBAC s trenutnom revokacijom, korisnici s PII zaštitom i
 jednokratnim resetom lozinke, audit svih značajnih akcija i web ekrane za upravljanje.
 
-Kapije su zelene (17/17, 776 testova, 0 ENV upozorenja), a sve što traži živu infrastrukturu je eksplicitno
-navedeno u §5 — bez toga se ne smije tvrditi da je P1–P3/P14 dokazan end-to-end.
+Dopuna 22.10.2026: puna lokalna kapija zelena (**25/25 taskova**, API **916/916**, ciljano web session **5/5**).
+Detaljni findings, fixes, regresijski testovi i pre-release uslovi: [`audit/FAZA1_AUDIT.md`](../audit/FAZA1_AUDIT.md).
+Coverage i ENV-sync nisu ponovo izračunati u ovoj dopuni. Migracije 3–4, PostgreSQL/Redis live provjere i E2E nisu izvršeni;
+bez tih provjera se ne smije tvrditi da je P1–P3/P14 dokazan end-to-end.

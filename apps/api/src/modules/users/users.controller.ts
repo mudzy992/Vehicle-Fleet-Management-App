@@ -54,7 +54,7 @@ import {
   uuidSchema,
 } from '@vfm/shared/schemas';
 import { AuditContext } from '../../common/audit/audit.types.js';
-import { Audit, CurrentUser, RequirePermissions } from '../../common/decorators/auth.decorators.js';
+import { Audit, CurrentUser, RequireScope } from '../../common/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import type { AuthenticatedUser, VfmRequest } from '../../common/types/authenticated-user.js';
 import { UsersService } from './users.service.js';
@@ -64,7 +64,7 @@ export class UsersController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
-  @RequirePermissions('user:view')
+  @RequireScope('user:view', 'ALL')
   list(
     @Query(new ZodValidationPipe(userListQuerySchema, 'query')) query: Parameters<UsersService['list']>[0],
     @CurrentUser() actor: AuthenticatedUser | undefined,
@@ -74,7 +74,7 @@ export class UsersController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @RequirePermissions('user:create')
+  @RequireScope('user:create', 'ALL')
   @Audit('CREATE', { severity: 'INFO', resource: 'User' })
   async create(
     @Body(new ZodValidationPipe(createUserSchema, 'body')) input: CreateUserInput,
@@ -100,7 +100,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  @RequirePermissions('user:view')
+  @RequireScope('user:view', 'ALL')
   get(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @CurrentUser() actor: AuthenticatedUser | undefined,
@@ -109,7 +109,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @RequirePermissions('user:update')
+  @RequireScope('user:update', 'ALL')
   @Audit('UPDATE', { severity: 'INFO', resource: 'User' })
   async update(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
@@ -131,7 +131,7 @@ export class UsersController {
 
   @Post(':id/archive')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @RequirePermissions('user:archive')
+  @RequireScope('user:archive', 'ALL')
   @Audit('ARCHIVE', { severity: 'SECURITY', resource: 'User' })
   async archive(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
@@ -155,7 +155,7 @@ export class UsersController {
    */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @RequirePermissions('user:delete')
+  @RequireScope('user:delete', 'ALL')
   @Audit('DELETE', { severity: 'CRITICAL', resource: 'User' })
   async remove(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
@@ -175,7 +175,7 @@ export class UsersController {
 
   @Post(':id/roles')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions('user:assign_role')
+  @RequireScope('user:assign_role', 'ALL')
   @Audit('UPDATE', { severity: 'SECURITY', resource: 'User' })
   async assignRole(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
@@ -197,7 +197,7 @@ export class UsersController {
 
   @Delete(':id/roles/:roleId')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions('user:assign_role')
+  @RequireScope('user:assign_role', 'ALL')
   @Audit('UPDATE', { severity: 'SECURITY', resource: 'User' })
   async removeRole(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
@@ -220,7 +220,7 @@ export class UsersController {
   /** Izdaje jednokratni token (30 min). Token se **ne** upisuje u audit. */
   @Post(':id/reset-password')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions('user:reset_password')
+  @RequireScope('user:reset_password', 'ALL')
   @Audit('UPDATE', { severity: 'SECURITY', resource: 'User', diff: false })
   async resetPassword(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
@@ -241,7 +241,7 @@ export class UsersController {
 
   @Post(':id/force-logout')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions('user:force_logout')
+  @RequireScope('user:force_logout', 'ALL')
   @Audit('SECURITY', { severity: 'SECURITY', resource: 'Session' })
   async forceLogout(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,

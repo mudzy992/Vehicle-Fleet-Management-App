@@ -99,6 +99,8 @@ export class FakeRedis implements PermissionsRedisClient {
   scanCalls = 0;
   /** Simulacija kvara (NOPERM/timeout) — potroši se na prvi poziv. */
   failNext = false;
+  /** Kvar samo na PEXPIRE, radi provjere cleanup-a brojača bez TTL-a. */
+  failNextPexpire = false;
 
   async get(key: string): Promise<string | null> {
     this.maybeFail();
@@ -161,6 +163,10 @@ export class FakeRedis implements PermissionsRedisClient {
 
   /** `PEXPIRE` — pamti TTL u ms (kao ioredis). */
   async pexpire(key: string, milliseconds: number): Promise<number> {
+    if (this.failNextPexpire) {
+      this.failNextPexpire = false;
+      throw new Error('fake PEXPIRE timeout');
+    }
     this.maybeFail();
     if (!this.store.has(key)) return 0;
     this.pttls.set(key, milliseconds);

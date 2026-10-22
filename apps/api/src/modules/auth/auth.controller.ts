@@ -200,15 +200,19 @@ export class AuthController {
 
   /** Odjava jednog uređaja (tuđa sesija → `404 NOT_FOUND`). */
   @Delete('sessions/:id')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   @RequirePermissions('auth:manage_sessions')
   @Audit('LOGOUT', { severity: 'SECURITY', resource: 'auth', diff: false })
   async revokeSession(
     @Param('id', new ZodValidationPipe(sessionIdSchema, 'params')) id: string,
     @CurrentUser() user: AuthenticatedUser | undefined,
-  ): Promise<void> {
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ currentSessionRevoked: boolean }> {
     const current = this.requireUser(user);
     await this.auth.revokeSession(current.id, id);
+    const currentSessionRevoked = id === current.sessionId;
+    if (currentSessionRevoked) this.clearRefreshCookie(response);
+    return { currentSessionRevoked };
   }
 
   // ---------------------------------------------------------------------------
