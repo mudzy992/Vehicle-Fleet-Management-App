@@ -192,7 +192,11 @@ function renderControl(field: RenderField, id: string, onChange: (value: unknown
 
     case 'SELECT':
       if (!field.options) {
-        return <p className="text-xs text-[var(--fg-muted)]">Opcije se učitavaju na serveru (LIST/QUERY).</p>;
+        return (
+          <p className="text-xs text-[var(--fg-muted)]">
+            Dinamičke opcije (LIST/QUERY) nisu učitane na ovom ekranu.
+          </p>
+        );
       }
       return (
         <select
@@ -213,7 +217,11 @@ function renderControl(field: RenderField, id: string, onChange: (value: unknown
 
     case 'MULTI_SELECT':
       if (!field.options) {
-        return <p className="text-xs text-[var(--fg-muted)]">Opcije se učitavaju na serveru (LIST/QUERY).</p>;
+        return (
+          <p className="text-xs text-[var(--fg-muted)]">
+            Dinamičke opcije (LIST/QUERY) nisu učitane na ovom ekranu.
+          </p>
+        );
       }
       return (
         <div className="space-y-1">

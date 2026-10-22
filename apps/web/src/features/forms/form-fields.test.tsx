@@ -82,6 +82,26 @@ describe('FormFields', () => {
     expect(screen.getByLabelText(/Kilometraža/u)).toBeTruthy();
   });
 
+  it('jasno označava dinamičke opcije koje ekran još nije učitao', () => {
+    const base = model();
+    const section = base.sections[0]!;
+    const field = {
+      ...section.fields[0]!,
+      widget: 'SELECT' as const,
+      optionsSourceKind: 'LIST' as const,
+      optionsSource: { kind: 'LIST' as const, listCode: 'WORKSHOP' },
+      options: null,
+    };
+    const dynamicModel = {
+      ...base,
+      sections: [{ ...section, fields: [field] }, ...base.sections.slice(1)],
+    } as unknown as RenderModel;
+
+    render(<FormFields model={dynamicModel} onChange={() => undefined} />);
+
+    expect(screen.getByText('Dinamičke opcije (LIST/QUERY) nisu učitane na ovom ekranu.')).toBeTruthy();
+  });
+
   it('serverska greška ide uz polje', () => {
     render(<FormFields model={model()} errors={{ odometerKm: 'Prevoziljeno' }} onChange={() => undefined} />);
 
