@@ -1,6 +1,6 @@
 # Mobilna aplikacija (Expo / Android)
 
-**Faza 6 je u toku.** Aplikacija uključuje Expo Router, prijavu s `MOBILE_ANDROID`, obaveznu promjenu privremene lozinke, refresh token u SecureStore, moje i slobodne zadatke, detalj, dinamičku formu prema snapshotu pri preuzimanju/završetku i kreiranju zadatka, upload fotografija/fajlova, listu i read-only profil vozila, korisnički profil i odjavu. Obavijesti/FCM, novi zadatak, sesije/promjena lozinke i EAS distribucija još nisu završeni.
+**Faza 6 je u toku.** Implementirano je: prijava za `MOBILE_ANDROID`, obavezna promjena privremene lozinke, refresh token u SecureStore, Moji/Slobodni zadaci i detalj, trokorakni wizard za kreiranje, dinamičke forme sa LIST/QUERY i podržanim REFERENCE lookup-ima, upload priloga, vozila (lista/profil), profil i odjava. Preostaju: mobilni ekran/API za obavijesti, sesije i postavke obavijesti, REFERENCE_RECORD za `VEHICLE_HANDOVER`/`OTHER`, uređajski UAT i EAS distribucija. FCM nije aktivan.
 
 ## Pokretanje i provjera
 
