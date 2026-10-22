@@ -448,6 +448,43 @@ describe('FormSchemasService — validacija zapisa (P11)', () => {
     expect(result.errors).toEqual([]);
   });
 
+  it('P11 provjerava dinamički LIST izbor prema trenutnim server vrijednostima', async () => {
+    const { prisma, service } = build();
+    prisma.formOptionLists.set('WORKSHOP', [
+      { code: 'GARAGE_A', label: 'Radionica A', active: true, deletedAt: null, sortOrder: 1 },
+    ]);
+    const definition = freshWashDefinition();
+    const sections = definition.sections as Array<Record<string, unknown>>;
+    const fields = sections[0]!.fields as Array<Record<string, unknown>>;
+    fields.push({
+      key: 'workshop',
+      type: 'SINGLE_CHOICE',
+      label: 'Radionica',
+      order: 5,
+      optionsSource: { kind: 'LIST', listCode: 'WORKSHOP' },
+    });
+    const form = (
+      await service.create(
+        { key: 'pranje_dinamicno', name: 'Pranje dinamično', subject: 'TASK', definition },
+        ACTOR,
+      )
+    ).data;
+    const versionId = form.versions[0]!.id;
+    await service.publish(form.id, versionId, { changeNote: 'Objava dinamičkog izbora' }, ACTOR);
+
+    const accepted = await service.validateValues(form.id, versionId, {
+      values: { ...VALID_VALUES, workshop: 'GARAGE_A' },
+      isNew: true,
+    });
+    const rejected = await service.validateValues(form.id, versionId, {
+      values: { ...VALID_VALUES, workshop: 'NOT_ALLOWED' },
+      isNew: true,
+    });
+
+    expect(accepted.ok).toBe(true);
+    expect(rejected.errors.map((error) => error.code)).toContain('OPTION');
+  });
+
   it('objavljena verzija vraća očišćene vrijednosti, izračunata polja i greške', async () => {
     const { service } = build();
     const detail = await createWashForm(service);

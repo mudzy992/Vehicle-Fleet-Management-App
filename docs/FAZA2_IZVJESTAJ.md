@@ -112,7 +112,7 @@ Jedna ruta `/forme`, tri panela: katalog → verzije → editor. Detalji u [`06`
 
 | # | Kriterij | Dokaz | Status |
 |---|---|---|---|
-| **P9** | Forma: kreirati, validirati, preview, objaviti | `form-schemas-service.spec.ts` (20) — `create` → `DRAFT`, `validate` → P11, `publish` bez bilješke → 422, s bilješkom → `PUBLISHED` + prethodna `RETIRED`; web pregled kroz `buildRenderModel` | ✅ unit + UI |
+| **P9** | Forma: kreirati, validirati, preview, objaviti | `form-schemas-service.spec.ts` (21) — `create` → `DRAFT`, `validate` → P11, `publish` bez bilješke → 422, s bilješkom → `PUBLISHED` + prethodna `RETIRED`; web pregled kroz `buildRenderModel` | ✅ unit + UI |
 | **P10** | Imutabilnost objavljene verzije; zapis renderuje **svoju** verziju | `PUT`/`DELETE` nad `PUBLISHED` → `409 FORM_VERSION_IMMUTABLE`; **DB trigger** `trg_form_version_immutable` u `2_manual`; `buildRenderModel({ formSchemaVersionId, version })` nosi verziju zapisa; `GET /:id/versions/:vid` + `ETag` | ✅ unit + renderer + SQL (trigger nije primijenjen u sandboxu) |
 | **P11** | Validacija zapisa prema verziji | `record-validation.spec.ts` (23) + resolver unit test; nepoznato/skriveno polje, obavezno, tipovi, static/dynamic opcije, prilozi, `COMPUTED`, normalizacija | ⚠️ lokalno unit; permission scope/live HTTP preostaju |
 | **P12** | Migracija zapisa između verzija | `form-migrations-service.spec.ts` (13) — preview bez pisanja, `apply` u serijama 500, `SKIPPED`, `rollback` | ✅ unit |
@@ -247,8 +247,8 @@ Ovaj odjeljak je aktuelan za aktivnu granu `arena/d46d9ae6-vehicle-fleet-managem
 | Komanda / gate | Rezultat | Ograničenje |
 |---|---|---|
 | `pnpm --filter @vfm/form-engine exec vitest run` | **10 fajlova, 151/151 testova** | Unit only. |
-| API targeted: `form-schemas-service` + `form-migrations-service` + `form-option-values` | **3 fajla, 34/34** (20 + 13 + 1) | Fake Prisma; ne dokazuje PostgreSQL transakcije/concurrency. |
-| Turbo `lint typecheck test build` | **25/25 taskova**; API 923, shared 250, form-engine 151, renderer 13, web 163; ukupno **1500** testova | Cijeli lokalni gate; nije HTTP/DB/Redis/E2E. |
+| API targeted: `form-schemas-service` + `form-migrations-service` + `form-option-values` | **3 fajla, 35/35** (21 + 13 + 1) | Fake Prisma; ne dokazuje PostgreSQL transakcije/concurrency. |
+| Turbo `lint typecheck test build` | **25/25 taskova**; API 924, shared 250, form-engine 151, renderer 13, web 163; ukupno **1501** testova | Cijeli lokalni gate; nije HTTP/DB/Redis/E2E. |
 | `git diff --check` | Prošao | Samo whitespace/diff provjera. |
 
 Komande su izvršene uz `PRISMA_SCHEMA_ENGINE_BINARY=/bin/true` sandbox workaround i Turbo lokalni pnpm shim. Ovaj workaround nije Prisma native engine, ne dokazuje svježi engine download/generate, migraciju niti rad protiv žive baze. Coverage u §1 je historijski rezultat baznog audita; **coverage nije ponovo pokrenut** u ovoj reviziji.
