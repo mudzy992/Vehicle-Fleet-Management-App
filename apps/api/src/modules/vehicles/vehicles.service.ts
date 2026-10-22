@@ -250,7 +250,12 @@ export class VehiclesService {
   //  Upis
   // ---------------------------------------------------------------------------
 
-  async create(input: CreateVehicleInput, actorId?: string): Promise<VehicleMutation<VehicleDetail>> {
+  async create(
+    input: CreateVehicleInput,
+    actorId?: string,
+    actor?: AuthenticatedUser,
+  ): Promise<VehicleMutation<VehicleDetail>> {
+    if (actor) this.assertCreateScope(actor, 'vehicle:create');
     const version = await this.resolveFormVersion(input.formSchemaVersionId);
     const validated = await this.validateFormData({
       definition: version.definition,
@@ -312,8 +317,10 @@ export class VehiclesService {
     input: UpdateVehicleInput,
     //  `Vehicle` nema `updatedById`; akter je u audit zapisu (`AuditContext`).
     _actorId?: string,
+    actor?: AuthenticatedUser,
   ): Promise<VehicleMutation<VehicleDetail>> {
     const current = await this.loadOrThrow(id);
+    if (actor) this.assertScope(actor, 'vehicle:update', current);
     this.assertVersion(current, input.version);
     if (current.status === 'ARCHIVED') {
       throw new VfmException(
@@ -427,8 +434,10 @@ export class VehiclesService {
     id: string,
     input: ArchiveVehicleInput,
     _actorId?: string,
+    actor?: AuthenticatedUser,
   ): Promise<VehicleMutation<VehicleDetail>> {
     const current = await this.loadOrThrow(id);
+    if (actor) this.assertScope(actor, 'vehicle:archive', current);
     if (current.status === 'ARCHIVED') return { data: this.toDetail(current) };
 
     const archived = await this.prisma.vehicle.update({
@@ -448,8 +457,13 @@ export class VehiclesService {
     };
   }
 
-  async restore(id: string, _actorId?: string): Promise<VehicleMutation<VehicleDetail>> {
+  async restore(
+    id: string,
+    _actorId?: string,
+    actor?: AuthenticatedUser,
+  ): Promise<VehicleMutation<VehicleDetail>> {
     const current = await this.loadOrThrow(id);
+    if (actor) this.assertScope(actor, 'vehicle:archive', current);
     if (current.status !== 'ARCHIVED') {
       throw new VfmException('VALIDATION_ERROR', 'Vozilo nije u arhivi.', [detail('status', current.status)]);
     }
@@ -469,8 +483,13 @@ export class VehiclesService {
   }
 
   /** Soft-delete: zapis i sve evidencije ostaju, `internalNo`/`vin` se oslobađaju. */
-  async remove(id: string, actorId?: string): Promise<VehicleMutation<{ id: string }>> {
+  async remove(
+    id: string,
+    actorId?: string,
+    actor?: AuthenticatedUser,
+  ): Promise<VehicleMutation<{ id: string }>> {
     const current = await this.loadOrThrow(id);
+    if (actor) this.assertScope(actor, 'vehicle:delete', current);
     await this.prisma.vehicle.update({ where: { id }, data: { deletedAt: new Date() } });
 
     return {
@@ -519,8 +538,10 @@ export class VehiclesService {
     vehicleId: string,
     input: CreateOdometerReadingInput,
     actorId?: string,
+    actor?: AuthenticatedUser,
   ): Promise<VehicleMutation<OdometerReading>> {
     const vehicle = await this.loadOrThrow(vehicleId);
+    if (actor) this.assertScope(actor, 'odometer:create', vehicle);
 
     if (input.valueKm < vehicle.odometerKm) {
       throw new VfmException(
@@ -539,8 +560,10 @@ export class VehiclesService {
     vehicleId: string,
     input: CorrectOdometerReadingInput,
     actorId?: string,
+    actor?: AuthenticatedUser,
   ): Promise<VehicleMutation<OdometerReading>> {
     const vehicle = await this.loadOrThrow(vehicleId);
+    if (actor) this.assertScope(actor, 'odometer:correct', vehicle);
     const reason = input.correctionReason.trim();
 
     if (reason.length < 5) {
@@ -794,6 +817,18 @@ export class VehiclesService {
   // ---------------------------------------------------------------------------
   //  Pomoćne
   // ---------------------------------------------------------------------------
+
+  private assertCreateScope(actor: AuthenticatedUser, permission: Permission): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL' || scope === 'OWN') return;
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Opseg dozvole ne dopušta kreiranje vozila.',
+        code: 'scope_denied',
+      },
+    ]);
+  }
 
   private scopeWhere(actor: AuthenticatedUser, permission: Permission): Record<string, unknown> {
     const scope = actor.permissions?.permissions.get(permission);

@@ -77,7 +77,7 @@ export class DriversController {
   @Audit('CREATE', { severity: 'INFO', resource: 'Driver' })
   async create(
     @Body(new ZodValidationPipe(createDriverSchema, 'body')) input: CreateDriverInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<DriverDetail> {
     const outcome = await this.drivers.create(input, actor);
@@ -100,7 +100,7 @@ export class DriversController {
   async update(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(updateDriverSchema, 'body')) input: UpdateDriverInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<DriverDetail> {
     const outcome = await this.drivers.update(id, input, actor);
@@ -120,7 +120,7 @@ export class DriversController {
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(archiveDriverSchema, 'body', { allowEmpty: true }))
     input: ArchiveDriverInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<void> {
     const outcome = await this.drivers.archive(id, input, actor);
@@ -138,7 +138,7 @@ export class DriversController {
   @Audit('RESTORE', { severity: 'WARN', resource: 'Driver' })
   async restore(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<void> {
     const outcome = await this.drivers.restore(id, actor);
@@ -155,10 +155,10 @@ export class DriversController {
   @Audit('DELETE', { severity: 'CRITICAL', resource: 'Driver' })
   async remove(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<void> {
-    const outcome = await this.drivers.remove(id, actor?.id);
+    const outcome = await this.drivers.remove(id, actor.id);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(outcome.before)
@@ -184,9 +184,10 @@ export class DriversController {
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(createDriverLicenseCategorySchema, 'body'))
     input: CreateDriverLicenseCategoryInput,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<DriverLicenseCategory> {
-    const outcome = await this.drivers.addLicenseCategory(id, input);
+    const outcome = await this.drivers.addLicenseCategory(id, input, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setResource('Driver')
@@ -203,9 +204,10 @@ export class DriversController {
     @Param('categoryId', new ZodValidationPipe(uuidSchema, 'params')) categoryId: string,
     @Body(new ZodValidationPipe(updateDriverLicenseCategorySchema, 'body'))
     input: UpdateDriverLicenseCategoryInput,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<DriverLicenseCategory> {
-    const outcome = await this.drivers.updateLicenseCategory(id, categoryId, input);
+    const outcome = await this.drivers.updateLicenseCategory(id, categoryId, input, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setResource('Driver')
@@ -221,9 +223,10 @@ export class DriversController {
   async removeLicenseCategory(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Param('categoryId', new ZodValidationPipe(uuidSchema, 'params')) categoryId: string,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<void> {
-    const outcome = await this.drivers.removeLicenseCategory(id, categoryId);
+    const outcome = await this.drivers.removeLicenseCategory(id, categoryId, actor);
     AuditContext.from(request).setEntityId(id).setResource('Driver').setBefore(outcome.before);
   }
 }

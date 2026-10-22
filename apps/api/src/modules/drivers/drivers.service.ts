@@ -254,6 +254,7 @@ export class DriversService {
   // ---------------------------------------------------------------------------
 
   async create(input: CreateDriverInput, actor?: AuthenticatedUser): Promise<DriverMutation<DriverDetail>> {
+    if (actor) this.assertCreateScope(actor, 'driver:create');
     const version = await this.resolveFormVersion(input.formSchemaVersionId);
     const { values } = await this.validateFormData({
       definition: version.definition,
@@ -308,6 +309,7 @@ export class DriversService {
     actor?: AuthenticatedUser,
   ): Promise<DriverMutation<DriverDetail>> {
     const current = await this.loadOrThrow(id);
+    if (actor) this.assertScope(actor, 'driver:update', current);
     this.assertVersion(current, input.version);
     if (current.status === 'ARCHIVED') {
       throw new VfmException(
@@ -411,6 +413,7 @@ export class DriversService {
     actor?: AuthenticatedUser,
   ): Promise<DriverMutation<DriverDetail>> {
     const current = await this.loadOrThrow(id);
+    if (actor) this.assertScope(actor, 'driver:archive', current);
     if (current.status === 'ARCHIVED') {
       return { data: this.toDetail(current, allows(actor, 'driver:view_pii')) };
     }
@@ -435,6 +438,7 @@ export class DriversService {
 
   async restore(id: string, actor?: AuthenticatedUser): Promise<DriverMutation<DriverDetail>> {
     const current = await this.loadOrThrow(id);
+    if (actor) this.assertScope(actor, 'driver:archive', current);
     if (current.status !== 'ARCHIVED') {
       throw new VfmException('VALIDATION_ERROR', 'Vozač nije u arhivi.', [detail('status', current.status)]);
     }
@@ -454,8 +458,13 @@ export class DriversService {
   }
 
   /** Soft-delete: zapis i sve evidencije ostaju. */
-  async remove(id: string, actorId?: string): Promise<DriverMutation<{ id: string }>> {
+  async remove(
+    id: string,
+    actorId?: string,
+    actor?: AuthenticatedUser,
+  ): Promise<DriverMutation<{ id: string }>> {
     const current = await this.loadOrThrow(id);
+    if (actor) this.assertScope(actor, 'driver:delete', current);
     await this.prisma.driver.update({ where: { id }, data: { deletedAt: new Date() } });
 
     return {
@@ -486,8 +495,10 @@ export class DriversService {
     driverId: string,
     input: CreateDriverLicenseCategoryInput,
     _actorId?: string,
+    actor?: AuthenticatedUser,
   ): Promise<DriverMutation<DriverLicenseCategory>> {
-    await this.loadOrThrow(driverId);
+    const driver = await this.loadOrThrow(driverId);
+    if (actor) this.assertScope(actor, 'driver:update', driver);
 
     const category = input.category.toUpperCase();
     const existing = await this.prisma.driverLicenseCategory.findFirst({
@@ -522,8 +533,10 @@ export class DriversService {
     driverId: string,
     categoryId: string,
     input: UpdateDriverLicenseCategoryInput,
+    actor?: AuthenticatedUser,
   ): Promise<DriverMutation<DriverLicenseCategory>> {
-    await this.loadOrThrow(driverId);
+    const driver = await this.loadOrThrow(driverId);
+    if (actor) this.assertScope(actor, 'driver:update', driver);
     const current = await this.loadCategoryOrThrow(driverId, categoryId);
 
     const data: Record<string, unknown> = {};
@@ -546,8 +559,13 @@ export class DriversService {
     };
   }
 
-  async removeLicenseCategory(driverId: string, categoryId: string): Promise<DriverMutation<{ id: string }>> {
-    await this.loadOrThrow(driverId);
+  async removeLicenseCategory(
+    driverId: string,
+    categoryId: string,
+    actor?: AuthenticatedUser,
+  ): Promise<DriverMutation<{ id: string }>> {
+    const driver = await this.loadOrThrow(driverId);
+    if (actor) this.assertScope(actor, 'driver:update', driver);
     const current = await this.loadCategoryOrThrow(driverId, categoryId);
     await this.prisma.driverLicenseCategory.delete({ where: { id: categoryId } });
 
@@ -675,6 +693,18 @@ export class DriversService {
   // ---------------------------------------------------------------------------
   //  Pomoćne
   // ---------------------------------------------------------------------------
+
+  private assertCreateScope(actor: AuthenticatedUser, permission: Permission): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL' || scope === 'OWN') return;
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Opseg dozvole ne dopušta kreiranje vozača.',
+        code: 'scope_denied',
+      },
+    ]);
+  }
 
   private scopeWhere(actor: AuthenticatedUser, permission: Permission): Record<string, unknown> {
     const scope = actor.permissions?.permissions.get(permission);

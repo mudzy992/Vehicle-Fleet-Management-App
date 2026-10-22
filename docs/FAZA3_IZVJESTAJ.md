@@ -9,9 +9,9 @@ U repozitoriju već postoje API moduli i web ekrani za vozila, vozače, registra
 
 | Područje                  | Nalaz                                                                                                                                                           | Status                                                    |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Vozila i kilometraža      | API servis i jedinični testovi postoje; list/detail i historija kilometraže sada filtriraju `OWN`/`VEHICLE_IDS` i čuvaju `ALL`. Web funkcionalnost je prisutna. | Čitanje ograničeno po opsegu; ostale rute su još u auditu |
-| Vozači i PII | API/web moduli postoje; servis maskira PII prema `driver:view_pii`; list/detail i kategorije dozvole sada filtriraju `OWN`/`DRIVER_IDS`. | Čitanje ograničeno po opsegu; PII i write rute još u auditu |
-| Registracije i osiguranje | Servisi i jedinični testovi postoje; list/detail sada ograničavaju `OWN`/`VEHICLE_IDS` i čuvaju `ALL`; ručna migracija zabranjuje preklapanje perioda. | Čitanje ograničeno po opsegu; write rute i DB integracija još otvorene |
+| Vozila i kilometraža | API servis i jedinični testovi postoje; read scope `OWN`/`VEHICLE_IDS` i `ALL` je sačuvan. Mutacije provjeravaju scope za update/archive/delete, odometar i ograničavaju create na `OWN`/`ALL`. | Resursni scope je pokriven u servisima; P14 end-to-end još otvoren |
+| Vozači i PII | API/web moduli postoje; PII se maskira prema `driver:view_pii`; list/detail/kategorije čitaju `OWN`/`DRIVER_IDS`. Create/update/archive/delete i izmjene kategorija provjeravaju scope. | PII matrica i P14 end-to-end još otvoreni |
+| Registracije i osiguranje | List/detail filtriraju `OWN`/`VEHICLE_IDS`; create provjerava ciljano vozilo, update/delete zapis, `ALL` ostaje dozvoljen. Ručna migracija zabranjuje preklapanje perioda. | Resursni scope je pokriven u servisima; DB integracija još nije izvršena |
 | Podsjetnici               | Scheduler koristi `dedupeKey`, `createMany(skipDuplicates: true)` i `Europe/Sarajevo`; postoje jedinični testovi.                                               | P13 djelimično pokriven                                   |
 | Prilozi                   | Postoje provjere opsega kod list/get/url/content sesije i audit pristupa.                                                                                       | P14 nije potvrđen end-to-end                              |
 | Web ekrani                | Postoje feature moduli za vozila, vozače i podsjetnike; P14 test prolaza kroz sve API rute još nije pronađen.                                                   | Audit u toku                                              |
@@ -38,16 +38,16 @@ P14 je i dalje otvoren: `docs/09-TEST_PLAN.md` traži OpenAPI-wide provjeru dozv
 
 Audit je potvrdio razliku prema doslovnom P14 očekivanju: potpisani URL je ranije radio kao javni bearer token bez sesije. Ispravljena je zaštita: izdavanje URL-a i preuzimanje sada traže `attachment:view`; ruta s tokenom više nije javna, ponovo provjerava opseg priloga, a HMAC potpis veže token za ID korisnika i rok važenja. Web klijent preuzima bajtove uz memorijski access token umjesto otvaranja javnog linka. Dodani su regresijski testovi za metapodatke permisije, vezivanje tokena za korisnika i autentifikovano preuzimanje; puna P14 matrica svih OpenAPI ruta i dalje nije izvršena.
 
-Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view`/list endpoint ne smije se smatrati ekvivalentom prava nad konkretnim vozilom, vozačem ili prilogom. U nastavku audita su list/detail rute vozila, vozača, registracija i osiguranja, plus historija kilometraže i kategorije dozvole, dobile serversko filtriranje/provjeru opsega. Regresijski testovi pokrivaju `OWN`, `VEHICLE_IDS`/`DRIVER_IDS`, direktni GET izvan opsega i očuvanje `ALL`. Opsezi na write rutama, PII, podsjetnicima i svim ostalim OpenAPI rutama još nisu verifikovani; P14 nije zatvoren.
+Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view`/list endpoint ne smije se smatrati ekvivalentom prava nad konkretnim vozilom, vozačem ili prilogom. List/detail rute vozila, vozača, registracija i osiguranja, historija kilometraže i kategorije dozvole imaju serversko filtriranje/provjeru opsega. Write rute ovih resursa sada provjeravaju scope za kreiranje, izmjenu, arhivu/brisanje, odometar i kategorije dozvole; regresijski testovi pokrivaju `OWN`, `VEHICLE_IDS`/`DRIVER_IDS`, odbijanje izvan opsega i očuvanje `ALL`. PII politika i rute ostalih modula još nisu kompletno verifikovane; P14 nije zatvoren.
 
 ## Verifikacija u ovom prolazu
 
 - `corepack pnpm --filter @vfm/api exec vitest run --config vitest.integration.config.ts` — prolaz alata; jedan integracijski fajl i oba testa preskočena zbog nedostajućeg `PHASE3_TEST_DATABASE_URL`.
 - `corepack pnpm --filter @vfm/api typecheck` — prolaz.
-- `corepack pnpm --filter @vfm/api test` — prolaz: 58 fajlova, 930 jediničnih testova.
+- `corepack pnpm --filter @vfm/api test` — prolaz: 58 fajlova, 936 jediničnih testova.
 - `corepack pnpm --filter @vfm/web test` — prolaz: 23 fajla, 166 testova.
 - API i web `typecheck` — prolaz; ESLint nad izmijenjenim API/web fajlovima — prolaz.
-- Nije pokrenuta živa DB/API provjera. Korisnik je prijavio da su promjene do `42fa9d7` povučene i redeployane; to nije nezavisna provjera i ne pokriva kasnije promjene iz ovog prolaza.
+- Nije pokrenuta živa DB/API provjera. Korisnik je potvrdio da je commit `61d3d3e` obuhvaćen uspješnim redeployem; to je korisnički prijavljen rezultat, ne nezavisna provjera i ne obuhvata izmjene iz ovog radnog prolaza.
 
 ## Sljedeći koraci
 

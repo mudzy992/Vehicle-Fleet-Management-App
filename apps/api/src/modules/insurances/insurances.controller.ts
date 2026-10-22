@@ -61,10 +61,10 @@ export class InsurancesController {
   @Audit('CREATE', { severity: 'INFO', resource: 'InsuranceRecord' })
   async create(
     @Body(new ZodValidationPipe(createInsuranceSchema, 'body')) input: CreateInsuranceInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<InsuranceRecord> {
-    const outcome = await this.insurances.create(input, actor?.id);
+    const outcome = await this.insurances.create(input, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(outcome.data.id)
       .setAfter(outcome.after)
@@ -88,9 +88,10 @@ export class InsurancesController {
   async update(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(updateInsuranceSchema, 'body')) input: UpdateInsuranceInput,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<InsuranceRecord> {
-    const outcome = await this.insurances.update(id, input);
+    const outcome = await this.insurances.update(id, input, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(outcome.before)
@@ -105,10 +106,10 @@ export class InsurancesController {
   @Audit('DELETE', { severity: 'CRITICAL', resource: 'InsuranceRecord' })
   async remove(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<void> {
-    const outcome = await this.insurances.remove(id, actor?.id);
+    const outcome = await this.insurances.remove(id, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(outcome.before)

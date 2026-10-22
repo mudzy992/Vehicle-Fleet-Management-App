@@ -12,6 +12,24 @@ import { toLocalDateString } from '@vfm/shared';
 import type { RegistrationListQuery } from '@vfm/shared/schemas';
 import { asPrisma, baseRegistrationInput, catchVfm, FakePeriodPrisma } from '../helpers/periods-fake.js';
 
+function scopeActor(
+  permission: string,
+  scope: 'ALL' | 'OWN' | 'VEHICLE_IDS',
+  id = 'owner-1',
+  vehicleIds: string[] = [],
+): AuthenticatedUser {
+  return {
+    id,
+    isSuperAdmin: false,
+    permissions: {
+      isSuperAdmin: false,
+      permissions: new Map([[permission, scope]]),
+      list: [permission],
+      grants: [{ permission, scope, scopeVehicleIds: vehicleIds }],
+    },
+  } as unknown as AuthenticatedUser;
+}
+
 function registrationViewer(
   scope: 'ALL' | 'OWN' | 'VEHICLE_IDS',
   id = 'viewer-1',
@@ -369,6 +387,35 @@ describe('RegistrationsService — brisanje i lista', () => {
       svc.get(assignedRecord.data.id, registrationViewer('VEHICLE_IDS', 'viewer', [ownVehicle.id])),
     ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
     expect(fake.registrations[0]?.createdById).toBe('owner-1');
+  });
+
+  it('create/update opseg provjerava vozilo i vlasnika zapisa', async () => {
+    const { fake, svc } = service();
+    fake.addForm('REGISTRATION');
+    const permittedVehicle = fake.addVehicle();
+    const otherVehicle = fake.addVehicle();
+    const created = await svc.create(
+      baseRegistrationInput(permittedVehicle.id) as never,
+      'owner-1',
+      scopeActor('registration:create', 'VEHICLE_IDS', 'owner-1', [permittedVehicle.id]),
+    );
+    const deniedCreate = await catchVfm(
+      svc.create(
+        baseRegistrationInput(otherVehicle.id, { registrationNumber: 'REG-003' }) as never,
+        'owner-1',
+        scopeActor('registration:create', 'VEHICLE_IDS', 'owner-1', [permittedVehicle.id]),
+      ),
+    );
+    const deniedUpdate = await catchVfm(
+      svc.update(
+        created.data.id,
+        { version: 0, notes: 'Neovlašteno' } as never,
+        scopeActor('registration:update', 'OWN', 'other-user'),
+      ),
+    );
+
+    expect(deniedCreate.code).toBe('SCOPE_DENIED');
+    expect(deniedUpdate.code).toBe('SCOPE_DENIED');
   });
 
   it('`daysLeft` je negativan za istekao period', () => {

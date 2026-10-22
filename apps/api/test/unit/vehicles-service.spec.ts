@@ -22,6 +22,24 @@ import {
   vehicleForm,
 } from '../helpers/vehicles-fake.js';
 
+function scopedActor(
+  permission: string,
+  scope: 'ALL' | 'OWN' | 'VEHICLE_IDS',
+  id = 'user-1',
+  vehicleIds: string[] = [],
+): AuthenticatedUser {
+  return {
+    id,
+    isSuperAdmin: false,
+    permissions: {
+      isSuperAdmin: false,
+      permissions: new Map([[permission, scope]]),
+      list: [permission],
+      grants: [{ permission, scope, scopeVehicleIds: vehicleIds }],
+    },
+  } as unknown as AuthenticatedUser;
+}
+
 function viewer(
   scope: 'ALL' | 'OWN' | 'VEHICLE_IDS',
   id = 'viewer-1',
@@ -41,6 +59,18 @@ function viewer(
 }
 
 describe('VehiclesService — create', () => {
+  it('ne dopušta kreiranje s opsegom VEHICLE_IDS bez poznatog ciljnog zapisa', async () => {
+    const fake = new FakeVehiclePrisma();
+    const service = new VehiclesService(asPrisma(fake));
+    const denied = await catchVfm(
+      service.create(
+        baseInput() as never,
+        'owner-1',
+        scopedActor('vehicle:create', 'VEHICLE_IDS', 'owner-1', ['existing-vehicle']),
+      ),
+    );
+    expect(denied.code).toBe('SCOPE_DENIED');
+  });
   it('puni normalizovane kolone iz forme i čuva verziju forme (P10)', async () => {
     const fake = new FakeVehiclePrisma();
     const { formSchemaId, versionId } = fake.addForm();
@@ -245,6 +275,51 @@ describe('VehiclesService — list', () => {
 });
 
 describe('VehiclesService — update / status', () => {
+  it('vehicle:update OWN dozvoljava vlasniku, a odbija izmjenu tuđeg zapisa', async () => {
+    const fake = new FakeVehiclePrisma();
+    fake.addForm();
+    const service = new VehiclesService(asPrisma(fake));
+    const created = await service.create(baseInput() as never, 'owner-1');
+
+    await service.update(
+      created.data.id,
+      { version: 0, notes: 'Vlasnik' } as never,
+      'owner-1',
+      scopedActor('vehicle:update', 'OWN', 'owner-1'),
+    );
+    const denied = await catchVfm(
+      service.update(
+        created.data.id,
+        { version: 1, notes: 'Tuđi zapis' } as never,
+        'other-user',
+        scopedActor('vehicle:update', 'OWN', 'other-user'),
+      ),
+    );
+    const deniedArchive = await catchVfm(
+      service.archive(
+        created.data.id,
+        {} as never,
+        'other-user',
+        scopedActor('vehicle:archive', 'OWN', 'other-user'),
+      ),
+    );
+    const deniedDelete = await catchVfm(
+      service.remove(created.data.id, 'other-user', scopedActor('vehicle:delete', 'OWN', 'other-user')),
+    );
+    const deniedOdometer = await catchVfm(
+      service.addOdometer(
+        created.data.id,
+        {} as never,
+        'other-user',
+        scopedActor('odometer:create', 'OWN', 'other-user'),
+      ),
+    );
+
+    expect(denied.code).toBe('SCOPE_DENIED');
+    expect(deniedArchive.code).toBe('SCOPE_DENIED');
+    expect(deniedDelete.code).toBe('SCOPE_DENIED');
+    expect(deniedOdometer.code).toBe('SCOPE_DENIED');
+  });
   async function seed(): Promise<{
     service: VehiclesService;
     fake: FakeVehiclePrisma;

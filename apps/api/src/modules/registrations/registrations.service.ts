@@ -176,7 +176,9 @@ export class RegistrationsService {
   async create(
     input: CreateRegistrationInput,
     actorId?: string,
+    actor?: AuthenticatedUser,
   ): Promise<RegistrationMutation<RegistrationRecord>> {
+    if (actor) this.assertCreateScope(actor, 'registration:create', input.vehicleId);
     const version = await resolveFormVersion(this.prisma as never, {
       subject: 'REGISTRATION',
       ...(input.formSchemaVersionId ? { versionId: input.formSchemaVersionId } : {}),
@@ -248,8 +250,10 @@ export class RegistrationsService {
   async update(
     id: string,
     input: UpdateRegistrationInput,
+    actor?: AuthenticatedUser,
   ): Promise<RegistrationMutation<RegistrationRecord>> {
     const current = await this.loadOrThrow(id);
+    if (actor) this.assertScope(actor, 'registration:update', current);
     this.assertVersion(current, input.version);
 
     const data: Record<string, unknown> = {};
@@ -347,8 +351,13 @@ export class RegistrationsService {
   }
 
   /** Soft-delete: zapis ostaje u historiji, a period se oslobađa. */
-  async remove(id: string, actorId?: string): Promise<RegistrationMutation<{ id: string }>> {
+  async remove(
+    id: string,
+    actorId?: string,
+    actor?: AuthenticatedUser,
+  ): Promise<RegistrationMutation<{ id: string }>> {
     const current = await this.loadOrThrow(id);
+    if (actor) this.assertScope(actor, 'registration:delete', current);
 
     await this.run(async (tx) => {
       await tx.registrationRecord.update({
@@ -443,6 +452,24 @@ export class RegistrationsService {
         { conflictingId: conflict.id },
       );
     }
+  }
+
+  private assertCreateScope(actor: AuthenticatedUser, permission: Permission, vehicleId: string): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL' || scope === 'OWN') return;
+    if (scope === 'VEHICLE_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      if (ids?.includes(vehicleId)) return;
+    }
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Opseg dozvole ne dopušta kreiranje registracije za ovo vozilo.',
+        code: 'scope_denied',
+      },
+    ]);
   }
 
   private scopeWhere(actor: AuthenticatedUser, permission: Permission): Record<string, unknown> {

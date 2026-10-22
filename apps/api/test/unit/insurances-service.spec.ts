@@ -11,6 +11,24 @@ import { InsurancesService } from '../../src/modules/insurances/insurances.servi
 import type { InsuranceListQuery } from '@vfm/shared/schemas';
 import { asPrisma, baseInsuranceInput, catchVfm, FakePeriodPrisma } from '../helpers/periods-fake.js';
 
+function scopeActor(
+  permission: string,
+  scope: 'ALL' | 'OWN' | 'VEHICLE_IDS',
+  id = 'owner-1',
+  vehicleIds: string[] = [],
+): AuthenticatedUser {
+  return {
+    id,
+    isSuperAdmin: false,
+    permissions: {
+      isSuperAdmin: false,
+      permissions: new Map([[permission, scope]]),
+      list: [permission],
+      grants: [{ permission, scope, scopeVehicleIds: vehicleIds }],
+    },
+  } as unknown as AuthenticatedUser;
+}
+
 function insuranceViewer(
   scope: 'ALL' | 'OWN' | 'VEHICLE_IDS',
   id = 'viewer-1',
@@ -194,6 +212,35 @@ describe('InsurancesService — lista', () => {
     await expect(
       svc.get(assignedRecord.data.id, insuranceViewer('VEHICLE_IDS', 'viewer', [ownVehicle.id])),
     ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
+  });
+
+  it('create/update opseg provjerava vozilo i vlasnika zapisa', async () => {
+    const { fake, svc } = service();
+    fake.addForm('INSURANCE');
+    const permittedVehicle = fake.addVehicle();
+    const otherVehicle = fake.addVehicle();
+    const created = await svc.create(
+      baseInsuranceInput(permittedVehicle.id) as never,
+      'owner-1',
+      scopeActor('insurance:create', 'VEHICLE_IDS', 'owner-1', [permittedVehicle.id]),
+    );
+    const deniedCreate = await catchVfm(
+      svc.create(
+        baseInsuranceInput(otherVehicle.id, { policyNumber: 'POL-003' }) as never,
+        'owner-1',
+        scopeActor('insurance:create', 'VEHICLE_IDS', 'owner-1', [permittedVehicle.id]),
+      ),
+    );
+    const deniedUpdate = await catchVfm(
+      svc.update(
+        created.data.id,
+        { version: 0, notes: 'Neovlašteno' } as never,
+        scopeActor('insurance:update', 'OWN', 'other-user'),
+      ),
+    );
+
+    expect(deniedCreate.code).toBe('SCOPE_DENIED');
+    expect(deniedUpdate.code).toBe('SCOPE_DENIED');
   });
 
   it('`daysLeft` i `expiringInDays` rade nad `validUntil`', async () => {

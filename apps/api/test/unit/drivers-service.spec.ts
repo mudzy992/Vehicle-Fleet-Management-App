@@ -41,6 +41,24 @@ function actor(permissions: string[] = [], isSuperAdmin = false): AuthenticatedU
   } as unknown as AuthenticatedUser;
 }
 
+function scopeActor(
+  permission: string,
+  scope: 'ALL' | 'OWN' | 'DRIVER_IDS',
+  id = 'user-1',
+  driverIds: string[] = [],
+): AuthenticatedUser {
+  return {
+    ...actor([permission]),
+    id,
+    permissions: {
+      isSuperAdmin: false,
+      list: [permission],
+      permissions: new Map([[permission, scope]]),
+      grants: [{ permission, scope, scopeDriverIds: driverIds }],
+    },
+  } as unknown as AuthenticatedUser;
+}
+
 function driverViewer(
   scope: 'ALL' | 'OWN' | 'DRIVER_IDS',
   id = 'user-1',
@@ -74,6 +92,13 @@ function query(overrides: Partial<DriverListQuery> = {}): DriverListQuery {
 }
 
 describe('DriversService — kreiranje', () => {
+  it('ne dopušta kreiranje s opsegom DRIVER_IDS', async () => {
+    const { svc } = service();
+    const denied = await catchVfm(
+      svc.create(baseDriverInput() as never, scopeActor('driver:create', 'DRIVER_IDS')),
+    );
+    expect(denied.code).toBe('SCOPE_DENIED');
+  });
   it('validira formu i čuva PII, ali ga maskira bez `driver:view_pii`', async () => {
     const { fake, svc } = service();
     const { versionId } = fake.addForm();
@@ -95,7 +120,7 @@ describe('DriversService — kreiranje', () => {
     const { fake, svc } = service();
     fake.addForm();
 
-    const created = await svc.create(baseDriverInput() as never, actor([VIEW_PII]));
+    const created = await svc.create(baseDriverInput() as never, actor([VIEW_PII, 'driver:create']));
 
     expect(created.data.piiRedacted).toBe(false);
     expect(created.data.email).toBe('fikret.hodzic@example.ba');
@@ -224,6 +249,47 @@ describe('DriversService — izmjena i verzija', () => {
     expect(error.code).toBe('VALIDATION_ERROR');
   });
 
+  it('driver:update OWN dozvoljava vlasniku, a odbija izmjenu tuđeg zapisa', async () => {
+    const { fake, svc } = service();
+    fake.addForm();
+    const created = await svc.create(
+      baseDriverInput() as never,
+      scopeActor('driver:create', 'OWN', 'owner-1'),
+    );
+
+    await svc.update(
+      created.data.id,
+      { version: 0, firstName: 'Izmijenjeno' } as never,
+      scopeActor('driver:update', 'OWN', 'owner-1'),
+    );
+    const denied = await catchVfm(
+      svc.update(
+        created.data.id,
+        { version: 1, firstName: 'Neovlašteno' } as never,
+        scopeActor('driver:update', 'OWN', 'other-user'),
+      ),
+    );
+    const deniedArchive = await catchVfm(
+      svc.archive(created.data.id, {} as never, scopeActor('driver:archive', 'OWN', 'other-user')),
+    );
+    const deniedDelete = await catchVfm(
+      svc.remove(created.data.id, 'other-user', scopeActor('driver:delete', 'OWN', 'other-user')),
+    );
+    const deniedCategory = await catchVfm(
+      svc.addLicenseCategory(
+        created.data.id,
+        {} as never,
+        'other-user',
+        scopeActor('driver:update', 'OWN', 'other-user'),
+      ),
+    );
+
+    expect(denied.code).toBe('SCOPE_DENIED');
+    expect(deniedArchive.code).toBe('SCOPE_DENIED');
+    expect(deniedDelete.code).toBe('SCOPE_DENIED');
+    expect(deniedCategory.code).toBe('SCOPE_DENIED');
+  });
+
   it('nepostojeći vozač je `NOT_FOUND`', async () => {
     const { svc } = service();
     const error = await catchVfm(svc.get('nema-me', actor(['driver:view'])));
@@ -236,8 +302,8 @@ describe('DriversService — arhiva i brisanje', () => {
     const { fake, svc } = service();
     const row = fake.addDriver();
 
-    const first = await svc.archive(row.id, { reason: 'Prešao u drugu firmu' }, actor());
-    const second = await svc.archive(row.id, {}, actor());
+    const first = await svc.archive(row.id, { reason: 'Prešao u drugu firmu' }, actor(['driver:archive']));
+    const second = await svc.archive(row.id, {}, actor(['driver:archive']));
 
     expect(first.data.status).toBe('ARCHIVED');
     expect(second.data.status).toBe('ARCHIVED');
@@ -249,7 +315,7 @@ describe('DriversService — arhiva i brisanje', () => {
     const { fake, svc } = service();
     const row = fake.addDriver({ status: 'ARCHIVED' });
 
-    const restored = await svc.restore(row.id, actor());
+    const restored = await svc.restore(row.id, actor(['driver:archive']));
 
     expect(restored.data.status).toBe('INACTIVE');
   });
@@ -258,7 +324,7 @@ describe('DriversService — arhiva i brisanje', () => {
     const { fake, svc } = service();
     const row = fake.addDriver();
 
-    const error = await catchVfm(svc.restore(row.id, actor()));
+    const error = await catchVfm(svc.restore(row.id, actor(['driver:archive'])));
 
     expect(error.code).toBe('VALIDATION_ERROR');
   });

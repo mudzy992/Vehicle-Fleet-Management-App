@@ -176,7 +176,12 @@ export class InsurancesService {
   //  Upis
   // ---------------------------------------------------------------------------
 
-  async create(input: CreateInsuranceInput, actorId?: string): Promise<InsuranceMutation<InsuranceRecord>> {
+  async create(
+    input: CreateInsuranceInput,
+    actorId?: string,
+    actor?: AuthenticatedUser,
+  ): Promise<InsuranceMutation<InsuranceRecord>> {
+    if (actor) this.assertCreateScope(actor, 'insurance:create', input.vehicleId);
     const version = await resolveFormVersion(this.prisma as never, {
       subject: 'INSURANCE',
       ...(input.formSchemaVersionId ? { versionId: input.formSchemaVersionId } : {}),
@@ -249,8 +254,13 @@ export class InsurancesService {
     return { data: this.toRecord(created), after: this.auditSnapshot(created) };
   }
 
-  async update(id: string, input: UpdateInsuranceInput): Promise<InsuranceMutation<InsuranceRecord>> {
+  async update(
+    id: string,
+    input: UpdateInsuranceInput,
+    actor?: AuthenticatedUser,
+  ): Promise<InsuranceMutation<InsuranceRecord>> {
     const current = await this.loadOrThrow(id);
+    if (actor) this.assertScope(actor, 'insurance:update', current);
     this.assertVersion(current, input.version);
 
     const data: Record<string, unknown> = {};
@@ -356,8 +366,13 @@ export class InsurancesService {
   }
 
   /** Soft-delete: zapis ostaje u historiji, a period se oslobađa. */
-  async remove(id: string, actorId?: string): Promise<InsuranceMutation<{ id: string }>> {
+  async remove(
+    id: string,
+    actorId?: string,
+    actor?: AuthenticatedUser,
+  ): Promise<InsuranceMutation<{ id: string }>> {
     const current = await this.loadOrThrow(id);
+    if (actor) this.assertScope(actor, 'insurance:delete', current);
 
     await this.run(async (tx) => {
       await tx.insuranceRecord.update({
@@ -452,6 +467,24 @@ export class InsurancesService {
         { conflictingId: conflict.id },
       );
     }
+  }
+
+  private assertCreateScope(actor: AuthenticatedUser, permission: Permission, vehicleId: string): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL' || scope === 'OWN') return;
+    if (scope === 'VEHICLE_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      if (ids?.includes(vehicleId)) return;
+    }
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Opseg dozvole ne dopušta kreiranje osiguranja za ovo vozilo.',
+        code: 'scope_denied',
+      },
+    ]);
   }
 
   private scopeWhere(actor: AuthenticatedUser, permission: Permission): Record<string, unknown> {

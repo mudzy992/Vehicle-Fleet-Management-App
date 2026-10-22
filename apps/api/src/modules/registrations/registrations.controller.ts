@@ -61,10 +61,10 @@ export class RegistrationsController {
   @Audit('CREATE', { severity: 'INFO', resource: 'RegistrationRecord' })
   async create(
     @Body(new ZodValidationPipe(createRegistrationSchema, 'body')) input: CreateRegistrationInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<RegistrationRecord> {
-    const outcome = await this.registrations.create(input, actor?.id);
+    const outcome = await this.registrations.create(input, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(outcome.data.id)
       .setAfter(outcome.after)
@@ -88,9 +88,10 @@ export class RegistrationsController {
   async update(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(updateRegistrationSchema, 'body')) input: UpdateRegistrationInput,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<RegistrationRecord> {
-    const outcome = await this.registrations.update(id, input);
+    const outcome = await this.registrations.update(id, input, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(outcome.before)
@@ -105,10 +106,10 @@ export class RegistrationsController {
   @Audit('DELETE', { severity: 'CRITICAL', resource: 'RegistrationRecord' })
   async remove(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<void> {
-    const outcome = await this.registrations.remove(id, actor?.id);
+    const outcome = await this.registrations.remove(id, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(outcome.before)

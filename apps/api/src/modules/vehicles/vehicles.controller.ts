@@ -78,10 +78,10 @@ export class VehiclesController {
   @Audit('CREATE', { severity: 'INFO', resource: 'Vehicle' })
   async create(
     @Body(new ZodValidationPipe(createVehicleSchema, 'body')) input: CreateVehicleInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<VehicleDetail> {
-    const outcome = await this.vehicles.create(input, actor?.id);
+    const outcome = await this.vehicles.create(input, actor.id);
     AuditContext.from(request).setEntityId(outcome.data.id).setAfter(outcome.after).setResource('Vehicle');
     return outcome.data;
   }
@@ -101,10 +101,10 @@ export class VehiclesController {
   async update(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(updateVehicleSchema, 'body')) input: UpdateVehicleInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<VehicleDetail> {
-    const outcome = await this.vehicles.update(id, input, actor?.id);
+    const outcome = await this.vehicles.update(id, input, actor.id);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(outcome.before)
@@ -121,10 +121,10 @@ export class VehiclesController {
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(archiveVehicleSchema, 'body', { allowEmpty: true }))
     input: ArchiveVehicleInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<void> {
-    const outcome = await this.vehicles.archive(id, input, actor?.id);
+    const outcome = await this.vehicles.archive(id, input, actor.id);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(outcome.before)
@@ -139,10 +139,10 @@ export class VehiclesController {
   @Audit('RESTORE', { severity: 'WARN', resource: 'Vehicle' })
   async restore(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<void> {
-    const outcome = await this.vehicles.restore(id, actor?.id);
+    const outcome = await this.vehicles.restore(id, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(outcome.before)
@@ -168,10 +168,10 @@ export class VehiclesController {
   async addOdometer(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(createOdometerReadingSchema, 'body')) input: CreateOdometerReadingInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<OdometerReading> {
-    const outcome = await this.vehicles.addOdometer(id, input, actor?.id);
+    const outcome = await this.vehicles.addOdometer(id, input, actor.id);
     AuditContext.from(request)
       .setEntityId(id)
       .setResource('Vehicle')
@@ -187,10 +187,10 @@ export class VehiclesController {
   async correctOdometer(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(correctOdometerReadingSchema, 'body')) input: CorrectOdometerReadingInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<OdometerReading> {
-    const outcome = await this.vehicles.correctOdometer(id, input, actor?.id);
+    const outcome = await this.vehicles.correctOdometer(id, input, actor.id);
     AuditContext.from(request)
       .setEntityId(id)
       .setResource('Vehicle')
@@ -206,10 +206,10 @@ export class VehiclesController {
   @Audit('DELETE', { severity: 'CRITICAL', resource: 'Vehicle' })
   async remove(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<void> {
-    const outcome = await this.vehicles.remove(id, actor?.id);
+    const outcome = await this.vehicles.remove(id, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(outcome.before)
