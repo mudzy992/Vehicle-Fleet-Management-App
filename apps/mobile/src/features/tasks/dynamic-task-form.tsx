@@ -53,8 +53,6 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
   const [activeUpload, setActiveUpload] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Array<{ key: string; code: string; message: string }>>([]);
-  const [lookupOptions, setLookupOptions] = useState<Record<string, Array<{ value: string; label: string }>>>({});
-  const [lookupLoading, setLookupLoading] = useState<Record<string, boolean>>({});
   const [comment, setComment] = useState('');
   const [odometer, setOdometer] = useState('');
 
@@ -88,31 +86,6 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
       formSchemaVersionId: task.formSchemaVersionId,
     });
   }, [parsed, snapshot, values, fieldErrors, task.formSchemaVersionId]);
-
-  useEffect(() => {
-    if (!parsed?.ok) return;
-    let active = true;
-    const fields = parsed.definition.sections.flatMap((section) => section.fields);
-    const needsVehicles = fields.some((field) => field.type === 'REFERENCE_VEHICLE' || (field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'ACTIVE_VEHICLES'));
-    const needsDrivers = fields.some((field) => field.type === 'REFERENCE_DRIVER' || (field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'ACTIVE_DRIVERS'));
-    const load = async () => {
-      const next: Record<string, Array<{ value: string; label: string }>> = {};
-      const requests: Promise<void>[] = [];
-      if (needsVehicles) requests.push(mobileApi.vehicles().then((result) => {
-        const options = result.items.map((vehicle) => ({ value: vehicle.id, label: `${vehicle.internalNo} · ${vehicle.make} ${vehicle.model}` }));
-        fields.forEach((field) => { if (field.type === 'REFERENCE_VEHICLE' || (field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'ACTIVE_VEHICLES')) next[field.key] = options; });
-      }));
-      if (needsDrivers) requests.push(mobileApi.drivers().then((result) => {
-        const options = result.items.map((driver) => ({ value: driver.id, label: driver.displayName || `${driver.firstName} ${driver.lastName}` }));
-        fields.forEach((field) => { if (field.type === 'REFERENCE_DRIVER' || (field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'ACTIVE_DRIVERS')) next[field.key] = options; });
-      }));
-      setLookupLoading(Object.fromEntries(fields.map((field) => [field.key, true])));
-      await Promise.allSettled(requests);
-      if (active) { setLookupOptions(next); setLookupLoading({}); }
-    };
-    void load();
-    return () => { active = false; };
-  }, [parsed]);
 
   const uploadPicked = async (field: RenderField, files: PickedFile[]) => {
     if (!canUpload) {
@@ -246,7 +219,7 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
         <View key={section.key} style={styles.section}>
           <Text style={styles.sectionTitle}>{section.title}</Text>
           {section.description ? <Text style={styles.muted}>{section.description}</Text> : null}
-          {section.fields.map((field) => <FieldControl key={field.key} field={field} value={values[field.key]} disabled={busy || activeUpload !== null || field.disabled || !canSubmit} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} onCamera={() => void pickPhoto(field, 'CAMERA')} onGallery={() => void pickPhoto(field, 'GALLERY')} onDocument={() => void pickDocument(field)} canUpload={canUpload} uploading={activeUpload === field.key} lookupOptions={lookupOptions[field.key] ?? []} lookupLoading={lookupLoading[field.key] ?? false} />)}
+          {section.fields.map((field) => <FieldControl key={field.key} field={field} value={values[field.key]} disabled={busy || activeUpload !== null || field.disabled || !canSubmit} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} onCamera={() => void pickPhoto(field, 'CAMERA')} onGallery={() => void pickPhoto(field, 'GALLERY')} onDocument={() => void pickDocument(field)} canUpload={canUpload} uploading={activeUpload === field.key} />)}
         </View>
       ) : null)}
 
@@ -263,7 +236,7 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
   );
 }
 
-export function FieldControl({ field, value, disabled, onChange, onCamera, onGallery, onDocument, canUpload, uploading, lookupOptions = [], lookupLoading = false }: {
+export function FieldControl({ field, value, disabled, onChange, onCamera, onGallery, onDocument, canUpload, uploading }: {
   field: RenderField;
   value: unknown;
   disabled: boolean;
@@ -273,8 +246,6 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
   onDocument(): void;
   canUpload: boolean;
   uploading: boolean;
-  lookupOptions?: Array<{ value: string; label: string }>;
-  lookupLoading?: boolean;
 }) {
   const [loadedOptions, setLoadedOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
@@ -286,7 +257,9 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
       const isDriver = field.type === 'REFERENCE_DRIVER' || (source?.kind === 'QUERY' && source.queryId === 'ACTIVE_DRIVERS');
       const isTaskType = source?.kind === 'QUERY' && source.queryId === 'OPEN_TASK_TYPES';
       const isList = source?.kind === 'LIST';
-      if (!isVehicle && !isDriver && !isTaskType && !isList) { setLoadedOptions([]); return; }
+      const isWorkshopQuery = source?.kind === 'QUERY' && source.queryId === 'WORKSHOPS';
+      const isTireSetQuery = source?.kind === 'QUERY' && source.queryId === 'TIRE_SETS_BY_VEHICLE';
+      if (!isVehicle && !isDriver && !isTaskType && !isList && !isWorkshopQuery && !isTireSetQuery) { setLoadedOptions([]); return; }
       setLoadingOptions(true);
       try {
         let resolved: Array<{ value: string; label: string }> = [];
@@ -301,6 +274,14 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
           resolved = result.items.map((item) => ({ value: item.id, label: item.name }));
         } else if (source?.kind === 'LIST') {
           resolved = await mobileApi.formOptions(source.listCode);
+        } else if (isWorkshopQuery) {
+          resolved = await mobileApi.formOptions('WORKSHOP');
+        } else if (source?.kind === 'QUERY' && source.queryId === 'TIRE_SETS_BY_VEHICLE') {
+          const vehicleId = source.params?.['vehicleId'];
+          if (typeof vehicleId === 'string') {
+            const result = await mobileApi.tireSets();
+            resolved = result.items.filter((item) => item.mountedVehicleId === vehicleId).map((item) => ({ value: item.id, label: `${item.code} · ${item.brand ?? ''} ${item.model ?? ''} ${item.size ?? ''}`.trim() }));
+          }
         }
         if (active) setLoadedOptions(resolved);
       } catch { if (active) setLoadedOptions([]); }
@@ -316,7 +297,7 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
   const valueText = fieldText({ ...field, value });
   const options = field.options ?? [];
   const reference = field.widget === 'REFERENCE';
-  const renderedOptions = reference ? (lookupOptions.length ? lookupOptions : loadedOptions) : options.length ? options : loadedOptions;
+  const renderedOptions = options.length ? options : loadedOptions;
   const multiple = field.widget === 'MULTI_SELECT';
   const selected = multiple ? stringArray(value) : [];
   return (
@@ -329,7 +310,7 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
         renderedOptions.length ? <View style={styles.options}>{renderedOptions.map((option) => {
           const active = multiple ? selected.includes(option.value) : value === option.value;
           return <Pressable key={option.value} onPress={() => onChange(multiple ? (active ? selected.filter((item) => item !== option.value) : [...selected, option.value]) : active ? undefined : option.value)} disabled={disabled || ('disabled' in option && option.disabled === true)} style={[styles.option, active && styles.optionActive]}><Text style={[styles.optionText, active && styles.optionTextActive]}>{option.label}</Text></Pressable>;
-        })}</View> : <Text style={styles.help}>{(lookupLoading || loadingOptions) ? 'Učitavanje izbora…' : reference ? field.type === 'REFERENCE_RECORD' ? 'Ova vrsta povezane reference još nije podržana u mobilnom obrascu.' : 'Nema dostupnih zapisa ili nedostaje dozvola za pregled.' : field.optionsSourceKind === 'LIST' ? 'Šifarnik je prazan ili nije dostupan.' : 'Ovaj QUERY izvor još nije podržan u mobilnom obrascu.'}</Text>
+        })}</View> : <Text style={styles.help}>{loadingOptions ? 'Učitavanje izbora…' : reference ? field.type === 'REFERENCE_RECORD' ? 'Ova vrsta povezane reference još nije podržana u mobilnom obrascu.' : 'Nema dostupnih zapisa ili nedostaje dozvola za pregled.' : field.optionsSourceKind === 'LIST' || (field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'WORKSHOPS') ? 'Šifarnik je prazan ili nije dostupan.' : field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'TIRE_SETS_BY_VEHICLE' ? 'Nema kompleta guma za vozilo. Podesite params.vehicleId i dozvolu tire:view.' : 'Ovaj QUERY izvor još nije podržan u mobilnom obrascu.'}</Text>
       ) : field.widget === 'PHOTO' || field.widget === 'FILE' ? (
         <View style={styles.uploadBox}>
           <Text style={styles.help}>Dodano fajlova: {stringArray(value).length}{uploading ? ' · Upload u toku…' : ''}</Text>
