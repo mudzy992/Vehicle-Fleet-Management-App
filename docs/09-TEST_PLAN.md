@@ -621,4 +621,4 @@ Jedinični lažni klijent ne dokazuje rollback, HTTP retry ponašanje ni isporuk
 
 ### Web detalj zadatka, historija i komentari — W09
 
-`apps/web/src/features/tasks/task-detail-page.test.tsx` provjerava detalje, historiju, sakrivanje Claim akcije bez `task:claim` i dodavanje komentara kroz API. `task-detail-page.tsx` koristi `GET /tasks/:id`, `GET /tasks/:id/comments` i `POST /tasks/:id/comments`; prikaz događaja dolazi iz detalja i ne uvodi zasebnu klijentsku kopiju. Browser UAT i API integracija nisu provedeni.
+`apps/web/src/features/tasks/task-detail-page.test.tsx` provjerava detalje, historiju, sakrivanje Claim akcije bez `task:claim` i dodavanje komentara kroz API. Završni obrazac (`task-completion-form.tsx`) učitava tačnu snapshotovanu verziju forme, šalje `version` kao CAS zaštitu i formData/comment/odometerKm; mapira greške servera nazad na polja i osvježava detalj/liste nakon uspjeha. Ekran ga prikazuje samo za `IN_PROGRESS` uz `task:complete` ili `task:complete_override`. Browser UAT i API integracija nisu provedeni.

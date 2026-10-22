@@ -16,6 +16,7 @@ import {
 } from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
 import { useSession } from '../auth/session.js';
+import { TaskCompletionForm } from './task-completion-form.js';
 
 const COMMENTS_PAGE_SIZE = 20;
 
@@ -120,6 +121,8 @@ export function TaskDetailPage() {
   const task = taskQuery.data;
   if (!task) return null;
   const mayClaim = hasPermission('task:claim') && task.status === 'OPEN';
+  const mayComplete =
+    (hasPermission('task:complete') || hasPermission('task:complete_override')) && task.status === 'IN_PROGRESS';
   const mayComment = hasPermission('task:comment');
 
   return (
@@ -150,6 +153,8 @@ export function TaskDetailPage() {
           {claimError}
         </p>
       )}
+
+      {mayComplete && <TaskCompletionForm key={`${task.id}-${task.version}`} task={task} />}
 
       {mayClaim && (
         <Card>
