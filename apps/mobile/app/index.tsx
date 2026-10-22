@@ -6,6 +6,7 @@ import { colors } from '@/lib/theme';
 export default function IndexScreen() {
   const { user, loading, error, retryRestore } = useAuth();
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /><Text style={styles.text}>Provjera sesije…</Text></View>;
+  if (user?.mustChangePassword) return <Redirect href="/(auth)/change-password" />;
   if (user) return <Redirect href="/(tabs)/tasks" />;
   if (!error) return <Redirect href="/(auth)/login" />;
   return (

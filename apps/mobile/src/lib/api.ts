@@ -187,6 +187,11 @@ export interface VehicleDetail extends VehicleSummary {
 }
 
 export const mobileApi = {
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   login: async (email: string, password: string) => {
     const deviceName = Device.modelName ?? 'Android uređaj';
     const session = await request<AuthResult>('/auth/login', {
