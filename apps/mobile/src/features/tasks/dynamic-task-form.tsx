@@ -53,6 +53,8 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
   const [activeUpload, setActiveUpload] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Array<{ key: string; code: string; message: string }>>([]);
+  const [lookupOptions, setLookupOptions] = useState<Record<string, Array<{ value: string; label: string }>>>({});
+  const [lookupLoading, setLookupLoading] = useState<Record<string, boolean>>({});
   const [comment, setComment] = useState('');
   const [odometer, setOdometer] = useState('');
 
@@ -86,6 +88,31 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
       formSchemaVersionId: task.formSchemaVersionId,
     });
   }, [parsed, snapshot, values, fieldErrors, task.formSchemaVersionId]);
+
+  useEffect(() => {
+    if (!parsed?.ok) return;
+    let active = true;
+    const fields = parsed.definition.sections.flatMap((section) => section.fields);
+    const needsVehicles = fields.some((field) => field.type === 'REFERENCE_VEHICLE' || (field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'ACTIVE_VEHICLES'));
+    const needsDrivers = fields.some((field) => field.type === 'REFERENCE_DRIVER' || (field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'ACTIVE_DRIVERS'));
+    const load = async () => {
+      const next: Record<string, Array<{ value: string; label: string }>> = {};
+      const requests: Promise<void>[] = [];
+      if (needsVehicles) requests.push(mobileApi.vehicles().then((result) => {
+        const options = result.items.map((vehicle) => ({ value: vehicle.id, label: `${vehicle.internalNo} · ${vehicle.make} ${vehicle.model}` }));
+        fields.forEach((field) => { if (field.type === 'REFERENCE_VEHICLE' || (field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'ACTIVE_VEHICLES')) next[field.key] = options; });
+      }));
+      if (needsDrivers) requests.push(mobileApi.drivers().then((result) => {
+        const options = result.items.map((driver) => ({ value: driver.id, label: driver.displayName || `${driver.firstName} ${driver.lastName}` }));
+        fields.forEach((field) => { if (field.type === 'REFERENCE_DRIVER' || (field.optionsSource?.kind === 'QUERY' && field.optionsSource.queryId === 'ACTIVE_DRIVERS')) next[field.key] = options; });
+      }));
+      setLookupLoading(Object.fromEntries(fields.map((field) => [field.key, true])));
+      await Promise.allSettled(requests);
+      if (active) { setLookupOptions(next); setLookupLoading({}); }
+    };
+    void load();
+    return () => { active = false; };
+  }, [parsed]);
 
   const uploadPicked = async (field: RenderField, files: PickedFile[]) => {
     if (!canUpload) {
@@ -219,7 +246,7 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
         <View key={section.key} style={styles.section}>
           <Text style={styles.sectionTitle}>{section.title}</Text>
           {section.description ? <Text style={styles.muted}>{section.description}</Text> : null}
-          {section.fields.map((field) => <FieldControl key={field.key} field={field} value={values[field.key]} disabled={busy || activeUpload !== null || field.disabled || !canSubmit} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} onCamera={() => void pickPhoto(field, 'CAMERA')} onGallery={() => void pickPhoto(field, 'GALLERY')} onDocument={() => void pickDocument(field)} canUpload={canUpload} uploading={activeUpload === field.key} />)}
+          {section.fields.map((field) => <FieldControl key={field.key} field={field} value={values[field.key]} disabled={busy || activeUpload !== null || field.disabled || !canSubmit} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} onCamera={() => void pickPhoto(field, 'CAMERA')} onGallery={() => void pickPhoto(field, 'GALLERY')} onDocument={() => void pickDocument(field)} canUpload={canUpload} uploading={activeUpload === field.key} lookupOptions={lookupOptions[field.key] ?? []} lookupLoading={lookupLoading[field.key] ?? false} />)}
         </View>
       ) : null)}
 
@@ -236,7 +263,7 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
   );
 }
 
-export function FieldControl({ field, value, disabled, onChange, onCamera, onGallery, onDocument, canUpload, uploading }: {
+export function FieldControl({ field, value, disabled, onChange, onCamera, onGallery, onDocument, canUpload, uploading, lookupOptions = [], lookupLoading = false }: {
   field: RenderField;
   value: unknown;
   disabled: boolean;
@@ -246,6 +273,8 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
   onDocument(): void;
   canUpload: boolean;
   uploading: boolean;
+  lookupOptions?: Array<{ value: string; label: string }>;
+  lookupLoading?: boolean;
 }) {
   if (field.widget === 'OUTPUT' || field.readOnly) {
     return <View style={styles.field}><Text style={styles.label}>{field.label}</Text><Text style={styles.output}>{field.value === null ? '—' : String(field.value)}</Text></View>;
@@ -253,6 +282,8 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
   if (field.widget === 'GROUP') return <Text style={styles.sectionTitle}>{field.label}</Text>;
   const valueText = fieldText({ ...field, value });
   const options = field.options ?? [];
+  const reference = field.widget === 'REFERENCE';
+  const renderedOptions = reference ? lookupOptions : options;
   const multiple = field.widget === 'MULTI_SELECT';
   const selected = multiple ? stringArray(value) : [];
   return (
@@ -261,11 +292,11 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
       {field.helpText ? <Text style={styles.help}>{field.helpText}</Text> : null}
       {field.widget === 'BOOLEAN' ? (
         <Switch value={value === true} onValueChange={onChange} disabled={disabled} trackColor={{ true: colors.primary }} />
-      ) : field.widget === 'SELECT' || multiple ? (
-        options.length ? <View style={styles.options}>{options.map((option) => {
+      ) : field.widget === 'SELECT' || multiple || reference ? (
+        renderedOptions.length ? <View style={styles.options}>{renderedOptions.map((option) => {
           const active = multiple ? selected.includes(option.value) : value === option.value;
-          return <Pressable key={option.value} onPress={() => onChange(multiple ? (active ? selected.filter((item) => item !== option.value) : [...selected, option.value]) : option.value)} disabled={disabled || option.disabled} style={[styles.option, active && styles.optionActive]}><Text style={[styles.optionText, active && styles.optionTextActive]}>{option.label}</Text></Pressable>;
-        })}</View> : <Text style={styles.help}>Ova lista se učitava sa servera i nije dostupna u mobilnom obrascu.</Text>
+          return <Pressable key={option.value} onPress={() => onChange(multiple ? (active ? selected.filter((item) => item !== option.value) : [...selected, option.value]) : active ? undefined : option.value)} disabled={disabled || ('disabled' in option && option.disabled === true)} style={[styles.option, active && styles.optionActive]}><Text style={[styles.optionText, active && styles.optionTextActive]}>{option.label}</Text></Pressable>;
+        })}</View> : <Text style={styles.help}>{lookupLoading ? 'Učitavanje izbora…' : reference ? 'Nema dostupnih zapisa ili nedostaje dozvola za pregled.' : 'Ovaj izvor liste još nije podržan u mobilnom obrascu.'}</Text>
       ) : field.widget === 'PHOTO' || field.widget === 'FILE' ? (
         <View style={styles.uploadBox}>
           <Text style={styles.help}>Dodano fajlova: {stringArray(value).length}{uploading ? ' · Upload u toku…' : ''}</Text>
@@ -276,8 +307,6 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
             </> : <Pressable disabled={disabled} onPress={onDocument} style={styles.option}><Text style={styles.optionText}>Odaberi fajl</Text></Pressable>}
           </View> : <Text style={styles.help}>Za upload je potrebna dozvola attachment:upload.</Text>}
         </View>
-      ) : field.widget === 'REFERENCE' ? (
-        <Text style={styles.help}>Izbor povezanih zapisa još nije dostupan u mobilnom obrascu.</Text>
       ) : (
         <TextInput
           value={valueText}
