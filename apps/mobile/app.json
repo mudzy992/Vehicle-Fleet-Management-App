@@ -22,6 +22,7 @@
     "android": {
       "package": "ba.ba101.voznipark",
       "versionCode": 1,
+      "googleServicesFile": "./google-services.json",
       "permissions": ["android.permission.CAMERA", "android.permission.INTERNET"]
     },
     "experiments": {
