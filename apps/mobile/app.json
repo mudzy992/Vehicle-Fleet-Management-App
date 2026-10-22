@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Vozni park",
+    "slug": "vfm-mobile",
+    "scheme": "vfm",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Dozvoli pristup fotografijama za priloge uz zadatak.",
+          "cameraPermission": "Dozvoli kameru za fotografisanje priloga uz zadatak.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "android": {
+      "package": "ba.example.voznipark",
+      "versionCode": 1,
+      "permissions": ["android.permission.CAMERA", "android.permission.INTERNET"]
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -752,19 +752,19 @@ i ne pokreće nijedan upit. Ostali ekrani su placeholderi s oznakom faze.
 
 ### 9.2 Mobilna (11 ekrana)
 
-| # | Ekran | Faza | Permisija |
-|---|---|---|---|
-| M1 | Prijava | 6 | javno |
-| M2 | Zadaci — lista (segmenti) | 6 | `task:view` |
-| M3 | Zadatak — detalj | 6 | `task:view` |
-| M4 | Preuzimanje (potvrda + 409 dijalog) | 6 | `task:claim` |
-| M5 | Završetak — dinamička forma + kamera | 6 | `task:complete` |
-| M6 | Novi zadatak (wizard, 3 koraka) | 6 | `task:create` |
-| M7 | Vozila — lista | 6 | `vehicle:view` |
-| M8 | Vozilo — profil (read-only, tabovi) | 6 | `vehicle:view` |
-| M9 | Obavijesti — lista + read | 6 | `notification:view` |
-| M10 | Profil — sesije, lozinka, postavke obavijesti, logout | 6 | `auth:login` |
-| M11 | Sistem: offline/greška/403 stanja | 6 | — |
+| # | Ekran | Faza | Permisija | Status |
+|---|---|---|---|---|
+| M1 | Prijava | 6 | javno | ✅ `apps/mobile/app/(auth)/login.tsx`, refresh token u SecureStore; API odbija Super Admina |
+| M2 | Zadaci — lista slobodnih | 6 | `task:claim` | ✅ `apps/mobile/app/(tabs)/tasks.tsx`, online-only, refresh/pull-to-refresh |
+| M3 | Zadatak — detalj | 6 | `task:view` | ✅ `apps/mobile/app/task/[id].tsx`, osnovni metapodaci/snapshot verzije |
+| M4 | Preuzimanje | 6 | `task:claim` | ✅ CTA i prikaz greške konflikta; dinamička `ON_CLAIM` forma još nije dodana |
+| M5 | Završetak — dinamička forma + kamera | 6 | `task:complete` | ⏳ |
+| M6 | Novi zadatak (wizard, 3 koraka) | 6 | `task:create` | ⏳ |
+| M7 | Vozila — lista | 6 | `vehicle:view` | ⏳ |
+| M8 | Vozilo — profil (read-only, tabovi) | 6 | `vehicle:view` | ⏳ |
+| M9 | Obavijesti — lista + read | 6 | `notification:view` | ⏳ API ruta nije implementirana |
+| M10 | Profil — sesije, lozinka, postavke obavijesti, logout | 6 | `auth:login` | ⚠️ osnovni profil i odjava; sesije/lozinka/postavke nisu dodane |
+| M11 | Sistem: offline/greška/403 stanja | 6 | — | ⚠️ mrežna greška i retry; nema uređajskog UAT-a |
 
 ---
 
