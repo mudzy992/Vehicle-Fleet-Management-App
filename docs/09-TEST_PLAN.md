@@ -600,3 +600,10 @@ TaskEvent `OVERRIDE_COMPLETED`, `completedById=C`).
 `apps/api/test/unit/tasks.spec.ts` sada ima 40 testova; dvije nove service provjere pokrivaju CAS dodjelu kandidata i direktnog izvršioca na `OPEN`, očuvanje posmatrača, audit route metadata, `TaskEvent(ASSIGNED)`, `OutboxEvent(TASK_ASSIGNED)`, zamjenu izvršioca za `IN_PROGRESS`, odbijanje `OPEN_CLAIM` tokom izvršavanja i zastarjelu verziju. `packages/shared/test/schemas.spec.ts` prolazi 33 testa uz provjere strict DTO-a, jednog direktnog korisnika, broadcast bez korisnika, duplikata i odbijanja dodatnih serverskih polja.
 
 Testovi su jedinični i ne dokazuju PostgreSQL konkurentnost/rollback, HTTP replay ni Coolify isporuku outboxa.
+
+
+### Komentari zadatka — sedma cjelina Faze 5
+
+`apps/api/test/unit/tasks.spec.ts` pokriva kreiranje komentara uz `COMMENTED` događaj i jedinstveni `TASK_COMMENTED` outbox ključ, paginaciju liste, odbijanje nevidljivog zadatka i nedostajućeg `task:comment`, te `GET/POST` permission, status i audit metadata. `packages/shared/test/schemas.spec.ts` provjerava trimovanje teksta, prazan tekst i odbijanje nepoznatog polja za komentar.
+
+Jedinični lažni klijent ne dokazuje rollback, HTTP retry ponašanje ni isporuku outboxa u Coolifyu.

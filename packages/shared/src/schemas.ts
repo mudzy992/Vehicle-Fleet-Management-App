@@ -3246,6 +3246,42 @@ export const taskEventViewSchema = z
   .strict();
 export type TaskEventView = z.output<typeof taskEventViewSchema>;
 
+/** Novi komentar zadatka. Spominjanja se ne prihvataju dok obavještenja nisu uključena. */
+export const createTaskCommentSchema = z
+  .object({
+    body: z.string().trim().min(1).max(2000),
+  })
+  .strict();
+export type CreateTaskCommentInput = z.output<typeof createTaskCommentSchema>;
+
+export const taskCommentListQuerySchema = paginationQuerySchema.strict();
+export type TaskCommentListQuery = z.output<typeof taskCommentListQuerySchema>;
+
+export const taskCommentViewSchema = z
+  .object({
+    id: uuidSchema,
+    taskId: uuidSchema,
+    authorId: uuidSchema,
+    authorName: z.string(),
+    body: z.string(),
+    mentionsUserIds: z.array(uuidSchema),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export type TaskCommentView = z.output<typeof taskCommentViewSchema>;
+
+export const taskCommentListResponseSchema = z
+  .object({
+    items: z.array(taskCommentViewSchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type TaskCommentListResponse = z.output<typeof taskCommentListResponseSchema>;
+
 export const taskViewSchema = z
   .object({
     id: uuidSchema,

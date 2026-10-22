@@ -33,6 +33,7 @@ import {
 } from '@vfm/form-engine';
 import type {
   AssignTaskInput,
+  CreateTaskCommentInput,
   CancelTaskInput,
   ClaimTaskInput,
   CompleteTaskInput,
@@ -41,6 +42,9 @@ import type {
   ReleaseTaskInput,
   TaskAssignmentView,
   TaskAvailableQuery,
+  TaskCommentListQuery,
+  TaskCommentListResponse,
+  TaskCommentView,
   TaskDetail,
   TaskEventView,
   TaskListQuery,
@@ -515,6 +519,154 @@ export class TasksService {
     const row = await this.loadDetail(this.prisma, id);
     if (!this.canView(row, access)) throw new VfmException('NOT_FOUND', 'Zadatak nije pronađen.');
     return this.serializeDetail(row);
+  }
+
+  async listComments(
+    id: string,
+    query: TaskCommentListQuery,
+    actorInput: TaskActorContext | string | undefined,
+  ): Promise<TaskCommentListResponse> {
+    const access = await this.resolveAccess(actorInput);
+    const canRead =
+      access.permissions.isSuperAdmin ||
+      access.permissions.permissions.has('task:view') ||
+      access.permissions.permissions.has('task:view_all');
+    if (!canRead) {
+      throw VfmErrors.permissionDenied([detail('task:view', 'Za pregled komentara potreban je task:view.')]);
+    }
+    const task = await this.loadDetail(this.prisma, id);
+    if (!this.canView(task, access)) throw new VfmException('NOT_FOUND', 'Zadatak nije pronađen.');
+    const where = { taskId: id, deletedAt: null };
+    const [rows, total] = await Promise.all([
+      this.prisma.taskComment.findMany({
+        where,
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        select: {
+          id: true,
+          taskId: true,
+          authorId: true,
+          body: true,
+          mentionsUserIds: true,
+          createdAt: true,
+          updatedAt: true,
+          author: { select: USER_NAME_FIELDS },
+        },
+      }),
+      this.prisma.taskComment.count({ where }),
+    ]);
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        taskId: row.taskId,
+        authorId: row.authorId,
+        authorName: userName(row.author) ?? row.authorId,
+        body: row.body,
+        mentionsUserIds: row.mentionsUserIds,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      })),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+      totalPages: Math.ceil(total / query.pageSize),
+    };
+  }
+
+  async addComment(
+    id: string,
+    input: CreateTaskCommentInput,
+    actorInput: TaskActorContext | string | undefined,
+  ): Promise<TaskCommentView> {
+    const access = await this.resolveAccess(actorInput);
+    const commentScope = access.permissions.isSuperAdmin
+      ? 'ALL'
+      : (access.permissions.permissions.get('task:comment') ?? null);
+    if (commentScope === null) {
+      throw VfmErrors.permissionDenied([detail('task:comment', 'Za komentar je potreban task:comment.')]);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockRow(tx, 'Task', id);
+      const task = await this.loadDetail(tx, id);
+      const visible = this.canView(task, access);
+      if (!visible) throw new VfmException('NOT_FOUND', 'Zadatak nije pronađen.');
+      const related =
+        task.createdById === access.actor.id ||
+        task.assigneeUserId === access.actor.id ||
+        task.completedById === access.actor.id ||
+        task.assignments.some((assignment) => assignment.userId === access.actor.id && !assignment.revokedAt);
+      const commentVehicleIds = access.permissions.grants
+        .filter((grant) => grant.permission === 'task:comment' && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      const commentAllowed =
+        commentScope === 'ALL' ||
+        (commentScope === 'OWN' && related) ||
+        (commentScope === 'VEHICLE_IDS' &&
+          task.vehicleId !== null &&
+          commentVehicleIds.includes(task.vehicleId));
+      if (!commentAllowed) {
+        throw VfmErrors.scopeDenied([
+          detail('task:comment', 'Permisija za komentar ne obuhvata ovaj zadatak.'),
+        ]);
+      }
+      const now = new Date();
+      const commentId = randomUUID();
+      await tx.taskComment.create({
+        data: {
+          id: commentId,
+          taskId: id,
+          authorId: access.actor.id,
+          body: input.body,
+          mentionsUserIds: [],
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+      await tx.taskEvent.create({
+        data: this.eventData({
+          taskId: id,
+          action: 'COMMENTED',
+          actor: access.actor,
+          at: now,
+          data: { commentId },
+          formSchemaVersionId: task.formSchemaVersionId,
+        }),
+      });
+      await tx.outboxEvent.create({
+        data: {
+          id: randomUUID(),
+          aggregateType: 'TASK',
+          aggregateId: id,
+          eventType: 'TASK_COMMENTED',
+          idempotencyKey: `task:${id}:TASK_COMMENTED:${commentId}`,
+          payload: {
+            taskId: id,
+            code: task.code,
+            status: task.status,
+            version: task.version,
+            actorId: access.actor.id,
+            commentId,
+            recipientUserIds: this.involvedUserIds(task, access.actor.id),
+          } as Prisma.InputJsonObject,
+        },
+      });
+      const author = await tx.user.findFirst({
+        where: { id: access.actor.id },
+        select: USER_NAME_FIELDS,
+      });
+      return {
+        id: commentId,
+        taskId: id,
+        authorId: access.actor.id,
+        authorName: userName(author) ?? access.actor.id,
+        body: input.body,
+        mentionsUserIds: [],
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      };
+    });
   }
 
   async create(

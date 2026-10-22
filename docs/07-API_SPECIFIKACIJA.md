@@ -363,7 +363,8 @@ Detaljan implementirani ugovor je u §7.6.
 | POST | `/tasks/:id/reopen` | `task:reopen` | implementirano; `{version,reason?,dueAt?}`, audit + DB outbox |
 | POST | `/tasks/:id/release` | `task:release` s opsegom `ALL` | implementirano; strict `{version,reason?}`, samo `IN_PROGRESS → OPEN`, CAS, `RELEASE`/`WARN`, DB outbox `TASK_RELEASED` |
 | POST | `/tasks/:id/assign` | `task:assign` s opsegom `ALL` | implementirano; strict `{version,mode,userIds[]}`, CAS, aktivne dodjele + audit/outbox |
-| GET/POST | `/tasks/:id/comments` | `task:view` / `task:comment` | |
+| GET | `/tasks/:id/comments` | `task:view` ili `task:view_all` | paginirana lista vidljivog zadatka, najstariji prvo |
+| POST | `/tasks/:id/comments` | `task:comment` | `{body}` strict, `201`; TaskEvent + DB outbox + audit |
 | POST | `/tasks/:id/attachments` | `attachment:upload` | |
 | GET | `/tasks/:id/events` | `task:view` | historija (immutabilna) |
 | GET | `/tasks/available` | `task:claim` | implementirano; samo `OPEN` zadaci koje korisnik **smije** preuzeti po načinu dodjele i opsegu permisije |
@@ -380,8 +381,8 @@ Detaljan implementirani ugovor je u §7.6.
 
 Detaljan implementirani ugovor jezgre zadataka je u §7.7, atomskog
 preuzimanja i slobodnih zadataka u §7.8, a završetka i override prelaza u
-§7.9, release-a u §7.10, a naknadne dodjele u §7.11. Samostalni komentari ostaju zasebne
-cjeline; DB outbox redovi se zapisuju, ali worker/FCM/SSE isporuka još
+§7.9, release-a u §7.10, a naknadne dodjele u §7.11, dok su komentari u §7.12. Historija zadataka
+ostaje zasebna cjelina; DB outbox redovi se zapisuju, ali worker/FCM/SSE isporuka još
 nije dio ugovora.
 
 ### 2.12 Prilozi (`/attachments`)
@@ -1081,7 +1082,7 @@ događaj i DB outbox s novom verzijom u idempotency ključu.
 
 Nema novih ENV varijabli, Redis ključeva/redova ni migracija. Atomski
 claim i `/tasks/available` dodani su u §7.8, završetak/override u §7.9,
-a release u §7.10 i naknadna dodjela u §7.11. Samostalni komentari, zasebna
+a release u §7.10, naknadna dodjela u §7.11 i komentari u §7.12. Zasebna
 historija, outbox worker i FCM/SSE isporuka nisu dio jezgre. Jedinični lažni klijent ne
 dokazuje stvarni PostgreSQL advisory lock, `FOR UPDATE`, rollback ni puni
 HTTP lanac na Coolifyu.
@@ -1244,8 +1245,8 @@ Nema novih ENV varijabli, Redis ključeva/redova ni migracija.
 `fuelConsumptionL100` se u ovoj generičkoj cjelini ne izračunava jer
 form-engine TASK whitelist i postojeći ugovor nemaju jednoznačnu početnu
 kilometražu za potrošnju; kolona ostaje kakva jest do zasebne
-`FUEL_REFILL` semantike. Samostalni komentari i historija, outbox
-worker/FCM/SSE i web zadaci ostaju zasebne cjeline.
+`FUEL_REFILL` semantike. Zasebna historija, outbox worker/FCM/SSE i web
+zadaci ostaju zasebne cjeline.
 Jedinični lažni klijent ne dokazuje stvarni PostgreSQL lock/rollback,
 Decimal upis, HTTP replay ni Coolify tok; P7 integracijski dokaz i dalje
 zahtijeva pravu bazu.
@@ -1267,3 +1268,12 @@ Jedinični testovi pokrivaju DTO, permission/scope, CAS, nevažeći status, obje
 Dopušteno je mijenjati zadatak u `OPEN` ili `IN_PROGRESS`; terminalni statusi su odbijeni. Za `IN_PROGRESS` je dozvoljena samo direktna zamjena jednim izvršiocem; status ostaje u toku, `claimedAt` se postavlja na vrijeme zamjene, a prethodni aktivni `ASSIGNEE` se opoziva. Svi kandidati moraju biti aktivni i imati `task:claim`. Posmatrači se ne mijenjaju. U istoj transakciji se CAS-om ažurira zadatak, stare aktivne `INVITED`/`ASSIGNEE` dodjele opozivaju, ciljne dodjele kreiraju ili reaktiviraju, te upisuju `TaskEvent(ASSIGNED)` i `OutboxEvent(TASK_ASSIGNED)`. Audit je `UPDATE`/`WARN`; outbox nije dokaz FCM/SSE isporuke.
 
 Jedinični testovi pokrivaju dodjelu na OPEN, zamjenu izvršioca u toku, CAS, odbijanje načina koji nije direktan za zadatak u toku, očuvanje posmatrača te event/outbox. Lažni klijent ne dokazuje stvarni PostgreSQL lock/rollback niti Coolify HTTP tok.
+
+
+### 7.12 Komentari zadatka — sedma cjelina Faze 5
+
+`GET /tasks/:id/comments` traži `task:view` ili `task:view_all`; servis primjenjuje istu vidljivost zapisa kao detalj zadatka i vraća stranicu komentara po vremenu rasta (`createdAt`, `id`). `POST /tasks/:id/comments` traži `task:comment` i da akter smije vidjeti zadatak; primjenjuje se i opseg permisije (`ALL`, povezani zadatak za `OWN`, grantovano vozilo za `VEHICLE_IDS`; `DRIVER_IDS` nije primjenjiv). Strict tijelo je `{body}`, nakon trimovanja 1–2000 znakova. Spominjanja nisu prihvaćena dok isporuka obavijesti za njih nije podržana; `mentionsUserIds` ostaje prazna.
+
+Kreiranje komentara ne mijenja verziju zadatka. U jednoj transakciji se upisuju `TaskComment`, `TaskEvent(COMMENTED)` i `OutboxEvent(TASK_COMMENTED)` s ključem jedinstvenim za ID komentara; uključenim korisnicima osim autora namijenjen je outbox payload. Audit je `CREATE`/`INFO` nad `TaskComment`. Upis outboxa ne dokazuje isporuku push/in-app obavijesti.
+
+Jedinični testovi pokrivaju trimovanje, paginaciju, vidljivost, permission, event/outbox i controller metadata. PostgreSQL rollback, HTTP replay i Coolify outbox isporuka nisu dokazani.

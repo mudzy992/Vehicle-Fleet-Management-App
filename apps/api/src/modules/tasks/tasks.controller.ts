@@ -2,6 +2,8 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   assignTaskSchema,
+  createTaskCommentSchema,
+  taskCommentListQuerySchema,
   cancelTaskSchema,
   claimTaskSchema,
   completeTaskSchema,
@@ -13,6 +15,8 @@ import {
   taskListQuerySchema,
   updateTaskSchema,
   type AssignTaskInput,
+  type CreateTaskCommentInput,
+  type TaskCommentListQuery,
   type CancelTaskInput,
   type ClaimTaskInput,
   type CompleteTaskInput,
@@ -216,6 +220,32 @@ export class TasksController {
       .set('assigneeUserId', result.data.assigneeUserId);
     if (input.reason) audit.set('reason', input.reason);
     return result.data;
+  }
+
+  @Get(':id/comments')
+  @RequireAnyPermission('task:view', 'task:view_all')
+  listComments(
+    @Param('id', new ZodValidationPipe(taskIdSchema, 'params')) id: string,
+    @Query(new ZodValidationPipe(taskCommentListQuerySchema, 'query')) query: TaskCommentListQuery,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ) {
+    return this.tasks.listComments(id, query, actorContext(actor, request));
+  }
+
+  @Post(':id/comments')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions('task:comment')
+  @Audit('CREATE', { severity: 'INFO', resource: 'TaskComment' })
+  async addComment(
+    @Param('id', new ZodValidationPipe(taskIdSchema, 'params')) id: string,
+    @Body(new ZodValidationPipe(createTaskCommentSchema, 'body')) input: CreateTaskCommentInput,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ) {
+    const result = await this.tasks.addComment(id, input, actorContext(actor, request));
+    AuditContext.from(request).setEntityId(result.id).setResource('TaskComment').set('taskId', id);
+    return result;
   }
 
   @Post(':id/assign')

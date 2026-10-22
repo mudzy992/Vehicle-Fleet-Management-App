@@ -21,6 +21,7 @@ import {
   resetPasswordSchema,
   archiveTaskTypeSchema,
   assignTaskSchema,
+  createTaskCommentSchema,
   cancelTaskSchema,
   claimTaskSchema,
   completeTaskSchema,
@@ -539,6 +540,9 @@ describe('zadaci (docs/07 §2.11)', () => {
       assignTaskSchema.safeParse({ version: 5, mode: 'OPEN_CLAIM', userIds: [], assignMode: 'OPEN_CLAIM' })
         .success,
     ).toBe(false);
+    expect(createTaskCommentSchema.parse({ body: '  Bilješka  ' })).toEqual({ body: 'Bilješka' });
+    expect(createTaskCommentSchema.safeParse({ body: '  ' }).success).toBe(false);
+    expect(createTaskCommentSchema.safeParse({ body: 'Komentar', mentionsUserIds: [] }).success).toBe(false);
   });
 
   it('lista parsira filtere i odbija obrnut interval roka', () => {

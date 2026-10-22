@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { HTTP_CODE_METADATA } from '@nestjs/common/constants.js';
 import {
   assignTaskSchema,
+  createTaskCommentSchema,
+  taskCommentListQuerySchema,
   cancelTaskSchema,
   claimTaskSchema,
   completeTaskSchema,
@@ -89,6 +91,7 @@ class FakePermissions {
       'task:reopen': 'ALL',
       'task:release': 'ALL',
       'task:assign': 'ALL',
+      'task:comment': 'ALL',
       'task:complete': 'ALL',
       'task:complete_override': 'ALL',
     });
@@ -711,6 +714,14 @@ class FakeTasksPrisma {
       this.comments.push(row);
       return clone(row);
     },
+    findMany: async (args: { where?: Row; skip?: number; take?: number } = {}) =>
+      this.comments
+        .filter((row) => this.matches(row, args.where))
+        .sort((a, b) => compare(a.createdAt, b.createdAt) || compare(a.id, b.id))
+        .slice(args.skip ?? 0, (args.skip ?? 0) + (args.take ?? Number.MAX_SAFE_INTEGER))
+        .map((row) => ({ ...clone(row), author: this.userFields(String(row.authorId)) })),
+    count: async (args: { where?: Row } = {}) =>
+      this.comments.filter((row) => this.matches(row, args.where)).length,
   };
 }
 
@@ -1426,6 +1437,55 @@ describe('TasksService — vraćanje među slobodne', () => {
     );
     expect(repeated.code).toBe('INVALID_TASK_TRANSITION');
     expect(fake.events.filter((row) => row.action === 'RELEASED')).toHaveLength(1);
+  });
+});
+
+describe('TasksService — komentari', () => {
+  it('kreira komentar, COMMENTED događaj i jedinstveni transakcijski outbox; lista je paginirana', async () => {
+    const { fake, service } = setup();
+    const taskId = 'ffffffff-ffff-4fff-8fff-fffffffff033';
+    fake.addTask({ id: taskId, code: 'Z-2026-000033', version: 1 });
+    const comment = await service.addComment(
+      taskId,
+      createTaskCommentSchema.parse({ body: '  Provjera završena.  ' }),
+      actor(adminId),
+    );
+
+    expect(comment).toMatchObject({
+      taskId,
+      authorId: adminId,
+      authorName: 'Amina Administrator',
+      body: 'Provjera završena.',
+      mentionsUserIds: [],
+    });
+    expect(fake.events.at(-1)).toMatchObject({ action: 'COMMENTED', taskId });
+    expect(fake.outbox.at(-1)).toMatchObject({
+      eventType: 'TASK_COMMENTED',
+      idempotencyKey: `task:${taskId}:TASK_COMMENTED:${comment.id}`,
+    });
+    expect((fake.outbox.at(-1)!.payload as Row).commentId).toBe(comment.id);
+
+    const page = await service.listComments(
+      taskId,
+      taskCommentListQuerySchema.parse({ page: 1, pageSize: 10 }),
+      actor(adminId),
+    );
+    expect(page).toMatchObject({ page: 1, pageSize: 10, total: 1, totalPages: 1 });
+    expect(page.items).toEqual([comment]);
+  });
+
+  it('sakriva komentare na nevidljivom zadatku i zahtijeva task:comment za pisanje', async () => {
+    const { fake, service } = setup();
+    const taskId = 'ffffffff-ffff-4fff-8fff-fffffffff034';
+    fake.addTask({ id: taskId, code: 'Z-2026-000034' });
+    const hidden = await errorOf(() =>
+      service.listComments(taskId, taskCommentListQuerySchema.parse({}), actor(noClaimId)),
+    );
+    expect(hidden.code).toBe('NOT_FOUND');
+    const denied = await errorOf(() =>
+      service.addComment(taskId, createTaskCommentSchema.parse({ body: 'Komentar.' }), actor(noClaimId)),
+    );
+    expect(denied.code).toBe('PERMISSION_DENIED');
   });
 });
 
@@ -2334,15 +2394,23 @@ describe('TasksController — metadata', () => {
     expect(permissions(TasksController.prototype.reopen)).toEqual(['task:reopen']);
     expect(permissions(TasksController.prototype.release)).toEqual(['task:release']);
     expect(permissions(TasksController.prototype.assign)).toEqual(['task:assign']);
+    expect(permissions(TasksController.prototype.listComments)).toEqual(['task:view', 'task:view_all']);
+    expect(permissions(TasksController.prototype.addComment)).toEqual(['task:comment']);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.create)).toBe(201);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.claim)).toBe(200);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.complete)).toBe(200);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.release)).toBe(200);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.assign)).toBe(200);
+    expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.addComment)).toBe(201);
     expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.assign)).toMatchObject({
       action: 'UPDATE',
       severity: 'WARN',
       resource: 'Task',
+    });
+    expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.addComment)).toMatchObject({
+      action: 'CREATE',
+      severity: 'INFO',
+      resource: 'TaskComment',
     });
     expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.claim)).toMatchObject({
       action: 'CLAIM',
