@@ -625,4 +625,4 @@ Jedinični lažni klijent ne dokazuje rollback, HTTP retry ponašanje ni isporuk
 
 ### Web kreiranje zadatka — W17
 
-`task-create-page.tsx` implementira tri koraka i koristi liste aktivnih vrsta, aktivnih vozila (kada su potrebna) te efektivnu TASK formu. Kreiranje ide kroz postojeći `POST /tasks`; server bira i snapshotuje stvarnu objavljenu verziju. Ako vrsta podrazumijeva `ASSIGN_DIRECT`, ovaj obrazac namjerno šalje `OPEN_CLAIM`; direktna dodjela, pozvani i posmatrači još nisu podržani u wizardu. Ciljani React test i browser UAT još nisu dodani; stvarna RBAC/API integracija nije provjerena.
+`task-create-page.tsx` implementira tri koraka i koristi liste aktivnih vrsta, aktivnih vozila (kada su potrebna), aktivnih korisnika uz `user:view` te efektivnu TASK formu. Kreiranje ide kroz postojeći `POST /tasks`; server bira i snapshotuje stvarnu objavljenu verziju. Podržani su tri načina dodjele i korisnici pozvani/posmatrači; ciljani React test i browser UAT još nisu dodani. Upload priloga nije uključen: vrste/formulari koji zahtijevaju PHOTO na `ON_CREATE` mogu vratiti serversku validacijsku grešku; stvarna RBAC/API integracija nije provjerena.

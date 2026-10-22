@@ -1,23 +1,25 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
-import { TASK_PRIORITIES } from '@vfm/shared';
+import { TASK_ASSIGN_MODES, TASK_PRIORITIES, type TaskAssignMode } from '@vfm/shared';
 import type {
   FormSchemaSummary,
   FormVersionDetail,
   TaskDetail,
   TaskTypeListResponse,
+  UserListResponse,
   VehicleListResponse,
 } from '@vfm/shared/schemas';
 import { parseDefinition } from '@vfm/form-engine';
 import type { RenderModel } from '@vfm/form-renderer';
 import { buildRenderModel } from '@vfm/form-renderer';
-import { Badge, Button, Card, CardContent, CardHeader, EmptyState, Field, inputClassName } from '../../components/ui/index.js';
+import { Button, Card, CardContent, CardHeader, EmptyState, Field, inputClassName } from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
 import { FormFields } from '../forms/form-fields.js';
 import { sarajevoToday } from '../forms/forms-preview-values.js';
 import { toQueryString } from '../vehicles/vehicles-model.js';
 import { effectiveTaskForm } from '../task-types/task-types-model.js';
+import { useSession } from '../auth/session.js';
 
 const PAGE_SIZE = 100;
 const PRIORITY_LABELS: Record<(typeof TASK_PRIORITIES)[number], string> = {
@@ -27,6 +29,8 @@ const PRIORITY_LABELS: Record<(typeof TASK_PRIORITIES)[number], string> = {
 export function TaskCreatePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { hasPermission } = useSession();
+  const canViewUsers = hasPermission('user:view');
   const [step, setStep] = useState(1);
   const [taskTypeId, setTaskTypeId] = useState('');
   const [vehicleId, setVehicleId] = useState('');
@@ -34,6 +38,10 @@ export function TaskCreatePage() {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<(typeof TASK_PRIORITIES)[number]>('NORMAL');
   const [dueLocal, setDueLocal] = useState('');
+  const [assignMode, setAssignMode] = useState<TaskAssignMode>('OPEN_CLAIM');
+  const [assigneeUserId, setAssigneeUserId] = useState('');
+  const [invitedUserIds, setInvitedUserIds] = useState<string[]>([]);
+  const [observerUserIds, setObserverUserIds] = useState<string[]>([]);
   const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
@@ -47,6 +55,12 @@ export function TaskCreatePage() {
   const vehiclesQuery = useQuery({
     queryKey: ['vehicles', 'task-create-options'],
     queryFn: () => api.get<VehicleListResponse>(`/vehicles?${toQueryString({ page: 1, pageSize: PAGE_SIZE, status: 'ACTIVE' })}`),
+    retry: false,
+  });
+  const usersQuery = useQuery({
+    queryKey: ['users', 'task-create-options'],
+    queryFn: () => api.get<UserListResponse>(`/users?${toQueryString({ page: 1, pageSize: PAGE_SIZE, status: 'ACTIVE' })}`),
+    enabled: canViewUsers,
     retry: false,
   });
   const formsQuery = useQuery({
@@ -90,7 +104,10 @@ export function TaskCreatePage() {
         ...(title.trim() ? { title: title.trim() } : {}),
         ...(description.trim() ? { description: description.trim() } : {}),
         priority,
-        assignMode: selectedType.defaultAssignMode === 'ASSIGN_DIRECT' ? 'OPEN_CLAIM' : selectedType.defaultAssignMode,
+        assignMode,
+        ...(assignMode === 'ASSIGN_DIRECT' ? { assigneeUserId } : {}),
+        ...(assignMode === 'OPEN_CLAIM' ? { invitedUserIds } : {}),
+        observerUserIds,
         ...(dueLocal ? { dueAt: new Date(dueLocal).toISOString() } : {}),
         formData,
       });
@@ -118,12 +135,24 @@ export function TaskCreatePage() {
   if (types.length === 0) return <EmptyState title="Nema aktivnih vrsta" description="Prije kreiranja zadatka potrebno je aktivirati barem jednu vrstu zadatka." />;
 
   const vehicleItems = vehiclesQuery.data?.items ?? [];
+  const users = usersQuery.data?.items ?? [];
   const nextStep = () => {
     setMessage(null);
     if (step === 1) {
       if (!selectedType) { setMessage('Odaberite vrstu zadatka.'); return; }
       if (selectedType.requiresVehicle && !vehicleId) { setMessage('Odabrana vrsta zahtijeva vozilo.'); return; }
       setPriority(selectedType.defaultPriority);
+      setAssignMode(selectedType.defaultAssignMode);
+      setAssigneeUserId('');
+      setInvitedUserIds([]);
+    }
+    if (step === 2 && assignMode === 'ASSIGN_DIRECT' && !assigneeUserId) {
+      setMessage('Odaberite direktnog izvršioca ili promijenite način dodjele.');
+      return;
+    }
+    if (step === 2 && assignMode === 'ASSIGN_DIRECT' && !canViewUsers) {
+      setMessage('Za odabir izvršioca potrebna je permisija user:view. Odaberite OPEN_CLAIM ili BROADCAST.');
+      return;
     }
     setStep((current) => Math.min(3, current + 1));
   };
@@ -183,6 +212,34 @@ export function TaskCreatePage() {
             <Field label="Rok (opciono)" htmlFor="task-create-due">
               <input id="task-create-due" className={inputClassName} type="datetime-local" value={dueLocal} onChange={(event) => setDueLocal(event.target.value)} />
             </Field>
+            <Field label="Način dodjele" htmlFor="task-create-assign-mode">
+              <select id="task-create-assign-mode" className={inputClassName} value={assignMode} onChange={(event) => { setAssignMode(event.target.value as TaskAssignMode); setAssigneeUserId(''); setInvitedUserIds([]); }}>
+                {TASK_ASSIGN_MODES.map((mode) => <option key={mode} value={mode}>{mode === 'OPEN_CLAIM' ? 'Slobodno preuzimanje' : mode === 'ASSIGN_DIRECT' ? 'Direktna dodjela' : 'Broadcast'}</option>)}
+              </select>
+            </Field>
+            {assignMode === 'ASSIGN_DIRECT' && (
+              <Field label="Direktni izvršilac *" htmlFor="task-create-assignee">
+                {canViewUsers ? <select id="task-create-assignee" className={inputClassName} value={assigneeUserId} onChange={(event) => { setAssigneeUserId(event.target.value); setObserverUserIds((current) => current.filter((id) => id !== event.target.value)); }}>
+                  <option value="">Odaberite izvršioca…</option>
+                  {users.map((user) => <option key={user.id} value={user.id} disabled={observerUserIds.includes(user.id)}>{user.displayName || `${user.firstName} ${user.lastName}`} · {user.email}</option>)}
+                </select> : <p className="text-sm text-[var(--danger)]">Za direktnu dodjelu potrebna je permisija user:view.</p>}
+                {usersQuery.error && <span className="text-xs text-[var(--danger)]">{usersQuery.error instanceof ApiError ? usersQuery.error.message : 'Korisnici nisu dostupni.'}</span>}
+              </Field>
+            )}
+            {assignMode === 'OPEN_CLAIM' && canViewUsers && (
+              <Field label="Pozvani korisnici (opciono)" htmlFor="task-create-invited" hint="Pozvani korisnici mogu preuzeti zadatak prije ostalih.">
+                <select id="task-create-invited" className={`${inputClassName} min-h-24`} multiple value={invitedUserIds} onChange={(event) => { const selected = Array.from(event.currentTarget.selectedOptions, (option) => option.value); setInvitedUserIds(selected); setObserverUserIds((current) => current.filter((id) => !selected.includes(id))); }}>
+                  {users.map((user) => <option key={user.id} value={user.id} disabled={observerUserIds.includes(user.id)}>{user.displayName || `${user.firstName} ${user.lastName}`}</option>)}
+                </select>
+              </Field>
+            )}
+            {canViewUsers && (
+              <Field label="Posmatrači (opciono)" htmlFor="task-create-observers" hint="Držite Ctrl/Cmd za višestruki izbor.">
+                <select id="task-create-observers" className={`${inputClassName} min-h-24`} multiple value={observerUserIds} onChange={(event) => setObserverUserIds(Array.from(event.currentTarget.selectedOptions, (option) => option.value))}>
+                  {users.map((user) => <option key={user.id} value={user.id} disabled={invitedUserIds.includes(user.id) || user.id === assigneeUserId}>{user.displayName || `${user.firstName} ${user.lastName}`}</option>)}
+                </select>
+              </Field>
+            )}
             {selectedType.dueOffsetHours && <p className="text-xs text-[var(--fg-muted)]">Vrsta predlaže rok za {selectedType.dueOffsetHours} sati; unesite tačan rok po potrebi.</p>}
           </CardContent>
         </Card>
@@ -196,9 +253,8 @@ export function TaskCreatePage() {
             {formsQuery.error || versionQuery.error ? <p role="alert" className="text-sm text-[var(--danger)]">{(formsQuery.error ?? versionQuery.error) instanceof ApiError ? (formsQuery.error ?? versionQuery.error as ApiError).message : 'TASK forma nije dostupna.'}</p> : null}
             {!effectiveForm && !formsQuery.isPending && <p role="alert" className="text-sm text-[var(--danger)]">Vrsta nema efektivnu objavljenu TASK formu. Zadatak se ne može kreirati.</p>}
             {model && versionQuery.data && <><p className="text-sm text-[var(--fg-muted)]">{effectiveForm?.name} · v{versionQuery.data.version}</p><FormFields model={model} errors={errors} idPrefix="task-create" onChange={(key, value) => setFormData((current) => ({ ...current, [key]: value }))} /></>}
-            {selectedType.defaultAssignMode === 'ASSIGN_DIRECT' && <p className="text-sm text-[var(--fg-muted)]"><Badge level="warning">Dodjela</Badge> Ova vrsta podrazumijeva direktnu dodjelu. Kreiranje iz ovog web obrasca koristi siguran otvoreni režim; izvršioca možete dodijeliti nakon kreiranja.</p>}
             <div className="rounded-md bg-[var(--surface-muted)] p-3 text-sm">
-              <p><strong>{title.trim() || selectedType.name}</strong> · {PRIORITY_LABELS[priority]}</p>
+              <p><strong>{title.trim() || selectedType.name}</strong> · {PRIORITY_LABELS[priority]} · {assignMode === 'OPEN_CLAIM' ? 'Slobodno preuzimanje' : assignMode === 'ASSIGN_DIRECT' ? 'Direktna dodjela' : 'Broadcast'}</p>
               <p className="text-[var(--fg-muted)]">{vehicleItems.find((item) => item.id === vehicleId)?.internalNo ?? 'Bez vozila'} · {dueLocal ? new Date(dueLocal).toLocaleString('bs-BA') : 'Bez roka'}</p>
             </div>
           </CardContent>
