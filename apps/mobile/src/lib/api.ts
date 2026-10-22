@@ -221,6 +221,7 @@ export const mobileApi = {
     }
   },
   tasks: () => request<{ items: TaskSummary[]; total: number }>('/tasks/available?page=1&pageSize=50'),
+  myTasks: () => request<{ items: TaskSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/tasks?mine=true&page=1&pageSize=50&sortBy=updatedAt&sortOrder=desc'),
   task: (id: string) => request<TaskDetail>(`/tasks/${encodeURIComponent(id)}`),
   vehicles: () => request<{ items: VehicleSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/vehicles?page=1&pageSize=50'),
   vehicle: (id: string) => request<VehicleDetail>(`/vehicles/${encodeURIComponent(id)}`),

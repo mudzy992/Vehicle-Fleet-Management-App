@@ -755,7 +755,7 @@ i ne pokreće nijedan upit. Ostali ekrani su placeholderi s oznakom faze.
 | # | Ekran | Faza | Permisija | Status |
 |---|---|---|---|---|
 | M1 | Prijava | 6 | javno | ✅ `apps/mobile/app/(auth)/login.tsx`, refresh token u SecureStore; API odbija Super Admina |
-| M2 | Zadaci — lista slobodnih | 6 | `task:claim` | ✅ `apps/mobile/app/(tabs)/tasks.tsx`, online-only, refresh/pull-to-refresh |
+| M2 | Zadaci — moji i slobodni | 6 | `task:view`, `task:claim` | ✅ `apps/mobile/app/(tabs)/tasks.tsx`, segmenti filtrirani po permisijama, online-only i pull-to-refresh |
 | M3 | Zadatak — detalj | 6 | `task:view` | ✅ `apps/mobile/app/task/[id].tsx`, metapodaci i snapshot verzije |
 | M4 | Preuzimanje | 6 | `task:claim` | ✅ `ON_CLAIM` polja, multipart upload fotografije/priloga, server greške i konflikta |
 | M5 | Završetak — dinamička forma + kamera | 6 | `task:complete` | ✅ zajednički `@vfm/form-renderer`, kamera/galerija, kompresija i upload; ⏳ LIST/QUERY opcije, REFERENCE lookup i test na uređaju |
