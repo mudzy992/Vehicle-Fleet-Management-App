@@ -9,9 +9,12 @@
  * - očitanje „iz budućnosti" se odbija; lista je sortirana po vremenu očitanja.
  */
 import { describe, expect, it } from 'vitest';
+import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import { VehiclesService } from '../../src/modules/vehicles/vehicles.service.js';
 import type { VehicleDetail } from '@vfm/shared/schemas';
 import { FakeVehiclePrisma, asPrisma, baseInput, catchVfm } from '../helpers/vehicles-fake.js';
+
+const SUPER_ADMIN = { id: 'super-admin', isSuperAdmin: true } as AuthenticatedUser;
 
 async function seedVehicle(): Promise<{
   service: VehiclesService;
@@ -156,19 +159,19 @@ describe('lista očitanja', () => {
       readingAt: '2026-10-20T08:00:00.000Z',
     } as never);
 
-    const first = await service.listOdometer(vehicle.id, { page: 1, pageSize: 2 });
+    const first = await service.listOdometer(vehicle.id, { page: 1, pageSize: 2 }, SUPER_ADMIN);
     expect(first.items.map((item) => item.valueKm)).toEqual([123_000, 122_000]);
     expect(first.total).toBe(3);
     expect(first.totalPages).toBe(2);
 
-    const second = await service.listOdometer(vehicle.id, { page: 2, pageSize: 2 });
+    const second = await service.listOdometer(vehicle.id, { page: 2, pageSize: 2 }, SUPER_ADMIN);
     expect(second.items.map((item) => item.valueKm)).toEqual([121_000]);
   });
 
   it('lista nepostojećeg vozila → NOT_FOUND', async () => {
     const { service } = await seedVehicle();
 
-    const error = await catchVfm(service.listOdometer('nema-ga', { page: 1, pageSize: 25 }));
+    const error = await catchVfm(service.listOdometer('nema-ga', { page: 1, pageSize: 25 }, SUPER_ADMIN));
     expect(error.code).toBe('NOT_FOUND');
   });
 });

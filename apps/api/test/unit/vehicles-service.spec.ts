@@ -10,6 +10,7 @@
  * - arhiviranje i brisanje ne uklanjaju zapis (arhiva/brisanje su meke).
  */
 import { describe, expect, it } from 'vitest';
+import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import type { VehicleDetail } from '@vfm/shared/schemas';
 import { VEHICLE_STATUS_TRANSITIONS, VehiclesService } from '../../src/modules/vehicles/vehicles.service.js';
 import {
@@ -20,6 +21,24 @@ import {
   getCurrentVersion,
   vehicleForm,
 } from '../helpers/vehicles-fake.js';
+
+function viewer(
+  scope: 'ALL' | 'OWN' | 'VEHICLE_IDS',
+  id = 'viewer-1',
+  vehicleIds: string[] = [],
+): AuthenticatedUser {
+  const permission = 'vehicle:view' as const;
+  return {
+    id,
+    isSuperAdmin: false,
+    permissions: {
+      isSuperAdmin: false,
+      permissions: new Map([[permission, scope]]),
+      list: [permission],
+      grants: [{ permission, scope, scopeVehicleIds: vehicleIds }],
+    },
+  } as unknown as AuthenticatedUser;
+}
 
 describe('VehiclesService — create', () => {
   it('puni normalizovane kolone iz forme i čuva verziju forme (P10)', async () => {
@@ -121,62 +140,107 @@ describe('VehiclesService — list', () => {
     const fake = new FakeVehiclePrisma();
     fake.addForm();
     const service = new VehiclesService(asPrisma(fake));
-    await service.create(baseInput() as never);
-    await service.create({
-      internalNo: 'V-002',
-      make: 'Renault',
-      model: 'Clio',
-      fuelType: 'PETROL',
-      formData: { plateNumber: 'B22-M-222' },
-    } as never);
+    await service.create(baseInput() as never, 'owner-1');
+    await service.create(
+      {
+        internalNo: 'V-002',
+        make: 'Renault',
+        model: 'Clio',
+        fuelType: 'PETROL',
+        formData: { plateNumber: 'B22-M-222' },
+      } as never,
+      'owner-2',
+    );
     return { service, fake };
   }
 
   it('podrazumijevano skriva arhivirana vozila', async () => {
     const { service } = await seeded();
     const first = (
-      await service.list({ page: 1, pageSize: 25, sortOrder: 'asc', includeArchived: false } as never)
+      await service.list(
+        { page: 1, pageSize: 25, sortOrder: 'asc', includeArchived: false } as never,
+        viewer('ALL'),
+      )
     ).items[0];
     await service.archive(first!.id, {} as never);
 
-    const visible = await service.list({
-      page: 1,
-      pageSize: 25,
-      sortOrder: 'asc',
-      includeArchived: false,
-    } as never);
+    const visible = await service.list(
+      {
+        page: 1,
+        pageSize: 25,
+        sortOrder: 'asc',
+        includeArchived: false,
+      } as never,
+      viewer('ALL'),
+    );
     expect(visible.total).toBe(1);
 
-    const all = await service.list({
-      page: 1,
-      pageSize: 25,
-      sortOrder: 'asc',
-      includeArchived: true,
-    } as never);
+    const all = await service.list(
+      {
+        page: 1,
+        pageSize: 25,
+        sortOrder: 'asc',
+        includeArchived: true,
+      } as never,
+      viewer('ALL'),
+    );
     expect(all.total).toBe(2);
   });
 
   it('paginacija vraća `totalPages` i filtrira po `q`', async () => {
     const { service } = await seeded();
 
-    const page = await service.list({
-      page: 1,
-      pageSize: 1,
-      sortOrder: 'asc',
-      includeArchived: false,
-    } as never);
+    const page = await service.list(
+      {
+        page: 1,
+        pageSize: 1,
+        sortOrder: 'asc',
+        includeArchived: false,
+      } as never,
+      viewer('ALL'),
+    );
     expect(page.items).toHaveLength(1);
     expect(page.total).toBe(2);
     expect(page.totalPages).toBe(2);
 
-    const search = await service.list({
-      page: 1,
-      pageSize: 25,
-      sortOrder: 'asc',
-      includeArchived: false,
-      q: 'clio',
-    } as never);
+    const search = await service.list(
+      {
+        page: 1,
+        pageSize: 25,
+        sortOrder: 'asc',
+        includeArchived: false,
+        q: 'clio',
+      } as never,
+      viewer('ALL'),
+    );
     expect(search.items.map((item) => item.internalNo)).toEqual(['V-002']);
+  });
+
+  it('OWN filtrira listu po kreatoru, a ALL i dalje vidi sva vozila', async () => {
+    const { service } = await seeded();
+    const query = { page: 1, pageSize: 25, sortOrder: 'asc', includeArchived: false } as never;
+
+    const own = await service.list(query, viewer('OWN', 'owner-1'));
+    const all = await service.list(query, viewer('ALL'));
+
+    expect(own.items.map((item) => item.internalNo)).toEqual(['V-001']);
+    expect(own.total).toBe(1);
+    expect(all.total).toBe(2);
+  });
+
+  it('VEHICLE_IDS ograničava listu, a direktni GET odbija tuđe vozilo', async () => {
+    const { service, fake } = await seeded();
+    const permittedId = fake.vehicles[1]!.id;
+    const permitted = await service.list(
+      { page: 1, pageSize: 25, sortOrder: 'asc', includeArchived: false } as never,
+      viewer('VEHICLE_IDS', 'viewer-1', [permittedId]),
+    );
+
+    expect(permitted.items.map((item) => item.internalNo)).toEqual(['V-002']);
+    const denied = await catchVfm(
+      service.get(fake.vehicles[0]!.id, viewer('VEHICLE_IDS', 'viewer-1', [permittedId])),
+    );
+    expect(denied.code).toBe('SCOPE_DENIED');
   });
 });
 
@@ -314,7 +378,7 @@ describe('VehiclesService — arhiva i brisanje', () => {
 
     expect(fake.vehicles).toHaveLength(1);
     expect(fake.vehicles[0]?.deletedAt).not.toBeNull();
-    const error = await catchVfm(service.get(vehicle.id));
+    const error = await catchVfm(service.get(vehicle.id, viewer('ALL')));
     expect(error.code).toBe('NOT_FOUND');
   });
 });

@@ -68,8 +68,9 @@ export class VehiclesController {
   @RequirePermissions('vehicle:view')
   list(
     @Query(new ZodValidationPipe(vehicleListQuerySchema, 'query')) query: VehicleListQuery,
+    @CurrentUser() actor: AuthenticatedUser,
   ): Promise<VehicleListResponse> {
-    return this.vehicles.list(query);
+    return this.vehicles.list(query, actor);
   }
 
   @Post()
@@ -87,8 +88,11 @@ export class VehiclesController {
 
   @Get(':id')
   @RequirePermissions('vehicle:view')
-  get(@Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string): Promise<VehicleDetail> {
-    return this.vehicles.get(id);
+  get(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): Promise<VehicleDetail> {
+    return this.vehicles.get(id, actor);
   }
 
   @Patch(':id')
@@ -153,8 +157,9 @@ export class VehiclesController {
   listOdometer(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Query(new ZodValidationPipe(paginationQuerySchema, 'query')) query: PaginationQuery,
+    @CurrentUser() actor: AuthenticatedUser,
   ): Promise<OdometerListResponse> {
-    return this.vehicles.listOdometer(id, query);
+    return this.vehicles.listOdometer(id, query, actor);
   }
 
   @Post(':id/odometer')

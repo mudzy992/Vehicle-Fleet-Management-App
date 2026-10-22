@@ -7,14 +7,14 @@
 
 U repozitoriju već postoje API moduli i web ekrani za vozila, vozače, registracije, osiguranje, podsjetnike i priloge. Postoje i jedinični testovi za glavne servise, skeniranje podsjetnika, historiju kilometraže i obradu priloga. Prisustvo koda i jediničnih testova samo po sebi ne potvrđuje P13/P14 niti završetak Faze 3.
 
-| Područje                  | Nalaz                                                                                                                    | Status                                                   |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
-| Vozila i kilometraža      | API servis i jedinični testovi postoje; web funkcionalnost je prisutna.                                                  | Audit u toku                                             |
-| Vozači i PII              | API/web moduli postoje; servis maskira PII prema `driver:view_pii`. Potrebna je provjera na nivou ruta i stvarnih uloga. | Audit u toku                                             |
-| Registracije i osiguranje | Servisi i jedinični testovi postoje; ručna migracija dodaje DB zabranu preklapanja perioda.                              | DB integracija dodata; još nije izvršena na testnoj bazi |
-| Podsjetnici               | Scheduler koristi `dedupeKey`, `createMany(skipDuplicates: true)` i `Europe/Sarajevo`; postoje jedinični testovi.        | P13 djelimično pokriven                                  |
-| Prilozi                   | Postoje provjere opsega kod list/get/url/content sesije i audit pristupa.                                                | P14 nije potvrđen end-to-end                             |
-| Web ekrani                | Postoje feature moduli za vozila, vozače i podsjetnike; P14 test prolaza kroz sve API rute još nije pronađen.            | Audit u toku                                             |
+| Područje                  | Nalaz                                                                                                                                                           | Status                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Vozila i kilometraža      | API servis i jedinični testovi postoje; list/detail i historija kilometraže sada filtriraju `OWN`/`VEHICLE_IDS` i čuvaju `ALL`. Web funkcionalnost je prisutna. | Čitanje ograničeno po opsegu; ostale rute su još u auditu |
+| Vozači i PII              | API/web moduli postoje; servis maskira PII prema `driver:view_pii`. Potrebna je provjera na nivou ruta i stvarnih uloga.                                        | Audit u toku                                              |
+| Registracije i osiguranje | Servisi i jedinični testovi postoje; ručna migracija dodaje DB zabranu preklapanja perioda.                                                                     | DB integracija dodata; još nije izvršena na testnoj bazi  |
+| Podsjetnici               | Scheduler koristi `dedupeKey`, `createMany(skipDuplicates: true)` i `Europe/Sarajevo`; postoje jedinični testovi.                                               | P13 djelimično pokriven                                   |
+| Prilozi                   | Postoje provjere opsega kod list/get/url/content sesije i audit pristupa.                                                                                       | P14 nije potvrđen end-to-end                              |
+| Web ekrani                | Postoje feature moduli za vozila, vozače i podsjetnike; P14 test prolaza kroz sve API rute još nije pronađen.                                                   | Audit u toku                                              |
 
 ## P13 — testovi prihvatanja
 
@@ -38,13 +38,13 @@ P14 je i dalje otvoren: `docs/09-TEST_PLAN.md` traži OpenAPI-wide provjeru dozv
 
 Audit je potvrdio razliku prema doslovnom P14 očekivanju: potpisani URL je ranije radio kao javni bearer token bez sesije. Ispravljena je zaštita: izdavanje URL-a i preuzimanje sada traže `attachment:view`; ruta s tokenom više nije javna, ponovo provjerava opseg priloga, a HMAC potpis veže token za ID korisnika i rok važenja. Web klijent preuzima bajtove uz memorijski access token umjesto otvaranja javnog linka. Dodani su regresijski testovi za metapodatke permisije, vezivanje tokena za korisnika i autentifikovano preuzimanje; puna P14 matrica svih OpenAPI ruta i dalje nije izvršena.
 
-Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view`/list endpoint ne smije se smatrati ekvivalentom prava nad konkretnim vozilom, vozačem ili prilogom. P14 treba provjeriti efektivni opseg na svakom endpointu, ne samo prisustvo permission dekoratora.
+Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view`/list endpoint ne smije se smatrati ekvivalentom prava nad konkretnim vozilom, vozačem ili prilogom. U ovom prolazu je na vozilima potvrđen i ispravljen slučaj gdje list/detail i historija kilometraže nisu primjenjivali uži opseg. Regresijski testovi dokazuju `OWN`, `VEHICLE_IDS`, odbijanje direktnog GET-a izvan opsega i očuvanje `vehicle:view:ALL`. Opsezi na write rutama te registracijama, osiguranju, vozačima i ostalim resursima još nisu verifikovani; P14 nije zatvoren.
 
 ## Verifikacija u ovom prolazu
 
 - `corepack pnpm --filter @vfm/api exec vitest run --config vitest.integration.config.ts` — prolaz alata; jedan integracijski fajl i oba testa preskočena zbog nedostajućeg `PHASE3_TEST_DATABASE_URL`.
 - `corepack pnpm --filter @vfm/api typecheck` — prolaz.
-- `corepack pnpm --filter @vfm/api test` — prolaz: 58 fajlova, 925 jediničnih testova.
+- `corepack pnpm --filter @vfm/api test` — prolaz: 58 fajlova, 927 jediničnih testova.
 - `corepack pnpm --filter @vfm/web test` — prolaz: 23 fajla, 166 testova.
 - API i web `typecheck` — prolaz; ESLint nad izmijenjenim API/web fajlovima — prolaz.
 - Nije pokrenuta živa DB/API provjera. Raniji korisnički izvještaj o uspješnom redeployu i DB/HTTP provjeri ostaje korisnički prijavljen rezultat, ne nezavisna provjera ovog audita.

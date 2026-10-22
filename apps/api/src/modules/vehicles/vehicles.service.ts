@@ -21,7 +21,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { ApiErrorDetail, VehicleStatus } from '@vfm/shared';
+import type { ApiErrorDetail, Permission, VehicleStatus } from '@vfm/shared';
 import { VEHICLE_STATUSES, toLocalDateString } from '@vfm/shared';
 import type {
   ArchiveVehicleInput,
@@ -44,7 +44,8 @@ import {
   type FormDefinition,
 } from '@vfm/form-engine';
 import type { Prisma } from '../../generated/prisma/client.js';
-import { VfmException } from '../../common/errors/vfm-error.js';
+import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { toDatabaseDate } from '../../common/dates.js';
 import { resolveFormOptionValues } from '../../common/form-option-values.js';
@@ -132,11 +133,13 @@ const VEHICLE_SELECT = {
   updatedAt: true,
   deletedAt: true,
   archivedAt: true,
+  createdById: true,
 } as const;
 
 /** Red kakav vraća Prisma (samo polja iz `VEHICLE_SELECT`). */
 interface VehicleRow {
   id: string;
+  createdById: string | null;
   internalNo: string;
   make: string;
   model: string;
@@ -212,8 +215,8 @@ export class VehiclesService {
   //  Čitanje
   // ---------------------------------------------------------------------------
 
-  async list(query: VehicleListQuery): Promise<VehicleListResponse> {
-    const where = this.buildWhere(query);
+  async list(query: VehicleListQuery, actor: AuthenticatedUser): Promise<VehicleListResponse> {
+    const where = { ...this.buildWhere(query), ...this.scopeWhere(actor, 'vehicle:view') };
     const sortBy = SORTABLE[query.sortBy ?? ''] ?? 'internalNo';
     const orderBy = { [sortBy]: query.sortOrder } as Prisma.VehicleOrderByWithRelationInput;
 
@@ -237,8 +240,9 @@ export class VehiclesService {
     };
   }
 
-  async get(id: string): Promise<VehicleDetail> {
+  async get(id: string, actor: AuthenticatedUser): Promise<VehicleDetail> {
     const row = await this.loadOrThrow(id);
+    this.assertScope(actor, 'vehicle:view', row);
     return this.toDetail(row);
   }
 
@@ -483,8 +487,10 @@ export class VehiclesService {
   async listOdometer(
     vehicleId: string,
     query: { page: number; pageSize: number },
+    actor: AuthenticatedUser,
   ): Promise<OdometerListResponse> {
-    await this.loadOrThrow(vehicleId);
+    const vehicle = await this.loadOrThrow(vehicleId);
+    this.assertScope(actor, 'odometer:view', vehicle);
 
     const [total, rows] = await Promise.all([
       this.prisma.odometerReading.count({ where: { vehicleId } }),
@@ -788,6 +794,46 @@ export class VehiclesService {
   // ---------------------------------------------------------------------------
   //  Pomoćne
   // ---------------------------------------------------------------------------
+
+  private scopeWhere(actor: AuthenticatedUser, permission: Permission): Record<string, unknown> {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return {};
+    if (scope === 'OWN') return { createdById: actor.id };
+    if (scope === 'VEHICLE_IDS') {
+      const ids =
+        actor.permissions?.grants
+          .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+          .flatMap((grant) => grant.scopeVehicleIds ?? []) ?? [];
+      return { id: { in: ids } };
+    }
+    if (scope === 'DRIVER_IDS') return { id: { in: [] } };
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Nemate pristup ovom zapisu u okviru dodijeljenog opsega.',
+        code: 'scope_denied',
+      },
+    ]);
+  }
+
+  private assertScope(actor: AuthenticatedUser, permission: Permission, row: VehicleRow): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return;
+    if (scope === 'OWN' && row.createdById === actor.id) return;
+    if (scope === 'VEHICLE_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      if (ids?.includes(row.id)) return;
+    }
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Nemate pristup ovom zapisu u okviru dodijeljenog opsega.',
+        code: 'scope_denied',
+      },
+    ]);
+  }
 
   private buildWhere(query: VehicleListQuery): Record<string, unknown> {
     const where: Record<string, unknown> = { deletedAt: null };
