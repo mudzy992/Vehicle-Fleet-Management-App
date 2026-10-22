@@ -96,6 +96,7 @@ export interface RenderField {
   /** Opcije za `SELECT`/`MULTI_SELECT`; `null` kad ih rješava server. */
   readonly options: readonly RenderOption[] | null;
   readonly optionsSourceKind: 'STATIC' | 'LIST' | 'QUERY' | null;
+  readonly optionsSource: FieldDefinition['optionsSource'] | null;
   /** Greške iz servera ili lokalne validacije (ključ = `fieldKey`). */
   readonly errors: readonly RenderFieldError[];
   readonly hasError: boolean;
@@ -284,6 +285,7 @@ export function buildRenderModel(options: BuildRenderModelOptions): RenderModel 
         value,
         options: staticOptions(field),
         optionsSourceKind: source?.kind ?? null,
+        optionsSource: source ?? null,
         errors: fieldErrors,
         hasError: fieldErrors.length > 0,
       });

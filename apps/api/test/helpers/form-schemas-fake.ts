@@ -122,6 +122,16 @@ export class FakeFormPrisma {
   readonly versions = new Map<string, FakeVersionRow>();
   readonly fieldKeys = new Map<string, FakeFieldKeyRow>();
   readonly taskTypes = new Map<string, FakeTaskTypeRow>();
+  readonly formOptionLists = new Map<string, Array<{ code: string | null; label: string; active: boolean; deletedAt: Date | null; sortOrder: number }>>();
+  readonly list = {
+    findUnique: async ({ where }: { where: { code: string }; select?: unknown }) => {
+      const items = (this.formOptionLists.get(where.code) ?? [])
+        .filter((item) => item.active && item.deletedAt === null)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label))
+        .map(({ code, label }) => ({ code, label }));
+      return this.formOptionLists.has(where.code) ? { items } : null;
+    },
+  };
   readonly migrationJobs = new Map<string, FakeMigrationJobRow>();
   readonly migrationItems = new Map<string, FakeMigrationItemRow>();
   /** Zapisi po modelu (`task`, `vehicle`, …) — migracija ih čita i mijenja. */

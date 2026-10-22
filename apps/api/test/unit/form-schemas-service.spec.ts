@@ -122,6 +122,23 @@ async function createWashForm(service: FormSchemasService) {
   ).data;
 }
 
+describe('FormSchemasService — LIST opcije', () => {
+  it('vraća samo aktivne stavke sortirane i s vrijednošću stabilnog koda', async () => {
+    const { prisma, service } = build();
+    prisma.formOptionLists.set('WORKSHOP', [
+      { code: 'Z', label: 'Zadnja', active: true, deletedAt: null, sortOrder: 20 },
+      { code: 'A', label: 'Prva', active: true, deletedAt: null, sortOrder: 10 },
+      { code: 'OFF', label: 'Neaktivna', active: false, deletedAt: null, sortOrder: 1 },
+      { code: null, label: 'Bez koda', active: true, deletedAt: null, sortOrder: 30 },
+    ]);
+    await expect(service.listFormOptions('WORKSHOP')).resolves.toEqual([
+      { value: 'A', label: 'Prva' },
+      { value: 'Z', label: 'Zadnja' },
+      { value: 'Bez koda', label: 'Bez koda' },
+    ]);
+  });
+});
+
 const VALID_VALUES = {
   washType: 'FULL',
   washDurationMin: 30,

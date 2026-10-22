@@ -46,6 +46,6 @@ Privatni **service-account JSON** je drugi fajl: nikad ga ne stavljati u `apps/m
 
 ## Planirani nastavak
 
-- U wizardu dodati `LIST`/`QUERY` i `REFERENCE` lookup polja.
+- Podržani su `LIST` šifarnici, `REFERENCE_VEHICLE`/`REFERENCE_DRIVER` i QUERY izvori `ACTIVE_VEHICLES`, `ACTIVE_DRIVERS` i `OPEN_TASK_TYPES` u dinamičkim formama za kreiranje i rad na zadatku. Preostali whitelist QUERY izvori i test na fizičkom uređaju su otvoreni.
 - Obavijesti, FCM token registracija i API slanje push poruka.
 - Expo/EAS Android development build i test na fizičkom uređaju.
