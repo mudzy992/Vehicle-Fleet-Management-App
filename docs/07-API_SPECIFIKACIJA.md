@@ -354,7 +354,7 @@ Detaljan implementirani ugovor je u §7.6.
 | Metoda | Put | P | Napomena |
 |---|---|---|---|
 | GET | `/tasks` | `task:view` / `task:view_all` | implementirano; filteri: `status`, `vehicleId`, `taskTypeId`, `assigneeUserId`, `createdById`, `dueFrom`, `dueTo`, `priority`, `mine`, `overdueOnly`, `q` |
-| POST | `/tasks` `Idem` | `task:create` | implementirano; snapshot efektivne objavljene TASK verzije + DB outbox `TASK_CREATED` |
+| POST | `/tasks` `Idem` | `task:create` | implementirano; snapshot efektivne objavljene TASK verzije + DB outbox `TASK_CREATED`; PHOTO/FILE UUID-evi iz `formData` se validiraju i vežu u istoj transakciji uz fazu `ON_CREATE` |
 | GET | `/tasks/:id` | `task:view` / `task:view_all` (+ scope) | implementirano; uključuje `assignments`, `events`, `attachmentIds`, `commentCount`, `formSchemaVersion` |
 | PATCH | `/tasks/:id` | `task:update` | implementirano; CAS `version`, vlastiti zadatak dok je `OPEN` ili puni opseg |
 | **POST** | **`/tasks/:id/claim`** `Idem` | `task:claim` | implementirano; **atomski** prelaz `OPEN → IN_PROGRESS`; `409 TASK_ALREADY_CLAIMED` s imenom i vremenom izvršioca kad akter smije vidjeti zadatak ili je bio kandidat |
@@ -533,6 +533,13 @@ Idempotency-Key: 7b1f…-uuid
 ```
 `201` → `{ "data": { "id": "…", "code": "Z-2026-000118", "status": "OPEN",
 "formSchemaVersionId": "…", "formSchemaVersion": 3, "assignments": […], "createdAt": "…" } }`
+
+PHOTO/FILE polja u `formData` primaju UUID nizove fajlova prethodno uploadovanih
+multipart pozivom `POST /attachments` (permisija `attachment:upload`). Upload ostaje
+nevezan uz aktera do kreiranja: unutar iste transakcije sa zadatkom server provjerava
+vlasništvo, MIME/veličinu i zahtjeve `ON_CREATE`, a zatim veže prihvaćene fajlove uz
+zadatak i njihovo polje forme sa fazom `ON_CREATE`. Neuspješno kreiranje ne ostavlja
+napola kreiran zadatak niti djelimično vezane priloge.
 
 ### 3.3 Preuzimanje (atomski)
 ```http
@@ -993,7 +1000,7 @@ Implementirani su:
 | Metoda i ruta | Permisija | Odgovor i audit |
 |---|---|---|
 | `GET /tasks` | `task:view` ili `task:view_all` | `{items,total,page,pageSize,totalPages}`; bez audita |
-| `POST /tasks` | `task:create` | `201 TaskDetail`; audit `CREATE`/`INFO` na `Task` |
+| `POST /tasks` | `task:create` | `201 TaskDetail`; audit `CREATE`/`INFO` na `Task`; prethodno uploadovani PHOTO/FILE prilozi se validiraju i transakcijski vežu u fazi `ON_CREATE` |
 | `GET /tasks/:id` | `task:view` ili `task:view_all` | `TaskDetail`; bez audita |
 | `PATCH /tasks/:id` | `task:update` | `TaskDetail`; audit `UPDATE`/`INFO` prije/poslije |
 | `POST /tasks/:id/cancel` | `task:cancel` | `TaskDetail`; audit `CANCEL`/`WARN`, DB outbox `TASK_CANCELLED` |

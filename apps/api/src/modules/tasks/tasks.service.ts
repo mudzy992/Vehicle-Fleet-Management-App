@@ -720,11 +720,20 @@ export class TasksService {
         await this.assertRecipients(tx, input, assignMode, actor.id);
 
         const form = await this.resolvePublishedTaskForm(tx, taskType.id, taskType.formSchemaId);
+        const taskId = randomUUID();
+        const attachmentPlan = await this.prepareCompletionAttachments(tx, {
+          taskId,
+          actorId: actor.id,
+          definition: form.definition,
+          values: input.formData,
+          attachmentIds: [],
+        });
         const formData = this.validateDraftFormData({
           form,
           values: input.formData,
           isNew: true,
           requirements: taskType.completionRequirements,
+          attachments: attachmentPlan.facts,
         });
 
         const title =
@@ -738,7 +747,6 @@ export class TasksService {
               ? null
               : new Date(input.dueAt);
         const code = await this.nextTaskCode(tx, now);
-        const taskId = randomUUID();
 
         await tx.task.create({
           data: {
@@ -762,6 +770,7 @@ export class TasksService {
           },
           select: { id: true },
         });
+        await this.bindCompletionAttachments(tx, taskId, actor.id, attachmentPlan, 'ON_CREATE');
 
         const assignments = [
           ...(assignMode === 'ASSIGN_DIRECT' && input.assigneeUserId
@@ -2576,6 +2585,7 @@ export class TasksService {
     taskId: string,
     actorId: string,
     plan: CompletionAttachmentPlan,
+    stage: 'ON_CREATE' | 'ON_COMPLETE' = 'ON_COMPLETE',
   ): Promise<readonly string[]> {
     const boundIds: string[] = [];
 
@@ -2606,7 +2616,7 @@ export class TasksService {
           ownerId: taskId,
           taskId,
           formFieldKey: nextFormFieldKey,
-          ...(pointsToTask ? {} : { stage: 'ON_COMPLETE' as const }),
+          ...(pointsToTask ? {} : { stage }),
         } as Prisma.AttachmentUncheckedUpdateManyInput,
       });
       if (changed.count !== 1) {
@@ -2626,6 +2636,7 @@ export class TasksService {
     isNew: boolean;
     requirements: readonly RequirementRow[];
     stages?: readonly string[];
+    attachments?: ReadonlyMap<string, AttachmentFacts>;
   }): Record<string, unknown> {
     const result = validateRecord({
       version: {
@@ -2637,6 +2648,7 @@ export class TasksService {
       values: args.values,
       isNew: args.isNew,
       today: toLocalDateString(new Date()),
+      attachments: args.attachments,
     });
 
     if (result.versionError) {

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
 import { TASK_ASSIGN_MODES, TASK_PRIORITIES, type TaskAssignMode } from '@vfm/shared';
 import type {
+  AttachmentUploadResult,
   FormSchemaSummary,
   FormVersionDetail,
   TaskDetail,
@@ -31,6 +32,7 @@ export function TaskCreatePage() {
   const queryClient = useQueryClient();
   const { hasPermission } = useSession();
   const canViewUsers = hasPermission('user:view');
+  const canUpload = hasPermission('attachment:upload');
   const [step, setStep] = useState(1);
   const [taskTypeId, setTaskTypeId] = useState('');
   const [vehicleId, setVehicleId] = useState('');
@@ -45,6 +47,8 @@ export function TaskCreatePage() {
   const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
   const today = useMemo(() => sarajevoToday(), []);
 
   const typesQuery = useQuery({
@@ -94,6 +98,38 @@ export function TaskCreatePage() {
       formSchemaVersionId: versionQuery.data.id,
     });
   }, [parsed, versionQuery.data, formData, today]);
+  const attachmentFields = parsed?.ok
+    ? parsed.definition.sections.flatMap((section) => section.fields.filter((field) => field.type === 'PHOTO' || field.type === 'FILE'))
+    : [];
+
+  const uploadFiles = async (fieldKey: string, files: FileList | null, maxFiles: number | undefined) => {
+    if (!files?.length) return;
+    if (!canUpload) {
+      setUploadError('Upload fotografija/priloga zahtijeva permisiju attachment:upload.');
+      return;
+    }
+    const current = Array.isArray(formData[fieldKey]) ? formData[fieldKey] as string[] : [];
+    if (maxFiles !== undefined && current.length + files.length > maxFiles) {
+      setUploadError(`Polje prima najviše ${maxFiles} fajlova.`);
+      return;
+    }
+    setUploadError(null);
+    setUploadingField(fieldKey);
+    try {
+      const uploadedIds = [...current];
+      for (const file of Array.from(files)) {
+        const body = new FormData();
+        body.append('file', file);
+        const uploaded = await api.upload<AttachmentUploadResult>('/attachments', body);
+        uploadedIds.push(uploaded.id);
+        setFormData((previous) => ({ ...previous, [fieldKey]: [...uploadedIds] }));
+      }
+    } catch (error) {
+      setUploadError(error instanceof ApiError ? error.message : 'Upload priloga nije uspio.');
+    } finally {
+      setUploadingField(null);
+    }
+  };
 
   const create = useMutation({
     mutationFn: () => {
@@ -252,7 +288,38 @@ export function TaskCreatePage() {
             {formsQuery.isPending || (effectiveForm && versionQuery.isPending) ? <p className="text-sm text-[var(--fg-muted)]">Učitavanje objavljene TASK forme…</p> : null}
             {formsQuery.error || versionQuery.error ? <p role="alert" className="text-sm text-[var(--danger)]">{(formsQuery.error ?? versionQuery.error) instanceof ApiError ? (formsQuery.error ?? versionQuery.error as ApiError).message : 'TASK forma nije dostupna.'}</p> : null}
             {!effectiveForm && !formsQuery.isPending && <p role="alert" className="text-sm text-[var(--danger)]">Vrsta nema efektivnu objavljenu TASK formu. Zadatak se ne može kreirati.</p>}
-            {model && versionQuery.data && <><p className="text-sm text-[var(--fg-muted)]">{effectiveForm?.name} · v{versionQuery.data.version}</p><FormFields model={model} errors={errors} idPrefix="task-create" onChange={(key, value) => setFormData((current) => ({ ...current, [key]: value }))} /></>}
+            {model && versionQuery.data && (
+              <>
+                <p className="text-sm text-[var(--fg-muted)]">{effectiveForm?.name} · v{versionQuery.data.version}</p>
+                <FormFields model={model} errors={errors} hiddenKeys={attachmentFields.map((field) => field.key)} idPrefix="task-create" onChange={(key, value) => setFormData((current) => ({ ...current, [key]: value }))} />
+                {attachmentFields.length > 0 && (
+                  <section className="space-y-3 rounded-md border border-[var(--border)] p-3">
+                    <h3 className="text-sm font-medium">Fotografije i prilozi za kreiranje</h3>
+                    {!canUpload && <p className="text-xs text-[var(--warning)]">Za upload je potrebna permisija attachment:upload.</p>}
+                    {attachmentFields.map((field) => {
+                      const ids = Array.isArray(formData[field.key]) ? formData[field.key] as string[] : [];
+                      const maxFiles = typeof field.validation?.maxFiles === 'number' ? field.validation.maxFiles : undefined;
+                      return (
+                        <Field key={field.key} label={`${field.label}${field.required ? ' *' : ''}`} htmlFor={`task-create-upload-${field.key}`} hint={field.helpText ?? undefined} error={errors[field.key] ?? null}>
+                          <input
+                            id={`task-create-upload-${field.key}`}
+                            className={inputClassName}
+                            type="file"
+                            accept={field.type === 'PHOTO' ? 'image/*' : undefined}
+                            multiple
+                            disabled={!canUpload || uploadingField !== null || create.isPending}
+                            onChange={(event) => { void uploadFiles(field.key, event.currentTarget.files, maxFiles); event.currentTarget.value = ''; }}
+                          />
+                          <p className="mt-1 text-xs text-[var(--fg-muted)]">Dodano fajlova: {ids.length}{uploadingField === field.key ? ' · Upload u toku…' : ''}</p>
+                        </Field>
+                      );
+                    })}
+                    {uploadError && <p role="alert" className="text-sm text-[var(--danger)]">{uploadError}</p>}
+                    <p className="text-xs text-[var(--fg-muted)]">Fajlovi će se u istoj transakciji vezati uz zadatak tek nakon serverske validacije.</p>
+                  </section>
+                )}
+              </>
+            )}
             <div className="rounded-md bg-[var(--surface-muted)] p-3 text-sm">
               <p><strong>{title.trim() || selectedType.name}</strong> · {PRIORITY_LABELS[priority]} · {assignMode === 'OPEN_CLAIM' ? 'Slobodno preuzimanje' : assignMode === 'ASSIGN_DIRECT' ? 'Direktna dodjela' : 'Broadcast'}</p>
               <p className="text-[var(--fg-muted)]">{vehicleItems.find((item) => item.id === vehicleId)?.internalNo ?? 'Bez vozila'} · {dueLocal ? new Date(dueLocal).toLocaleString('bs-BA') : 'Bez roka'}</p>
@@ -263,7 +330,7 @@ export function TaskCreatePage() {
 
       <div className="flex flex-wrap justify-between gap-2">
         <Button variant="ghost" disabled={step === 1 || create.isPending} onClick={() => { setMessage(null); setStep((current) => current - 1); }}>Nazad</Button>
-        {step < 3 ? <Button onClick={nextStep}>Nastavi</Button> : <Button loading={create.isPending} disabled={!effectiveForm || !model || formsQuery.isPending || versionQuery.isPending || Boolean(versionQuery.error)} onClick={() => { setMessage(null); setErrors({}); create.mutate(); }}>Kreiraj zadatak</Button>}
+        {step < 3 ? <Button onClick={nextStep}>Nastavi</Button> : <Button loading={create.isPending} disabled={!effectiveForm || !model || formsQuery.isPending || versionQuery.isPending || Boolean(versionQuery.error) || uploadingField !== null} onClick={() => { setMessage(null); setErrors({}); create.mutate(); }}>Kreiraj zadatak</Button>}
       </div>
     </main>
   );

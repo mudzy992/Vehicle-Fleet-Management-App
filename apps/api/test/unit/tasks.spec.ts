@@ -815,6 +815,27 @@ describe('TasksService — kreiranje i snapshot forme', () => {
     expect(missing.httpStatus).toBe(422);
     expect(fake.tasks.size).toBe(0);
 
+    const unknownAttachment = await errorOf(() =>
+      service.create(
+        parseCreate({ taskTypeId: customTypeId, formData: { washType: 'FULL', photosAfter: [photoId] } }),
+        actor(adminId),
+      ),
+    );
+    expect(unknownAttachment.code).toBe('FORM_VALIDATION_FAILED');
+    expect(fake.tasks.size).toBe(0);
+
+    fake.attachments.push({
+      id: photoId,
+      ownerType: 'OTHER',
+      ownerId: adminId,
+      stage: 'GENERAL',
+      mimeType: 'image/jpeg',
+      sizeBytes: 2048n,
+      uploadedById: adminId,
+      taskId: null,
+      formFieldKey: null,
+      deletedAt: null,
+    });
     const created = await service.create(
       parseCreate({
         taskTypeId: customTypeId,
@@ -825,6 +846,13 @@ describe('TasksService — kreiranje i snapshot forme', () => {
     expect(created.data.formSchemaId).toBe(boundFormId);
     expect(created.data.formSchemaVersionId).toBe(boundVersionId);
     expect(created.data.formSchemaVersion).toBe(1);
+    expect(fake.attachments[0]).toMatchObject({
+      ownerType: 'TASK',
+      ownerId: created.data.id,
+      taskId: created.data.id,
+      formFieldKey: 'photosAfter',
+      stage: 'ON_CREATE',
+    });
   });
 
   it('bez efektivne forme ne koristi generički fallback, a neaktivna vrsta i vozilo se odbijaju', async () => {
@@ -915,6 +943,18 @@ describe('TasksService — kreiranje i snapshot forme', () => {
 
   it('BROADCAST u outboxu označava dinamičke primaoce i vidljiv je korisniku s task:view', async () => {
     const { fake, service } = setup();
+    fake.attachments.push({
+      id: photoId,
+      ownerType: 'OTHER',
+      ownerId: adminId,
+      stage: 'GENERAL',
+      mimeType: 'image/jpeg',
+      sizeBytes: 2048n,
+      uploadedById: adminId,
+      taskId: null,
+      formFieldKey: null,
+      deletedAt: null,
+    });
     const created = await service.create(
       parseCreate({
         taskTypeId: customTypeId,
