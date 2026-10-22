@@ -258,6 +258,7 @@ export const mobileApi = {
   taskTypes: () => request<{ items: MobileTaskType[]; page: number; pageSize: number; total: number; totalPages: number }>('/task-types?activeOnly=true&page=1&pageSize=100'),
   activeTaskForm: (taskTypeId: string) => request<ActiveTaskForm>(`/form-schemas/active?subject=TASK&taskTypeId=${encodeURIComponent(taskTypeId)}`),
   formOptions: (listCode: string) => request<Array<{ value: string; label: string }>>(`/form-schemas/options?listCode=${encodeURIComponent(listCode)}`),
+  tireSets: () => request<{ items: Array<{ id: string; code: string; brand: string | null; model: string | null; size: string | null; mountedVehicleId: string | null }> }>('/tire-sets?page=1&pageSize=100'),
   users: () => request<{ items: UserSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/users?status=ACTIVE&page=1&pageSize=100'),
   createTask: (input: { taskTypeId: string; vehicleId: string | null; title?: string; description?: string | null; priority?: string; assignMode: 'OPEN_CLAIM' | 'ASSIGN_DIRECT' | 'BROADCAST'; assigneeUserId?: string; invitedUserIds?: string[]; observerUserIds?: string[]; dueAt?: string | null; formData: Record<string, unknown> }) =>
     request<TaskDetail>('/tasks', { method: 'POST', body: JSON.stringify(input) }),
