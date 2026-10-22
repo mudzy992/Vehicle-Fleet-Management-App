@@ -758,8 +758,8 @@ i ne pokreće nijedan upit. Ostali ekrani su placeholderi s oznakom faze.
 | M2 | Zadaci — moji i slobodni | 6 | `task:view`, `task:claim` | ✅ `apps/mobile/app/(tabs)/tasks.tsx`, segmenti filtrirani po permisijama, online-only i pull-to-refresh |
 | M3 | Zadatak — detalj | 6 | `task:view` | ✅ `apps/mobile/app/task/[id].tsx`, metapodaci i snapshot verzije |
 | M4 | Preuzimanje | 6 | `task:claim` | ✅ `ON_CLAIM` polja, multipart upload fotografije/priloga, server greške i konflikta |
-| M5 | Završetak — dinamička forma + kamera | 6 | `task:complete` | ✅ zajednički `@vfm/form-renderer`, kamera/galerija, kompresija i upload; ✅ REFERENCE vozilo/vozač i QUERY ACTIVE_VEHICLES/ACTIVE_DRIVERS na detalju; ⏳ LIST i ostali whitelist QUERY izvori, povezivanje lookup-a u wizardu i test na uređaju |
-| M6 | Novi zadatak (wizard, 3 koraka) | 6 | `task:create` | ✅ vrsta/vozilo, detalji, snapshot forme, OPEN_CLAIM/BROADCAST/direktna dodjela, pozvani i posmatrači; ⏳ LIST/QUERY/REFERENCE izbori |
+| M5 | Završetak — dinamička forma + kamera | 6 | `task:complete` | ✅ zajednički `@vfm/form-renderer`, kamera/galerija, kompresija i upload; ✅ REFERENCE vozilo/vozač, LIST šifarnici i QUERY ACTIVE_VEHICLES/ACTIVE_DRIVERS/OPEN_TASK_TYPES u kreiranju i detalju; ⏳ preostali whitelist QUERY izvori i test na uređaju |
+| M6 | Novi zadatak (wizard, 3 koraka) | 6 | `task:create` | ✅ vrsta/vozilo, detalji, snapshot forme, OPEN_CLAIM/BROADCAST/direktna dodjela, pozvani i posmatrači; ✅ LIST, REFERENCE vozilo/vozač i QUERY ACTIVE_VEHICLES/ACTIVE_DRIVERS/OPEN_TASK_TYPES; ⏳ ostali whitelist QUERY izvori i test na uređaju |
 | M7 | Vozila — lista | 6 | `vehicle:view` | ✅ `apps/mobile/app/(tabs)/vehicles.tsx`, online lista, pull-to-refresh i statusni pregled |
 | M8 | Vozilo — profil (read-only) | 6 | `vehicle:view` | ✅ `apps/mobile/app/vehicle/[id].tsx`, osnovni podaci, VIN i rokovi |
 | M9 | Obavijesti — lista + read | 6 | `notification:view` | ⏳ API ruta nije implementirana |

@@ -276,6 +276,39 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
   lookupOptions?: Array<{ value: string; label: string }>;
   lookupLoading?: boolean;
 }) {
+  const [loadedOptions, setLoadedOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [loadingOptions, setLoadingOptions] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const source = field.optionsSource;
+      const isVehicle = field.type === 'REFERENCE_VEHICLE' || (source?.kind === 'QUERY' && source.queryId === 'ACTIVE_VEHICLES');
+      const isDriver = field.type === 'REFERENCE_DRIVER' || (source?.kind === 'QUERY' && source.queryId === 'ACTIVE_DRIVERS');
+      const isTaskType = source?.kind === 'QUERY' && source.queryId === 'OPEN_TASK_TYPES';
+      const isList = source?.kind === 'LIST';
+      if (!isVehicle && !isDriver && !isTaskType && !isList) { setLoadedOptions([]); return; }
+      setLoadingOptions(true);
+      try {
+        let resolved: Array<{ value: string; label: string }> = [];
+        if (isVehicle) {
+          const result = await mobileApi.vehicles();
+          resolved = result.items.filter((item) => item.status === 'ACTIVE').map((item) => ({ value: item.id, label: `${item.internalNo} · ${item.make} ${item.model}` }));
+        } else if (isDriver) {
+          const result = await mobileApi.drivers();
+          resolved = result.items.filter((item) => item.status === 'ACTIVE').map((item) => ({ value: item.id, label: item.displayName || `${item.firstName} ${item.lastName}` }));
+        } else if (isTaskType) {
+          const result = await mobileApi.taskTypes();
+          resolved = result.items.map((item) => ({ value: item.id, label: item.name }));
+        } else if (source?.kind === 'LIST') {
+          resolved = await mobileApi.formOptions(source.listCode);
+        }
+        if (active) setLoadedOptions(resolved);
+      } catch { if (active) setLoadedOptions([]); }
+      finally { if (active) setLoadingOptions(false); }
+    };
+    void load();
+    return () => { active = false; };
+  }, [field.key, field.type, field.optionsSource]);
   if (field.widget === 'OUTPUT' || field.readOnly) {
     return <View style={styles.field}><Text style={styles.label}>{field.label}</Text><Text style={styles.output}>{field.value === null ? '—' : String(field.value)}</Text></View>;
   }
@@ -283,7 +316,7 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
   const valueText = fieldText({ ...field, value });
   const options = field.options ?? [];
   const reference = field.widget === 'REFERENCE';
-  const renderedOptions = reference ? lookupOptions : options;
+  const renderedOptions = reference ? (lookupOptions.length ? lookupOptions : loadedOptions) : options.length ? options : loadedOptions;
   const multiple = field.widget === 'MULTI_SELECT';
   const selected = multiple ? stringArray(value) : [];
   return (
@@ -296,7 +329,7 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
         renderedOptions.length ? <View style={styles.options}>{renderedOptions.map((option) => {
           const active = multiple ? selected.includes(option.value) : value === option.value;
           return <Pressable key={option.value} onPress={() => onChange(multiple ? (active ? selected.filter((item) => item !== option.value) : [...selected, option.value]) : active ? undefined : option.value)} disabled={disabled || ('disabled' in option && option.disabled === true)} style={[styles.option, active && styles.optionActive]}><Text style={[styles.optionText, active && styles.optionTextActive]}>{option.label}</Text></Pressable>;
-        })}</View> : <Text style={styles.help}>{lookupLoading ? 'Učitavanje izbora…' : reference ? 'Nema dostupnih zapisa ili nedostaje dozvola za pregled.' : 'Ovaj izvor liste još nije podržan u mobilnom obrascu.'}</Text>
+        })}</View> : <Text style={styles.help}>{(lookupLoading || loadingOptions) ? 'Učitavanje izbora…' : reference ? field.type === 'REFERENCE_RECORD' ? 'Ova vrsta povezane reference još nije podržana u mobilnom obrascu.' : 'Nema dostupnih zapisa ili nedostaje dozvola za pregled.' : field.optionsSourceKind === 'LIST' ? 'Šifarnik je prazan ili nije dostupan.' : 'Ovaj QUERY izvor još nije podržan u mobilnom obrascu.'}</Text>
       ) : field.widget === 'PHOTO' || field.widget === 'FILE' ? (
         <View style={styles.uploadBox}>
           <Text style={styles.help}>Dodano fajlova: {stringArray(value).length}{uploading ? ' · Upload u toku…' : ''}</Text>

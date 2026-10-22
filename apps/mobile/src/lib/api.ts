@@ -257,6 +257,7 @@ export const mobileApi = {
   myTasks: () => request<{ items: TaskSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/tasks?mine=true&page=1&pageSize=50&sortBy=updatedAt&sortOrder=desc'),
   taskTypes: () => request<{ items: MobileTaskType[]; page: number; pageSize: number; total: number; totalPages: number }>('/task-types?activeOnly=true&page=1&pageSize=100'),
   activeTaskForm: (taskTypeId: string) => request<ActiveTaskForm>(`/form-schemas/active?subject=TASK&taskTypeId=${encodeURIComponent(taskTypeId)}`),
+  formOptions: (listCode: string) => request<Array<{ value: string; label: string }>>(`/form-schemas/options?listCode=${encodeURIComponent(listCode)}`),
   users: () => request<{ items: UserSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/users?status=ACTIVE&page=1&pageSize=100'),
   createTask: (input: { taskTypeId: string; vehicleId: string | null; title?: string; description?: string | null; priority?: string; assignMode: 'OPEN_CLAIM' | 'ASSIGN_DIRECT' | 'BROADCAST'; assigneeUserId?: string; invitedUserIds?: string[]; observerUserIds?: string[]; dueAt?: string | null; formData: Record<string, unknown> }) =>
     request<TaskDetail>('/tasks', { method: 'POST', body: JSON.stringify(input) }),

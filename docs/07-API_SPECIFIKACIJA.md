@@ -308,6 +308,7 @@ Detalji engine-a: `04-FORM_ENGINE.md` §8–§12. Sve rute traže `form:*` permi
 |---|---|---|---|
 | GET | `/form-schemas?subject=&status=&q=` | `form:view` | lista; `status` filtrira po stanju **verzije** |
 | GET | `/form-schemas/active?subject=&taskTypeId=` | `form:view` | aktivna objavljena verzija; `ETag` = `"<contentHash>"` |
+| GET | `/form-schemas/options?listCode=` | `form:view` | aktivne stavke šifarnika u sortiranom redoslijedu za `LIST` polja |
 | POST | `/form-schemas` | `form:create` | kreira formu + **prvu `DRAFT`** verziju; audit `CREATE` |
 | GET | `/form-schemas/:id` | `form:view` | detalji + sve verzije (`recordCount` po verziji) |
 | PATCH | `/form-schemas/:id` | `form:update` | naziv, opis, `taskTypeId`, `ownerModule`; audit `UPDATE` |

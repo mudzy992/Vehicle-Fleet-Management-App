@@ -114,6 +114,15 @@ export class FormSchemasService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Aktivne opcije šifarnika za dinamičke forme; pristup je zaštićen `form:view`. */
+  async listFormOptions(listCode: string): Promise<Array<{ value: string; label: string }>> {
+    const list = await this.prisma.list.findUnique({
+      where: { code: listCode },
+      select: { items: { where: { active: true, deletedAt: null }, orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }], select: { code: true, label: true } } },
+    });
+    return (list?.items ?? []).map((item) => ({ value: item.code ?? item.label, label: item.label }));
+  }
+
   // ---------------------------------------------------------------------------
   //  Čitanje
   // ---------------------------------------------------------------------------

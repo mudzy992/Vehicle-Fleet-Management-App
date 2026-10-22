@@ -42,6 +42,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { z } from 'zod';
 import type {
   ActiveFormSchema,
   ActiveFormSchemaQuery,
@@ -97,6 +98,13 @@ export class FormSchemasController {
     @Query(new ZodValidationPipe(formSchemaListQuerySchema, 'query')) query: FormSchemaListQuery,
   ): Promise<FormSchemaSummary[]> {
     return this.forms.list(query);
+  }
+
+  /** Aktivne stavke šifarnika koje se koriste kao LIST opcije u dinamičkim formama. */
+  @Get('options')
+  @RequirePermissions('form:view')
+  listOptions(@Query('listCode', new ZodValidationPipe(z.string().regex(/^[A-Z][A-Z0-9_]{1,30}$/u), 'query')) listCode: string) {
+    return this.forms.listFormOptions(listCode);
   }
 
   /** Aktivna verzija za subject/tip zadatka (renderer i mobilna keširaju po ETag-u). */
