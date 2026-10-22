@@ -1,6 +1,6 @@
 # Mobilna aplikacija (Expo / Android)
 
-**Faza 6 je u toku.** Implementirano je: prijava za `MOBILE_ANDROID`, obavezna promjena privremene lozinke, refresh token u SecureStore, Moji/Slobodni zadaci i detalj, trokorakni wizard za kreiranje, dinamičke forme sa LIST/QUERY i podržanim REFERENCE lookup-ima, upload priloga, vozila (lista/profil), profil i odjava. Preostaju: postavke obavijesti, sesije, REFERENCE_RECORD za `VEHICLE_HANDOVER`/`OTHER`, uređajski UAT i EAS distribucija. In-app lista i pojedinačno označavanje pročitane su implementirani; FCM nije aktivan.
+**Faza 6 je u toku.** Implementirano je: prijava za `MOBILE_ANDROID`, obavezna i ručna promjena lozinke, refresh token u SecureStore, Moji/Slobodni zadaci i detalj, trokorakni wizard za kreiranje, dinamičke forme sa LIST/QUERY i podržanim REFERENCE lookup-ima, upload priloga, vozila (lista/profil), profil, odjava i permission-gated upravljanje aktivnim sesijama. API greške imaju ujednačene poruke; neuspjelo osvježavanje sesije vraća korisnika na prijavu. Preostaju postavke obavijesti, `REFERENCE_RECORD` za `VEHICLE_HANDOVER`/`OTHER`, uređajski UAT i EAS distribucija. In-app lista, unread count i označavanje pročitane su implementirani; FCM nije aktivan.
 
 ## Pokretanje i provjera
 
