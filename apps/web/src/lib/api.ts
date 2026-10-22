@@ -103,7 +103,9 @@ async function request<T>(path: string, init?: RequestInit, allowRetry = true): 
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'X-Client-Type': CLIENT_TYPE,
-    ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(init?.body && !(typeof FormData !== 'undefined' && init.body instanceof FormData)
+      ? { 'Content-Type': 'application/json' }
+      : {}),
   };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   for (const [key, value] of Object.entries((init?.headers ?? {}) as Record<string, string>)) {
@@ -144,6 +146,7 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) }),
+  upload: <T>(path: string, formData: FormData) => request<T>(path, { method: 'POST', body: formData }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PUT', body: body === undefined ? undefined : JSON.stringify(body) }),
   patch: <T>(path: string, body?: unknown) =>

@@ -103,6 +103,20 @@ describe('api klijent', () => {
     await expect(refreshAccessToken()).resolves.toBe(false);
   });
 
+  it('multipart upload ne postavlja ručno Content-Type zaglavlje', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ data: { id: 'attachment-1' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const formData = new FormData();
+    formData.append('file', new File(['sadržaj'], 'slika.jpg', { type: 'image/jpeg' }));
+
+    await api.upload('/attachments', formData);
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers['Content-Type']).toBeUndefined();
+    expect(init.body).toBe(formData);
+  });
+
   it('204 odgovor vraća undefined bez JSON parse greške', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
 

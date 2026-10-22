@@ -1,21 +1,26 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { FormVersionDetail, TaskDetail } from '@vfm/shared/schemas';
+import type { AttachmentUploadResult, FormVersionDetail, TaskDetail } from '@vfm/shared/schemas';
 import { parseDefinition } from '@vfm/form-engine';
 import type { RenderModel } from '@vfm/form-renderer';
 import { buildRenderModel } from '@vfm/form-renderer';
 import { Button, Card, CardContent, CardHeader, Field, inputClassName } from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
 import { FormFields } from '../forms/form-fields.js';
+import { useSession } from '../auth/session.js';
 import { sarajevoToday } from '../forms/forms-preview-values.js';
 
 export function TaskCompletionForm({ task }: { task: TaskDetail }) {
   const queryClient = useQueryClient();
+  const { hasPermission } = useSession();
+  const canUpload = hasPermission('attachment:upload');
   const [values, setValues] = useState<Record<string, unknown>>(task.formData);
   const [comment, setComment] = useState('');
   const [odometerKm, setOdometerKm] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const today = useMemo(() => sarajevoToday(), []);
   const versionQuery = useQuery({
     queryKey: ['form-version', task.formSchemaId, task.formSchemaVersionId],
@@ -35,6 +40,39 @@ export function TaskCompletionForm({ task }: { task: TaskDetail }) {
       formSchemaVersionId: task.formSchemaVersionId,
     });
   }, [parsed, versionQuery.data, values, today, task.formSchemaVersionId]);
+
+  const attachmentFields = parsed?.ok
+    ? parsed.definition.sections.flatMap((section) => section.fields.filter((field) => field.type === 'PHOTO' || field.type === 'FILE'))
+    : [];
+
+  const uploadFiles = async (fieldKey: string, files: FileList | null, maxFiles: number | undefined) => {
+    if (!files?.length) return;
+    if (!canUpload) {
+      setUploadError('Fotografije i prilozi traže permisiju attachment:upload.');
+      return;
+    }
+    const current = Array.isArray(values[fieldKey]) ? values[fieldKey] as string[] : [];
+    if (maxFiles !== undefined && current.length + files.length > maxFiles) {
+      setUploadError(`Polje prima najviše ${maxFiles} fajlova.`);
+      return;
+    }
+    setUploadError(null);
+    setUploadingField(fieldKey);
+    try {
+      const uploadedIds = [...current];
+      for (const file of Array.from(files)) {
+        const body = new FormData();
+        body.append('file', file);
+        const uploaded = await api.upload<AttachmentUploadResult>('/attachments', body);
+        uploadedIds.push(uploaded.id);
+        setValues((existing) => ({ ...existing, [fieldKey]: [...uploadedIds] }));
+      }
+    } catch (error) {
+      setUploadError(error instanceof ApiError ? error.message : 'Upload priloga nije uspio.');
+    } finally {
+      setUploadingField(null);
+    }
+  };
 
   const complete = useMutation({
     mutationFn: () => api.post<TaskDetail>(`/tasks/${task.id}/complete`, {
@@ -74,7 +112,32 @@ export function TaskCompletionForm({ task }: { task: TaskDetail }) {
       <CardHeader title="Završetak zadatka" description={`Obavezna polja se provjeravaju prema snapshotu forme v${versionQuery.data.version}.`} />
       <CardContent>
         <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); setMessage(null); complete.mutate(); }}>
-          <FormFields model={model} errors={errors} idPrefix="task-complete" onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} />
+          <FormFields model={model} errors={errors} hiddenKeys={attachmentFields.map((field) => field.key)} idPrefix="task-complete" onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} />
+          {attachmentFields.length > 0 && (
+            <section className="space-y-3 rounded-md border border-[var(--border)] p-3">
+              <h3 className="text-sm font-medium">Fotografije i prilozi</h3>
+              {!canUpload && <p className="text-xs text-[var(--warning)]">Za upload je potrebna permisija attachment:upload.</p>}
+              {attachmentFields.map((field) => {
+                const ids = Array.isArray(values[field.key]) ? values[field.key] as string[] : [];
+                const maxFiles = typeof field.validation?.maxFiles === 'number' ? field.validation.maxFiles : undefined;
+                return (
+                  <Field key={field.key} label={`${field.label}${field.required ? ' *' : ''}`} htmlFor={`task-complete-upload-${field.key}`} hint={field.helpText ?? undefined} error={errors[field.key] ?? null}>
+                    <input
+                      id={`task-complete-upload-${field.key}`}
+                      className={inputClassName}
+                      type="file"
+                      accept={field.type === 'PHOTO' ? 'image/*' : undefined}
+                      multiple
+                      disabled={!canUpload || uploadingField !== null || complete.isPending}
+                      onChange={(event) => { void uploadFiles(field.key, event.currentTarget.files, maxFiles); event.currentTarget.value = ''; }}
+                    />
+                    <p className="mt-1 text-xs text-[var(--fg-muted)]">Dodano fajlova: {ids.length}{uploadingField === field.key ? ' · Upload u toku…' : ''}</p>
+                  </Field>
+                );
+              })}
+              {uploadError && <p role="alert" className="text-sm text-[var(--danger)]">{uploadError}</p>}
+            </section>
+          )}
           <Field label="Kilometraža (km), ako je primjenjivo" htmlFor="task-complete-odometer">
             <input id="task-complete-odometer" className={inputClassName} inputMode="numeric" value={odometerKm} onChange={(event) => setOdometerKm(event.target.value.replace(/[^0-9]/gu, ''))} />
           </Field>
