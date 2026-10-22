@@ -10,9 +10,12 @@
  * `make`, `model`, `fuelType`…) **nije** dio dinamičke forme (docs/04 §7), pa se
  * unosi kroz statične kontrole i šalje kao strukturirani dio API-ja.
  */
+import { useQueries } from '@tanstack/react-query';
 import type { FormDefinition } from '@vfm/form-engine';
 import type { RenderField, RenderModel } from '@vfm/form-renderer';
 import { formatFieldValue } from '@vfm/form-renderer';
+import type { RenderOption } from '@vfm/form-renderer';
+import { api } from '../../lib/api.js';
 import { Badge, Field, inputClassName } from '../../components/ui/index.js';
 import { inputValue, moneyInputValue, parseInputValue, toggleMulti } from './forms-preview-values.js';
 
@@ -138,6 +141,32 @@ export function FormFields({
     .filter((section) => section.visible)
     .map((section) => ({ ...section, fields: section.fields.filter((field) => !hidden.has(field.key)) }))
     .filter((section) => section.fields.length > 0);
+  const dynamicFields = sections.flatMap((section) =>
+    section.fields.flatMap((field) => {
+      const source = field.optionsSource;
+      const listCode =
+        source?.kind === 'LIST'
+          ? source.listCode
+          : source?.kind === 'QUERY' && source.queryId === 'WORKSHOPS'
+            ? 'WORKSHOP'
+            : null;
+      return listCode ? [{ key: field.key, listCode }] : [];
+    }),
+  );
+  const optionQueries = useQueries({
+    queries: dynamicFields.map(({ listCode }) => ({
+      queryKey: ['form-options', listCode],
+      queryFn: () =>
+        api.get<RenderOption[]>(`/form-schemas/options?listCode=${encodeURIComponent(listCode)}`),
+      staleTime: 60_000,
+    })),
+  });
+  const dynamicOptions = new Map(
+    dynamicFields.flatMap(({ key }, index) => {
+      const options = optionQueries[index]?.data;
+      return options ? [[key, options] as const] : [];
+    }),
+  );
 
   return (
     <>
@@ -158,7 +187,11 @@ export function FormFields({
               hint={field.helpText ?? undefined}
               error={field.errors[0]?.message ?? errors[field.key] ?? null}
             >
-              {renderControl(field, `${idPrefix}-${field.key}`, (value) => onChange(field.key, value))}
+              {renderControl(
+                dynamicOptions.has(field.key) ? { ...field, options: dynamicOptions.get(field.key)! } : field,
+                `${idPrefix}-${field.key}`,
+                (value) => onChange(field.key, value),
+              )}
             </Field>
           ))}
         </section>

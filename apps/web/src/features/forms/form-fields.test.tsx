@@ -6,8 +6,11 @@
  * uz tačno polje (bez nje korisnik ne zna šta popraviti).
  */
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render as renderTestingLibrary, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import type { RenderModel } from '@vfm/form-renderer';
+import { api } from '../../lib/api.js';
 import { CoreFields, FormFields } from './form-fields.js';
 
 function model(overrides: Partial<RenderModel> = {}): RenderModel {
@@ -67,6 +70,13 @@ function model(overrides: Partial<RenderModel> = {}): RenderModel {
   } as unknown as RenderModel;
 }
 
+function render(ui: ReactNode) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return renderTestingLibrary(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
 describe('FormFields', () => {
   it('prikazuje samo vidljive sekcije', () => {
     render(<FormFields model={model()} onChange={() => undefined} />);
@@ -82,7 +92,8 @@ describe('FormFields', () => {
     expect(screen.getByLabelText(/Kilometraža/u)).toBeTruthy();
   });
 
-  it('jasno označava dinamičke opcije koje ekran još nije učitao', () => {
+  it('učitava LIST opcije preko dozvoljene API rute i prikazuje ih kao izbor', async () => {
+    const request = vi.spyOn(api, 'get').mockResolvedValue([{ value: 'GARAGE_A', label: 'Radionica A' }]);
     const base = model();
     const section = base.sections[0]!;
     const field = {
@@ -90,6 +101,28 @@ describe('FormFields', () => {
       widget: 'SELECT' as const,
       optionsSourceKind: 'LIST' as const,
       optionsSource: { kind: 'LIST' as const, listCode: 'WORKSHOP' },
+      options: null,
+    };
+    const dynamicModel = {
+      ...base,
+      sections: [{ ...section, fields: [field] }, ...base.sections.slice(1)],
+    } as unknown as RenderModel;
+
+    render(<FormFields model={dynamicModel} onChange={() => undefined} />);
+
+    expect(await screen.findByRole('option', { name: 'Radionica A' })).toBeTruthy();
+    expect(request).toHaveBeenCalledWith('/form-schemas/options?listCode=WORKSHOP');
+    vi.restoreAllMocks();
+  });
+
+  it('jasno označava neimplementirani QUERY izvor', () => {
+    const base = model();
+    const section = base.sections[0]!;
+    const field = {
+      ...section.fields[0]!,
+      widget: 'SELECT' as const,
+      optionsSourceKind: 'QUERY' as const,
+      optionsSource: { kind: 'QUERY' as const, queryId: 'ACTIVE_VEHICLES' as const },
       options: null,
     };
     const dynamicModel = {
