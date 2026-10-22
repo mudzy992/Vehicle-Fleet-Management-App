@@ -5,12 +5,32 @@ import { replaceServiceItemsSchema, type ServiceItemInput } from '@vfm/shared/sc
 import { ServiceItemsService, serviceItemTotals } from '../../src/modules/services/service-items.service.js';
 import { ServiceItemsController } from '../../src/modules/services/service-items.controller.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
+import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import { SEED_FORMS } from '../../src/tools/seed-forms.js';
 const item: ServiceItemInput = { kind: 'PART', name: 'Filter', quantityHundredths: 150, unitPrice: 101 };
 const id = '11111111-1111-4111-8111-111111111111';
+function serviceActor(
+  scope: 'OWN' | 'ALL',
+  id = 'owner-1',
+  permission: 'service:update' | 'service:view' = 'service:update',
+): AuthenticatedUser {
+  return {
+    id,
+    isSuperAdmin: false,
+    permissions: {
+      isSuperAdmin: false,
+      list: [permission],
+      permissions: new Map([[permission, scope]]),
+      grants: [{ permission, scope }],
+    },
+  } as unknown as AuthenticatedUser;
+}
+
 function setup() {
   const record = {
     id,
+    vehicleId: id,
+    createdById: 'owner-1',
     version: 4,
     totalCost: 5000,
     formSchemaVersionId: id,
@@ -29,16 +49,14 @@ function setup() {
       createMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     formSchemaVersion: {
-      findUnique: vi
-        .fn()
-        .mockResolvedValue({
-          id,
-          formSchemaId: id,
-          version: 1,
-          status: 'RETIRED',
-          formSchema: { subject: 'SERVICE' },
-          definition: SEED_FORMS.find((form) => form.subject === 'SERVICE')!.definition,
-        }),
+      findUnique: vi.fn().mockResolvedValue({
+        id,
+        formSchemaId: id,
+        version: 1,
+        status: 'RETIRED',
+        formSchema: { subject: 'SERVICE' },
+        definition: SEED_FORMS.find((form) => form.subject === 'SERVICE')!.definition,
+      }),
     },
     formSchema: { findFirst: vi.fn() },
   };
@@ -93,6 +111,21 @@ describe('Servisne stavke', () => {
     });
     expect(result.before.totalCost).toBe(5000);
     expect(result.data).toEqual({ id, version: 4, totalCost: 152 });
+  });
+  it('service:update OWN blokira zamjenu stavki tuđeg servisa prije CAS-a', async () => {
+    const { svc, tx } = setup();
+    await expect(
+      svc.replace(id, { version: 3, items: [item] }, serviceActor('OWN', 'other-user')),
+    ).rejects.toMatchObject({
+      code: 'SCOPE_DENIED',
+    });
+    expect(tx.serviceRecord.updateMany).not.toHaveBeenCalled();
+  });
+  it('service:view OWN blokira čitanje stavki tuđeg servisa', async () => {
+    const { svc } = setup();
+    await expect(svc.get(id, serviceActor('OWN', 'other-user', 'service:view'))).rejects.toMatchObject({
+      code: 'SCOPE_DENIED',
+    });
   });
   it('zastarjela verzija ne briše stavke', async () => {
     const { svc, tx } = setup();

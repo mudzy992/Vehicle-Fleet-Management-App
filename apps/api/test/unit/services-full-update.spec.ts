@@ -296,7 +296,7 @@ describe('Potpuna izmjena servisa', () => {
 
     await controller.update(serviceId, input, { id: actorId } as AuthenticatedUser, request);
 
-    expect(update).toHaveBeenCalledWith(serviceId, input, actorId);
+    expect(update).toHaveBeenCalledWith(serviceId, input, actorId, { id: actorId });
     expect(AuditContext.from(request).meta).toMatchObject({ vehicleBefore, vehicleAfter });
   });
 });

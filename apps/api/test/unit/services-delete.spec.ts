@@ -223,7 +223,7 @@ describe('DELETE servisa', () => {
     await expect(
       controller.remove(serviceId, { id: actorId } as AuthenticatedUser, request),
     ).resolves.toBeUndefined();
-    expect(remove).toHaveBeenCalledWith(serviceId, actorId);
+    expect(remove).toHaveBeenCalledWith(serviceId, actorId, { id: actorId });
     expect(AuditContext.from(request).meta).toMatchObject({ vehicleId, vehicleBefore, vehicleAfter });
     expect(
       Reflect.getMetadata('vfm:requiredPermissions', ServicesController.prototype.remove).permissions,

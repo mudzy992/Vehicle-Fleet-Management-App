@@ -4,7 +4,9 @@ import { Injectable } from '@nestjs/common';
 import type { ReplaceServiceItemsInput, ServiceItemInput, ServiceItemsResponse } from '@vfm/shared/schemas';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { Prisma } from '../../generated/prisma/client.js';
-import { VfmException } from '../../common/errors/vfm-error.js';
+import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
+import type { Permission } from '@vfm/shared';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user.js';
 import { resolveFormVersion, validateRecordValues } from '../../common/form-record-support.js';
 
 /** Zaokruživanje svake stavke na fening; proizvod ostaje unutar sigurnog integera. */
@@ -22,12 +24,13 @@ export function serviceItemTotals(items: readonly ServiceItemInput[]) {
 export class ServiceItemsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async get(id: string): Promise<ServiceItemsResponse> {
+  async get(id: string, actor?: AuthenticatedUser): Promise<ServiceItemsResponse> {
     const row = await this.prisma.serviceRecord.findFirst({
       where: { id, deletedAt: null },
       include: { items: { orderBy: [{ position: 'asc' }, { id: 'asc' }] } },
     });
     if (!row) throw new VfmException('NOT_FOUND', 'Servisna evidencija nije pronađena.');
+    if (actor) this.assertScope(actor, 'service:view', row);
     return {
       version: row.version,
       totalCost: row.totalCost,
@@ -44,9 +47,17 @@ export class ServiceItemsService {
     };
   }
 
-  async replace(id: string, input: ReplaceServiceItemsInput) {
+  async replace(id: string, input: ReplaceServiceItemsInput, actor?: AuthenticatedUser) {
     const amounts = serviceItemTotals(input.items);
     return this.prisma.$transaction(async (tx) => {
+      if (actor) {
+        const record = await tx.serviceRecord.findFirst({
+          where: { id, deletedAt: null },
+          select: { id: true, vehicleId: true, createdById: true },
+        });
+        if (!record) throw new VfmException('NOT_FOUND', 'Servisna evidencija nije pronađena.');
+        this.assertScope(actor, 'service:update', record);
+      }
       // Atomski CAS uzima zaključavanje reda; neuspjeh/izuzetak vraća i verziju.
       const claimed = await tx.serviceRecord.updateMany({
         where: {
@@ -139,5 +150,28 @@ export class ServiceItemsService {
         after: { version: input.version + 1, totalCost: amounts.totalCost, items: input.items },
       };
     });
+  }
+
+  private assertScope(
+    actor: AuthenticatedUser,
+    permission: Permission,
+    row: { id: string; vehicleId: string; createdById: string | null },
+  ): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return;
+    if (scope === 'OWN' && row.createdById === actor.id) return;
+    if (scope === 'VEHICLE_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      if (ids?.includes(row.vehicleId)) return;
+    }
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Nemate pristup ovom zapisu u okviru dodijeljenog opsega.',
+        code: 'scope_denied',
+      },
+    ]);
   }
 }

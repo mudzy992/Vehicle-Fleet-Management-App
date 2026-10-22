@@ -11,10 +11,12 @@ import { toDatabaseDate } from '../../common/dates.js';
 /** Pregled servisa: bez izmjene historije i bez pristupa obrisanim zapisima. */
 import { Injectable } from '@nestjs/common';
 import { toLocalDateString } from '@vfm/shared';
+import type { Permission } from '@vfm/shared';
 import type { ServiceListQuery } from '@vfm/shared/schemas';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { VfmException } from '../../common/errors/vfm-error.js';
+import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user.js';
 
 const SERVICE_SELECT = {
   id: true,
@@ -32,12 +34,14 @@ const SERVICE_SELECT = {
   formSchemaId: true,
   formSchemaVersionId: true,
   version: true,
+  createdById: true,
 } as const satisfies Prisma.ServiceRecordSelect;
 
 type Row = Prisma.ServiceRecordGetPayload<{ select: typeof SERVICE_SELECT }>;
 function serialize(row: Row) {
+  const { createdById: _createdById, ...visible } = row;
   return {
-    ...row,
+    ...visible,
     serviceDate: toLocalDateString(row.serviceDate),
     nextServiceDueDate: row.nextServiceDueDate ? toLocalDateString(row.nextServiceDueDate) : null,
   };
@@ -93,7 +97,7 @@ function syncServiceCoreValues(
 export class ServicesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(query: ServiceListQuery) {
+  async list(query: ServiceListQuery, actor: AuthenticatedUser) {
     const where: Prisma.ServiceRecordWhereInput = { deletedAt: null };
     if (query.vehicleId) where.vehicleId = query.vehicleId;
     if (query.status) where.status = query.status;
@@ -102,12 +106,16 @@ export class ServicesService {
       const contains = { contains: query.q.trim(), mode: 'insensitive' as const };
       where.OR = [{ workshopName: contains }, { description: contains }, { serviceType: contains }];
     }
+    const permissionWhere = this.scopeWhere(actor, 'service:view');
+    const scopedWhere: Prisma.ServiceRecordWhereInput = Object.keys(permissionWhere).length
+      ? { AND: [where, permissionWhere] }
+      : where;
     const allowed = ['serviceDate', 'totalCost', 'createdAt', 'serviceType'] as const;
     const sort = allowed.find((key) => key === query.sortBy) ?? 'serviceDate';
     const [total, rows] = await Promise.all([
-      this.prisma.serviceRecord.count({ where }),
+      this.prisma.serviceRecord.count({ where: scopedWhere }),
       this.prisma.serviceRecord.findMany({
-        where,
+        where: scopedWhere,
         select: SERVICE_SELECT,
         orderBy: [{ [sort]: query.sortBy ? query.sortOrder : 'desc' }, { id: 'asc' }],
         skip: (query.page - 1) * query.pageSize,
@@ -124,7 +132,8 @@ export class ServicesService {
   }
 
   /** Vozilo se zaključava prije provjere km; svaki upis je u istoj transakciji. */
-  async create(input: CreateServiceInput, actorId?: string) {
+  async create(input: CreateServiceInput, actorId?: string, actor?: AuthenticatedUser) {
+    if (actor) this.assertCreateScope(actor, 'service:create', input.vehicleId);
     const version = await resolveFormVersion(this.prisma as never, {
       subject: 'SERVICE',
       versionId: input.formSchemaVersionId,
@@ -239,10 +248,11 @@ export class ServicesService {
    * (historija očitanja se ne prepisuje), a rokovi vozila se ponovo računaju
    * iz najnovijeg aktivnog servisa.
    */
-  async update(id: string, input: UpdateServiceInput, actorId?: string) {
+  async update(id: string, input: UpdateServiceInput, actorId?: string, actor?: AuthenticatedUser) {
     return this.prisma.$transaction(async (tx) => {
       const current = await tx.serviceRecord.findFirst({ where: { id, deletedAt: null } });
       if (!current) throw new VfmException('NOT_FOUND', 'Servisna evidencija nije pronađena.');
+      if (actor) this.assertScope(actor, 'service:update', current);
       if (current.version !== input.version)
         throw new VfmException('VERSION_CONFLICT', 'Servis je izmijenjen. Ponovo učitajte evidenciju.');
 
@@ -262,6 +272,7 @@ export class ServicesService {
         formSchemaId: current.formSchemaId,
         formSchemaVersionId: current.formSchemaVersionId,
         version: current.version,
+        createdById: current.createdById,
       });
 
       const touchesSchedule =
@@ -474,13 +485,14 @@ export class ServicesService {
    * Stavke računa ostaju vezane za obrisani zapis u bazi i više nisu dostupne
    * kroz API; historija očitanja i trenutna kilometraža vozila se ne mijenjaju.
    */
-  async remove(id: string, actorId?: string) {
+  async remove(id: string, actorId?: string, actor?: AuthenticatedUser) {
     return this.prisma.$transaction(async (tx) => {
       const current = await tx.serviceRecord.findFirst({
         where: { id, deletedAt: null },
         select: SERVICE_SELECT,
       });
       if (!current) throw new VfmException('NOT_FOUND', 'Servisna evidencija nije pronađena.');
+      if (actor) this.assertScope(actor, 'service:delete', current);
 
       const before = serialize(current);
       const vehicle = await this.lockVehicle(
@@ -574,12 +586,74 @@ export class ServicesService {
     return vehicle;
   }
 
-  async get(id: string) {
+  async get(id: string, actor: AuthenticatedUser) {
     const row = await this.prisma.serviceRecord.findFirst({
       where: { id, deletedAt: null },
       select: SERVICE_SELECT,
     });
     if (!row) throw new VfmException('NOT_FOUND', 'Servisna evidencija nije pronađena.');
+    this.assertScope(actor, 'service:view', row);
     return serialize(row);
+  }
+
+  private assertCreateScope(actor: AuthenticatedUser, permission: Permission, vehicleId: string): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL' || scope === 'OWN') return;
+    if (scope === 'VEHICLE_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      if (ids?.includes(vehicleId)) return;
+    }
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Opseg ne dopušta kreiranje servisa za ovo vozilo.',
+        code: 'scope_denied',
+      },
+    ]);
+  }
+
+  private scopeWhere(actor: AuthenticatedUser, permission: Permission): Record<string, unknown> {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return {};
+    if (scope === 'OWN') return { createdById: actor.id };
+    if (scope === 'VEHICLE_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      return { vehicleId: { in: ids ?? [] } };
+    }
+    if (scope === 'DRIVER_IDS') return { id: { in: [] } };
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Nemate pristup ovom zapisu u okviru dodijeljenog opsega.',
+        code: 'scope_denied',
+      },
+    ]);
+  }
+
+  private assertScope(
+    actor: AuthenticatedUser,
+    permission: Permission,
+    row: { id?: string; vehicleId: string; createdById: string | null },
+  ): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return;
+    if (scope === 'OWN' && row.createdById === actor.id) return;
+    if (scope === 'VEHICLE_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      if (ids?.includes(row.vehicleId)) return;
+    }
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Nemate pristup ovom zapisu u okviru dodijeljenog opsega.',
+        code: 'scope_denied',
+      },
+    ]);
   }
 }

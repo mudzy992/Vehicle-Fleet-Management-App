@@ -27,18 +27,21 @@ export class ServicesController {
   constructor(private readonly services: ServicesService) {}
   @Get()
   @RequirePermissions('service:view')
-  list(@Query(new ZodValidationPipe(serviceListQuerySchema, 'query')) query: ServiceListQuery) {
-    return this.services.list(query);
+  list(
+    @Query(new ZodValidationPipe(serviceListQuerySchema, 'query')) query: ServiceListQuery,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.services.list(query, actor);
   }
   @Post()
   @RequirePermissions('service:create')
   @Audit('CREATE', { severity: 'INFO', resource: 'ServiceRecord' })
   async create(
     @Body(new ZodValidationPipe(createServiceSchema, 'body')) input: CreateServiceInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ) {
-    const result = await this.services.create(input, actor?.id);
+    const result = await this.services.create(input, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(result.data.id)
       .setAfter(result.after)
@@ -52,10 +55,10 @@ export class ServicesController {
   async update(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(updateServiceSchema, 'body')) input: UpdateServiceInput,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ) {
-    const result = await this.services.update(id, input, actor?.id);
+    const result = await this.services.update(id, input, actor.id, actor);
     const audit = AuditContext.from(request)
       .setEntityId(id)
       .setResource('ServiceRecord')
@@ -73,10 +76,10 @@ export class ServicesController {
   @Audit('DELETE', { severity: 'CRITICAL', resource: 'ServiceRecord' })
   async remove(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<void> {
-    const result = await this.services.remove(id, actor?.id);
+    const result = await this.services.remove(id, actor.id, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setResource('ServiceRecord')
@@ -88,7 +91,10 @@ export class ServicesController {
   }
   @Get(':id')
   @RequirePermissions('service:view')
-  get(@Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string) {
-    return this.services.get(id);
+  get(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.services.get(id, actor);
   }
 }
