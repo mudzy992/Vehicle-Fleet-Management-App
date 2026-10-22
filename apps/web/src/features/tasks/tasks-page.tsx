@@ -107,6 +107,14 @@ export function TasksPage() {
             {tasksQuery.isPending ? 'Učitavanje…' : taskCountLabel(tasksQuery.data)}
           </p>
         </div>
+        {hasPermission('task:create') && (
+          <Link
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            to="/zadaci/novi"
+          >
+            Novi zadatak
+          </Link>
+        )}
       </header>
 
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Prikaz zadataka">

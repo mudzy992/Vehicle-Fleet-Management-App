@@ -622,3 +622,7 @@ Jedinični lažni klijent ne dokazuje rollback, HTTP retry ponašanje ni isporuk
 ### Web detalj zadatka, historija i komentari — W09
 
 `apps/web/src/features/tasks/task-detail-page.test.tsx` provjerava detalje, historiju, sakrivanje Claim akcije bez `task:claim` i dodavanje komentara kroz API. Završni obrazac (`task-completion-form.tsx`) učitava tačnu snapshotovanu verziju forme, šalje `version` kao CAS zaštitu i formData/comment/odometerKm; mapira greške servera nazad na polja i osvježava detalj/liste nakon uspjeha. `task-status-actions.tsx` nudi otkazivanje (razlog obavezan), release i reopen uz odgovarajuće permisije/status te šalje `version`; API ostaje opseg/permisija konačni autoritet. `task-status-actions.test.tsx` provjerava obavezni razlog, trimovanje, CAS payload i status/permisija vidljivost. Browser UAT i API integracija nisu provedeni.
+
+### Web kreiranje zadatka — W17
+
+`task-create-page.tsx` implementira tri koraka i koristi liste aktivnih vrsta, aktivnih vozila (kada su potrebna) te efektivnu TASK formu. Kreiranje ide kroz postojeći `POST /tasks`; server bira i snapshotuje stvarnu objavljenu verziju. Ako vrsta podrazumijeva `ASSIGN_DIRECT`, ovaj obrazac namjerno šalje `OPEN_CLAIM`; direktna dodjela, pozvani i posmatrači još nisu podržani u wizardu. Ciljani React test i browser UAT još nisu dodani; stvarna RBAC/API integracija nije provjerena.

@@ -34,6 +34,7 @@ import { TireSetsPage } from '../features/tires/tire-sets-page.js';
 import { TaskTypesPage } from '../features/task-types/task-types-page.js';
 import { TasksPage } from '../features/tasks/tasks-page.js';
 import { TaskDetailPage } from '../features/tasks/task-detail-page.js';
+import { TaskCreatePage } from '../features/tasks/task-create-page.js';
 import { NAV_ITEMS } from './nav.js';
 
 export const router = createBrowserRouter([
@@ -159,6 +160,15 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission="task:view">
             <TasksPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        // W17 — čarobnjak za kreiranje zadatka preko postojećeg POST /tasks.
+        path: 'zadaci/novi',
+        element: (
+          <RequirePermission permission="task:create">
+            <TaskCreatePage />
           </RequirePermission>
         ),
       },
