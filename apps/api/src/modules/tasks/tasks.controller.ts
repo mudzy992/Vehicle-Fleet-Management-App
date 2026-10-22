@@ -222,6 +222,16 @@ export class TasksController {
     return result.data;
   }
 
+  @Get(':id/events')
+  @RequireAnyPermission('task:view', 'task:view_all')
+  listEvents(
+    @Param('id', new ZodValidationPipe(taskIdSchema, 'params')) id: string,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ) {
+    return this.tasks.listEvents(id, actorContext(actor, request));
+  }
+
   @Get(':id/comments')
   @RequireAnyPermission('task:view', 'task:view_all')
   listComments(

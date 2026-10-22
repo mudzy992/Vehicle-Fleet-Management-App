@@ -607,3 +607,8 @@ Testovi su jedinični i ne dokazuju PostgreSQL konkurentnost/rollback, HTTP repl
 `apps/api/test/unit/tasks.spec.ts` pokriva kreiranje komentara uz `COMMENTED` događaj i jedinstveni `TASK_COMMENTED` outbox ključ, paginaciju liste, odbijanje nevidljivog zadatka i nedostajućeg `task:comment`, te `GET/POST` permission, status i audit metadata. `packages/shared/test/schemas.spec.ts` provjerava trimovanje teksta, prazan tekst i odbijanje nepoznatog polja za komentar.
 
 Jedinični lažni klijent ne dokazuje rollback, HTTP retry ponašanje ni isporuku outboxa u Coolifyu.
+
+
+### Historija događaja zadatka — osma cjelina Faze 5
+
+`apps/api/test/unit/tasks.spec.ts` provjerava sortiranu/serijalizovanu `TaskEvent` historiju i skrivanje zadatka izvan vidljivosti. `TasksController` metadata test čuva zahtjev za `task:view` ili `task:view_all`. Test je jedinični; HTTP/RBAC integration i Coolify dokaz ostaju otvoreni.

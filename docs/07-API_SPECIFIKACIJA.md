@@ -366,7 +366,7 @@ Detaljan implementirani ugovor je u §7.6.
 | GET | `/tasks/:id/comments` | `task:view` ili `task:view_all` | paginirana lista vidljivog zadatka, najstariji prvo |
 | POST | `/tasks/:id/comments` | `task:comment` | `{body}` strict, `201`; TaskEvent + DB outbox + audit |
 | POST | `/tasks/:id/attachments` | `attachment:upload` | |
-| GET | `/tasks/:id/events` | `task:view` | historija (immutabilna) |
+| GET | `/tasks/:id/events` | `task:view` ili `task:view_all` | historija (immutabilna), samo za vidljiv zadatak |
 | GET | `/tasks/available` | `task:claim` | implementirano; samo `OPEN` zadaci koje korisnik **smije** preuzeti po načinu dodjele i opsegu permisije |
 
 **Odgovor na `409` pri claim-u** (mašinski čitljiva polja su u vrhu
@@ -1277,3 +1277,10 @@ Jedinični testovi pokrivaju dodjelu na OPEN, zamjenu izvršioca u toku, CAS, od
 Kreiranje komentara ne mijenja verziju zadatka. U jednoj transakciji se upisuju `TaskComment`, `TaskEvent(COMMENTED)` i `OutboxEvent(TASK_COMMENTED)` s ključem jedinstvenim za ID komentara; uključenim korisnicima osim autora namijenjen je outbox payload. Audit je `CREATE`/`INFO` nad `TaskComment`. Upis outboxa ne dokazuje isporuku push/in-app obavijesti.
 
 Jedinični testovi pokrivaju trimovanje, paginaciju, vidljivost, permission, event/outbox i controller metadata. PostgreSQL rollback, HTTP replay i Coolify outbox isporuka nisu dokazani.
+
+
+### 7.13 Historija događaja zadatka — osma cjelina Faze 5
+
+`GET /tasks/:id/events` traži `task:view` ili `task:view_all` i vraća događaje ugrađene u detalj zadatka, sortirane hronološki. Primjenjuje se ista provjera vidljivosti kao za `GET /tasks/:id`; nevidljiv zadatak vraća `404 NOT_FOUND`. Stavke su neizmjenjivi prikaz `TaskEvent` zapisa (akter, vrijeme, akcija, kontekst i snapshot forme), bez endpointa za izmjenu ili brisanje.
+
+Jedinični test pokriva serijalizaciju događaja i odbijanje skrivenog zadatka; pun HTTP/RBAC tok i Coolify baza nisu integracijski potvrđeni.

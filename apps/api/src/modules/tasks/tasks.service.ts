@@ -521,6 +521,13 @@ export class TasksService {
     return this.serializeDetail(row);
   }
 
+  async listEvents(id: string, actorInput: TaskActorContext | string | undefined): Promise<TaskEventView[]> {
+    const access = await this.resolveAccess(actorInput);
+    const task = await this.loadDetail(this.prisma, id);
+    if (!this.canView(task, access)) throw new VfmException('NOT_FOUND', 'Zadatak nije pronađen.');
+    return task.events.map(serializeEvent);
+  }
+
   async listComments(
     id: string,
     query: TaskCommentListQuery,

@@ -1440,6 +1440,38 @@ describe('TasksService — vraćanje među slobodne', () => {
   });
 });
 
+describe('TasksService — historija događaja', () => {
+  it('vraća neizmijenjenu historiju samo korisniku koji vidi zadatak', async () => {
+    const { fake, service } = setup();
+    const taskId = 'ffffffff-ffff-4fff-8fff-fffffffff035';
+    fake.addTask({ id: taskId, code: 'Z-2026-000035' });
+    fake.events.push({
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff036',
+      taskId,
+      action: 'COMMENTED',
+      actorId: adminId,
+      actorRole: 'ADMINISTRATOR',
+      at: new Date('2026-10-22T10:00:00Z'),
+      clientType: 'WEB',
+      requestId: 'req-event',
+      data: { commentId: 'ffffffff-ffff-4fff-8fff-fffffffff037' },
+      formSchemaVersionId: genericVersionId,
+    });
+
+    const events = await service.listEvents(taskId, actor(adminId));
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      id: 'ffffffff-ffff-4fff-8fff-fffffffff036',
+      action: 'COMMENTED',
+      actorId: adminId,
+      actorName: 'Amina Administrator',
+      requestId: 'req-event',
+    });
+    const hidden = await errorOf(() => service.listEvents(taskId, actor(noClaimId)));
+    expect(hidden.code).toBe('NOT_FOUND');
+  });
+});
+
 describe('TasksService — komentari', () => {
   it('kreira komentar, COMMENTED događaj i jedinstveni transakcijski outbox; lista je paginirana', async () => {
     const { fake, service } = setup();
@@ -2395,6 +2427,7 @@ describe('TasksController — metadata', () => {
     expect(permissions(TasksController.prototype.release)).toEqual(['task:release']);
     expect(permissions(TasksController.prototype.assign)).toEqual(['task:assign']);
     expect(permissions(TasksController.prototype.listComments)).toEqual(['task:view', 'task:view_all']);
+    expect(permissions(TasksController.prototype.listEvents)).toEqual(['task:view', 'task:view_all']);
     expect(permissions(TasksController.prototype.addComment)).toEqual(['task:comment']);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.create)).toBe(201);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.claim)).toBe(200);
