@@ -3,6 +3,7 @@ import 'reflect-metadata';
 import { describe, expect, it } from 'vitest';
 import { HTTP_CODE_METADATA } from '@nestjs/common/constants.js';
 import {
+  assignTaskSchema,
   cancelTaskSchema,
   claimTaskSchema,
   completeTaskSchema,
@@ -87,6 +88,7 @@ class FakePermissions {
       'task:cancel': 'ALL',
       'task:reopen': 'ALL',
       'task:release': 'ALL',
+      'task:assign': 'ALL',
       'task:complete': 'ALL',
       'task:complete_override': 'ALL',
     });
@@ -662,6 +664,11 @@ class FakeTasksPrisma {
     createMany: async (args: { data: Row[] }) => {
       this.assignments.push(...args.data.map((row) => ({ revokedAt: null, ...clone(row) })));
       return { count: args.data.length };
+    },
+    create: async (args: { data: Row }) => {
+      const row = { revokedAt: null, ...clone(args.data) };
+      this.assignments.push(row);
+      return clone(row);
     },
     updateMany: async (args: { where?: Row; data: Row }) => {
       const rows = this.assignments.filter((row) => this.matches(row, args.where));
@@ -1419,6 +1426,81 @@ describe('TasksService — vraćanje među slobodne', () => {
     );
     expect(repeated.code).toBe('INVALID_TASK_TRANSITION');
     expect(fake.events.filter((row) => row.action === 'RELEASED')).toHaveLength(1);
+  });
+});
+
+describe('TasksService — naknadna dodjela', () => {
+  it('direktno mijenja kandidata na OPEN uz CAS, historiju i outbox; čuva posmatrače', async () => {
+    const { fake, service } = setup();
+    const taskId = 'ffffffff-ffff-4fff-8fff-fffffffff031';
+    fake.addTask({ id: taskId, code: 'Z-2026-000031', version: 4 });
+    fake.addAssignment(taskId, invitedId, 'INVITED');
+    fake.addAssignment(taskId, observerId, 'OBSERVER');
+
+    const result = await service.assign(
+      taskId,
+      assignTaskSchema.parse({ version: 4, mode: 'ASSIGN_DIRECT', userIds: [invited2Id] }),
+      actor(adminId),
+    );
+
+    expect(result.data).toMatchObject({
+      status: 'OPEN',
+      assignMode: 'ASSIGN_DIRECT',
+      assigneeUserId: invited2Id,
+      version: 5,
+    });
+    expect(
+      fake.assignments.find((row) => row.userId === invitedId && row.role === 'INVITED')?.revokedAt,
+    ).toBeInstanceOf(Date);
+    expect(
+      fake.assignments.find((row) => row.userId === observerId && row.role === 'OBSERVER')?.revokedAt,
+    ).toBeNull();
+    expect(
+      fake.assignments.find((row) => row.userId === invited2Id && row.role === 'ASSIGNEE')?.revokedAt,
+    ).toBeNull();
+    expect(fake.events.at(-1)).toMatchObject({ action: 'ASSIGNED', taskId });
+    expect(fake.outbox.at(-1)).toMatchObject({ eventType: 'TASK_ASSIGNED' });
+    expect(fake.outbox.at(-1)!.payload as Row).toMatchObject({ taskId, assigneeUserId: invited2Id });
+  });
+
+  it('u toku dozvoljava samo direktnu zamjenu izvršioca i odbija zastarjelu verziju', async () => {
+    const { fake, service } = setup();
+    const taskId = 'ffffffff-ffff-4fff-8fff-fffffffff032';
+    fake.addTask({
+      id: taskId,
+      code: 'Z-2026-000032',
+      status: 'IN_PROGRESS',
+      assignMode: 'ASSIGN_DIRECT',
+      assigneeUserId: assigneeId,
+      claimedAt: new Date(),
+      version: 2,
+    });
+    fake.addAssignment(taskId, assigneeId, 'ASSIGNEE');
+
+    const invalidMode = await errorOf(() =>
+      service.assign(
+        taskId,
+        assignTaskSchema.parse({ version: 2, mode: 'OPEN_CLAIM', userIds: [invitedId] }),
+        actor(adminId),
+      ),
+    );
+    expect(invalidMode.code).toBe('VALIDATION_ERROR');
+    const stale = await errorOf(() =>
+      service.assign(
+        taskId,
+        assignTaskSchema.parse({ version: 1, mode: 'ASSIGN_DIRECT', userIds: [invitedId] }),
+        actor(adminId),
+      ),
+    );
+    expect(stale.code).toBe('VERSION_CONFLICT');
+
+    const result = await service.assign(
+      taskId,
+      assignTaskSchema.parse({ version: 2, mode: 'ASSIGN_DIRECT', userIds: [invitedId] }),
+      actor(adminId),
+    );
+    expect(result.data).toMatchObject({ status: 'IN_PROGRESS', assigneeUserId: invitedId, version: 3 });
+    expect(result.data.claimedAt).not.toBeNull();
   });
 });
 
@@ -2251,10 +2333,17 @@ describe('TasksController — metadata', () => {
     expect(permissions(TasksController.prototype.cancel)).toEqual(['task:cancel']);
     expect(permissions(TasksController.prototype.reopen)).toEqual(['task:reopen']);
     expect(permissions(TasksController.prototype.release)).toEqual(['task:release']);
+    expect(permissions(TasksController.prototype.assign)).toEqual(['task:assign']);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.create)).toBe(201);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.claim)).toBe(200);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.complete)).toBe(200);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.release)).toBe(200);
+    expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.assign)).toBe(200);
+    expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.assign)).toMatchObject({
+      action: 'UPDATE',
+      severity: 'WARN',
+      resource: 'Task',
+    });
     expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.claim)).toMatchObject({
       action: 'CLAIM',
       severity: 'INFO',

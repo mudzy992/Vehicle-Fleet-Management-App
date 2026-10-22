@@ -20,6 +20,7 @@ import {
   refreshSchema,
   resetPasswordSchema,
   archiveTaskTypeSchema,
+  assignTaskSchema,
   cancelTaskSchema,
   claimTaskSchema,
   completeTaskSchema,
@@ -519,6 +520,25 @@ describe('zadaci (docs/07 §2.11)', () => {
     });
     expect(releaseTaskSchema.safeParse({ version: 4, reason: 'x' }).success).toBe(false);
     expect(releaseTaskSchema.safeParse({ version: 4, status: 'OPEN' }).success).toBe(false);
+    expect(assignTaskSchema.parse({ version: 5, mode: 'ASSIGN_DIRECT', userIds: [assigneeId] })).toEqual({
+      version: 5,
+      mode: 'ASSIGN_DIRECT',
+      userIds: [assigneeId],
+    });
+    expect(assignTaskSchema.safeParse({ version: 5, mode: 'ASSIGN_DIRECT', userIds: [] }).success).toBe(
+      false,
+    );
+    expect(assignTaskSchema.safeParse({ version: 5, mode: 'BROADCAST', userIds: [assigneeId] }).success).toBe(
+      false,
+    );
+    expect(
+      assignTaskSchema.safeParse({ version: 5, mode: 'OPEN_CLAIM', userIds: [assigneeId, assigneeId] })
+        .success,
+    ).toBe(false);
+    expect(
+      assignTaskSchema.safeParse({ version: 5, mode: 'OPEN_CLAIM', userIds: [], assignMode: 'OPEN_CLAIM' })
+        .success,
+    ).toBe(false);
   });
 
   it('lista parsira filtere i odbija obrnut interval roka', () => {

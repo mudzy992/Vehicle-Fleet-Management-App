@@ -593,3 +593,10 @@ TaskEvent `OVERRIDE_COMPLETED`, `completedById=C`).
 `apps/api/test/unit/tasks.spec.ts` sada ima 38 testova. Dodatni release testovi pokrivaju uspješno `IN_PROGRESS → OPEN` s CAS verzijom, `releasedAt` i brisanje claim vremena/trajanja; vraćanje `OPEN_CLAIM`/`BROADCAST` assignee reda i očuvanje pozvanih/posmatrača; očuvanje direktnog izvršioca kao kandidata; `VERSION_CONFLICT`, nedozvoljen status, nedovoljan permission scope, event/outbox upise i route audit metadata.
 
 `packages/shared/test/schemas.spec.ts` prolazi 33 testa, uključujući strict release DTO i granice/trimovanje opcionalnog razloga. Puni API paket prolazi 896 testova; `pnpm env:check` i workspace gate `lint typecheck test build` prolaze. `pnpm test:coverage` prolazi. Ovi testovi ne dokazuju stvarni PostgreSQL lock/rollback, HTTP idempotency replay ni Coolify ponašanje; ti dokazi ostaju otvoreni.
+
+
+### Naknadna dodjela zadatka — šesta cjelina Faze 5
+
+`apps/api/test/unit/tasks.spec.ts` sada ima 40 testova; dvije nove service provjere pokrivaju CAS dodjelu kandidata i direktnog izvršioca na `OPEN`, očuvanje posmatrača, audit route metadata, `TaskEvent(ASSIGNED)`, `OutboxEvent(TASK_ASSIGNED)`, zamjenu izvršioca za `IN_PROGRESS`, odbijanje `OPEN_CLAIM` tokom izvršavanja i zastarjelu verziju. `packages/shared/test/schemas.spec.ts` prolazi 33 testa uz provjere strict DTO-a, jednog direktnog korisnika, broadcast bez korisnika, duplikata i odbijanja dodatnih serverskih polja.
+
+Testovi su jedinični i ne dokazuju PostgreSQL konkurentnost/rollback, HTTP replay ni Coolify isporuku outboxa.

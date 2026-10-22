@@ -1,6 +1,7 @@
 /** Zadaci — jezgra Faze 5, atomsko preuzimanje i završetak zadataka. */
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
+  assignTaskSchema,
   cancelTaskSchema,
   claimTaskSchema,
   completeTaskSchema,
@@ -11,6 +12,7 @@ import {
   taskIdSchema,
   taskListQuerySchema,
   updateTaskSchema,
+  type AssignTaskInput,
   type CancelTaskInput,
   type ClaimTaskInput,
   type CompleteTaskInput,
@@ -213,6 +215,29 @@ export class TasksController {
       .set('previousAssigneeUserId', result.meta?.['previousAssigneeUserId'] ?? null)
       .set('assigneeUserId', result.data.assigneeUserId);
     if (input.reason) audit.set('reason', input.reason);
+    return result.data;
+  }
+
+  @Post(':id/assign')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('task:assign')
+  @Audit('UPDATE', { severity: 'WARN', resource: 'Task' })
+  async assign(
+    @Param('id', new ZodValidationPipe(taskIdSchema, 'params')) id: string,
+    @Body(new ZodValidationPipe(assignTaskSchema, 'body')) input: AssignTaskInput,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ) {
+    const result = await this.tasks.assign(id, input, actorContext(actor, request));
+    AuditContext.from(request)
+      .setEntityId(id)
+      .setBefore(result.before)
+      .setAfter(result.after)
+      .setResource('Task')
+      .set('code', result.data.code)
+      .set('status', result.data.status)
+      .set('assignMode', result.data.assignMode)
+      .set('assigneeUserId', result.data.assigneeUserId);
     return result.data;
   }
 

@@ -362,7 +362,7 @@ Detaljan implementirani ugovor je u §7.6.
 | POST | `/tasks/:id/cancel` | `task:cancel` | implementirano; `{version,reason}` (`reason` obavezno) |
 | POST | `/tasks/:id/reopen` | `task:reopen` | implementirano; `{version,reason?,dueAt?}`, audit + DB outbox |
 | POST | `/tasks/:id/release` | `task:release` s opsegom `ALL` | implementirano; strict `{version,reason?}`, samo `IN_PROGRESS → OPEN`, CAS, `RELEASE`/`WARN`, DB outbox `TASK_RELEASED` |
-| POST | `/tasks/:id/assign` | `task:assign` | `{userIds[], mode}` |
+| POST | `/tasks/:id/assign` | `task:assign` s opsegom `ALL` | implementirano; strict `{version,mode,userIds[]}`, CAS, aktivne dodjele + audit/outbox |
 | GET/POST | `/tasks/:id/comments` | `task:view` / `task:comment` | |
 | POST | `/tasks/:id/attachments` | `attachment:upload` | |
 | GET | `/tasks/:id/events` | `task:view` | historija (immutabilna) |
@@ -380,7 +380,7 @@ Detaljan implementirani ugovor je u §7.6.
 
 Detaljan implementirani ugovor jezgre zadataka je u §7.7, atomskog
 preuzimanja i slobodnih zadataka u §7.8, a završetka i override prelaza u
-§7.9, a release-a u §7.10. Naknadna dodjela i samostalni komentari ostaju zasebne
+§7.9, release-a u §7.10, a naknadne dodjele u §7.11. Samostalni komentari ostaju zasebne
 cjeline; DB outbox redovi se zapisuju, ali worker/FCM/SSE isporuka još
 nije dio ugovora.
 
@@ -1023,7 +1023,7 @@ Načini dodjele imaju tačnu semantiku:
 
 - `OPEN_CLAIM`: `invitedUserIds` su kandidati, a kreator s `task:claim`
   također može preuzeti zadatak; prazna lista zato ostavlja kreatora kao
-  jedinog kandidata do buduće naknadne dodjele. Samo pravo pregleda
+  jedinog kandidata do eksplicitne naknadne promjene dodjele. Samo pravo pregleda
   (`task:view_all`) ili uloga posmatrača ne daje kandidaturu.
 - `ASSIGN_DIRECT`: tačno jedan `assigneeUserId`, bez pozvanih. Zadatak ostaje
   `OPEN`, `claimedAt` je `null`, a `Task.assigneeUserId` i jedinstveni aktivni
@@ -1081,8 +1081,8 @@ događaj i DB outbox s novom verzijom u idempotency ključu.
 
 Nema novih ENV varijabli, Redis ključeva/redova ni migracija. Atomski
 claim i `/tasks/available` dodani su u §7.8, završetak/override u §7.9,
-a release u §7.10. Naknadna dodjela, samostalni komentari, zasebna historija,
-outbox worker i FCM/SSE isporuka nisu dio jezgre. Jedinični lažni klijent ne
+a release u §7.10 i naknadna dodjela u §7.11. Samostalni komentari, zasebna
+historija, outbox worker i FCM/SSE isporuka nisu dio jezgre. Jedinični lažni klijent ne
 dokazuje stvarni PostgreSQL advisory lock, `FOR UPDATE`, rollback ni puni
 HTTP lanac na Coolifyu.
 
@@ -1244,8 +1244,8 @@ Nema novih ENV varijabli, Redis ključeva/redova ni migracija.
 `fuelConsumptionL100` se u ovoj generičkoj cjelini ne izračunava jer
 form-engine TASK whitelist i postojeći ugovor nemaju jednoznačnu početnu
 kilometražu za potrošnju; kolona ostaje kakva jest do zasebne
-`FUEL_REFILL` semantike. Naknadna dodjela, samostalni komentari i
-historija, outbox worker/FCM/SSE i web zadaci ostaju zasebne cjeline.
+`FUEL_REFILL` semantike. Samostalni komentari i historija, outbox
+worker/FCM/SSE i web zadaci ostaju zasebne cjeline.
 Jedinični lažni klijent ne dokazuje stvarni PostgreSQL lock/rollback,
 Decimal upis, HTTP replay ni Coolify tok; P7 integracijski dokaz i dalje
 zahtijeva pravu bazu.
@@ -1258,3 +1258,12 @@ zahtijeva pravu bazu.
 Za `OPEN_CLAIM` i `BROADCAST` uklanja se trenutni izvršilac i opoziva aktivni `ASSIGNEE`; pozvani i posmatrači ostaju. Za `ASSIGN_DIRECT` se čuvaju prethodno određeni izvršilac i aktivna dodjela, tako da samo on ostaje kandidat za ponovno preuzimanje. U istoj transakciji nastaju `TaskEvent(RELEASED)` i `OutboxEvent(TASK_RELEASED)`; obavijest ide uključenim korisnicima osim aktera. Audit je `RELEASE`/`WARN`; outbox upis nije dokaz isporuke FCM/SSE.
 
 Jedinični testovi pokrivaju DTO, permission/scope, CAS, nevažeći status, obje dodjele, assignments, event/outbox i controller metadata. Lažni Prisma klijent ne dokazuje PostgreSQL rollback/locking niti Coolify HTTP tok; integracijska provjera s pravom bazom ostaje potrebna.
+
+
+### 7.11 Naknadna dodjela zadatka — šesta cjelina Faze 5
+
+`POST /tasks/:id/assign` zahtijeva `task:assign` opsega `ALL` (Super Admin izuzetak prema RBAC pravilima). Strict DTO: `{version,mode,userIds}`; verzija je nenegativna CAS vrijednost, `mode` je `OPEN_CLAIM`, `ASSIGN_DIRECT` ili `BROADCAST`, a lista ima najviše 100 različitih UUID-ova. Direktna dodjela zahtijeva tačno jednog korisnika, broadcast ne prima listu, a `OPEN_CLAIM` korisnike tretira kao pozvane kandidate.
+
+Dopušteno je mijenjati zadatak u `OPEN` ili `IN_PROGRESS`; terminalni statusi su odbijeni. Za `IN_PROGRESS` je dozvoljena samo direktna zamjena jednim izvršiocem; status ostaje u toku, `claimedAt` se postavlja na vrijeme zamjene, a prethodni aktivni `ASSIGNEE` se opoziva. Svi kandidati moraju biti aktivni i imati `task:claim`. Posmatrači se ne mijenjaju. U istoj transakciji se CAS-om ažurira zadatak, stare aktivne `INVITED`/`ASSIGNEE` dodjele opozivaju, ciljne dodjele kreiraju ili reaktiviraju, te upisuju `TaskEvent(ASSIGNED)` i `OutboxEvent(TASK_ASSIGNED)`. Audit je `UPDATE`/`WARN`; outbox nije dokaz FCM/SSE isporuke.
+
+Jedinični testovi pokrivaju dodjelu na OPEN, zamjenu izvršioca u toku, CAS, odbijanje načina koji nije direktan za zadatak u toku, očuvanje posmatrača te event/outbox. Lažni klijent ne dokazuje stvarni PostgreSQL lock/rollback niti Coolify HTTP tok.

@@ -32,6 +32,7 @@ import {
   type FormDefinition,
 } from '@vfm/form-engine';
 import type {
+  AssignTaskInput,
   CancelTaskInput,
   ClaimTaskInput,
   CompleteTaskInput,
@@ -984,6 +985,160 @@ export class TasksService {
           assignMode: serialized.assignMode,
           reason: input.reason ?? null,
         },
+      };
+    });
+  }
+
+  /** Naknadno mijenja način dodjele i aktivne kandidate zadatka. */
+  async assign(
+    id: string,
+    input: AssignTaskInput,
+    actorInput: TaskActorContext | string | undefined,
+  ): Promise<TaskMutation<TaskDetail>> {
+    const access = await this.resolveAccess(actorInput);
+    const assignScope = access.permissions.isSuperAdmin
+      ? 'ALL'
+      : (access.permissions.permissions.get('task:assign') ?? null);
+    if (assignScope !== 'ALL') {
+      throw VfmErrors.permissionDenied([
+        detail('task:assign', 'Za izmjenu dodjele potreban je task:assign s punim opsegom.'),
+      ]);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockRow(tx, 'Task', id);
+      const current = await this.loadDetail(tx, id);
+      const before = this.serializeDetail(current);
+      this.assertVersion(current.version, input.version);
+      if (current.status !== 'OPEN' && current.status !== 'IN_PROGRESS') {
+        throw new VfmException(
+          'INVALID_TASK_TRANSITION',
+          'Dodjela se može izmijeniti samo na otvorenom zadatku ili zadatku u toku.',
+          undefined,
+          { status: current.status },
+        );
+      }
+      if (current.status === 'IN_PROGRESS' && input.mode !== 'ASSIGN_DIRECT') {
+        throw VfmErrors.validationError([
+          detail('mode', 'Zadatak u toku mora ostati direktno dodijeljen jednom izvršiocu.'),
+        ]);
+      }
+
+      const users = await tx.user.findMany({
+        where: { id: { in: input.userIds }, deletedAt: null },
+        select: { id: true, status: true },
+      });
+      const activeIds = new Set(users.filter((user) => user.status === 'ACTIVE').map((user) => user.id));
+      const invalidUsers = input.userIds.filter((userId) => !activeIds.has(userId));
+      if (invalidUsers.length) {
+        throw VfmErrors.validationError(
+          invalidUsers.map((userId) => detail('userIds', `Korisnik ${userId} ne postoji ili nije aktivan.`)),
+        );
+      }
+      const candidateIds = input.mode === 'BROADCAST' ? [] : input.userIds;
+      const unauthorized: string[] = [];
+      for (const userId of candidateIds) {
+        if (!(await this.permissions.hasPermission(userId, 'task:claim', 'OWN', 'WEB'))) {
+          unauthorized.push(userId);
+        }
+      }
+      if (unauthorized.length) {
+        throw VfmErrors.validationError(
+          unauthorized.map((userId) => detail('userIds', `Korisnik ${userId} nema task:claim.`)),
+        );
+      }
+
+      const now = new Date();
+      const assigneeUserId = input.mode === 'ASSIGN_DIRECT' ? input.userIds[0]! : null;
+      const changed = await tx.task.updateMany({
+        where: { id, deletedAt: null, version: input.version, status: current.status },
+        data: {
+          assignMode: input.mode,
+          assigneeUserId,
+          claimedAt: current.status === 'IN_PROGRESS' ? now : null,
+          version: { increment: 1 },
+        },
+      });
+      if (changed.count !== 1) await this.throwCasFailure(tx, id, input.version);
+
+      await tx.taskAssignment.updateMany({
+        where: { taskId: id, role: { in: ['ASSIGNEE', 'INVITED'] }, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      const newAssignments = [
+        ...(assigneeUserId ? [{ userId: assigneeUserId, role: 'ASSIGNEE' }] : []),
+        ...(input.mode === 'OPEN_CLAIM' ? input.userIds.map((userId) => ({ userId, role: 'INVITED' })) : []),
+      ];
+      for (const assignment of newAssignments) {
+        const existing = await tx.taskAssignment.findFirst({
+          where: { taskId: id, userId: assignment.userId, role: assignment.role },
+          select: { id: true },
+        });
+        if (existing) {
+          await tx.taskAssignment.updateMany({
+            where: { id: existing.id },
+            data: { revokedAt: null, assignedById: access.actor.id, assignedAt: now, note: null },
+          });
+        } else {
+          await tx.taskAssignment.create({
+            data: {
+              id: randomUUID(),
+              taskId: id,
+              userId: assignment.userId,
+              role: assignment.role,
+              assignedById: access.actor.id,
+              assignedAt: now,
+              revokedAt: null,
+              note: null,
+            },
+          });
+        }
+      }
+
+      await tx.taskEvent.create({
+        data: this.eventData({
+          taskId: id,
+          action: 'ASSIGNED',
+          actor: access.actor,
+          at: now,
+          data: {
+            fromAssignMode: current.assignMode,
+            assignMode: input.mode,
+            previousAssigneeUserId: current.assigneeUserId,
+            assigneeUserId,
+            userIds: input.userIds,
+            previousVersion: current.version,
+            version: current.version + 1,
+          },
+          formSchemaVersionId: current.formSchemaVersionId,
+        }),
+      });
+      await this.createOutbox(tx, {
+        taskId: id,
+        code: current.code,
+        eventType: 'TASK_ASSIGNED',
+        status: current.status,
+        version: current.version + 1,
+        actorId: access.actor.id,
+        recipientUserIds: [...new Set([...this.involvedUserIds(current), ...input.userIds])].filter(
+          (userId) => userId !== access.actor.id,
+        ),
+        extra: {
+          assignMode: input.mode,
+          broadcast: input.mode === 'BROADCAST',
+          previousAssigneeUserId: current.assigneeUserId,
+          assigneeUserId,
+          userIds: input.userIds,
+        },
+      });
+
+      const updated = await this.loadDetail(tx, id);
+      const serialized = this.serializeDetail(updated, now);
+      return {
+        data: serialized,
+        before: { ...before },
+        after: { ...serialized },
+        meta: { code: serialized.code, status: serialized.status, assigneeUserId },
       };
     });
   }
@@ -2579,6 +2734,7 @@ export class TasksService {
         | 'TASK_CLAIMED'
         | 'TASK_COMPLETED'
         | 'TASK_RELEASED'
+        | 'TASK_ASSIGNED'
         | 'TASK_CANCELLED'
         | 'TASK_REOPENED';
       status: TaskStatus;

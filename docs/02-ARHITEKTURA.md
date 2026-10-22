@@ -321,7 +321,7 @@ provjeru verzije, tako da TTL ne utiče na sigurnost (B-06).
 
 - **Jedna transakcija = jedan poslovni događaj + outbox + audit.** Nikad se push/HTTP poziv ne radi
   unutar transakcije.
-- **Izolacija:** `READ COMMITTED` (default). Za kritične tokove (claim/release, završetak zadatka, montaža guma, publish forme)
+- **Izolacija:** `READ COMMITTED` (default). Za kritične tokove (claim/release/dodjela, završetak zadatka, montaža guma, publish forme)
   koristimo **uslovno ažuriranje** (`UPDATE ... WHERE status=...`) ili `SELECT ... FOR UPDATE`,
   ne viši nivo izolacije (manje mrtvih zaključavanja).
 - **Migracije:** expand/contract (prvo dodaj kolonu, popuni, pa ukloni staro) → rollback je uvijek

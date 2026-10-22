@@ -3089,6 +3089,39 @@ export const releaseTaskSchema = z
   .strict();
 export type ReleaseTaskInput = z.output<typeof releaseTaskSchema>;
 
+/** Naknadna izmjena izvršioca/kandidata; verzija štiti konkurentne izmjene. */
+export const assignTaskSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    mode: z.enum(['OPEN_CLAIM', 'ASSIGN_DIRECT', 'BROADCAST']),
+    userIds: z.array(uuidSchema).max(100),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    for (const index of duplicatedIndexes(value.userIds)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['userIds', index],
+        message: 'Korisnik se ponavlja.',
+      });
+    }
+    if (value.mode === 'ASSIGN_DIRECT' && value.userIds.length !== 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['userIds'],
+        message: 'Direktna dodjela zahtijeva tačno jednog izvršioca.',
+      });
+    }
+    if (value.mode === 'BROADCAST' && value.userIds.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['userIds'],
+        message: 'Broadcast dodjela ne prima listu korisnika.',
+      });
+    }
+  });
+export type AssignTaskInput = z.output<typeof assignTaskSchema>;
+
 /**
  * Atomsko preuzimanje zadatka. Tijelo je opcionalno; poslani `formData` se
  * spaja s postojećim nacrtom i validira prema snapshotovanoj verziji forme,
