@@ -36,6 +36,7 @@ import { TasksModule } from './modules/tasks/tasks.module.js';
 import { RegistrationsModule } from './modules/registrations/registrations.module.js';
 import { InsurancesModule } from './modules/insurances/insurances.module.js';
 import { RemindersModule } from './modules/reminders/reminders.module.js';
+import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { AttachmentsModule } from './modules/attachments/attachments.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { ClientTypeGuard } from './common/guards/client-type.guard.js';
@@ -76,6 +77,8 @@ import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
     InsurancesModule,
     // Podsjetnici (docs/07 §2.14) — idempotentni skener (P-07).
     RemindersModule,
+    // In-app obavijesti (FCM/SSE dostava ostaje odvojena i nije aktivna).
+    NotificationsModule,
     // Prilozi (docs/07 §2.12) — host bind-mount, magic bytes, potpisani URL (B-15).
     AttachmentsModule,
   ],

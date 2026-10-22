@@ -33,6 +33,7 @@ import {
   taskAvailableQuerySchema,
   taskDetailSchema,
   taskListQuerySchema,
+  notificationListQuerySchema,
   taskListResponseSchema,
   updateTaskSchema,
   taskCompletionRequirementInputSchema,
@@ -778,5 +779,13 @@ describe('@vfm/shared/env i dalje izvozi API-ugovor šeme (kompatibilnost)', () 
         );
       }
     }
+  });
+});
+
+describe('notificationListQuerySchema', () => {
+  it('tumači string false kao false i podržava unreadOnly filter', () => {
+    expect(notificationListQuerySchema.parse({ unreadOnly: 'false', page: '2', pageSize: '10' })).toMatchObject({ unreadOnly: false, page: 2, pageSize: 10 });
+    expect(notificationListQuerySchema.parse({ unreadOnly: 'true' }).unreadOnly).toBe(true);
+    expect(notificationListQuerySchema.parse({}).unreadOnly).toBe(false);
   });
 });

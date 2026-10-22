@@ -23,6 +23,8 @@ import {
   AUDIT_ACTIONS,
   AUDIT_SEVERITIES,
   NOTIFICATION_CHANNELS,
+  NOTIFICATION_PRIORITIES,
+  NOTIFICATION_STATUSES,
   REMINDER_KINDS,
   REMINDER_STATUSES,
   CLIENT_TYPES,
@@ -3354,3 +3356,38 @@ export const taskListResponseSchema = z
   })
   .strict();
 export type TaskListResponse = z.output<typeof taskListResponseSchema>;
+
+/** In-app obavijesti — korisnik može čitati samo vlastite zapise. */
+export const notificationListQuerySchema = paginationQuerySchema
+  .extend({ unreadOnly: queryBoolean.default(false) })
+  .strict();
+export type NotificationListQuery = z.output<typeof notificationListQuerySchema>;
+
+export const notificationViewSchema = z
+  .object({
+    id: uuidSchema,
+    type: z.string(),
+    title: z.string(),
+    body: z.string().nullable(),
+    data: z.unknown().nullable(),
+    linkToType: z.string().nullable(),
+    linkToId: uuidSchema.nullable(),
+    priority: z.enum(NOTIFICATION_PRIORITIES),
+    status: z.enum(NOTIFICATION_STATUSES),
+    isRead: z.boolean(),
+    readAt: z.iso.datetime().nullable(),
+    createdAt: z.iso.datetime(),
+  })
+  .strict();
+export type NotificationView = z.output<typeof notificationViewSchema>;
+
+export const notificationListResponseSchema = z
+  .object({
+    items: z.array(notificationViewSchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type NotificationListResponse = z.output<typeof notificationListResponseSchema>;

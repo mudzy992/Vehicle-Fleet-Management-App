@@ -419,17 +419,14 @@ Napomene (Faza 3):
 
 | Metoda | Put | P |
 |---|---|---|
-| GET | `/notifications?unreadOnly=&page=` | `notification:view` |
-| GET | `/notifications/unread-count` | `notification:view` |
-| POST | `/notifications/read` `{ids[]}` | `notification:mark_read` |
-| POST | `/notifications/read-all` | `notification:mark_read` |
-| DELETE | `/notifications/:id` | `notification:view` |
-| GET | `/notifications/stream` (SSE) | `notification:view` — real-time za web |
-| GET/PUT | `/notifications/preferences` | `notification:manage_preferences` |
-| POST | `/notifications/broadcast` | `notification:broadcast` |
-| POST | `/devices/tokens` `{token, platform, appVersion, deviceModel}` | 🔒 — registracija FCM tokena (hash + unique) |
-| DELETE | `/devices/tokens/:id` | 🔒 — deregistracija pri logoutu |
-| GET | `/devices/tokens` | `user:view` (admin pregled) |
+| GET | `/notifications?unreadOnly=&page=&pageSize=` | `notification:view` — samo vlastite obavijesti |
+| POST | `/notifications/:id/read` | `notification:mark_read` — označava vlastitu obavijest kao pročitanu |
+| ⏳ GET | `/notifications/unread-count` | `notification:view` |
+| ⏳ POST | `/notifications/read` `{ids[]}` / `/read-all` | `notification:mark_read` |
+| ⏳ GET | `/notifications/stream` (SSE) | `notification:view` — real-time za web |
+| ⏳ GET/PUT | `/notifications/preferences` | `notification:manage_preferences` |
+| ⏳ POST | `/notifications/broadcast` | `notification:broadcast` |
+| ⏳ `/devices/tokens/*` | 🔒 — FCM tokeni; FCM nije aktivan |
 
 ### 2.14 Podsjetnici (`/reminders`)
 
