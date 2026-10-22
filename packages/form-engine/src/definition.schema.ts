@@ -9,6 +9,7 @@
  * Ovdje nema izvršavanja JavaScript-a: definicija je podatak (§1/1).
  */
 import { FIELD_TYPES, FORM_SUBJECTS } from '@vfm/shared';
+import safeRegex from 'safe-regex2';
 import { z } from 'zod';
 import {
   ALLOWED_OPTION_QUERY_IDS,
@@ -16,6 +17,7 @@ import {
   COMPUTED_RESULT_TYPES,
   FIELD_TYPES_WITH_OPTIONS,
   FORM_CURRENCIES,
+  REFERENCE_ENTITY_TYPES,
 } from './field-types.js';
 import { checkFieldKey, FIELD_KEY_PATTERN } from './reserved-keys.js';
 
@@ -234,7 +236,13 @@ export const FORBIDDEN_PATTERN_FRAGMENTS = ['(?=', '(?!', '(?<=', '(?<!'] as con
 
 export interface PatternCheckResult {
   readonly ok: boolean;
-  readonly reason?: 'TOO_LONG' | 'INVALID_REGEX' | 'LOOKAROUND' | 'BACKREFERENCE';
+  readonly reason?:
+    | 'TOO_LONG'
+    | 'INVALID_REGEX'
+    | 'LOOKAROUND'
+    | 'BACKREFERENCE'
+    | 'UNSAFE_COMPLEXITY'
+    | 'AMBIGUOUS_REPETITION';
   readonly message?: string;
 }
 
@@ -248,8 +256,32 @@ export function checkPatternSafe(pattern: string): PatternCheckResult {
   if (/\\[1-9]/u.test(pattern)) {
     return { ok: false, reason: 'BACKREFERENCE', message: 'Backreference nije dozvoljena.' };
   }
+  // Ponavljana alternacija i više neograničenih wildcard-a daju ambivalentne
+  // putanje u JavaScript regex engine-u iako su uzorci sintaksno ispravni.
+  if (/\((?:\?:)?(?:\\.|[^()])*?\|(?:\\.|[^()])*?\)(?:[+*]|\{\d+(?:,\d*)?\})/u.test(pattern)) {
+    return {
+      ok: false,
+      reason: 'AMBIGUOUS_REPETITION',
+      message: 'Alternacija unutar ponavljane grupe nije dozvoljena.',
+    };
+  }
+  const wildcardRepeats = pattern.match(/(?<!\\)\.(?:\*|\+)/gu) ?? [];
+  if (wildcardRepeats.length > 1) {
+    return {
+      ok: false,
+      reason: 'AMBIGUOUS_REPETITION',
+      message: 'Više ponavljanih wildcard segmenata nije dozvoljeno.',
+    };
+  }
   try {
-    new RegExp(pattern, 'u');
+    const compiled = new RegExp(pattern, 'u');
+    if (!safeRegex(compiled, { limit: 12 })) {
+      return {
+        ok: false,
+        reason: 'UNSAFE_COMPLEXITY',
+        message: 'Složenost uzorka nije sigurna za regularni izraz.',
+      };
+    }
   } catch {
     return { ok: false, reason: 'INVALID_REGEX', message: 'Uzorak nije ispravan regex.' };
   }
@@ -412,6 +444,52 @@ export const fieldDefinitionSchema = z
         path: ['validation'],
         message: `Nedozvoljeni validacijski ključevi za ${field.type}: ${unknownKeys.join(', ')}.`,
       });
+    }
+
+    if (field.type === 'REFERENCE_RECORD') {
+      const entityType = field.validation?.['entityType'];
+      if (
+        typeof entityType !== 'string' ||
+        !REFERENCE_ENTITY_TYPES.some((allowedType) => allowedType === entityType)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['validation', 'entityType'],
+          message: 'REFERENCE_RECORD zahtijeva entityType iz dozvoljene liste.',
+        });
+      }
+    }
+
+    if (field.type === 'MONEY') {
+      const currency = field.validation?.['currency'];
+      if (
+        typeof currency === 'string' &&
+        !FORM_CURRENCIES.some((allowedCurrency) => allowedCurrency === currency)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['validation', 'currency'],
+          message: `Valuta mora biti jedna od: ${FORM_CURRENCIES.join(', ')}.`,
+        });
+      }
+    }
+
+    if (field.type === 'CURRENCY') {
+      const allowedCurrencies = field.validation?.['allowedCurrencies'];
+      if (
+        Array.isArray(allowedCurrencies) &&
+        allowedCurrencies.some(
+          (currency) =>
+            typeof currency !== 'string' ||
+            !FORM_CURRENCIES.some((allowedCurrency) => allowedCurrency === currency),
+        )
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['validation', 'allowedCurrencies'],
+          message: `Valute moraju biti iz liste: ${FORM_CURRENCIES.join(', ')}.`,
+        });
+      }
     }
 
     const pattern = field.validation?.['pattern'];

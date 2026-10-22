@@ -118,7 +118,13 @@ export class FormSchemasService {
   async listFormOptions(listCode: string): Promise<Array<{ value: string; label: string }>> {
     const list = await this.prisma.list.findUnique({
       where: { code: listCode },
-      select: { items: { where: { active: true, deletedAt: null }, orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }], select: { code: true, label: true } } },
+      select: {
+        items: {
+          where: { active: true, deletedAt: null },
+          orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+          select: { code: true, label: true },
+        },
+      },
     });
     return (list?.items ?? []).map((item) => ({ value: item.code ?? item.label, label: item.label }));
   }
@@ -468,6 +474,31 @@ export class FormSchemasService {
 
     const publishedAt = new Date();
     await this.prisma.$transaction(async (tx) => {
+      // U-16 je tvrdo pravilo: konflikt tipa odbija objavu i rollbacka i registar
+      // i promjene verzija u istoj transakciji.
+      await syncFieldKeys(tx as unknown as FieldKeyRegistryClient, definition, formSchemaId, {
+        onTypeConflict: (conflict) => {
+          throw new VfmException(
+            'FORM_VALIDATION_FAILED',
+            `Ključ "${conflict.key}" je već definisan kao ${conflict.actual}; ${conflict.expected} nije dozvoljen (U-16).`,
+            [detail(`fields.${conflict.key}`, `Konflikt tipa: ${conflict.actual} / ${conflict.expected}.`)],
+          );
+        },
+      });
+
+      // Compare-and-set preko aktivne verzije serijalizuje dvije paralelne
+      // objave. Gubitnik ne smije ostaviti drugu verziju u stanju PUBLISHED.
+      const activated = await tx.formSchema.updateMany({
+        where: { id: formSchemaId, currentPublishedVersionId: schema.currentPublishedVersionId },
+        data: { currentPublishedVersionId: versionId },
+      });
+      if (activated.count !== 1) {
+        throw new VfmException(
+          'FORM_VERSION_IMMUTABLE',
+          'Aktivna verzija forme se promijenila tokom objave. Osvježite formu i pokušajte ponovo.',
+        );
+      }
+
       if (previous) {
         await tx.formSchemaVersion.update({
           where: { id: previous.id },
@@ -487,18 +518,6 @@ export class FormSchemasService {
           normalizedName: asJson(definition.normalizedName ?? []),
         },
       });
-
-      await tx.formSchema.update({
-        where: { id: formSchemaId },
-        data: { currentPublishedVersionId: versionId },
-      });
-    });
-
-    await syncFieldKeys(this.prisma as unknown as FieldKeyRegistryClient, definition, formSchemaId, {
-      onTypeConflict: (conflict) =>
-        this.logger.warn(
-          `Ključ "${conflict.key}" je u formi ${formSchemaId} tipa ${conflict.expected}, a registar ga vodi kao ${conflict.actual} (U-16).`,
-        ),
     });
 
     this.logger.log(`Forma ${schema.key}: verzija ${version.version} objavljena.`);

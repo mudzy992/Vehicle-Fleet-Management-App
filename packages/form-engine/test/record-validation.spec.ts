@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isEmptyRecordValue,
+  MAX_PATTERN_INPUT_LENGTH,
   normalizeRecordValues,
   parseMoneyValue,
   parseDefinition,
@@ -133,9 +134,71 @@ describe('validateRecord — odbijanja (§9 tačka 3)', () => {
     expect(codes({ ...VALID_WASH, washType: 'NEPOZNATO' })).toEqual(['FIELD_NOT_VISIBLE', 'OPTION']);
     expect(codes({ ...VALID_WASH, washCost: { amount: 9000 } })).toEqual(['TYPE']);
     expect(codes({ ...VALID_WASH, washCost: { amount: 1000, currency: 'EUR' } })).toEqual(['CURRENCY']);
+    expect(codes({ ...VALID_WASH, washCost: { amount: 9000, currency: 'JPY' } })).toEqual(['CURRENCY']);
+    expect(codes({ ...VALID_WASH, washDurationMin: Number.MAX_SAFE_INTEGER + 1 })).toEqual(['TYPE']);
     expect(codes({ ...VALID_WASH, washCost: { amount: 10_000_001, currency: 'BAM' } })).toEqual(['MAX']);
     expect(codes({ ...VALID_WASH, photosAfter: 'nije-uuid' })).toEqual(['TYPE']);
     expect(codes({ ...VALID_WASH, photosAfter: [] })).toEqual(['REQUIRED']);
+  });
+
+  it('REFERENCE_RECORD ne prihvata tip izvan whitelista definicije', () => {
+    const referenceDefinition = definitionOf(
+      minimalDefinition({
+        sections: [
+          {
+            key: 'osnovno',
+            title: 'Osnovno',
+            order: 1,
+            fields: [
+              {
+                key: 'povezaniZadatak',
+                type: 'REFERENCE_RECORD',
+                label: 'Zadatak',
+                order: 1,
+                validation: { entityType: 'TASK' },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const input = { entityId: '018f0000-0000-7000-8000-0000000000a1', entityType: 'VEHICLE' };
+    const result = validateRecord({
+      version: version({ definition: referenceDefinition }),
+      values: { povezaniZadatak: input },
+      today: TODAY,
+    });
+    expect(result.errors.map((error) => error.code)).toEqual(['TYPE']);
+  });
+
+  it('ograničava ulaz prije regex evaluacije', () => {
+    const patternDefinition = definitionOf(
+      minimalDefinition({
+        sections: [
+          {
+            key: 'osnovno',
+            title: 'Osnovno',
+            order: 1,
+            fields: [
+              {
+                key: 'kod',
+                type: 'TEXT',
+                label: 'Kod',
+                order: 1,
+                validation: { pattern: '^a+$' },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const result = validateRecord({
+      version: version({ definition: patternDefinition }),
+      values: { kod: 'a'.repeat(MAX_PATTERN_INPUT_LENGTH + 1) },
+      today: TODAY,
+    });
+
+    expect(result.errors.map((error) => error.code)).toEqual(['MAX_LENGTH']);
   });
 
   it('prilozi: nepoznat, pogrešan MIME i preveliki fajl', () => {

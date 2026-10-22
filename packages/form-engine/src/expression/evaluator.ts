@@ -34,7 +34,7 @@ export interface EvaluationContext {
   readonly values: Readonly<Record<string, unknown>>;
   /** Današnji datum (`YYYY-MM-DD`, UTC) za `today()`. */
   readonly today?: string;
-  /** Maksimalno trajanje evaluacije u ms (default 10 ms, docs/04 §6.3). */
+  /** Maksimalno trajanje evaluacije u ms (default 100 ms, docs/04 §6.3). */
   readonly timeoutMs?: number;
 }
 
@@ -165,7 +165,7 @@ class Interpreter {
     // Prvih nekoliko čvorova se provjerava uvijek (da i mali izraz padne kad je
     // budžet već potrošen), dalje svakih 64 čvora — `Date.now()` nije besplatan.
     if ((this.nodes <= 8 || (this.nodes & 0x3f) === 0) && Date.now() > this.deadline) {
-      throw new ExpressionError('COMPUTED_TIMEOUT', 'Izračun je prekoračio dozvoljeno vrijeme (10 ms).');
+      throw new ExpressionError('COMPUTED_TIMEOUT', 'Izračun je prekoračio dozvoljeno vrijeme (100 ms).');
     }
   }
 

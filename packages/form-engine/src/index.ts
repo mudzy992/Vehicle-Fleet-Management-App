@@ -154,6 +154,7 @@ export type {
 } from './definition.schema.js';
 
 export {
+  MAX_PATTERN_INPUT_LENGTH,
   RECORD_ERROR_CODES,
   RECORD_VERSION_ERRORS,
   RECORD_WARNING_CODES,

@@ -18,7 +18,12 @@
 import type { FieldDefinition, FormDefinition, SectionDefinition } from './definition.schema.js';
 import { computedFields, findField, inputFields } from './definition.schema.js';
 import type { FieldType } from './field-types.js';
-import { FIELD_VALUE_KIND, isMobileCompatible } from './field-types.js';
+import {
+  FIELD_VALUE_KIND,
+  FORM_CURRENCIES,
+  isMobileCompatible,
+  REFERENCE_ENTITY_TYPES,
+} from './field-types.js';
 import { isFieldVisible } from './conditions.js';
 import { evaluateExpression } from './expression/evaluator.js';
 import type { ExpressionValue } from './expression/functions.js';
@@ -115,6 +120,8 @@ export interface RecordValidationResult {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+/** Gornja granica ulaza koji se pušta kroz JavaScript regex. */
+export const MAX_PATTERN_INPUT_LENGTH = 4096;
 const DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})$/u;
 
 interface Ctx {
@@ -180,7 +187,7 @@ function decimalPlaces(value: number): number {
 export function parseMoneyValue(value: unknown): { amount: number; currency: string } | null {
   if (!isPlainObject(value)) return null;
   const { amount, currency } = value;
-  if (typeof amount !== 'number' || !Number.isFinite(amount) || !Number.isInteger(amount)) return null;
+  if (typeof amount !== 'number' || !Number.isSafeInteger(amount)) return null;
   if (typeof currency !== 'string' || !/^[A-Z]{3}$/u.test(currency)) return null;
   return { amount, currency };
 }
@@ -200,6 +207,15 @@ function checkText(ctx: Ctx, field: FieldDefinition, key: string, value: string)
     fail(ctx, key, 'MAX_LENGTH', `Najviše ${maxLength} znakova (uneseno ${trimmed.length}).`);
   }
   const pattern = ruleString(field, 'pattern');
+  if (pattern && trimmed.length > MAX_PATTERN_INPUT_LENGTH) {
+    fail(
+      ctx,
+      key,
+      'MAX_LENGTH',
+      `Vrijednost s regex provjerom može imati najviše ${MAX_PATTERN_INPUT_LENGTH} znakova.`,
+    );
+    return trimmed;
+  }
   if (pattern) {
     try {
       if (!new RegExp(pattern, 'u').test(trimmed)) {
@@ -233,7 +249,9 @@ function checkMoney(ctx: Ctx, field: FieldDefinition, key: string, value: unknow
     return undefined;
   }
   const currency = ruleString(field, 'currency');
-  if (currency && money.currency !== currency) {
+  if (!FORM_CURRENCIES.some((allowedCurrency) => allowedCurrency === money.currency)) {
+    fail(ctx, key, 'CURRENCY', `Dozvoljene valute: ${FORM_CURRENCIES.join(', ')}.`);
+  } else if (currency && money.currency !== currency) {
     fail(ctx, key, 'CURRENCY', `Valuta mora biti ${currency}.`);
   }
   // `min`/`max` su u KM (glavnoj jedinici), a `amount` je u feninzima.
@@ -346,7 +364,7 @@ function checkFieldValue(
     }
 
     case 'integer': {
-      if (typeof value !== 'number' || !Number.isInteger(value)) {
+      if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
         fail(ctx, key, 'TYPE', 'Vrijednost mora biti cijeli broj.');
         return undefined;
       }
@@ -375,8 +393,9 @@ function checkFieldValue(
         fail(ctx, key, 'TYPE', 'Valuta mora biti tekstualni kod.');
         return undefined;
       }
-      const allowed = ruleStringArray(field, 'allowedCurrencies');
-      if (allowed && allowed.length > 0 && !allowed.includes(value)) {
+      const configured = ruleStringArray(field, 'allowedCurrencies');
+      const allowed = configured && configured.length > 0 ? configured : [...FORM_CURRENCIES];
+      if (!FORM_CURRENCIES.some((currency) => currency === value) || !allowed.includes(value)) {
         fail(ctx, key, 'CURRENCY', `Dozvoljene valute: ${allowed.join(', ')}.`);
       }
       return value;
@@ -439,8 +458,20 @@ function checkFieldValue(
     case 'recordReference': {
       const entityType = isPlainObject(value) ? value['entityType'] : undefined;
       const entityId = isPlainObject(value) ? value['entityId'] : undefined;
-      if (typeof entityType !== 'string' || typeof entityId !== 'string' || !UUID_PATTERN.test(entityId)) {
-        fail(ctx, key, 'TYPE', 'Referenca mora biti { entityType, entityId } s ispravnim UUID-om.');
+      const expectedType = ruleString(field, 'entityType');
+      if (
+        typeof entityType !== 'string' ||
+        !REFERENCE_ENTITY_TYPES.some((allowedType) => allowedType === entityType) ||
+        (expectedType !== undefined && entityType !== expectedType) ||
+        typeof entityId !== 'string' ||
+        !UUID_PATTERN.test(entityId)
+      ) {
+        fail(
+          ctx,
+          key,
+          'TYPE',
+          `Referenca mora biti { entityType: ${expectedType ?? 'dozvoljeni tip'}, entityId: UUID }.`,
+        );
         return undefined;
       }
       return { entityType, entityId };

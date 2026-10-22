@@ -84,6 +84,7 @@ interface RecordRow {
   readonly formSchemaVersionId: string | null;
   readonly formData: Prisma.JsonValue;
   readonly createdAt: Date;
+  readonly [column: string]: unknown;
 }
 
 interface RecordDelegate {
@@ -218,14 +219,20 @@ export class FormMigrationsService {
     }
 
     const summary: MigrationSummary = { total: records.length, ok, failed, skipped: 0 };
-    await this.prisma.formMigrationJob.update({
-      where: { id: job.id },
+    const previewUpdate = await this.prisma.formMigrationJob.updateMany({
+      where: { id: job.id, status: job.status },
       data: {
         status: 'PREVIEW',
         previewResult: asJson({ summary, sample: items.length }),
         summary: asJson(summary),
       },
     });
+    if (previewUpdate.count !== 1) {
+      throw new VfmException(
+        'VALIDATION_ERROR',
+        'Stanje migracije se promijenilo tokom pregleda; pokrenite preview ponovo.',
+      );
+    }
 
     this.logger.log(`Migracija ${job.id}: preview ${ok}/${records.length} prolazi.`);
     return {
@@ -241,8 +248,11 @@ export class FormMigrationsService {
 
   async apply(jobId: string, input: RunFormMigrationInput): Promise<FormMigrationJob> {
     const job = await this.loadJobOrThrow(jobId);
-    if (job.status !== 'PREVIEW' && job.status !== 'PENDING') {
-      throw new VfmException('VALIDATION_ERROR', `Migracija je u stanju ${job.status}; apply nije moguć.`);
+    if (job.status !== 'PREVIEW') {
+      throw new VfmException(
+        'VALIDATION_ERROR',
+        `Migracija mora imati pregled prije primjene (trenutno stanje: ${job.status}).`,
+      );
     }
     if (input.changeNote.trim().length < 5) {
       throw VfmErrors.validationError([{ path: ['changeNote'], message: 'Bilješka je obavezna.' }]);
@@ -253,10 +263,16 @@ export class FormMigrationsService {
     const records = await this.loadCandidateRecords(job, fromVersion.id);
 
     const startedAt = new Date();
-    await this.prisma.formMigrationJob.update({
-      where: { id: job.id },
+    const claim = await this.prisma.formMigrationJob.updateMany({
+      where: { id: job.id, status: 'PREVIEW' },
       data: { status: 'RUNNING', startedAt, notes: input.changeNote.trim() },
     });
+    if (claim.count !== 1) {
+      throw new VfmException(
+        'VALIDATION_ERROR',
+        'Migracija je već pokrenuta ili više nije u stanju PREVIEW.',
+      );
+    }
 
     let ok = 0;
     let skipped = 0;
@@ -276,7 +292,7 @@ export class FormMigrationsService {
                 id: randomUUID(),
                 jobId: job.id,
                 entityId: record.id,
-                before: asJson(this.snapshot(record)),
+                before: asJson(this.snapshot(record, target)),
                 status: 'SKIPPED',
                 error: result.errors.map((error) => `${error.key}: ${error.code}`).join('; '),
                 processedAt: new Date(),
@@ -297,7 +313,7 @@ export class FormMigrationsService {
               id: randomUUID(),
               jobId: job.id,
               entityId: record.id,
-              before: asJson(this.snapshot(record)),
+              before: asJson(this.snapshot(record, target)),
               after: asJson({ formData: result.after, normalized: result.normalized }),
               status: 'APPLIED',
               processedAt: new Date(),
@@ -356,11 +372,17 @@ export class FormMigrationsService {
 
     const target = MIGRATION_TARGETS[job.targetEntityType as MigrationTargetEntity];
     const delegate = this.recordDelegate(target);
-    const entityFilter = input.entityIds && input.entityIds.length > 0 ? { in: input.entityIds } : undefined;
 
-    const items = await this.prisma.formMigrationItem.findMany({
-      where: { jobId: job.id, status: 'APPLIED', ...(entityFilter ? { entityId: entityFilter } : {}) },
+    const appliedItems = await this.prisma.formMigrationItem.findMany({
+      where: { jobId: job.id, status: 'APPLIED' },
     });
+    const requestedIds = input.entityIds?.length ? new Set(input.entityIds) : null;
+    const items = requestedIds
+      ? appliedItems.filter((item) => requestedIds.has(item.entityId))
+      : appliedItems;
+    if (items.length === 0) {
+      throw new VfmException('VALIDATION_ERROR', 'Nema primijenjenih zapisa za rollback u ovom izboru.');
+    }
 
     let restored = 0;
     for (let offset = 0; offset < items.length; offset += MIGRATION_BATCH_SIZE) {
@@ -389,19 +411,25 @@ export class FormMigrationsService {
       });
     }
 
-    const finishedAt = new Date();
+    const remaining = appliedItems.length - restored;
+    const fullyRolledBack = remaining === 0;
+    const finishedAt = fullyRolledBack ? new Date() : job.finishedAt;
     await this.prisma.formMigrationJob.update({
       where: { id: job.id },
       data: {
-        status: 'ROLLED_BACK',
-        finishedAt,
+        status: fullyRolledBack ? 'ROLLED_BACK' : 'COMPLETED',
+        ...(fullyRolledBack ? { finishedAt } : {}),
         notes: input.changeNote.trim(),
-        summary: asJson({ total: items.length, ok: 0, failed: 0, skipped: 0, restored }),
       },
     });
 
-    this.logger.log(`Migracija ${job.id}: vraćeno ${restored} zapisa.`);
-    return this.toJob({ ...job, status: 'ROLLED_BACK', finishedAt });
+    this.logger.log(`Migracija ${job.id}: vraćeno ${restored}; preostalo primijenjeno ${remaining}.`);
+    return this.toJob({
+      ...job,
+      status: fullyRolledBack ? 'ROLLED_BACK' : 'COMPLETED',
+      finishedAt: finishedAt ?? null,
+      notes: input.changeNote.trim(),
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -506,11 +534,16 @@ export class FormMigrationsService {
     return { errors: result.errors, after: { ...result.values }, normalized: { ...result.normalized } };
   }
 
-  private snapshot(record: RecordRow): Record<string, unknown> {
+  private snapshot(record: RecordRow, target: TargetSpec): Record<string, unknown> {
+    const normalized = Object.fromEntries(
+      target.columns
+        .filter((column) => Object.prototype.hasOwnProperty.call(record, column))
+        .map((column) => [column, record[column]]),
+    );
     return {
       formData: asRecord(record.formData),
       formSchemaVersionId: record.formSchemaVersionId,
-      normalized: {},
+      normalized,
     };
   }
 

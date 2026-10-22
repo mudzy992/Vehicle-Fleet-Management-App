@@ -552,8 +552,9 @@ Napomene uz implementaciju (odstupanja i pojašnjenja):
   dokumentovani primjer pada na testu.
 - **Shema je zatvorena** (`.strict()` na svakom nivou): nepoznat ključ je greška, ne tiho ignorisanje.
 - `fieldKey` je jedinstven na nivou **cijele forme** (ne samo sekcije jer se vrijednosti drže u jednom
-  JSONB objektu).
-- **`pattern` je ograničen**: lookaround i backreference se odbijaju (ReDoS), uz maksimalnu dužinu 200.
+  JSONB objektu); pri objavi registar odbija isti ključ s drugim tipom u bilo kojoj formi (U-16), u istoj transakciji.
+- `REFERENCE_RECORD.entityType` mora biti iz predmetne whiteliste i runtime vrijednost mora se poklapati s tipom polja. `CURRENCY` i `MONEY` prihvataju samo `BAM`/`EUR`; iznos u feninzima mora biti siguran cijeli broj.
+- **`pattern` je ograničen zbog ReDoS-a**: lookaround/backreference, ponavljana alternacija i više ponavljanih wildcard segmenata se odbijaju; `safe-regex2` dodatno provjerava složenost, a regex se ne izvršava nad tekstom dužim od 4096 znakova. Maksimalna dužina uzorka je 200.
 - `visibleWhen` dubina ≤ 3, `all`/`any` po ≤ 10 djece; operatori koji ne nose vrijednost (`IS_EMPTY`)
   odbijaju `value`, a `IN`/`BETWEEN` zahtijevaju listu.
 - `COMPUTED` ne može biti `required` (računa se na serveru), a `SECTION` ne nosi vrijednost.

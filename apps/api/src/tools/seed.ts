@@ -458,11 +458,12 @@ async function seedForms(prisma: PrismaClient): Promise<{
 
     // Prisma delegat ima strože tipove od minimalnog interfejsa registra.
     await syncFieldKeys(prisma as unknown as FieldKeyRegistryClient, parsed.definition, formSchemaId, {
-      onTypeConflict: (conflict) =>
-        log(
-          `U-16: ključ "${conflict.key}" je u formi "${form.key}" tipa ${conflict.expected}, ` +
-            `a registar ga vodi kao ${conflict.actual} — tip se ne prepisuje.`,
-        ),
+      onTypeConflict: (conflict) => {
+        throw new Error(
+          `U-16 konflikt u formi "${form.key}": ključ "${conflict.key}" je ${conflict.expected}, ` +
+            `a registar ga već vodi kao ${conflict.actual}.`,
+        );
+      },
     });
 
     created.push(form.key);

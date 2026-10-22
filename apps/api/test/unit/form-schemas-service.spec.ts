@@ -300,6 +300,53 @@ describe('FormSchemasService — objava (P9/P10)', () => {
     expect(active.contentHash).toMatch(/^[0-9a-f]{64}$/u);
   });
 
+  it('odbija objavu kad registar već ima isti fieldKey pod drugim tipom', async () => {
+    const { prisma, service } = build();
+    const detail = await createWashForm(service);
+    const versionId = detail.versions[0]!.id;
+    await prisma.fieldKeyRegistry.create({
+      data: {
+        key: 'washType',
+        dataType: 'TEXT',
+        unit: null,
+        normalizedColumn: null,
+        usedByFormSchemaIds: [],
+      },
+    });
+
+    const error = await errorOf(() =>
+      service.publish(detail.id, versionId, { changeNote: 'Prva verzija' }, ACTOR),
+    );
+
+    expect(error.code).toBe('FORM_VALIDATION_FAILED');
+    expect(error.message).toContain('U-16');
+    const fresh = await service.get(detail.id);
+    expect(fresh.currentPublishedVersionId).toBeNull();
+    expect(fresh.versions[0]?.status).toBe('DRAFT');
+  });
+
+  it('konkurentne objave ne ostavljaju više od jedne PUBLISHED verzije', async () => {
+    const { service } = build();
+    const detail = await createWashForm(service);
+    const first = detail.versions[0]!.id;
+    await service.publish(detail.id, first, { changeNote: 'Prva verzija' }, ACTOR);
+
+    const second = await service.createVersion(detail.id, { definition: freshWashDefinition() }, ACTOR);
+    const third = await service.createVersion(detail.id, { definition: freshWashDefinition() }, ACTOR);
+    const results = await Promise.allSettled([
+      service.publish(detail.id, second.data.id, { changeNote: 'Druga verzija' }, ACTOR),
+      service.publish(detail.id, third.data.id, { changeNote: 'Treća verzija' }, ACTOR),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    const fresh = await service.get(detail.id);
+    expect(fresh.versions.filter((version) => version.status === 'PUBLISHED')).toHaveLength(1);
+    expect(fresh.currentPublishedVersionId).toBe(
+      results[0]?.status === 'fulfilled' ? second.data.id : third.data.id,
+    );
+  });
+
   it('povlačenje aktivne verzije bez zamjene je odbijeno', async () => {
     const { service } = build();
     const detail = await createWashForm(service);

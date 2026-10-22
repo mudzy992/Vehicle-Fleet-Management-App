@@ -225,6 +225,20 @@ describe('meta-shema definicije (docs/04 §2–§5, §7)', () => {
     expect(findUnknownValidationKeys('PHOTO', { minFiles: 2 })).toEqual([]);
   });
 
+  it('whitelista entityType za REFERENCE_RECORD i valute forme', () => {
+    const reference = minimalDefinition();
+    const referenceField = (reference['sections'] as { fields: Record<string, unknown>[] }[])[0]!.fields[0]!;
+    referenceField['type'] = 'REFERENCE_RECORD';
+    referenceField['validation'] = { entityType: 'ARBITRARY_TABLE' };
+    expect(firstIssue(reference).path).toBe('$.sections[0].fields[0].validation.entityType');
+
+    const money = minimalDefinition();
+    const moneyField = (money['sections'] as { fields: Record<string, unknown>[] }[])[0]!.fields[0]!;
+    moneyField['type'] = 'MONEY';
+    moneyField['validation'] = { currency: 'XYZ' };
+    expect(firstIssue(money).path).toBe('$.sections[0].fields[0].validation.currency');
+  });
+
   it('odbija min > max i neispravan precision', () => {
     const minMax = minimalDefinition();
     (minMax['sections'] as { fields: Record<string, unknown>[] }[])[0]!.fields[0]!['type'] = 'INTEGER';
@@ -242,7 +256,7 @@ describe('meta-shema definicije (docs/04 §2–§5, §7)', () => {
     expect(firstIssue(precision).message).toContain('0–4');
   });
 
-  it('odbija `pattern` s lookaroundom i backreference (ReDoS)', () => {
+  it('odbija lookaround, backreference i obrasce s ReDoS rizikom', () => {
     const definition = minimalDefinition();
     (definition['sections'] as { fields: Record<string, unknown>[] }[])[0]!.fields[0]!['validation'] = {
       pattern: '^(?=.*\\d).+$',
@@ -251,6 +265,9 @@ describe('meta-shema definicije (docs/04 §2–§5, §7)', () => {
     expect(firstIssue(definition).message).toContain('Lookaround');
     expect(checkPatternSafe('^\\d+$').ok).toBe(true);
     expect(checkPatternSafe('(a)\\1').reason).toBe('BACKREFERENCE');
+    expect(checkPatternSafe('(a+)+$').reason).toBe('UNSAFE_COMPLEXITY');
+    expect(checkPatternSafe('^(a|aa)+$').reason).toBe('AMBIGUOUS_REPETITION');
+    expect(checkPatternSafe('^.*.*x$').reason).toBe('AMBIGUOUS_REPETITION');
     expect(checkPatternSafe('[').reason).toBe('INVALID_REGEX');
     expect(checkPatternSafe('a'.repeat(DEFINITION_LIMITS.maxPatternLength + 1)).reason).toBe('TOO_LONG');
   });

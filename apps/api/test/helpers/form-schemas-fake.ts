@@ -122,7 +122,10 @@ export class FakeFormPrisma {
   readonly versions = new Map<string, FakeVersionRow>();
   readonly fieldKeys = new Map<string, FakeFieldKeyRow>();
   readonly taskTypes = new Map<string, FakeTaskTypeRow>();
-  readonly formOptionLists = new Map<string, Array<{ code: string | null; label: string; active: boolean; deletedAt: Date | null; sortOrder: number }>>();
+  readonly formOptionLists = new Map<
+    string,
+    Array<{ code: string | null; label: string; active: boolean; deletedAt: Date | null; sortOrder: number }>
+  >();
   readonly list = {
     findUnique: async ({ where }: { where: { code: string }; select?: unknown }) => {
       const items = (this.formOptionLists.get(where.code) ?? [])
@@ -242,6 +245,18 @@ export class FakeFormPrisma {
       if (!row) throw new Error(`Forma ${args.where.id} ne postoji.`);
       Object.assign(row, args.data, { updatedAt: new Date('2026-10-20T10:00:00.000Z') });
       return { ...row };
+    },
+
+    updateMany: async (args: {
+      where: { id: string; currentPublishedVersionId: string | null };
+      data: Record<string, unknown>;
+    }) => {
+      const row = this.schemas.get(args.where.id);
+      if (!row || row.currentPublishedVersionId !== args.where.currentPublishedVersionId) {
+        return { count: 0 };
+      }
+      Object.assign(row, args.data, { updatedAt: new Date('2026-10-20T10:00:00.000Z') });
+      return { count: 1 };
     },
   };
 
@@ -445,6 +460,13 @@ export class FakeFormPrisma {
       if (data['previewResult'] === undefined) delete data['previewResult'];
       Object.assign(row, data);
       return { ...row };
+    },
+
+    updateMany: async (args: { where: { id: string; status: string }; data: Record<string, unknown> }) => {
+      const row = this.migrationJobs.get(args.where.id);
+      if (!row || row.status !== args.where.status) return { count: 0 };
+      Object.assign(row, args.data);
+      return { count: 1 };
     },
 
     findUnique: async (args: { where: { id: string } }) => {

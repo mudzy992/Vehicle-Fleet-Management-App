@@ -228,9 +228,12 @@ describe('FormMigrationsService — apply i rollback', () => {
       'SKIPPED',
     );
 
-    // `before` je sačuvan za rollback.
+    // `before` čuva i vrijednost normalizovane kolone za tačan rollback.
     const item = [...prisma.migrationItems.values()].find((entry) => entry.entityId === TASK_A);
-    expect(item?.before).toMatchObject({ formSchemaVersionId: v1 });
+    expect(item?.before).toMatchObject({
+      formSchemaVersionId: v1,
+      normalized: { odometerKm: null },
+    });
   });
 
   it('apply traži preview stanje i bilješku', async () => {
@@ -241,7 +244,9 @@ describe('FormMigrationsService — apply i rollback', () => {
       { formSchemaId, fromVersionId: v1, toVersionId: v2, targetEntityType: 'TASK' },
       ACTOR,
     );
-    await migrations.apply(job.id, { changeNote: 'Bez preview-a' }); // PENDING je dozvoljen
+    const missingPreview = await errorOf(() => migrations.apply(job.id, { changeNote: 'Bez preview-a' }));
+    expect(missingPreview.code).toBe('VALIDATION_ERROR');
+    expect((await migrations.get(job.id)).status).toBe('PENDING');
 
     const completed = await migrations.create(
       { formSchemaId, fromVersionId: v1, toVersionId: v2, targetEntityType: 'TASK' },
@@ -268,6 +273,7 @@ describe('FormMigrationsService — apply i rollback', () => {
     const task = (prisma.records.get('task') ?? []).find((row) => row.id === TASK_A);
     expect(task?.formSchemaVersionId).toBe(v1);
     expect(task?.formData).toMatchObject({ opis: 'A', km: 100, radionica: 'X' });
+    expect(task?.['odometerKm']).toBeNull();
 
     const item = [...prisma.migrationItems.values()].find((entry) => entry.entityId === TASK_A);
     expect(item?.status).toBe('ROLLED_BACK');
@@ -275,6 +281,47 @@ describe('FormMigrationsService — apply i rollback', () => {
     const jobRow = await migrations.get(job.id);
     expect(jobRow.status).toBe('ROLLED_BACK');
     expect(jobRow.notes).toBe('Vraćam na v1');
+  });
+
+  it('djelimični rollback ne zatvara job dok postoje primijenjene stavke', async () => {
+    const { prisma, migrations, formSchemaId, v1, v2 } = await publishedForm();
+    addTask(prisma, formSchemaId, v1, TASK_A, { opis: 'A', km: 100, radionica: 'X' });
+    addTask(prisma, formSchemaId, v1, TASK_B, { opis: 'B', km: 200, radionica: 'X' });
+
+    const job = await migrations.create(
+      { formSchemaId, fromVersionId: v1, toVersionId: v2, targetEntityType: 'TASK' },
+      ACTOR,
+    );
+    await migrations.preview(job.id);
+    await migrations.apply(job.id, { changeNote: 'Migracija na v2' });
+
+    await migrations.rollback(job.id, { changeNote: 'Vraćam prvi zapis', entityIds: [TASK_A] });
+    expect((await migrations.get(job.id)).status).toBe('COMPLETED');
+    expect((prisma.records.get('task') ?? []).find((row) => row.id === TASK_A)?.formSchemaVersionId).toBe(v1);
+    expect((prisma.records.get('task') ?? []).find((row) => row.id === TASK_B)?.formSchemaVersionId).toBe(v2);
+
+    await migrations.rollback(job.id, { changeNote: 'Vraćam preostali zapis' });
+    expect((await migrations.get(job.id)).status).toBe('ROLLED_BACK');
+    expect((prisma.records.get('task') ?? []).find((row) => row.id === TASK_B)?.formSchemaVersionId).toBe(v1);
+  });
+
+  it('konkurentni apply iste migracije prihvata samo jednom', async () => {
+    const { prisma, migrations, formSchemaId, v1, v2 } = await publishedForm();
+    addTask(prisma, formSchemaId, v1, TASK_A, { opis: 'A', km: 100, radionica: 'X' });
+    const job = await migrations.create(
+      { formSchemaId, fromVersionId: v1, toVersionId: v2, targetEntityType: 'TASK' },
+      ACTOR,
+    );
+    await migrations.preview(job.id);
+
+    const results = await Promise.allSettled([
+      migrations.apply(job.id, { changeNote: 'Migracija 1' }),
+      migrations.apply(job.id, { changeNote: 'Migracija 2' }),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect((await migrations.get(job.id)).summary?.ok).toBe(1);
+    expect(prisma.migrationItems.size).toBe(1);
   });
 
   it('rollback samo za završenu migraciju', async () => {
@@ -303,6 +350,7 @@ describe('FormMigrationsService — apply i rollback', () => {
       { formSchemaId, fromVersionId: v1, toVersionId: v2, targetEntityType: 'TASK' },
       ACTOR,
     );
+    await migrations.preview(job.id);
     const applied = await migrations.apply(job.id, { changeNote: 'Migracija 12 zapisa' });
 
     expect(applied.summary?.ok).toBe(12);
