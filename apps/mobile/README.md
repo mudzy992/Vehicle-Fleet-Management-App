@@ -46,6 +46,6 @@ Privatni **service-account JSON** je drugi fajl: nikad ga ne stavljati u `apps/m
 
 ## Planirani nastavak
 
-- U wizardu dodati `LIST`/`QUERY` i `REFERENCE` lookup te direktnu dodjelu/pozivanje korisnika.
+- U wizardu dodati `LIST`/`QUERY` i `REFERENCE` lookup polja.
 - Obavijesti, FCM token registracija i API slanje push poruka.
 - Expo/EAS Android development build i test na fizičkom uređaju.

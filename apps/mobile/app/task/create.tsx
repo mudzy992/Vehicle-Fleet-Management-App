@@ -8,11 +8,11 @@ import { buildRenderModel, collectSubmitValues, type RenderField, type RenderMod
 import { parseDefinition } from '@vfm/form-engine/definition';
 import { FieldControl } from '@/features/tasks/dynamic-task-form';
 import { useAuth } from '@/features/auth/auth-provider';
-import { ApiError, mobileApi, type ActiveTaskForm, type MobileTaskType, type VehicleSummary } from '@/lib/api';
+import { ApiError, mobileApi, type ActiveTaskForm, type MobileTaskType, type UserSummary, type VehicleSummary } from '@/lib/api';
 import { colors } from '@/lib/theme';
 
 interface PickedFile { uri: string; name: string; mimeType: string }
-type AssignMode = 'OPEN_CLAIM' | 'BROADCAST';
+type AssignMode = 'OPEN_CLAIM' | 'ASSIGN_DIRECT' | 'BROADCAST';
 
 function todaySarajevo(): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Sarajevo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
@@ -36,9 +36,15 @@ function dueAtFromDate(value: string): string | undefined | null {
 export default function CreateTaskScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const canViewUsers = user?.permissions.includes('user:view') === true;
+  const canAssignDirect = canViewUsers && user?.permissions.includes('task:assign') === true;
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [taskTypes, setTaskTypes] = useState<MobileTaskType[]>([]);
   const [vehicles, setVehicles] = useState<VehicleSummary[]>([]);
+  const [users, setUsers] = useState<UserSummary[]>([]);
+  const [invitedUserIds, setInvitedUserIds] = useState<string[]>([]);
+  const [observerUserIds, setObserverUserIds] = useState<string[]>([]);
+  const [assigneeUserId, setAssigneeUserId] = useState('');
   const [taskTypeId, setTaskTypeId] = useState('');
   const [vehicleId, setVehicleId] = useState('');
   const [activeForm, setActiveForm] = useState<ActiveTaskForm | null>(null);
@@ -61,10 +67,12 @@ export default function CreateTaskScreen() {
     Promise.all([
       mobileApi.taskTypes(),
       user?.permissions.includes('vehicle:view') ? mobileApi.vehicles() : Promise.resolve({ items: [], page: 1, pageSize: 50, total: 0, totalPages: 0 }),
-    ]).then(([typeResult, vehicleResult]) => {
+      canViewUsers ? mobileApi.users() : Promise.resolve({ items: [], page: 1, pageSize: 100, total: 0, totalPages: 0 }),
+    ]).then(([typeResult, vehicleResult, userResult]) => {
       if (!active) return;
       setTaskTypes(typeResult.items);
       setVehicles(vehicleResult.items.filter((item) => item.status !== 'ARCHIVED'));
+      setUsers(userResult.items.filter((item) => item.id !== user?.id));
       if (typeResult.items[0]) selectType(typeResult.items[0]);
     }).catch((cause: unknown) => {
       if (active) setError(cause instanceof ApiError ? cause.message : 'Podaci za kreiranje zadatka nisu dostupni.');
@@ -75,7 +83,10 @@ export default function CreateTaskScreen() {
   const selectType = (item: MobileTaskType) => {
     setTaskTypeId(item.id);
     setPriority(item.defaultPriority);
-    setAssignMode(item.defaultAssignMode === 'BROADCAST' ? 'BROADCAST' : 'OPEN_CLAIM');
+    setAssignMode(item.defaultAssignMode === 'BROADCAST' ? 'BROADCAST' : item.defaultAssignMode === 'ASSIGN_DIRECT' && canAssignDirect ? 'ASSIGN_DIRECT' : 'OPEN_CLAIM');
+    setAssigneeUserId('');
+    setInvitedUserIds([]);
+    setObserverUserIds([]);
     setValues({});
     setActiveForm(null);
     setVehicleId('');
@@ -183,6 +194,14 @@ export default function CreateTaskScreen() {
 
   const submit = async () => {
     if (!selectedType || !model || submitting) return;
+    if (assignMode === 'ASSIGN_DIRECT' && !assigneeUserId) {
+      setError('Odaberite direktnog izvršioca.');
+      return;
+    }
+    if (assignMode === 'ASSIGN_DIRECT' && !canAssignDirect) {
+      setError('Za direktnu dodjelu potrebne su dozvole task:assign i user:view.');
+      return;
+    }
     const dueAt = dueAtFromDate(dueDate);
     if (dueAt === null) {
       setError('Unesite rok u formatu GGGG-MM-DD, na primjer 2026-10-22.');
@@ -199,6 +218,9 @@ export default function CreateTaskScreen() {
         ...(description.trim() ? { description: description.trim() } : {}),
         priority,
         assignMode,
+        ...(assignMode === 'ASSIGN_DIRECT' ? { assigneeUserId } : {}),
+        ...(assignMode === 'OPEN_CLAIM' ? { invitedUserIds } : {}),
+        observerUserIds,
         ...(dueAt ? { dueAt } : {}),
         formData: collectSubmitValues(model),
       });
@@ -256,9 +278,29 @@ export default function CreateTaskScreen() {
             <TextInput value={dueDate} onChangeText={setDueDate} placeholder={todaySarajevo()} keyboardType="numbers-and-punctuation" style={styles.input} />
             <Text style={styles.label}>Način dodjele</Text>
             <View style={styles.choices}>
-              <Choice active={assignMode === 'OPEN_CLAIM'} label="Preuzimanje" detail="Zadatak ostaje slobodan za preuzimanje." onPress={() => setAssignMode('OPEN_CLAIM')} />
-              <Choice active={assignMode === 'BROADCAST'} label="Objava svima" detail="Vidljiv je korisnicima s dozvolom za preuzimanje." onPress={() => setAssignMode('BROADCAST')} />
+              <Choice active={assignMode === 'OPEN_CLAIM'} label="Preuzimanje" detail="Zadatak ostaje slobodan za preuzimanje." onPress={() => { setAssignMode('OPEN_CLAIM'); setAssigneeUserId(''); }} />
+              {canAssignDirect ? <Choice active={assignMode === 'ASSIGN_DIRECT'} label="Direktna dodjela" detail="Odaberite jednog izvršioca." onPress={() => { setAssignMode('ASSIGN_DIRECT'); setInvitedUserIds([]); }} /> : null}
+              <Choice active={assignMode === 'BROADCAST'} label="Objava svima" detail="Vidljiv je korisnicima s dozvolom za preuzimanje." onPress={() => { setAssignMode('BROADCAST'); setAssigneeUserId(''); setInvitedUserIds([]); }} />
             </View>
+            {assignMode === 'ASSIGN_DIRECT' ? (
+              <>
+                <Text style={styles.label}>Izvršilac *</Text>
+                {users.length ? <View style={styles.choices}>{users.map((item) => <Choice key={item.id} active={assigneeUserId === item.id} label={item.displayName ?? `${item.firstName} ${item.lastName}`} onPress={() => { setAssigneeUserId(item.id); setObserverUserIds((current) => current.filter((id) => id !== item.id)); }} />)}</View> : <Text style={styles.error}>Nema aktivnih korisnika za izbor ili nemate dozvolu user:view.</Text>}
+              </>
+            ) : null}
+            {assignMode === 'OPEN_CLAIM' && canViewUsers ? (
+              <>
+                <Text style={styles.label}>Pozvani korisnici (opciono)</Text>
+                <Text style={styles.muted}>Pozvani korisnici mogu preuzeti zadatak prije ostalih.</Text>
+                <View style={styles.choices}>{users.map((item) => <Choice key={item.id} active={invitedUserIds.includes(item.id)} selectionRole="checkbox" label={item.displayName ?? `${item.firstName} ${item.lastName}`} onPress={() => { setInvitedUserIds((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id]); setObserverUserIds((current) => current.filter((id) => id !== item.id)); }} />)}</View>
+              </>
+            ) : null}
+            {canViewUsers ? (
+              <>
+                <Text style={styles.label}>Posmatrači (opciono)</Text>
+                <View style={styles.choices}>{users.filter((item) => item.id !== assigneeUserId && !invitedUserIds.includes(item.id)).map((item) => <Choice key={item.id} active={observerUserIds.includes(item.id)} selectionRole="checkbox" label={item.displayName ?? `${item.firstName} ${item.lastName}`} onPress={() => setObserverUserIds((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id])} />)}</View>
+              </>
+            ) : null}
           </View>
         ) : null}
 
@@ -288,8 +330,8 @@ export default function CreateTaskScreen() {
   );
 }
 
-function Choice({ active, label, detail, onPress }: { active: boolean; label: string; detail?: string; onPress(): void }) {
-  return <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ selected: active }} style={[styles.choice, active && styles.choiceActive]}><Text style={[styles.choiceLabel, active && styles.choiceLabelActive]}>{label}</Text>{detail ? <Text style={styles.choiceDetail}>{detail}</Text> : null}</Pressable>;
+function Choice({ active, label, detail, onPress, selectionRole = 'radio' }: { active: boolean; label: string; detail?: string; selectionRole?: 'radio' | 'checkbox'; onPress(): void }) {
+  return <Pressable onPress={onPress} accessibilityRole={selectionRole} accessibilityState={{ selected: active }} style={[styles.choice, active && styles.choiceActive]}><Text style={[styles.choiceLabel, active && styles.choiceLabelActive]}>{label}</Text>{detail ? <Text style={styles.choiceDetail}>{detail}</Text> : null}</Pressable>;
 }
 
 function ActionButton({ label, onPress, disabled = false, secondary = false }: { label: string; onPress(): void; disabled?: boolean; secondary?: boolean }) {
