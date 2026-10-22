@@ -23,10 +23,20 @@
       "package": "ba.ba101.voznipark",
       "versionCode": 1,
       "googleServicesFile": "./google-services.json",
-      "permissions": ["android.permission.CAMERA", "android.permission.INTERNET"]
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.INTERNET"
+      ]
     },
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8615f331-a22a-436a-a489-9eaf8aada7ad"
+      }
+    },
+    "owner": "mudzahud"
   }
 }
