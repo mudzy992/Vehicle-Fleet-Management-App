@@ -1,6 +1,6 @@
 # Mobilna aplikacija (Expo / Android)
 
-**Faza 6 je u toku.** Implementirano je: prijava za `MOBILE_ANDROID`, obavezna promjena privremene lozinke, refresh token u SecureStore, Moji/Slobodni zadaci i detalj, trokorakni wizard za kreiranje, dinamičke forme sa LIST/QUERY i podržanim REFERENCE lookup-ima, upload priloga, vozila (lista/profil), profil i odjava. Preostaju: postavke obavijesti, sesije, REFERENCE_RECORD za `VEHICLE_HANDOVER`/`OTHER`, uređajski UAT i EAS distribucija. In-app lista i pojedinačno označavanje pročitane su implementirani; FCM nije aktivan.
+**Faza 6 je u toku.** Implementirano je: prijava za `MOBILE_ANDROID`, obavezna i ručna promjena lozinke, refresh token u SecureStore, Moji/Slobodni zadaci i detalj, trokorakni wizard za kreiranje, dinamičke forme sa LIST/QUERY i podržanim REFERENCE lookup-ima, upload priloga, vozila (lista/profil), profil, odjava i permission-gated upravljanje aktivnim sesijama. API greške imaju ujednačene poruke; neuspjelo osvježavanje sesije vraća korisnika na prijavu. Preostaju postavke obavijesti, `REFERENCE_RECORD` za `VEHICLE_HANDOVER`/`OTHER`, uređajski UAT i EAS distribucija. In-app lista, unread count i označavanje pročitane su implementirani; FCM nije aktivan.
 
 ## Pokretanje i provjera
 
@@ -43,6 +43,20 @@ Instaliraj **Expo Go** na Androidu, poveži telefon i računar na istu Wi-Fi mre
 Firebase Android aplikaciju registruj s package name **`ba.ba101.voznipark`**. Preuzeti klijentski `google-services.json` stavi lokalno u `apps/mobile/google-services.json`; `.gitignore` ga isključuje iz Gita. Nakon što fajl postoji, Expo konfiguracija Androida treba pokazivati na `./google-services.json` (`android.googleServicesFile`). Trenutno Firebase nije integrisan u mobilni build i nema FCM/API registracije tokena; ne uključuj `FIREBASE_ENABLED` još.
 
 Privatni **service-account JSON** je drugi fajl: nikad ga ne stavljati u `apps/mobile`, Git ili Expo bundle. Na produkcijskom hostu ide u `/etc/vfm/secrets/firebase-service-account.json`, montiran read-only u API/worker na `/run/secrets/vfm/firebase-service-account.json`; `FIREBASE_SERVICE_ACCOUNT_HOST_DIR=/etc/vfm/secrets`. Coolify ENV koristi `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_PATH` i tek nakon završene FCM integracije `FIREBASE_ENABLED=true`. Upute za host mount: `docs/08-DOCKER_COOLIFY_DEPLOYMENT.md` §4.4.
+
+## EAS Android build
+
+`eas.json` definiše `preview` (interni APK za uređajski UAT) i `production` (Android App Bundle). Oba profila koriste javni HTTPS API URL; nijedan ne koristi `localhost`. Expo projekat još treba povezati s vlasnikovim Expo nalogom — ne dodavati izmišljeni `projectId` ili nalog u repozitorij.
+
+Iz `apps/mobile` nakon prijave u Expo:
+
+```bash
+corepack pnpm dlx eas-cli@latest login
+corepack pnpm dlx eas-cli@latest init
+corepack pnpm dlx eas-cli@latest build --platform android --profile preview
+```
+
+Za Play Store paket koristi profil `production`. EAS signing credentials konfigurišu se kroz Expo/EAS; ne čuvati ih u repozitoriju. Google Play submit još nije podešen.
 
 ## Planirani nastavak
 
