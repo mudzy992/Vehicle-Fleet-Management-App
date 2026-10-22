@@ -267,6 +267,8 @@ Pragove (30/7) definiše Super Admin u Postavkama — UI ih čita, ne hardkodira
 | | `IN_STOCK` | Na skladištu | info |
 | | `RETIRED` | Izvan upotrebe | neutral |
 
+Lista zadataka (W09) koristi ove iste `taskStatus`/`taskPriority` oznake iz `@vfm/shared`; stanje dugmeta „Preuzmi" mijenja se tek nakon uspješnog serverskog claim-a.
+
 ### 5.6 Ikone
 
 Lucide, 16/20/24 px, `stroke-width 1.75`. Ikona uvijek **uz** tekst (nikad sama bez `aria-label`).
@@ -738,7 +740,8 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 
 | Ekran | Ruta | Fajl | Napomena |
 |---|---|---|---|
-| Vrste zadataka (W18) | `/vrste-zadataka` | `features/task-types/task-types-page.tsx`, `task-type-form.tsx`, `task-type-requirements-panel.tsx` | server pretraga, filteri aktivne/vozilo, sortiranje i paginacija; **Nova vrsta** uz `task_type:create`, **Uredi** i editor zahtjeva uz `task_type:update`, **Arhiviraj** uz `task_type:archive`; kod je pri izmjeni zaključan, zadana forma se bira među objavljenim generičkim/vlastitim TASK formama; zahtjevi se uređuju kao cijeli skup i, kad je efektivna forma dostupna, biraju iz njenih polja za unos. Sami zadaci, atomski claim i obavijesti nisu dio ove cjeline. |
+| Lista zadataka (W09, prva web cjelina) | `/zadaci` | `features/tasks/tasks-page.tsx`, `tasks-model.ts` | segmenti Slobodni/Moji/Svi; server paginacija; claim samo u Slobodni uz `task:claim`, mutation invalidira liste i prikazuje grešku/409 poruku; zadatak u toku se ne smatra preuzetim prije uspješnog odgovora servera. Detalj, završetak i wizard ostaju zasebne cjeline. |
+| Vrste zadataka (W18) | `/vrste-zadataka` | `features/task-types/task-types-page.tsx`, `task-type-form.tsx`, `task-type-requirements-panel.tsx` | server pretraga, filteri aktivne/vozilo, sortiranje i paginacija; **Nova vrsta** uz `task_type:create`, **Uredi** i editor zahtjeva uz `task_type:update`, **Arhiviraj** uz `task_type:archive`; kod je pri izmjeni zaključan, zadana forma se bira među objavljenim generičkim/vlastitim TASK formama; zahtjevi se uređuju kao cijeli skup i, kad je efektivna forma dostupna, biraju iz njenih polja za unos. |
 
 Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);
 sidebar filtrira stavke prema `/auth/me` (`visibleNavItems`), ali **server ostaje

@@ -32,6 +32,7 @@ import { DriverDetailPage } from '../features/drivers/driver-detail-page.js';
 import { VehicleDetailPage } from '../features/vehicles/vehicle-detail-page.js';
 import { TireSetsPage } from '../features/tires/tire-sets-page.js';
 import { TaskTypesPage } from '../features/task-types/task-types-page.js';
+import { TasksPage } from '../features/tasks/tasks-page.js';
 import { NAV_ITEMS } from './nav.js';
 
 export const router = createBrowserRouter([
@@ -152,14 +153,12 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        // W09 — lista i slobodni zadaci; claim ostaje atomska serverska odluka.
         path: 'zadaci',
         element: (
-          <PlaceholderPage
-            title="Zadaci"
-            code="W09"
-            phase="Faza 5"
-            description="Kanban i lista zadataka s preuzimanjem (atomski claim)."
-          />
+          <RequirePermission permission="task:view">
+            <TasksPage />
+          </RequirePermission>
         ),
       },
       {

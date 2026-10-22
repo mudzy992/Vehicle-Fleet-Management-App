@@ -612,3 +612,8 @@ Jedinični lažni klijent ne dokazuje rollback, HTTP retry ponašanje ni isporuk
 ### Historija događaja zadatka — osma cjelina Faze 5
 
 `apps/api/test/unit/tasks.spec.ts` provjerava sortiranu/serijalizovanu `TaskEvent` historiju i skrivanje zadatka izvan vidljivosti. `TasksController` metadata test čuva zahtjev za `task:view` ili `task:view_all`. Test je jedinični; HTTP/RBAC integration i Coolify dokaz ostaju otvoreni.
+
+
+### Web lista zadataka i claim — W09
+
+`apps/web/src/features/tasks/tasks-model.test.ts` provjerava da segmenti koriste odgovarajuće API rute/parametre i prikaz broja zadataka. `tasks-page.test.tsx` provjerava učitavanje slobodnog zadatka i uspješno pozivanje claim endpointa uz potvrdu poruke. Ručni browser/UAT tok, API 409 preko pravog servera i Coolify nisu dio ovog jediničnog testa.
