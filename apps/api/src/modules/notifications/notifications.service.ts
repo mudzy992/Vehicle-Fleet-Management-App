@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { NotificationListQuery, NotificationListResponse, NotificationView } from '@vfm/shared/schemas';
+import type { NotificationListQuery, NotificationListResponse, NotificationMarkAllRead, NotificationUnreadCount, NotificationView } from '@vfm/shared/schemas';
 import { VfmErrors } from '../../common/errors/vfm-error.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
@@ -65,6 +65,19 @@ export class NotificationsService {
       total,
       totalPages: Math.ceil(total / query.pageSize),
     };
+  }
+
+  async unreadCount(userId: string): Promise<NotificationUnreadCount> {
+    const count = await this.prisma.notification.count({ where: { userId, isRead: false } });
+    return { count };
+  }
+
+  async markAllRead(userId: string): Promise<NotificationMarkAllRead> {
+    const result = await this.prisma.notification.updateMany({
+      where: { userId, isRead: false },
+      data: { isRead: true, readAt: new Date(), status: 'READ' },
+    });
+    return { updatedCount: result.count };
   }
 
   async markRead(userId: string, id: string): Promise<NotificationView> {
