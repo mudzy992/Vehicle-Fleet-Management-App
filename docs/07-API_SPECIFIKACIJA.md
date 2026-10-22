@@ -361,7 +361,7 @@ Detaljan implementirani ugovor je u §7.6.
 | POST | `/tasks/:id/complete` `Idem` | `task:complete` (izvršilac) ili `task:complete_override` | implementirano; strict `{version,formData?,attachmentIds?,comment?,odometerKm?,reason?}`, puna forma i normalizacija, DB outbox `TASK_COMPLETED` |
 | POST | `/tasks/:id/cancel` | `task:cancel` | implementirano; `{version,reason}` (`reason` obavezno) |
 | POST | `/tasks/:id/reopen` | `task:reopen` | implementirano; `{version,reason?,dueAt?}`, audit + DB outbox |
-| POST | `/tasks/:id/release` | `task:release` | vraća među slobodne + obavijest pozvanima |
+| POST | `/tasks/:id/release` | `task:release` s opsegom `ALL` | implementirano; strict `{version,reason?}`, samo `IN_PROGRESS → OPEN`, CAS, `RELEASE`/`WARN`, DB outbox `TASK_RELEASED` |
 | POST | `/tasks/:id/assign` | `task:assign` | `{userIds[], mode}` |
 | GET/POST | `/tasks/:id/comments` | `task:view` / `task:comment` | |
 | POST | `/tasks/:id/attachments` | `attachment:upload` | |
@@ -380,7 +380,7 @@ Detaljan implementirani ugovor je u §7.6.
 
 Detaljan implementirani ugovor jezgre zadataka je u §7.7, atomskog
 preuzimanja i slobodnih zadataka u §7.8, a završetka i override prelaza u
-§7.9. Release, naknadna dodjela i samostalni komentari ostaju zasebne
+§7.9, a release-a u §7.10. Naknadna dodjela i samostalni komentari ostaju zasebne
 cjeline; DB outbox redovi se zapisuju, ali worker/FCM/SSE isporuka još
 nije dio ugovora.
 
@@ -1080,9 +1080,9 @@ se brišu. Obje akcije zaključavaju red, rade CAS na verziji/statusu, pišu
 događaj i DB outbox s novom verzijom u idempotency ključu.
 
 Nema novih ENV varijabli, Redis ključeva/redova ni migracija. Atomski
-claim i `/tasks/available` dodani su u §7.8, a završetak/override u §7.9.
-Release, naknadna dodjela, samostalni komentari, zasebna historija, outbox
-worker i FCM/SSE isporuka nisu dio jezgre. Jedinični lažni klijent ne
+claim i `/tasks/available` dodani su u §7.8, završetak/override u §7.9,
+a release u §7.10. Naknadna dodjela, samostalni komentari, zasebna historija,
+outbox worker i FCM/SSE isporuka nisu dio jezgre. Jedinični lažni klijent ne
 dokazuje stvarni PostgreSQL advisory lock, `FOR UPDATE`, rollback ni puni
 HTTP lanac na Coolifyu.
 
@@ -1244,8 +1244,17 @@ Nema novih ENV varijabli, Redis ključeva/redova ni migracija.
 `fuelConsumptionL100` se u ovoj generičkoj cjelini ne izračunava jer
 form-engine TASK whitelist i postojeći ugovor nemaju jednoznačnu početnu
 kilometražu za potrošnju; kolona ostaje kakva jest do zasebne
-`FUEL_REFILL` semantike. Release, naknadna dodjela, samostalni komentari i
+`FUEL_REFILL` semantike. Naknadna dodjela, samostalni komentari i
 historija, outbox worker/FCM/SSE i web zadaci ostaju zasebne cjeline.
 Jedinični lažni klijent ne dokazuje stvarni PostgreSQL lock/rollback,
 Decimal upis, HTTP replay ni Coolify tok; P7 integracijski dokaz i dalje
 zahtijeva pravu bazu.
+
+
+### 7.10 Vraćanje zadatka među slobodne — peta cjelina Faze 5
+
+`POST /tasks/:id/release` zahtijeva `task:release` opsega `ALL` (Super Admin izuzetak po standardnoj RBAC politici); DTO je strict `{version,reason?}`, gdje je razlog nakon trimovanja 3–500 znakova. Akcija dozvoljena je samo iz `IN_PROGRESS` i radi CAS na proslijeđenoj verziji; zastarjela verzija daje `409 VERSION_CONFLICT`, a drugi status `422 INVALID_TASK_TRANSITION`. Uspjeh postavlja `OPEN`, `releasedAt`, briše `claimedAt` i `durationMinutes` te povećava verziju. Forma i njen snapshot ostaju netaknuti.
+
+Za `OPEN_CLAIM` i `BROADCAST` uklanja se trenutni izvršilac i opoziva aktivni `ASSIGNEE`; pozvani i posmatrači ostaju. Za `ASSIGN_DIRECT` se čuvaju prethodno određeni izvršilac i aktivna dodjela, tako da samo on ostaje kandidat za ponovno preuzimanje. U istoj transakciji nastaju `TaskEvent(RELEASED)` i `OutboxEvent(TASK_RELEASED)`; obavijest ide uključenim korisnicima osim aktera. Audit je `RELEASE`/`WARN`; outbox upis nije dokaz isporuke FCM/SSE.
+
+Jedinični testovi pokrivaju DTO, permission/scope, CAS, nevažeći status, obje dodjele, assignments, event/outbox i controller metadata. Lažni Prisma klijent ne dokazuje PostgreSQL rollback/locking niti Coolify HTTP tok; integracijska provjera s pravom bazom ostaje potrebna.

@@ -26,6 +26,7 @@ import {
   createTaskSchema,
   createTaskTypeSchema,
   reopenTaskSchema,
+  releaseTaskSchema,
   replaceTaskCompletionRequirementsSchema,
   taskAvailableQuerySchema,
   taskDetailSchema,
@@ -512,6 +513,12 @@ describe('zadaci (docs/07 §2.11)', () => {
     expect(cancelTaskSchema.safeParse({ version: 0, reason: 'x' }).success).toBe(false);
     expect(reopenTaskSchema.parse({ version: 3 })).toEqual({ version: 3 });
     expect(reopenTaskSchema.safeParse({ version: 3, status: 'OPEN' }).success).toBe(false);
+    expect(releaseTaskSchema.parse({ version: 4, reason: '  Druga ekipa  ' })).toEqual({
+      version: 4,
+      reason: 'Druga ekipa',
+    });
+    expect(releaseTaskSchema.safeParse({ version: 4, reason: 'x' }).success).toBe(false);
+    expect(releaseTaskSchema.safeParse({ version: 4, status: 'OPEN' }).success).toBe(false);
   });
 
   it('lista parsira filtere i odbija obrnut interval roka', () => {

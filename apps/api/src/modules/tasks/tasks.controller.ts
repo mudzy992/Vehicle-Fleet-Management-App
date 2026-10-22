@@ -6,6 +6,7 @@ import {
   completeTaskSchema,
   createTaskSchema,
   reopenTaskSchema,
+  releaseTaskSchema,
   taskAvailableQuerySchema,
   taskIdSchema,
   taskListQuerySchema,
@@ -15,6 +16,7 @@ import {
   type CompleteTaskInput,
   type CreateTaskInput,
   type ReopenTaskInput,
+  type ReleaseTaskInput,
   type TaskAvailableQuery,
   type TaskListQuery,
   type UpdateTaskInput,
@@ -187,6 +189,30 @@ export class TasksController {
       .set('code', result.data.code)
       .set('status', result.data.status)
       .set('reason', input.reason);
+    return result.data;
+  }
+
+  @Post(':id/release')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('task:release')
+  @Audit('RELEASE', { severity: 'WARN', resource: 'Task' })
+  async release(
+    @Param('id', new ZodValidationPipe(taskIdSchema, 'params')) id: string,
+    @Body(new ZodValidationPipe(releaseTaskSchema, 'body')) input: ReleaseTaskInput,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @Req() request: VfmRequest,
+  ) {
+    const result = await this.tasks.release(id, input, actorContext(actor, request));
+    const audit = AuditContext.from(request)
+      .setEntityId(id)
+      .setBefore(result.before)
+      .setAfter(result.after)
+      .setResource('Task')
+      .set('code', result.data.code)
+      .set('status', result.data.status)
+      .set('previousAssigneeUserId', result.meta?.['previousAssigneeUserId'] ?? null)
+      .set('assigneeUserId', result.data.assigneeUserId);
+    if (input.reason) audit.set('reason', input.reason);
     return result.data;
   }
 

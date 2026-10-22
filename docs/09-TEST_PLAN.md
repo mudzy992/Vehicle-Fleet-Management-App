@@ -586,3 +586,10 @@ bazu. P7 fajl `task-complete-authorization.integration.spec.ts` tek treba
 nad pravom bazom potvrditi korisnika B (`403 NOT_ASSIGNEE`), izvršioca
 (`200`) i korisnika C (`200`, AuditLog `COMPLETE` s `override=true`,
 TaskEvent `OVERRIDE_COMPLETED`, `completedById=C`).
+
+
+### Vraćanje zadatka među slobodne — peta cjelina Faze 5
+
+`apps/api/test/unit/tasks.spec.ts` sada ima 38 testova. Dodatni release testovi pokrivaju uspješno `IN_PROGRESS → OPEN` s CAS verzijom, `releasedAt` i brisanje claim vremena/trajanja; vraćanje `OPEN_CLAIM`/`BROADCAST` assignee reda i očuvanje pozvanih/posmatrača; očuvanje direktnog izvršioca kao kandidata; `VERSION_CONFLICT`, nedozvoljen status, nedovoljan permission scope, event/outbox upise i route audit metadata.
+
+`packages/shared/test/schemas.spec.ts` prolazi 33 testa, uključujući strict release DTO i granice/trimovanje opcionalnog razloga. Puni API paket prolazi 896 testova; `pnpm env:check` i workspace gate `lint typecheck test build` prolaze. `pnpm test:coverage` prolazi. Ovi testovi ne dokazuju stvarni PostgreSQL lock/rollback, HTTP idempotency replay ni Coolify ponašanje; ti dokazi ostaju otvoreni.

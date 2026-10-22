@@ -8,6 +8,7 @@ import {
   completeTaskSchema,
   createTaskSchema,
   reopenTaskSchema,
+  releaseTaskSchema,
   taskAvailableQuerySchema,
   taskDetailSchema,
   taskListQuerySchema,
@@ -85,6 +86,7 @@ class FakePermissions {
       'task:update': 'ALL',
       'task:cancel': 'ALL',
       'task:reopen': 'ALL',
+      'task:release': 'ALL',
       'task:complete': 'ALL',
       'task:complete_override': 'ALL',
     });
@@ -1308,6 +1310,118 @@ describe('TasksService — otkazivanje i ponovno otvaranje', () => {
   });
 });
 
+describe('TasksService — vraćanje među slobodne', () => {
+  it('release OPEN_CLAIM opoziva ASSIGNEE, zadrži pozvane i transakcijski piše događaj/outbox', async () => {
+    const { fake, service } = setup();
+    const taskId = 'ffffffff-ffff-4fff-8fff-fffffffff030';
+    fake.addTask({
+      id: taskId,
+      code: 'Z-2026-000030',
+      status: 'IN_PROGRESS',
+      assigneeUserId: assigneeId,
+      claimedAt: new Date('2026-10-20T09:00:00Z'),
+      durationMinutes: 12,
+      version: 4,
+    });
+    fake.addAssignment(taskId, invitedId, 'INVITED');
+    fake.addAssignment(taskId, assigneeId, 'ASSIGNEE');
+
+    const result = await service.release(
+      taskId,
+      releaseTaskSchema.parse({ version: 4, reason: 'Zadatak mora preuzeti drugi izvršilac.' }),
+      actor(adminId),
+    );
+    expect(result.data).toMatchObject({
+      status: 'OPEN',
+      assigneeUserId: null,
+      claimedAt: null,
+      durationMinutes: null,
+      version: 5,
+    });
+    expect(result.data.releasedAt).not.toBeNull();
+    expect(result.data.assignments.find((item) => item.role === 'ASSIGNEE')?.revokedAt).not.toBeNull();
+    expect(result.data.assignments.find((item) => item.role === 'INVITED')?.revokedAt).toBeNull();
+    expect(fake.events.at(-1)).toMatchObject({
+      action: 'RELEASED',
+      actorId: adminId,
+      data: {
+        fromStatus: 'IN_PROGRESS',
+        toStatus: 'OPEN',
+        previousAssigneeUserId: assigneeId,
+        assigneeUserId: null,
+        assignMode: 'OPEN_CLAIM',
+        reason: 'Zadatak mora preuzeti drugi izvršilac.',
+        previousVersion: 4,
+        version: 5,
+      },
+    });
+    expect(fake.outbox.at(-1)).toMatchObject({
+      eventType: 'TASK_RELEASED',
+      idempotencyKey: `task:${taskId}:TASK_RELEASED:v5`,
+    });
+    expect((fake.outbox.at(-1)!.payload as Row).recipientUserIds).toEqual(
+      expect.arrayContaining([invitedId, assigneeId]),
+    );
+    expect(result.meta).toMatchObject({ previousAssigneeUserId: assigneeId, assigneeUserId: null });
+  });
+
+  it('release direktne dodjele čuva unaprijed dodijeljenog izvršioca kao kandidata', async () => {
+    const { fake, service } = setup();
+    const taskId = 'ffffffff-ffff-4fff-8fff-fffffffff031';
+    fake.addTask({
+      id: taskId,
+      code: 'Z-2026-000031',
+      status: 'IN_PROGRESS',
+      assignMode: 'ASSIGN_DIRECT',
+      assigneeUserId: assigneeId,
+      claimedAt: new Date('2026-10-20T09:00:00Z'),
+      version: 1,
+    });
+    fake.addAssignment(taskId, assigneeId, 'ASSIGNEE');
+
+    const result = await service.release(taskId, releaseTaskSchema.parse({ version: 1 }), actor(adminId));
+    expect(result.data).toMatchObject({
+      status: 'OPEN',
+      assignMode: 'ASSIGN_DIRECT',
+      assigneeUserId: assigneeId,
+      claimedAt: null,
+      version: 2,
+    });
+    expect(result.data.assignments[0]?.revokedAt).toBeNull();
+    expect(fake.outbox.at(-1)).toMatchObject({ eventType: 'TASK_RELEASED' });
+  });
+
+  it('release odbija nedovoljnu permisiju, zastarjelu verziju i stanje različito od IN_PROGRESS', async () => {
+    const { fake, service } = setup();
+    const taskId = 'ffffffff-ffff-4fff-8fff-fffffffff032';
+    fake.addTask({
+      id: taskId,
+      code: 'Z-2026-000032',
+      status: 'IN_PROGRESS',
+      assigneeUserId: assigneeId,
+      version: 2,
+    });
+    fake.addAssignment(taskId, assigneeId, 'ASSIGNEE');
+
+    const denied = await errorOf(() =>
+      service.release(taskId, releaseTaskSchema.parse({ version: 2 }), actor(invitedId)),
+    );
+    expect(denied.code).toBe('PERMISSION_DENIED');
+
+    const stale = await errorOf(() =>
+      service.release(taskId, releaseTaskSchema.parse({ version: 1 }), actor(adminId)),
+    );
+    expect(stale.code).toBe('VERSION_CONFLICT');
+
+    await service.release(taskId, releaseTaskSchema.parse({ version: 2 }), actor(adminId));
+    const repeated = await errorOf(() =>
+      service.release(taskId, releaseTaskSchema.parse({ version: 3 }), actor(adminId)),
+    );
+    expect(repeated.code).toBe('INVALID_TASK_TRANSITION');
+    expect(fake.events.filter((row) => row.action === 'RELEASED')).toHaveLength(1);
+  });
+});
+
 describe('TasksService — slobodni zadaci i atomski claim', () => {
   const claimInput = (formData: Record<string, unknown> = {}) => claimTaskSchema.parse({ formData });
   const availableQuery = (patch: Record<string, unknown> = {}) => taskAvailableQuerySchema.parse(patch);
@@ -2136,9 +2250,11 @@ describe('TasksController — metadata', () => {
     expect(mode(TasksController.prototype.complete)).toBe('ANY');
     expect(permissions(TasksController.prototype.cancel)).toEqual(['task:cancel']);
     expect(permissions(TasksController.prototype.reopen)).toEqual(['task:reopen']);
+    expect(permissions(TasksController.prototype.release)).toEqual(['task:release']);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.create)).toBe(201);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.claim)).toBe(200);
     expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.complete)).toBe(200);
+    expect(Reflect.getMetadata(HTTP_CODE_METADATA, TasksController.prototype.release)).toBe(200);
     expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.claim)).toMatchObject({
       action: 'CLAIM',
       severity: 'INFO',
@@ -2147,6 +2263,11 @@ describe('TasksController — metadata', () => {
     expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.complete)).toMatchObject({
       action: 'COMPLETE',
       severity: 'INFO',
+      resource: 'Task',
+    });
+    expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.release)).toMatchObject({
+      action: 'RELEASE',
+      severity: 'WARN',
       resource: 'Task',
     });
     expect(Reflect.getMetadata('vfm:audit', TasksController.prototype.cancel)).toMatchObject({
@@ -2165,6 +2286,9 @@ describe('TasksController — metadata', () => {
     expect(createTaskSchema.safeParse({ taskTypeId: washTypeId, status: 'COMPLETED' }).success).toBe(false);
     expect(updateTaskSchema.safeParse({ version: 0 }).success).toBe(false);
     expect(cancelTaskSchema.safeParse({ version: 0 }).success).toBe(false);
+    expect(releaseTaskSchema.parse({ version: 3 })).toEqual({ version: 3 });
+    expect(releaseTaskSchema.safeParse({ version: 3, status: 'OPEN' }).success).toBe(false);
+    expect(releaseTaskSchema.safeParse({ version: 3, reason: 'x' }).success).toBe(false);
     expect(claimTaskSchema.safeParse({ version: 0 }).success).toBe(false);
     expect(completeTaskSchema.safeParse({ version: 0, status: 'COMPLETED' }).success).toBe(false);
     expect(completeTaskSchema.safeParse({ version: 0, formValues: {} }).success).toBe(false);

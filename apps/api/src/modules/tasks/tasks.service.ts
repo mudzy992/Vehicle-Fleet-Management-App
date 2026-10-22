@@ -37,6 +37,7 @@ import type {
   CompleteTaskInput,
   CreateTaskInput,
   ReopenTaskInput,
+  ReleaseTaskInput,
   TaskAssignmentView,
   TaskAvailableQuery,
   TaskDetail,
@@ -873,6 +874,116 @@ export class TasksService {
         before: { ...before },
         after: { ...data },
         meta: { code: data.code, status: data.status, reason: input.reason },
+      };
+    });
+  }
+
+  /**
+   * Vraća zadatak u toku među slobodne. Otvorena/broadcast dodjela uklanja
+   * trenutnog izvršioca i opoziva ASSIGNEE red; kod direktne dodjele ostaje
+   * unaprijed izabrani izvršilac kao jedini kandidat za novo preuzimanje.
+   */
+  async release(
+    id: string,
+    input: ReleaseTaskInput,
+    actorInput: TaskActorContext | string | undefined,
+  ): Promise<TaskMutation<TaskDetail>> {
+    const access = await this.resolveAccess(actorInput);
+    const releaseScope = access.permissions.isSuperAdmin
+      ? 'ALL'
+      : (access.permissions.permissions.get('task:release') ?? null);
+    if (releaseScope !== 'ALL') {
+      throw VfmErrors.permissionDenied([
+        detail('task:release', 'Za vraćanje zadatka među slobodne potrebno je task:release s punim opsegom.'),
+      ]);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockRow(tx, 'Task', id);
+      const current = await this.loadDetail(tx, id);
+      const before = this.serializeDetail(current);
+      this.assertVersion(current.version, input.version);
+      if (!canTransitionTask(current.status, 'OPEN')) {
+        throw new VfmException(
+          'INVALID_TASK_TRANSITION',
+          `Zadatak u statusu ${current.status} se ne može vratiti među slobodne.`,
+          undefined,
+          { from: current.status, to: 'OPEN' },
+        );
+      }
+
+      const now = new Date();
+      const releaseDirectAssignment = current.assignMode === 'ASSIGN_DIRECT';
+      const changed = await tx.task.updateMany({
+        where: { id, version: input.version, status: 'IN_PROGRESS', deletedAt: null },
+        data: {
+          status: 'OPEN',
+          assigneeUserId: releaseDirectAssignment ? current.assigneeUserId : null,
+          claimedAt: null,
+          durationMinutes: null,
+          releasedAt: now,
+          version: { increment: 1 },
+        },
+      });
+      if (changed.count !== 1) await this.throwCasFailure(tx, id, input.version);
+
+      if (!releaseDirectAssignment) {
+        await tx.taskAssignment.updateMany({
+          where: { taskId: id, role: 'ASSIGNEE', revokedAt: null },
+          data: { revokedAt: now },
+        });
+      }
+
+      await tx.taskEvent.create({
+        data: this.eventData({
+          taskId: id,
+          action: 'RELEASED',
+          actor: access.actor,
+          at: now,
+          data: {
+            fromStatus: 'IN_PROGRESS',
+            toStatus: 'OPEN',
+            previousAssigneeUserId: current.assigneeUserId,
+            assigneeUserId: releaseDirectAssignment ? current.assigneeUserId : null,
+            assignMode: current.assignMode,
+            reason: input.reason ?? null,
+            previousVersion: current.version,
+            version: current.version + 1,
+          },
+          formSchemaVersionId: current.formSchemaVersionId,
+        }),
+      });
+      await this.createOutbox(tx, {
+        taskId: id,
+        code: current.code,
+        eventType: 'TASK_RELEASED',
+        status: 'OPEN',
+        version: current.version + 1,
+        actorId: access.actor.id,
+        recipientUserIds: this.involvedUserIds(current, access.actor.id),
+        extra: {
+          fromStatus: 'IN_PROGRESS',
+          previousAssigneeUserId: current.assigneeUserId,
+          assigneeUserId: releaseDirectAssignment ? current.assigneeUserId : null,
+          assignMode: current.assignMode,
+          reason: input.reason ?? null,
+        },
+      });
+
+      const updated = await this.loadDetail(tx, id);
+      const serialized = this.serializeDetail(updated, now);
+      return {
+        data: serialized,
+        before: { ...before },
+        after: { ...serialized },
+        meta: {
+          code: serialized.code,
+          status: serialized.status,
+          previousAssigneeUserId: current.assigneeUserId,
+          assigneeUserId: serialized.assigneeUserId,
+          assignMode: serialized.assignMode,
+          reason: input.reason ?? null,
+        },
       };
     });
   }
@@ -2463,7 +2574,13 @@ export class TasksService {
     args: {
       taskId: string;
       code: string;
-      eventType: 'TASK_CREATED' | 'TASK_CLAIMED' | 'TASK_COMPLETED' | 'TASK_CANCELLED' | 'TASK_REOPENED';
+      eventType:
+        | 'TASK_CREATED'
+        | 'TASK_CLAIMED'
+        | 'TASK_COMPLETED'
+        | 'TASK_RELEASED'
+        | 'TASK_CANCELLED'
+        | 'TASK_REOPENED';
       status: TaskStatus;
       version: number;
       actorId: string;

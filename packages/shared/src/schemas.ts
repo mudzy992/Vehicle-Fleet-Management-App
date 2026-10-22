@@ -3080,6 +3080,15 @@ export const reopenTaskSchema = z
   .strict();
 export type ReopenTaskInput = z.output<typeof reopenTaskSchema>;
 
+/** Vraćanje zadatka u toku među slobodne; promjena statusa nosi CAS verziju. */
+export const releaseTaskSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    reason: z.string().trim().min(3).max(500).optional(),
+  })
+  .strict();
+export type ReleaseTaskInput = z.output<typeof releaseTaskSchema>;
+
 /**
  * Atomsko preuzimanje zadatka. Tijelo je opcionalno; poslani `formData` se
  * spaja s postojećim nacrtom i validira prema snapshotovanoj verziji forme,
