@@ -63,9 +63,12 @@ export default function TasksScreen() {
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.subtitle}>{mode === 'MINE' ? 'Zadaci povezani s vašim nalogom.' : 'Preuzmite zadatak koji možete izvršiti.'}</Text>
         </View>
-        <Pressable onPress={() => void load(true)} accessibilityRole="button" accessibilityLabel="Osvježi zadatke" style={styles.refresh}>
-          <Text style={styles.refreshText}>↻</Text>
-        </Pressable>
+        <View style={styles.headingActions}>
+          {user?.permissions.includes('task:create') ? <Link href="/task/create" asChild><Pressable accessibilityRole="button" accessibilityLabel="Kreiraj zadatak" style={styles.create}><Text style={styles.createText}>+ Novi</Text></Pressable></Link> : null}
+          <Pressable onPress={() => void load(true)} accessibilityRole="button" accessibilityLabel="Osvježi zadatke" style={styles.refresh}>
+            <Text style={styles.refreshText}>↻</Text>
+          </Pressable>
+        </View>
       </View>
 
       {canViewMine && canClaim ? (
@@ -127,6 +130,9 @@ const styles = StyleSheet.create({
   page: { flex: 1, paddingHorizontal: 18, paddingTop: 14 },
   heading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   title: { color: colors.ink, fontSize: 22, fontWeight: '800' },
+  headingActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  create: { minHeight: 42, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.primary },
+  createText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   subtitle: { color: colors.muted, fontSize: 14, marginTop: 4 },
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   refreshText: { color: colors.primary, fontSize: 27 },

@@ -236,7 +236,7 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
   );
 }
 
-function FieldControl({ field, value, disabled, onChange, onCamera, onGallery, onDocument, canUpload, uploading }: {
+export function FieldControl({ field, value, disabled, onChange, onCamera, onGallery, onDocument, canUpload, uploading }: {
   field: RenderField;
   value: unknown;
   disabled: boolean;

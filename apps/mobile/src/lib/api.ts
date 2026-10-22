@@ -164,6 +164,31 @@ export interface VehicleSummary {
   updatedAt: string;
 }
 
+export interface MobileTaskType {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  requiresVehicle: boolean;
+  requiresOdometer: boolean;
+  requiresPhotos: boolean;
+  defaultPriority: string;
+  defaultAssignMode: string;
+  formSchemaId: string | null;
+}
+
+export interface ActiveTaskForm {
+  formSchemaId: string;
+  key: string;
+  name: string;
+  subject: string;
+  formSchemaVersionId: string;
+  version: number;
+  contentHash: string;
+  mobileCompatible: boolean;
+  definition: unknown;
+}
+
 export interface VehicleDetail extends VehicleSummary {
   vin: string | null;
   transmission: string | null;
@@ -222,6 +247,10 @@ export const mobileApi = {
   },
   tasks: () => request<{ items: TaskSummary[]; total: number }>('/tasks/available?page=1&pageSize=50'),
   myTasks: () => request<{ items: TaskSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/tasks?mine=true&page=1&pageSize=50&sortBy=updatedAt&sortOrder=desc'),
+  taskTypes: () => request<{ items: MobileTaskType[]; page: number; pageSize: number; total: number; totalPages: number }>('/task-types?activeOnly=true&page=1&pageSize=100'),
+  activeTaskForm: (taskTypeId: string) => request<ActiveTaskForm>(`/form-schemas/active?subject=TASK&taskTypeId=${encodeURIComponent(taskTypeId)}`),
+  createTask: (input: { taskTypeId: string; vehicleId: string | null; title?: string; description?: string | null; priority?: string; assignMode: 'OPEN_CLAIM' | 'BROADCAST'; dueAt?: string | null; formData: Record<string, unknown> }) =>
+    request<TaskDetail>('/tasks', { method: 'POST', body: JSON.stringify(input) }),
   task: (id: string) => request<TaskDetail>(`/tasks/${encodeURIComponent(id)}`),
   vehicles: () => request<{ items: VehicleSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/vehicles?page=1&pageSize=50'),
   vehicle: (id: string) => request<VehicleDetail>(`/vehicles/${encodeURIComponent(id)}`),
