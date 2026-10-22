@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/features/auth/auth-provider';
 import { DynamicTaskForm } from '@/features/tasks/dynamic-task-form';
-import { ApiError, mobileApi, type TaskDetail } from '@/lib/api';
+import { mobileApi, toUserMessage, type TaskDetail } from '@/lib/api';
 import { colors } from '@/lib/theme';
 
 export default function TaskDetailScreen() {
@@ -16,7 +16,7 @@ export default function TaskDetailScreen() {
   const load = async () => {
     setError(null);
     try { setTask(await mobileApi.task(id)); }
-    catch (cause) { setError(cause instanceof ApiError ? cause.message : 'Detalji zadatka se nisu mogli učitati.'); }
+    catch (cause) { setError(toUserMessage(cause, 'Detalji zadatka se nisu mogli učitati.')); }
     finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, [id]);

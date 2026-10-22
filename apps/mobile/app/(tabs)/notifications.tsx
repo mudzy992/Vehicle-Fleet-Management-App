@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Tex
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/features/auth/auth-provider';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { ApiError, mobileApi, type NotificationSummary } from '@/lib/api';
+import { mobileApi, toUserMessage, type NotificationSummary } from '@/lib/api';
 import { colors } from '@/lib/theme';
 
 function relativeDate(value: string): string {
@@ -33,7 +33,7 @@ export default function NotificationsScreen() {
       setItems(result.items);
       setUnreadCount(unread.count);
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Obavijesti trenutno nisu dostupne.');
+      setError(toUserMessage(cause, 'Obavijesti trenutno nisu dostupne.'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -53,7 +53,7 @@ export default function NotificationsScreen() {
       setItems((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
       setUnreadCount((count) => Math.max(0, count - 1));
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Obavijest nije označena kao pročitana.');
+      setError(toUserMessage(cause, 'Obavijest nije označena kao pročitana.'));
     } finally {
       setMarkingId(null);
     }
@@ -68,7 +68,7 @@ export default function NotificationsScreen() {
       setItems((current) => current.map((item) => ({ ...item, isRead: true, status: 'READ', readAt: new Date().toISOString() })));
       setUnreadCount(0);
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Obavijesti nije moguće označiti kao pročitane.');
+      setError(toUserMessage(cause, 'Obavijesti nije moguće označiti kao pročitane.'));
     } finally {
       setMarkingAll(false);
     }

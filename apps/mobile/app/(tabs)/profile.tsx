@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@/features/auth/auth-provider';
-import { mobileApi, type ActiveSession } from '@/lib/api';
+import { mobileApi, toUserMessage, type ActiveSession } from '@/lib/api';
 import { colors } from '@/lib/theme';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('bs-BA', {
@@ -35,7 +35,7 @@ export default function ProfileScreen() {
     try {
       setSessions(await mobileApi.activeSessions());
     } catch (cause) {
-      setSessionError(cause instanceof Error ? cause.message : 'Sesije se trenutno ne mogu učitati.');
+      setSessionError(toUserMessage(cause, 'Sesije se trenutno ne mogu učitati.'));
     } finally {
       setLoadingSessions(false);
     }
@@ -76,7 +76,7 @@ export default function ProfileScreen() {
                   await loadSessions();
                 }
               } catch (cause) {
-                setSessionError(cause instanceof Error ? cause.message : 'Sesiju nije moguće odjaviti.');
+                setSessionError(toUserMessage(cause, 'Sesiju nije moguće odjaviti.'));
               } finally {
                 setBusySessionId(null);
               }
@@ -100,7 +100,7 @@ export default function ProfileScreen() {
               await signOut();
             } catch (cause) {
               setSessionError(
-                cause instanceof Error ? cause.message : 'Odjava sa svih uređaja nije uspjela.',
+                toUserMessage(cause, 'Odjava sa svih uređaja nije uspjela.'),
               );
             } finally {
               setLoggingOutAll(false);

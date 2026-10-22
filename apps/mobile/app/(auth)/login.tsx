@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '@/features/auth/auth-provider';
+import { toUserMessage } from '@/lib/api';
 import { colors } from '@/lib/theme';
 
 export default function LoginScreen() {
@@ -20,7 +21,7 @@ export default function LoginScreen() {
       const user = await signIn(email, password);
       router.replace(user.mustChangePassword ? '/(auth)/change-password' : '/(tabs)/tasks');
     } catch (cause) {
-      setLocalError(cause instanceof Error ? cause.message : 'Prijava nije uspjela.');
+      setLocalError(toUserMessage(cause, 'Prijava nije uspjela.'));
     } finally {
       setSubmitting(false);
     }

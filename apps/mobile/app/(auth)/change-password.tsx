@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/features/auth/auth-provider';
-import { ApiError, mobileApi } from '@/lib/api';
+import { ApiError, mobileApi, toUserMessage } from '@/lib/api';
 import { colors } from '@/lib/theme';
 
 export default function ChangePasswordScreen() {
@@ -32,7 +32,7 @@ export default function ChangePasswordScreen() {
       setConfirmation('');
     } catch (cause) {
       const details = cause instanceof ApiError ? cause.details?.map((item) => item.message).join(' ') : undefined;
-      setError(details || (cause instanceof Error ? cause.message : 'Lozinku nije moguće promijeniti.'));
+      setError(details || toUserMessage(cause, 'Lozinku nije moguće promijeniti.'));
     } finally {
       setSubmitting(false);
     }

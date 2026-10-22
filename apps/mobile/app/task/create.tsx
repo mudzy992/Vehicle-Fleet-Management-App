@@ -8,7 +8,7 @@ import { buildRenderModel, collectSubmitValues, type RenderField, type RenderMod
 import { parseDefinition } from '@vfm/form-engine/definition';
 import { FieldControl } from '@/features/tasks/dynamic-task-form';
 import { useAuth } from '@/features/auth/auth-provider';
-import { ApiError, mobileApi, type ActiveTaskForm, type MobileTaskType, type UserSummary, type VehicleSummary } from '@/lib/api';
+import { ApiError, mobileApi, toUserMessage, type ActiveTaskForm, type MobileTaskType, type UserSummary, type VehicleSummary } from '@/lib/api';
 import { colors } from '@/lib/theme';
 
 interface PickedFile { uri: string; name: string; mimeType: string }
@@ -75,7 +75,7 @@ export default function CreateTaskScreen() {
       setUsers(userResult.items.filter((item) => item.id !== user?.id));
       if (typeResult.items[0]) selectType(typeResult.items[0]);
     }).catch((cause: unknown) => {
-      if (active) setError(cause instanceof ApiError ? cause.message : 'Podaci za kreiranje zadatka nisu dostupni.');
+      if (active) setError(toUserMessage(cause, 'Podaci za kreiranje zadatka nisu dostupni.'));
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [user?.id]);
@@ -141,7 +141,7 @@ export default function CreateTaskScreen() {
         setValues((current) => ({ ...current, [field.key]: [...ids] }));
       }
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Upload priloga nije uspio.');
+      setError(toUserMessage(cause, 'Upload priloga nije uspio.'));
     } finally {
       setUploadingField(null);
     }
@@ -227,7 +227,7 @@ export default function CreateTaskScreen() {
       router.replace({ pathname: '/task/[id]', params: { id: created.id } });
     } catch (cause) {
       if (cause instanceof ApiError) {
-        setError(cause.message);
+        setError(toUserMessage(cause, 'Zadatak nije moguće sačuvati.'));
         setFieldErrors((cause.details ?? []).flatMap((detail) => {
           const path = detail.path.join('.');
           return path.startsWith('formData.') ? [{ key: path.slice('formData.'.length), code: cause.code, message: detail.message }] : [];

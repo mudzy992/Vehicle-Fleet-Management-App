@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Link } from 'expo-router';
 import { useAuth } from '@/features/auth/auth-provider';
-import { ApiError, mobileApi, type TaskSummary } from '@/lib/api';
+import { mobileApi, toUserMessage, type TaskSummary } from '@/lib/api';
 import { colors } from '@/lib/theme';
 
 type TaskListMode = 'MINE' | 'AVAILABLE';
@@ -41,7 +41,7 @@ export default function TasksScreen() {
       const result = mode === 'AVAILABLE' ? await mobileApi.tasks() : await mobileApi.myTasks();
       setItems(result.items);
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Zadaci se nisu mogli učitati.');
+      setError(toUserMessage(cause, 'Zadaci se nisu mogli učitati.'));
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
-import { mobileApi, type MobileUser } from '@/lib/api';
+import { mobileApi, onAuthExpired, toUserMessage, type MobileUser } from '@/lib/api';
 
 interface AuthContextValue {
   user: MobileUser | null;
@@ -23,7 +23,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       setUser(await mobileApi.restore());
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Sesija se nije mogla obnoviti.');
+      setError(toUserMessage(cause, 'Sesija se nije mogla obnoviti.'));
     } finally {
       setLoading(false);
     }
@@ -33,6 +33,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
     void retryRestore();
   }, [retryRestore]);
 
+  useEffect(() => onAuthExpired(() => {
+    setUser(null);
+    setError('Sesija je istekla. Prijavite se ponovo da nastavite.');
+  }), []);
+
   const signIn = useCallback(async (email: string, password: string) => {
     setError(null);
     try {
@@ -40,7 +45,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setUser(profile);
       return profile;
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Prijava nije uspjela.';
+      const message = toUserMessage(cause, 'Prijava nije uspjela.');
       setError(message);
       throw cause;
     }
