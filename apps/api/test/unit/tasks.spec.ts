@@ -772,6 +772,7 @@ describe('TasksService — kreiranje i snapshot forme', () => {
     );
 
     expect(result.data.code).toMatch(/^Z-\d{4}-000001$/u);
+    expect(fake.rawCalls.some((query) => query.includes('pg_advisory_xact_lock') && query.includes('::text'))).toBe(true);
     expect(result.data).toMatchObject({
       title: 'Pranje vozila — V-001',
       status: 'OPEN',

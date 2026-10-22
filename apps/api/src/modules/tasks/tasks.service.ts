@@ -2856,8 +2856,8 @@ export class TasksService {
   private async nextTaskCode(tx: Tx, now: Date): Promise<string> {
     const year = toLocalDateString(now).slice(0, 4);
     const lockKey = `vfm:task-code:${year}`;
-    await tx.$queryRaw<Array<{ locked: unknown }>>`
-      SELECT pg_advisory_xact_lock(hashtext(${lockKey})) AS "locked"`;
+    await tx.$queryRaw<Array<{ locked: string }>>`
+      SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS "locked"`;
 
     const prefix = `Z-${year}-`;
     const rows = await tx.task.findMany({
