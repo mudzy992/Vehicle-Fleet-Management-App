@@ -6,6 +6,7 @@ const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? 'https://api.vehicle.ba101.
 const REFRESH_KEY = 'vfm.refresh-token';
 
 let accessToken: string | null = null;
+let sessionId: string | null = null;
 let refreshFlight: Promise<boolean> | null = null;
 
 export class ApiError extends Error {
@@ -49,9 +50,10 @@ async function refresh(): Promise<boolean> {
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Client-Type': 'MOBILE_ANDROID' },
         body: JSON.stringify({ refreshToken, clientType: 'MOBILE_ANDROID' }),
       });
-      const body = (await response.json()) as Envelope<{ accessToken: string; refreshToken: string }>;
+      const body = (await response.json()) as Envelope<{ accessToken: string; refreshToken: string; sessionId: string }>;
       if (!response.ok || !('data' in body) || !body.data.accessToken || !body.data.refreshToken) return false;
       accessToken = body.data.accessToken;
+      sessionId = body.data.sessionId ?? null;
       await SecureStore.setItemAsync(REFRESH_KEY, body.data.refreshToken);
       return true;
     } catch {
@@ -86,6 +88,7 @@ async function request<T>(path: string, init: RequestInit = {}, mayRefresh = tru
   if (response.status === 401 && mayRefresh && !path.startsWith('/auth/')) {
     if (await refresh()) return request<T>(path, init, false);
     accessToken = null;
+    sessionId = null;
     await SecureStore.deleteItemAsync(REFRESH_KEY);
   }
 
@@ -117,6 +120,7 @@ export interface MobileUser {
 export interface AuthResult {
   accessToken: string;
   refreshToken: string;
+  sessionId: string;
   user: MobileUser;
 }
 
@@ -144,6 +148,17 @@ export interface TaskDetail extends TaskSummary {
   formData: Record<string, unknown>;
   assignments: Array<{ id: string; userId: string; userName: string; role: string }>;
   attachmentIds: string[];
+}
+
+export interface ActiveSession {
+  id: string;
+  clientType: string;
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  deviceInfo: { model?: string; osVersion?: string; appVersion?: string } | null;
 }
 
 export interface NotificationSummary {
@@ -240,6 +255,10 @@ export const mobileApi = {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
+  currentSessionId: () => sessionId,
+  activeSessions: () => request<ActiveSession[]>('/auth/sessions'),
+  revokeSession: (id: string) => request<void>(`/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  logoutAll: () => request<void>('/auth/logout-all', { method: 'POST', body: JSON.stringify({}) }),
   login: async (email: string, password: string) => {
     const deviceName = Device.modelName ?? 'Android uređaj';
     const session = await request<AuthResult>('/auth/login', {
@@ -252,6 +271,7 @@ export const mobileApi = {
       }),
     });
     accessToken = session.accessToken;
+    sessionId = session.sessionId;
     await SecureStore.setItemAsync(REFRESH_KEY, session.refreshToken);
     return session.user;
   },
@@ -265,6 +285,7 @@ export const mobileApi = {
       await request('/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken }) }, false);
     } finally {
       accessToken = null;
+      sessionId = null;
       await SecureStore.deleteItemAsync(REFRESH_KEY);
     }
   },
