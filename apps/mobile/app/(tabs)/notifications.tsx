@@ -17,6 +17,8 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const canMarkRead = user?.permissions.includes('notification:mark_read') === true;
   const [items, setItems] = useState<NotificationSummary[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [markingAll, setMarkingAll] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,8 +29,9 @@ export default function NotificationsScreen() {
     else setLoading(true);
     setError(null);
     try {
-      const result = await mobileApi.notifications();
+      const [result, unread] = await Promise.all([mobileApi.notifications(), mobileApi.unreadNotificationCount()]);
       setItems(result.items);
+      setUnreadCount(unread.count);
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : 'Obavijesti trenutno nisu dostupne.');
     } finally {
@@ -48,10 +51,26 @@ export default function NotificationsScreen() {
     try {
       const updated = await mobileApi.markNotificationRead(item.id);
       setItems((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
+      setUnreadCount((count) => Math.max(0, count - 1));
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : 'Obavijest nije označena kao pročitana.');
     } finally {
       setMarkingId(null);
+    }
+  };
+
+  const markAllRead = async () => {
+    if (!canMarkRead || unreadCount === 0 || markingAll) return;
+    setMarkingAll(true);
+    setError(null);
+    try {
+      await mobileApi.markAllNotificationsRead();
+      setItems((current) => current.map((item) => ({ ...item, isRead: true, status: 'READ', readAt: new Date().toISOString() })));
+      setUnreadCount(0);
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : 'Obavijesti nije moguće označiti kao pročitane.');
+    } finally {
+      setMarkingAll(false);
     }
   };
 
@@ -84,7 +103,10 @@ export default function NotificationsScreen() {
     <View style={styles.page}>
       <View style={styles.heading}>
         <Text style={styles.headingTitle}>Obavijesti</Text>
-        <Text style={styles.headingSub}>Nepročitano na učitanoj listi: {items.filter((item) => !item.isRead).length}</Text>
+        <View style={styles.headingActions}>
+          <Text style={styles.headingSub}>{unreadCount} nepročitanih</Text>
+          {canMarkRead && unreadCount > 0 ? <Pressable accessibilityRole="button" onPress={() => void markAllRead()} disabled={markingAll} style={styles.markAllButton}><Text style={styles.markAllText}>{markingAll ? 'Označavanje…' : 'Pročitaj sve'}</Text></Pressable> : null}
+        </View>
       </View>
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       {loading && items.length === 0 ? (
@@ -107,7 +129,10 @@ const styles = StyleSheet.create({
   page: { flex: 1, paddingHorizontal: 16, paddingTop: 14 },
   heading: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 },
   headingTitle: { color: colors.ink, fontSize: 23, fontWeight: '800' },
+  headingActions: { alignItems: 'flex-end', gap: 4 },
   headingSub: { color: colors.muted, fontSize: 13, fontWeight: '600' },
+  markAllButton: { paddingVertical: 5, paddingHorizontal: 2 },
+  markAllText: { color: colors.primary, fontSize: 12, fontWeight: '800' },
   list: { gap: 10, paddingBottom: 24 },
   emptyList: { flexGrow: 1, justifyContent: 'center' },
   card: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 14, padding: 14 },

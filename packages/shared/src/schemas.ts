@@ -3391,3 +3391,9 @@ export const notificationListResponseSchema = z
   })
   .strict();
 export type NotificationListResponse = z.output<typeof notificationListResponseSchema>;
+
+export const notificationUnreadCountSchema = z.object({ count: z.number().int().nonnegative() }).strict();
+export type NotificationUnreadCount = z.output<typeof notificationUnreadCountSchema>;
+
+export const notificationMarkAllReadSchema = z.object({ updatedCount: z.number().int().nonnegative() }).strict();
+export type NotificationMarkAllRead = z.output<typeof notificationMarkAllReadSchema>;

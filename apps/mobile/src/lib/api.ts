@@ -305,6 +305,8 @@ export const mobileApi = {
     request<TaskDetail>('/tasks', { method: 'POST', body: JSON.stringify(input) }),
   task: (id: string) => request<TaskDetail>(`/tasks/${encodeURIComponent(id)}`),
   notifications: () => request<{ items: NotificationSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/notifications?page=1&pageSize=50&sortOrder=desc'),
+  unreadNotificationCount: () => request<{ count: number }>('/notifications/unread-count'),
+  markAllNotificationsRead: () => request<{ updatedCount: number }>('/notifications/read-all', { method: 'POST', body: JSON.stringify({}) }),
   markNotificationRead: (id: string) => request<NotificationSummary>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'POST', body: JSON.stringify({}) }),
   vehicles: () => request<{ items: VehicleSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/vehicles?page=1&pageSize=100&status=ACTIVE'),
   drivers: () => request<{ items: Array<{ id: string; firstName: string; lastName: string; displayName: string | null; status: string }> }>('/drivers?page=1&pageSize=100&status=ACTIVE'),

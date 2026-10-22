@@ -62,6 +62,7 @@ const SELECT_REGISTRY: ReadonlyArray<{ file: string; constant: string; model: st
     model: 'TireInstallation',
   },
   { file: 'modules/reminders/reminders.service.ts', constant: 'SELECT', model: 'ScheduledReminder' },
+  { file: 'modules/notifications/notifications.service.ts', constant: 'NOTIFICATION_SELECT', model: 'Notification' },
   { file: 'modules/users/users.service.ts', constant: 'USER_SELECT', model: 'User' },
   { file: 'modules/vehicles/vehicles.service.ts', constant: 'VEHICLE_SELECT', model: 'Vehicle' },
 ];

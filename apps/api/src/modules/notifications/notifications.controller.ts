@@ -1,5 +1,5 @@
 import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
-import type { NotificationListQuery, NotificationListResponse, NotificationView } from '@vfm/shared/schemas';
+import type { NotificationListQuery, NotificationListResponse, NotificationMarkAllRead, NotificationUnreadCount, NotificationView } from '@vfm/shared/schemas';
 import { notificationListQuerySchema, uuidSchema } from '@vfm/shared/schemas';
 import { CurrentUser, RequirePermissions } from '../../common/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
@@ -17,6 +17,19 @@ export class NotificationsController {
     @CurrentUser() actor: AuthenticatedUser | undefined,
   ): Promise<NotificationListResponse> {
     return this.notifications.list(actor!.id, query);
+  }
+
+  @Get('unread-count')
+  @RequirePermissions('notification:view')
+  unreadCount(@CurrentUser() actor: AuthenticatedUser | undefined): Promise<NotificationUnreadCount> {
+    return this.notifications.unreadCount(actor!.id);
+  }
+
+  @Post('read-all')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('notification:mark_read')
+  markAllRead(@CurrentUser() actor: AuthenticatedUser | undefined): Promise<NotificationMarkAllRead> {
+    return this.notifications.markAllRead(actor!.id);
   }
 
   @Post(':id/read')

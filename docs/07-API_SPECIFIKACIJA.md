@@ -421,8 +421,8 @@ Napomene (Faza 3):
 |---|---|---|
 | GET | `/notifications?unreadOnly=&page=&pageSize=` | `notification:view` — samo vlastite obavijesti |
 | POST | `/notifications/:id/read` | `notification:mark_read` — označava vlastitu obavijest kao pročitanu |
-| ⏳ GET | `/notifications/unread-count` | `notification:view` |
-| ⏳ POST | `/notifications/read` `{ids[]}` / `/read-all` | `notification:mark_read` |
+| GET | `/notifications/unread-count` | `notification:view` — broj vlastitih nepročitanih |
+| POST | `/notifications/read-all` | `notification:mark_read` — označi sve vlastite nepročitane |
 | ⏳ GET | `/notifications/stream` (SSE) | `notification:view` — real-time za web |
 | ⏳ GET/PUT | `/notifications/preferences` | `notification:manage_preferences` |
 | ⏳ POST | `/notifications/broadcast` | `notification:broadcast` |

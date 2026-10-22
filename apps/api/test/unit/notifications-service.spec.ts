@@ -50,6 +50,23 @@ describe('NotificationsService', () => {
     }));
   });
 
+  it('vraća broj nepročitanih samo za prijavljenog korisnika', async () => {
+    const { prisma, service } = makeHarness();
+    prisma.notification.count.mockResolvedValue(7);
+    await expect(service.unreadCount('user-1')).resolves.toEqual({ count: 7 });
+    expect(prisma.notification.count).toHaveBeenCalledWith({ where: { userId: 'user-1', isRead: false } });
+  });
+
+  it('označava sve vlastite nepročitane kao pročitane', async () => {
+    const { prisma, service } = makeHarness();
+    prisma.notification.updateMany.mockResolvedValue({ count: 4 });
+    await expect(service.markAllRead('user-1')).resolves.toEqual({ updatedCount: 4 });
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: 'user-1', isRead: false },
+      data: expect.objectContaining({ isRead: true, status: 'READ' }),
+    }));
+  });
+
   it('označava samo vlastitu obavijest kao pročitanu i ponavlja sigurno', async () => {
     const { prisma, service } = makeHarness();
     prisma.notification.findFirst.mockResolvedValueOnce({ id: ROW.id, isRead: false }).mockResolvedValueOnce({ ...ROW, isRead: true, status: 'READ', readAt: new Date('2026-01-02T00:00:00.000Z') });
