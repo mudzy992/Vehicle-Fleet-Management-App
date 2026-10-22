@@ -17,6 +17,7 @@ import {
 import { ApiError, api } from '../../lib/api.js';
 import { useSession } from '../auth/session.js';
 import { TaskCompletionForm } from './task-completion-form.js';
+import { TaskStatusActions } from './task-status-actions.js';
 
 const COMMENTS_PAGE_SIZE = 20;
 
@@ -155,6 +156,13 @@ export function TaskDetailPage() {
       )}
 
       {mayComplete && <TaskCompletionForm key={`${task.id}-${task.version}`} task={task} />}
+      <TaskStatusActions
+        key={`${task.id}-actions-${task.version}`}
+        task={task}
+        canCancel={hasPermission('task:cancel')}
+        canRelease={hasPermission('task:release')}
+        canReopen={hasPermission('task:reopen')}
+      />
 
       {mayClaim && (
         <Card>
