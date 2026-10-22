@@ -19,7 +19,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { ApiErrorDetail } from '@vfm/shared';
+import type { ApiErrorDetail, Permission } from '@vfm/shared';
 import { toLocalDateString } from '@vfm/shared';
 import type {
   CreateRegistrationInput,
@@ -36,7 +36,8 @@ import {
   resolveFormVersion,
   validateRecordValues,
 } from '../../common/form-record-support.js';
-import { VfmException } from '../../common/errors/vfm-error.js';
+import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { toDatabaseDate } from '../../common/dates.js';
 
@@ -93,10 +94,12 @@ const SELECT = {
   createdAt: true,
   updatedAt: true,
   deletedAt: true,
+  createdById: true,
 } as const;
 
 interface RegistrationRow {
   id: string;
+  createdById: string | null;
   vehicleId: string;
   registrationNumber: string;
   validFrom: Date;
@@ -135,8 +138,8 @@ export class RegistrationsService {
   //  Čitanje
   // ---------------------------------------------------------------------------
 
-  async list(query: RegistrationListQuery): Promise<RegistrationListResponse> {
-    const where = this.buildWhere(query);
+  async list(query: RegistrationListQuery, actor: AuthenticatedUser): Promise<RegistrationListResponse> {
+    const where = { ...this.buildWhere(query), ...this.scopeWhere(actor, 'registration:view') };
     const sortBy = SORTABLE[query.sortBy ?? ''] ?? 'validUntil';
     const orderBy = { [sortBy]: query.sortOrder } as Prisma.RegistrationRecordOrderByWithRelationInput;
 
@@ -160,8 +163,10 @@ export class RegistrationsService {
     };
   }
 
-  async get(id: string): Promise<RegistrationRecord> {
-    return this.toRecord(await this.loadOrThrow(id));
+  async get(id: string, actor: AuthenticatedUser): Promise<RegistrationRecord> {
+    const row = await this.loadOrThrow(id);
+    this.assertScope(actor, 'registration:view', row);
+    return this.toRecord(row);
   }
 
   // ---------------------------------------------------------------------------
@@ -438,6 +443,46 @@ export class RegistrationsService {
         { conflictingId: conflict.id },
       );
     }
+  }
+
+  private scopeWhere(actor: AuthenticatedUser, permission: Permission): Record<string, unknown> {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return {};
+    if (scope === 'OWN') return { createdById: actor.id };
+    if (scope === 'VEHICLE_IDS') {
+      const ids =
+        actor.permissions?.grants
+          .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+          .flatMap((grant) => grant.scopeVehicleIds ?? []) ?? [];
+      return { vehicleId: { in: ids } };
+    }
+    if (scope === 'DRIVER_IDS') return { id: { in: [] } };
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Nemate pristup ovom zapisu u okviru dodijeljenog opsega.',
+        code: 'scope_denied',
+      },
+    ]);
+  }
+
+  private assertScope(actor: AuthenticatedUser, permission: Permission, row: RegistrationRow): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return;
+    if (scope === 'OWN' && row.createdById === actor.id) return;
+    if (scope === 'VEHICLE_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'VEHICLE_IDS')
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      if (ids?.includes(row.vehicleId)) return;
+    }
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Nemate pristup ovom zapisu u okviru dodijeljenog opsega.',
+        code: 'scope_denied',
+      },
+    ]);
   }
 
   private buildWhere(query: RegistrationListQuery): Record<string, unknown> {

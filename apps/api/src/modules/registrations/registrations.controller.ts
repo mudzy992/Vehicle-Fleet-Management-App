@@ -51,8 +51,9 @@ export class RegistrationsController {
   @RequirePermissions('registration:view')
   list(
     @Query(new ZodValidationPipe(registrationListQuerySchema, 'query')) query: RegistrationListQuery,
+    @CurrentUser() actor: AuthenticatedUser,
   ): Promise<RegistrationListResponse> {
-    return this.registrations.list(query);
+    return this.registrations.list(query, actor);
   }
 
   @Post()
@@ -74,8 +75,11 @@ export class RegistrationsController {
 
   @Get(':id')
   @RequirePermissions('registration:view')
-  get(@Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string): Promise<RegistrationRecord> {
-    return this.registrations.get(id);
+  get(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): Promise<RegistrationRecord> {
+    return this.registrations.get(id, actor);
   }
 
   @Patch(':id')

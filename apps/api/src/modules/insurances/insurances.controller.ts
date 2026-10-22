@@ -51,8 +51,9 @@ export class InsurancesController {
   @RequirePermissions('insurance:view')
   list(
     @Query(new ZodValidationPipe(insuranceListQuerySchema, 'query')) query: InsuranceListQuery,
+    @CurrentUser() actor: AuthenticatedUser,
   ): Promise<InsuranceListResponse> {
-    return this.insurances.list(query);
+    return this.insurances.list(query, actor);
   }
 
   @Post()
@@ -74,8 +75,11 @@ export class InsurancesController {
 
   @Get(':id')
   @RequirePermissions('insurance:view')
-  get(@Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string): Promise<InsuranceRecord> {
-    return this.insurances.get(id);
+  get(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): Promise<InsuranceRecord> {
+    return this.insurances.get(id, actor);
   }
 
   @Patch(':id')

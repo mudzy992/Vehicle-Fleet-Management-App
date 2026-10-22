@@ -6,9 +6,28 @@
  * odbitnu franšizu.
  */
 import { describe, expect, it } from 'vitest';
+import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import { InsurancesService } from '../../src/modules/insurances/insurances.service.js';
 import type { InsuranceListQuery } from '@vfm/shared/schemas';
 import { asPrisma, baseInsuranceInput, catchVfm, FakePeriodPrisma } from '../helpers/periods-fake.js';
+
+function insuranceViewer(
+  scope: 'ALL' | 'OWN' | 'VEHICLE_IDS',
+  id = 'viewer-1',
+  vehicleIds: string[] = [],
+): AuthenticatedUser {
+  const permission = 'insurance:view' as const;
+  return {
+    id,
+    isSuperAdmin: false,
+    permissions: {
+      isSuperAdmin: false,
+      permissions: new Map([[permission, scope]]),
+      list: [permission],
+      grants: [{ permission, scope, scopeVehicleIds: vehicleIds }],
+    },
+  } as unknown as AuthenticatedUser;
+}
 
 function service(fake = new FakePeriodPrisma()): {
   fake: FakePeriodPrisma;
@@ -127,7 +146,7 @@ describe('InsurancesService — izmjena i brisanje', () => {
     await svc.remove(first.data.id, 'user-1');
 
     expect(fake.vehicles[0]!.insuranceExpiresAt?.toISOString().slice(0, 10)).toBe('2027-12-31');
-    const list = await svc.list(query());
+    const list = await svc.list(query(), insuranceViewer('ALL'));
     expect(list.total).toBe(1);
   });
 });
@@ -149,10 +168,32 @@ describe('InsurancesService — lista', () => {
       }) as never,
     );
 
-    expect((await svc.list(query({ vehicleId: first.id }))).total).toBe(1);
-    expect((await svc.list(query({ type: 'ODGOVORNOST' }))).total).toBe(1);
-    expect((await svc.list(query({ q: 'drugo' }))).total).toBe(1);
-    expect((await svc.list(query({ q: 'auto-9' }))).total).toBe(1);
+    expect((await svc.list(query({ vehicleId: first.id }), insuranceViewer('ALL'))).total).toBe(1);
+    expect((await svc.list(query({ type: 'ODGOVORNOST' }), insuranceViewer('ALL'))).total).toBe(1);
+    expect((await svc.list(query({ q: 'drugo' }), insuranceViewer('ALL'))).total).toBe(1);
+    expect((await svc.list(query({ q: 'auto-9' }), insuranceViewer('ALL'))).total).toBe(1);
+  });
+
+  it('scope OWN i VEHICLE_IDS ograničavaju listu i direktni GET, a ALL ostaje dozvoljen', async () => {
+    const { fake, svc } = service();
+    fake.addForm('INSURANCE');
+    const ownVehicle = fake.addVehicle();
+    const assignedVehicle = fake.addVehicle();
+    await svc.create(baseInsuranceInput(ownVehicle.id) as never, 'owner-1');
+    const assignedRecord = await svc.create(
+      baseInsuranceInput(assignedVehicle.id, { policyNumber: 'POL-002' }) as never,
+      'owner-2',
+    );
+    const listQuery = query();
+
+    expect((await svc.list(listQuery, insuranceViewer('OWN', 'owner-1'))).total).toBe(1);
+    expect(
+      (await svc.list(listQuery, insuranceViewer('VEHICLE_IDS', 'viewer', [assignedVehicle.id]))).items,
+    ).toHaveLength(1);
+    expect((await svc.list(listQuery, insuranceViewer('ALL'))).total).toBe(2);
+    await expect(
+      svc.get(assignedRecord.data.id, insuranceViewer('VEHICLE_IDS', 'viewer', [ownVehicle.id])),
+    ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
   });
 
   it('`daysLeft` i `expiringInDays` rade nad `validUntil`', async () => {
@@ -167,7 +208,7 @@ describe('InsurancesService — lista', () => {
       baseInsuranceInput(vehicle.id, { validFrom: '2026-01-01', validUntil: soonIso }) as never,
     );
 
-    const list = await svc.list(query({ expiringInDays: 7 }));
+    const list = await svc.list(query({ expiringInDays: 7 }), insuranceViewer('ALL'));
     expect(list.total).toBe(1);
     expect(list.items[0]!.daysLeft).toBeGreaterThanOrEqual(0);
     expect(list.items[0]!.daysLeft).toBeLessThanOrEqual(7);

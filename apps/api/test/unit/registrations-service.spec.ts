@@ -6,10 +6,29 @@
  * `VERSION_CONFLICT` i soft-delete koji oslobađa period.
  */
 import { describe, expect, it } from 'vitest';
+import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import { RegistrationsService, daysLeft } from '../../src/modules/registrations/registrations.service.js';
 import { toLocalDateString } from '@vfm/shared';
 import type { RegistrationListQuery } from '@vfm/shared/schemas';
 import { asPrisma, baseRegistrationInput, catchVfm, FakePeriodPrisma } from '../helpers/periods-fake.js';
+
+function registrationViewer(
+  scope: 'ALL' | 'OWN' | 'VEHICLE_IDS',
+  id = 'viewer-1',
+  vehicleIds: string[] = [],
+): AuthenticatedUser {
+  const permission = 'registration:view' as const;
+  return {
+    id,
+    isSuperAdmin: false,
+    permissions: {
+      isSuperAdmin: false,
+      permissions: new Map([[permission, scope]]),
+      list: [permission],
+      grants: [{ permission, scope, scopeVehicleIds: vehicleIds }],
+    },
+  } as unknown as AuthenticatedUser;
+}
 
 function service(fake = new FakePeriodPrisma()): {
   fake: FakePeriodPrisma;
@@ -290,9 +309,9 @@ describe('RegistrationsService — brisanje i lista', () => {
       }) as never,
     );
 
-    expect((await svc.list(query({ vehicleId: first.id }))).total).toBe(1);
-    expect((await svc.list(query({ q: 'drugi' }))).total).toBe(1);
-    expect((await svc.list(query({ status: 'CANCELLED' }))).total).toBe(0);
+    expect((await svc.list(query({ vehicleId: first.id }), registrationViewer('ALL'))).total).toBe(1);
+    expect((await svc.list(query({ q: 'drugi' }), registrationViewer('ALL'))).total).toBe(1);
+    expect((await svc.list(query({ status: 'CANCELLED' }), registrationViewer('ALL'))).total).toBe(0);
   });
 
   it('`expiringInDays` gleda samo aktivne zapise', async () => {
@@ -310,7 +329,7 @@ describe('RegistrationsService — brisanje i lista', () => {
       }) as never,
     );
 
-    const list = await svc.list(query({ expiringInDays: 7 }));
+    const list = await svc.list(query({ expiringInDays: 7 }), registrationViewer('ALL'));
     expect(list.total).toBe(1);
     expect(list.items[0]!.daysLeft).toBeGreaterThanOrEqual(0);
   });
@@ -324,9 +343,32 @@ describe('RegistrationsService — brisanje i lista', () => {
 
     await svc.create(baseRegistrationInput(vehicle.id, { validFrom: from, validUntil: today }) as never);
 
-    const list = await svc.list(query({ expiringInDays: 0 }));
+    const list = await svc.list(query({ expiringInDays: 0 }), registrationViewer('ALL'));
     expect(list.total).toBe(1);
     expect(list.items[0]!.daysLeft).toBe(0);
+  });
+
+  it('scope OWN i VEHICLE_IDS ograničavaju listu i direktni GET, a ALL ostaje dozvoljen', async () => {
+    const { fake, svc } = service();
+    fake.addForm('REGISTRATION');
+    const ownVehicle = fake.addVehicle();
+    const assignedVehicle = fake.addVehicle();
+    await svc.create(baseRegistrationInput(ownVehicle.id) as never, 'owner-1');
+    const assignedRecord = await svc.create(
+      baseRegistrationInput(assignedVehicle.id, { registrationNumber: 'REG-002' }) as never,
+      'owner-2',
+    );
+    const listQuery = query();
+
+    expect((await svc.list(listQuery, registrationViewer('OWN', 'owner-1'))).total).toBe(1);
+    expect(
+      (await svc.list(listQuery, registrationViewer('VEHICLE_IDS', 'viewer', [assignedVehicle.id]))).items,
+    ).toHaveLength(1);
+    expect((await svc.list(listQuery, registrationViewer('ALL'))).total).toBe(2);
+    await expect(
+      svc.get(assignedRecord.data.id, registrationViewer('VEHICLE_IDS', 'viewer', [ownVehicle.id])),
+    ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
+    expect(fake.registrations[0]?.createdById).toBe('owner-1');
   });
 
   it('`daysLeft` je negativan za istekao period', () => {

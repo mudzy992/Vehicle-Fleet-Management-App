@@ -303,6 +303,11 @@ class FakeDriverPrisma {
     return this.drivers.filter((row) => {
       if (where.deletedAt === null && row.deletedAt !== null) return false;
       if (typeof where.id === 'string' && row.id !== where.id) return false;
+      if (where.id && typeof where.id === 'object') {
+        const idFilter = where.id as { in?: readonly string[] };
+        if (idFilter.in && !idFilter.in.includes(row.id)) return false;
+      }
+      if (typeof where.createdById === 'string' && row.createdById !== where.createdById) return false;
 
       const status = where.status;
       if (typeof status === 'string' && row.status !== status) return false;

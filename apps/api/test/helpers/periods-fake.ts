@@ -15,6 +15,7 @@ if (!SEED_REGISTRATION || !SEED_INSURANCE) throw new Error('seed forme za period
 export interface FakePeriodRow {
   id: string;
   vehicleId: string;
+  createdById?: string | null;
   formSchemaId: string;
   formSchemaVersionId: string;
   formData: Record<string, unknown>;
@@ -63,10 +64,16 @@ function matches(row: FakePeriodRow, where: Where): boolean {
   if (where.deletedAt === null && row.deletedAt !== null) return false;
   if (typeof where.id === 'string' && row.id !== where.id) return false;
   if (where.id && typeof where.id === 'object') {
-    const not = (where.id as { not?: string }).not;
-    if (not && row.id === not) return false;
+    const idFilter = where.id as { not?: string; in?: readonly string[] };
+    if (idFilter.not && row.id === idFilter.not) return false;
+    if (idFilter.in && !idFilter.in.includes(row.id)) return false;
   }
   if (typeof where.vehicleId === 'string' && row.vehicleId !== where.vehicleId) return false;
+  if (where.vehicleId && typeof where.vehicleId === 'object') {
+    const ids = (where.vehicleId as { in?: readonly string[] }).in;
+    if (ids && !ids.includes(row.vehicleId)) return false;
+  }
+  if (typeof where.createdById === 'string' && row.createdById !== where.createdById) return false;
   if (typeof where.status === 'string' && row.status !== where.status) return false;
   if (where.status && typeof where.status === 'object') {
     const filter = where.status as { not?: string; notIn?: string[] };

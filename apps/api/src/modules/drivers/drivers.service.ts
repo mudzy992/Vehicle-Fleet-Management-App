@@ -23,7 +23,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { ApiErrorDetail, DriverStatus } from '@vfm/shared';
+import type { ApiErrorDetail, DriverStatus, Permission } from '@vfm/shared';
 import { toLocalDateString } from '@vfm/shared';
 import type {
   ArchiveDriverInput,
@@ -47,7 +47,7 @@ import {
 } from '@vfm/form-engine';
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.js';
-import { VfmException } from '../../common/errors/vfm-error.js';
+import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { toDatabaseDate } from '../../common/dates.js';
 import { resolveFormOptionValues } from '../../common/form-option-values.js';
@@ -111,6 +111,7 @@ const DRIVER_SELECT = {
   createdAt: true,
   updatedAt: true,
   deletedAt: true,
+  createdById: true,
   // `Driver` NEMA `archivedAt` (samo `Vehicle` ga ima) — arhiva je `status`.
   // Selektovano polje koje ne postoji ne pada na typecheck-u (Prisma preskače
   // provjeru viška ključeva kod spread objekta), nego na prvom upitu: baza
@@ -121,6 +122,7 @@ const DRIVER_SELECT = {
 /** Red kakav vraća Prisma (samo polja iz `DRIVER_SELECT` + kategorije). */
 interface DriverRow {
   id: string;
+  createdById: string | null;
   firstName: string;
   lastName: string;
   phone: string | null;
@@ -214,8 +216,8 @@ export class DriversService {
   // ---------------------------------------------------------------------------
 
   // Lista ne nosi PII (samo meta + kategorije), pa joj pravo na PII nije potrebno.
-  async list(query: DriverListQuery): Promise<DriverListResponse> {
-    const where = this.buildWhere(query);
+  async list(query: DriverListQuery, actor: AuthenticatedUser): Promise<DriverListResponse> {
+    const where = { ...this.buildWhere(query), ...this.scopeWhere(actor, 'driver:view') };
     const sortBy = SORTABLE[query.sortBy ?? ''] ?? 'lastName';
     const orderBy = { [sortBy]: query.sortOrder } as Prisma.DriverOrderByWithRelationInput;
 
@@ -241,8 +243,9 @@ export class DriversService {
     };
   }
 
-  async get(id: string, actor?: AuthenticatedUser): Promise<DriverDetail> {
+  async get(id: string, actor: AuthenticatedUser): Promise<DriverDetail> {
     const row = await this.loadOrThrow(id);
+    this.assertScope(actor, 'driver:view', row);
     return this.toDetail(row, allows(actor, 'driver:view_pii'));
   }
 
@@ -466,8 +469,12 @@ export class DriversService {
   //  Kategorije dozvole (docs/07 §2.4)
   // ---------------------------------------------------------------------------
 
-  async listLicenseCategories(driverId: string): Promise<DriverLicenseCategoryList> {
-    await this.loadOrThrow(driverId);
+  async listLicenseCategories(
+    driverId: string,
+    actor: AuthenticatedUser,
+  ): Promise<DriverLicenseCategoryList> {
+    const driver = await this.loadOrThrow(driverId);
+    this.assertScope(actor, 'driver:view', driver);
     const rows = await this.prisma.driverLicenseCategory.findMany({
       where: { driverId },
       orderBy: { category: 'asc' },
@@ -668,6 +675,46 @@ export class DriversService {
   // ---------------------------------------------------------------------------
   //  Pomoćne
   // ---------------------------------------------------------------------------
+
+  private scopeWhere(actor: AuthenticatedUser, permission: Permission): Record<string, unknown> {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return {};
+    if (scope === 'OWN') return { createdById: actor.id };
+    if (scope === 'DRIVER_IDS') {
+      const ids =
+        actor.permissions?.grants
+          .filter((grant) => grant.permission === permission && grant.scope === 'DRIVER_IDS')
+          .flatMap((grant) => grant.scopeDriverIds ?? []) ?? [];
+      return { id: { in: ids } };
+    }
+    if (scope === 'VEHICLE_IDS') return { id: { in: [] } };
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Nemate pristup ovom zapisu u okviru dodijeljenog opsega.',
+        code: 'scope_denied',
+      },
+    ]);
+  }
+
+  private assertScope(actor: AuthenticatedUser, permission: Permission, row: DriverRow): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return;
+    if (scope === 'OWN' && row.createdById === actor.id) return;
+    if (scope === 'DRIVER_IDS') {
+      const ids = actor.permissions?.grants
+        .filter((grant) => grant.permission === permission && grant.scope === 'DRIVER_IDS')
+        .flatMap((grant) => grant.scopeDriverIds ?? []);
+      if (ids?.includes(row.id)) return;
+    }
+    throw VfmErrors.scopeDenied([
+      {
+        path: [permission],
+        message: 'Nemate pristup ovom zapisu u okviru dodijeljenog opsega.',
+        code: 'scope_denied',
+      },
+    ]);
+  }
 
   private buildWhere(query: DriverListQuery): Record<string, unknown> {
     const where: Record<string, unknown> = { deletedAt: null };

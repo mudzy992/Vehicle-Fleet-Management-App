@@ -33,7 +33,29 @@ function actor(permissions: string[] = [], isSuperAdmin = false): AuthenticatedU
     clientType: 'WEB',
     permissionsVersion: 1,
     isSuperAdmin,
-    permissions: { list: permissions },
+    permissions: {
+      list: permissions,
+      permissions: new Map(permissions.map((permission) => [permission, 'ALL'])),
+      grants: permissions.map((permission) => ({ permission, scope: 'ALL' })),
+    },
+  } as unknown as AuthenticatedUser;
+}
+
+function driverViewer(
+  scope: 'ALL' | 'OWN' | 'DRIVER_IDS',
+  id = 'user-1',
+  driverIds: string[] = [],
+): AuthenticatedUser {
+  const permission = 'driver:view' as const;
+  return {
+    ...actor([permission]),
+    id,
+    permissions: {
+      isSuperAdmin: false,
+      list: [permission],
+      permissions: new Map([[permission, scope]]),
+      grants: [{ permission, scope, scopeDriverIds: driverIds }],
+    },
   } as unknown as AuthenticatedUser;
 }
 
@@ -204,7 +226,7 @@ describe('DriversService — izmjena i verzija', () => {
 
   it('nepostojeći vozač je `NOT_FOUND`', async () => {
     const { svc } = service();
-    const error = await catchVfm(svc.get('nema-me'));
+    const error = await catchVfm(svc.get('nema-me', actor(['driver:view'])));
     expect(error.code).toBe('NOT_FOUND');
   });
 });
@@ -249,7 +271,7 @@ describe('DriversService — arhiva i brisanje', () => {
 
     expect(fake.drivers).toHaveLength(1);
     expect(fake.drivers[0]!.deletedAt).toBeInstanceOf(Date);
-    const error = await catchVfm(svc.get(row.id));
+    const error = await catchVfm(svc.get(row.id, actor(['driver:view'])));
     expect(error.code).toBe('NOT_FOUND');
   });
 });
@@ -261,7 +283,7 @@ describe('DriversService — lista i filteri', () => {
     fake.addDriver({ lastName: 'Arhiviran', status: 'ARCHIVED' });
     fake.addDriver({ lastName: 'Obrisan', deletedAt: new Date() });
 
-    const list = await svc.list(query());
+    const list = await svc.list(query(), actor(['driver:view']));
 
     expect(list.items.map((item) => item.lastName)).toEqual(['Aktivan']);
     expect(list.total).toBe(1);
@@ -272,7 +294,7 @@ describe('DriversService — lista i filteri', () => {
     fake.addDriver({ lastName: 'Aktivan' });
     fake.addDriver({ lastName: 'Arhiviran', status: 'ARCHIVED' });
 
-    const list = await svc.list(query({ includeArchived: true }));
+    const list = await svc.list(query({ includeArchived: true }), actor(['driver:view']));
 
     expect(list.total).toBe(2);
   });
@@ -282,8 +304,8 @@ describe('DriversService — lista i filteri', () => {
     fake.addDriver({ lastName: 'Hodžić', employeeNumber: 'EMP-1' });
     fake.addDriver({ lastName: 'Kovač', employeeNumber: 'EMP-2' });
 
-    expect((await svc.list(query({ q: 'kova' }))).total).toBe(1);
-    expect((await svc.list(query({ q: 'EMP-1' }))).total).toBe(1);
+    expect((await svc.list(query({ q: 'kova' }), actor(['driver:view']))).total).toBe(1);
+    expect((await svc.list(query({ q: 'EMP-1' }), actor(['driver:view']))).total).toBe(1);
   });
 
   it('`licenseCategory` filtrira po kategoriji (case-insensitive ulaz)', async () => {
@@ -292,7 +314,7 @@ describe('DriversService — lista i filteri', () => {
     fake.addDriver({ lastName: 'Bez kategorije' });
     await fake.driverLicenseCategory.create({ data: { driverId: c.id, category: 'C' } });
 
-    const list = await svc.list(query({ licenseCategory: 'c' }));
+    const list = await svc.list(query({ licenseCategory: 'c' }), actor(['driver:view']));
 
     expect(list.items).toHaveLength(1);
     expect(list.items[0]!.lastName).toBe('C-kategorija');
@@ -308,7 +330,7 @@ describe('DriversService — lista i filteri', () => {
     });
     fake.addDriver({ lastName: 'Daleko', licenseExpiresAt: inDays(90) });
 
-    const list = await svc.list(query({ expiringInDays: 7 }));
+    const list = await svc.list(query({ expiringInDays: 7 }), actor(['driver:view']));
 
     expect(list.items.map((item) => item.lastName).sort()).toEqual(['Dozvola', 'Kategorija']);
   });
@@ -318,7 +340,7 @@ describe('DriversService — lista i filteri', () => {
     fake.addDriver({ lastName: 'Danas', licenseExpiresAt: inDays(0) });
     fake.addDriver({ lastName: 'Sutra', licenseExpiresAt: inDays(1) });
 
-    const list = await svc.list(query({ expiringInDays: 0 }));
+    const list = await svc.list(query({ expiringInDays: 0 }), actor(['driver:view']));
 
     expect(list.items.map((item) => item.lastName)).toEqual(['Danas']);
   });
@@ -327,9 +349,27 @@ describe('DriversService — lista i filteri', () => {
     const { fake, svc } = service();
     fake.addDriver({ licenseExpiresAt: inDays(-2) });
 
-    const list = await svc.list(query());
+    const list = await svc.list(query(), actor(['driver:view']));
 
     expect(list.items[0]!.licenseDaysLeft).toBeLessThan(0);
+  });
+
+  it('primjenjuje OWN i DRIVER_IDS, a ALL zadržava pristup svim vozačima', async () => {
+    const { fake, svc } = service();
+    fake.addDriver({ lastName: 'Vlastiti', createdById: 'user-1' });
+    const scopedDriver = fake.addDriver({ lastName: 'Dodijeljeni', createdById: 'user-2' });
+    fake.addDriver({ lastName: 'Treći', createdById: 'user-3' });
+
+    const own = await svc.list(query(), driverViewer('OWN', 'user-1'));
+    const assigned = await svc.list(query(), driverViewer('DRIVER_IDS', 'user-4', [scopedDriver.id]));
+    const all = await svc.list(query(), driverViewer('ALL', 'user-4'));
+
+    expect(own.items.map((item) => item.lastName)).toEqual(['Vlastiti']);
+    expect(assigned.items.map((item) => item.lastName)).toEqual(['Dodijeljeni']);
+    expect(all.total).toBe(3);
+    await expect(svc.get(scopedDriver.id, driverViewer('DRIVER_IDS', 'user-4', []))).rejects.toMatchObject({
+      code: 'SCOPE_DENIED',
+    });
   });
 });
 
@@ -345,7 +385,7 @@ describe('DriversService — kategorije dozvole', () => {
     });
 
     expect(created.data.category).toBe('CE');
-    const list = await svc.listLicenseCategories(row.id);
+    const list = await svc.listLicenseCategories(row.id, actor(['driver:view']));
     expect(list.items).toHaveLength(1);
   });
 

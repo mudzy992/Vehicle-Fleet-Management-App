@@ -66,8 +66,9 @@ export class DriversController {
   @RequirePermissions('driver:view')
   list(
     @Query(new ZodValidationPipe(driverListQuerySchema, 'query')) query: DriverListQuery,
+    @CurrentUser() actor: AuthenticatedUser,
   ): Promise<DriverListResponse> {
-    return this.drivers.list(query);
+    return this.drivers.list(query, actor);
   }
 
   @Post()
@@ -88,7 +89,7 @@ export class DriversController {
   @RequirePermissions('driver:view')
   get(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
   ): Promise<DriverDetail> {
     return this.drivers.get(id, actor);
   }
@@ -171,8 +172,9 @@ export class DriversController {
   @RequirePermissions('driver:view')
   listLicenseCategories(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
   ): Promise<DriverLicenseCategoryList> {
-    return this.drivers.listLicenseCategories(id);
+    return this.drivers.listLicenseCategories(id, actor);
   }
 
   @Post(':id/license-categories')
