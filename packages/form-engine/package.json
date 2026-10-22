@@ -42,6 +42,22 @@
     "./definition": {
       "types": "./dist/definition.schema.d.ts",
       "default": "./dist/definition.schema.js"
+    },
+    "./conditions": {
+      "types": "./dist/conditions.d.ts",
+      "default": "./dist/conditions.js"
+    },
+    "./field-types": {
+      "types": "./dist/field-types.d.ts",
+      "default": "./dist/field-types.js"
+    },
+    "./expression": {
+      "types": "./dist/expression/index.d.ts",
+      "default": "./dist/expression/index.js"
+    },
+    "./expression/functions": {
+      "types": "./dist/expression/functions.d.ts",
+      "default": "./dist/expression/functions.js"
     }
   },
   "typesVersions": {

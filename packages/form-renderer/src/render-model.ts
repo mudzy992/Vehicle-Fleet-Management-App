@@ -19,9 +19,11 @@
  *   whitelist upite) — model nosi `optionsSource` i `options: null`;
  * - funkcija je deterministička: isti ulaz → isti izlaz, bez `Date.now()`.
  */
-import type { FieldDefinition, FormDefinition, SectionDefinition, VisibleWhenNode } from '@vfm/form-engine';
-import { evaluateExpression, isFieldVisible, roundTo } from '@vfm/form-engine';
-import type { FieldType } from '@vfm/form-engine';
+import type { FieldDefinition, FormDefinition, SectionDefinition, VisibleWhenNode } from '@vfm/form-engine/definition';
+import { isFieldVisible } from '@vfm/form-engine/conditions';
+import type { FieldType } from '@vfm/form-engine/field-types';
+import { evaluateExpression } from '@vfm/form-engine/expression';
+import { roundTo } from '@vfm/form-engine/expression/functions';
 
 /** Kontrola koju klijent treba nacrtati (mapiranje 1:1 na web/mobilnu). */
 export const RENDER_WIDGETS = [

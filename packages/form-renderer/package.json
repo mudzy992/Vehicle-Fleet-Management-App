@@ -38,6 +38,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./render-model": {
+      "types": "./dist/render-model.d.ts",
+      "default": "./dist/render-model.js"
     }
   },
   "typesVersions": {

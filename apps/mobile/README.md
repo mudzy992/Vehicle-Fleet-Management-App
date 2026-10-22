@@ -1,6 +1,6 @@
 # Mobilna aplikacija (Expo / Android)
 
-**Faza 6 je započeta.** Trenutni obim je početni online-first temelj: Expo Router, sigurno čuvanje refresh tokena, prijava s `MOBILE_ANDROID`, lista slobodnih zadataka, detalj/preuzimanje zadatka i profil/odjava. Dinamička forma, završetak zadatka, obavijesti/FCM, testovi na uređaju i EAS distribucija još nisu završeni.
+**Faza 6 je u toku.** Aplikacija uključuje Expo Router, prijavu s `MOBILE_ANDROID`, refresh token u SecureStore, slobodne zadatke, detalj, dinamičku formu prema snapshotu pri preuzimanju/završetku, upload fotografija/fajlova, profil i odjavu. Obavijesti/FCM, novi zadatak, sesije/promjena lozinke i EAS distribucija još nisu završeni.
 
 ## Pokretanje i provjera
 

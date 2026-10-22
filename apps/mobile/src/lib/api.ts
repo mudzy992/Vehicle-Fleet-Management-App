@@ -14,13 +14,29 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     readonly requestId?: string,
+    readonly details?: Array<{ path: string[]; message: string }>,
   ) {
     super(message);
     this.name = 'ApiError';
   }
 }
 
-type Envelope<T> = { data: T } | { error: { code?: string; message?: string; requestId?: string } };
+type Envelope<T> = { data: T } | { error: { code?: string; message?: string; requestId?: string; details?: Array<{ path: string[]; message: string }> } };
+
+export interface FormVersionSnapshot {
+  id: string;
+  formSchemaId: string;
+  version: number;
+  definition: unknown;
+}
+
+export interface AttachmentUploadResult {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+}
 
 async function refresh(): Promise<boolean> {
   if (refreshFlight) return refreshFlight;
@@ -58,7 +74,7 @@ async function request<T>(path: string, init: RequestInit = {}, mayRefresh = tru
       headers: {
         Accept: 'application/json',
         'X-Client-Type': 'MOBILE_ANDROID',
-        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(init.body && !(typeof FormData !== 'undefined' && init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         ...init.headers,
       },
@@ -81,7 +97,7 @@ async function request<T>(path: string, init: RequestInit = {}, mayRefresh = tru
   }
   if (!response.ok) {
     const error = body && 'error' in body ? body.error : {};
-    throw new ApiError(error.message ?? `Zahtjev nije uspio (HTTP ${response.status}).`, response.status, error.code ?? 'HTTP_ERROR', error.requestId);
+    throw new ApiError(error.message ?? `Zahtjev nije uspio (HTTP ${response.status}).`, response.status, error.code ?? 'HTTP_ERROR', error.requestId, error.details);
   }
   return body && 'data' in body ? body.data : (body as T);
 }
@@ -115,6 +131,7 @@ export interface TaskSummary {
   createdAt: string;
   taskTypeName: string;
   vehicleInternalNo: string | null;
+  vehicleId: string | null;
   assigneeName: string | null;
   formSchemaId: string;
   formSchemaName: string;
@@ -123,6 +140,7 @@ export interface TaskSummary {
 }
 
 export interface TaskDetail extends TaskSummary {
+  version: number;
   formData: Record<string, unknown>;
   assignments: Array<{ id: string; userId: string; userName: string; role: string }>;
   attachmentIds: string[];
@@ -159,5 +177,18 @@ export const mobileApi = {
   },
   tasks: () => request<{ items: TaskSummary[]; total: number }>('/tasks/available?page=1&pageSize=50'),
   task: (id: string) => request<TaskDetail>(`/tasks/${encodeURIComponent(id)}`),
-  claimTask: (id: string) => request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/claim`, { method: 'POST', body: JSON.stringify({}) }),
+  formVersion: (task: Pick<TaskSummary, 'formSchemaId' | 'formSchemaVersionId'>) =>
+    request<FormVersionSnapshot>(`/form-schemas/${encodeURIComponent(task.formSchemaId)}/versions/${encodeURIComponent(task.formSchemaVersionId)}`),
+  claimTask: (id: string, formData: Record<string, unknown>) =>
+    request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/claim`, { method: 'POST', body: JSON.stringify({ formData }) }),
+  completeTask: (id: string, version: number, formData: Record<string, unknown>, extra: { comment?: string; odometerKm?: number } = {}) =>
+    request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ version, formData, ...extra }),
+    }),
+  uploadAttachment: (uri: string, fileName: string, mimeType: string) => {
+    const form = new FormData();
+    form.append('file', { uri, name: fileName, type: mimeType } as unknown as Blob);
+    return request<AttachmentUploadResult>('/attachments', { method: 'POST', body: form });
+  },
 };

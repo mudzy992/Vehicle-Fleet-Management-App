@@ -5,7 +5,16 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@vfm/form-engine": ["../../packages/form-engine/src/index.ts"],
+      "@vfm/form-engine/definition": ["../../packages/form-engine/src/definition.schema.ts"],
+      "@vfm/form-engine/conditions": ["../../packages/form-engine/src/conditions.ts"],
+      "@vfm/form-engine/field-types": ["../../packages/form-engine/src/field-types.ts"],
+      "@vfm/form-engine/expression": ["../../packages/form-engine/src/expression/index.ts"],
+      "@vfm/form-engine/expression/functions": ["../../packages/form-engine/src/expression/functions.ts"],
+      "@vfm/form-renderer": ["../../packages/form-renderer/src/index.ts"],
+      "@vfm/form-renderer/render-model": ["../../packages/form-renderer/src/render-model.ts"],
+      "@vfm/shared": ["../../packages/shared/src/index.ts"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
