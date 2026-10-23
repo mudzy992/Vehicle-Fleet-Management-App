@@ -293,13 +293,24 @@ describe('RemindersService — politike i lista', () => {
     expect(filtered.total).toBe(0);
   });
 
-  it('acknowledge i snooze odbijaju scope koji nije ALL', async () => {
-    const { svc } = service();
+  it('acknowledge i snooze dozvoljavaju OWN zapis, ali odbijaju tuđi podsjetnik', async () => {
+    const { fake, svc } = service();
+    fake.vehicles.push(
+      { id: 'veh-own', nextServiceDueDate: null, nextServiceDueKm: null, createdById: 'user-own' },
+      { id: 'veh-other', nextServiceDueDate: null, nextServiceDueKm: null, createdById: 'user-other' },
+    );
+    const ownedAcknowledgement = fake.addReminder({ entityType: 'Vehicle', entityId: 'veh-own' });
+    const ownedSnooze = fake.addReminder({ entityType: 'Vehicle', entityId: 'veh-own' });
+    const foreignAcknowledgement = fake.addReminder({ entityType: 'Vehicle', entityId: 'veh-other' });
+    const foreignSnooze = fake.addReminder({ entityType: 'Vehicle', entityId: 'veh-other' });
+
+    await svc.acknowledge(ownedAcknowledgement.id, scopeActor('reminder:acknowledge', 'OWN'));
+    await svc.snooze(ownedSnooze.id, { days: 2 }, scopeActor('reminder:snooze', 'OWN'));
     const acknowledgeError = await catchVfm(
-      svc.acknowledge('reminder-id', scopeActor('reminder:acknowledge', 'OWN')),
+      svc.acknowledge(foreignAcknowledgement.id, scopeActor('reminder:acknowledge', 'OWN')),
     );
     const snoozeError = await catchVfm(
-      svc.snooze('reminder-id', { days: 2 }, scopeActor('reminder:snooze', 'OWN')),
+      svc.snooze(foreignSnooze.id, { days: 2 }, scopeActor('reminder:snooze', 'OWN')),
     );
 
     expect(acknowledgeError.code).toBe('SCOPE_DENIED');

@@ -108,6 +108,17 @@ describe('default matrica (docs/05 §4)', () => {
     expect(DEFAULT_ROLE_MATRIX.OBICNI_KORISNIK['user:view_pii']).toBeNull();
   });
 
+  it('Podsjetnici korisnika su OWN; administrator zadržava ALL scope', () => {
+    const user = DEFAULT_ROLE_MATRIX.OBICNI_KORISNIK;
+    const admin = DEFAULT_ROLE_MATRIX.ADMINISTRATOR;
+    expect(user['reminder:view']).toBe('OWN');
+    expect(user['reminder:acknowledge']).toBe('OWN');
+    expect(user['reminder:snooze']).toBe('OWN');
+    expect(admin['reminder:view']).toBe('ALL');
+    expect(admin['reminder:acknowledge']).toBe('ALL');
+    expect(admin['reminder:snooze']).toBe('ALL');
+  });
+
   it('Obični korisnik može preuzeti i završiti svoj zadatak', () => {
     const user = DEFAULT_ROLE_MATRIX.OBICNI_KORISNIK;
     expect(user['task:claim']).toBe('ALL');

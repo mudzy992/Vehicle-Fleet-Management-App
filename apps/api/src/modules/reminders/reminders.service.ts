@@ -255,11 +255,10 @@ export class RemindersService {
     id: string,
     actorOrId?: AuthenticatedUser | string,
   ): Promise<ReminderMutation<ScheduledReminder>> {
-    if (actorOrId && typeof actorOrId !== 'string') {
-      this.assertAllScope(actorOrId, 'reminder:acknowledge');
-    }
+    const actor = typeof actorOrId === 'string' ? undefined : actorOrId;
     const actorId = typeof actorOrId === 'string' ? actorOrId : actorOrId?.id;
     const current = await this.loadOrThrow(id);
+    if (actor) await this.assertReminderScope(actor, 'reminder:acknowledge', current);
     if (current.status === 'ACKNOWLEDGED') {
       return { data: this.toReminder(current) };
     }
@@ -291,8 +290,8 @@ export class RemindersService {
     input: SnoozeReminderInput,
     actor?: AuthenticatedUser,
   ): Promise<ReminderMutation<ScheduledReminder>> {
-    if (actor) this.assertAllScope(actor, 'reminder:snooze');
     const current = await this.loadOrThrow(id);
+    if (actor) await this.assertReminderScope(actor, 'reminder:snooze', current);
     if (['ACKNOWLEDGED', 'CANCELLED', 'SENT'].includes(current.status)) {
       throw new VfmException('VALIDATION_ERROR', 'Podsjetnik se više ne može odgoditi.', [
         detail('status', current.status),
@@ -512,11 +511,30 @@ export class RemindersService {
     };
   }
 
-  private assertAllScope(actor: AuthenticatedUser, permission: Permission): void {
+  private async assertReminderScope(
+    actor: AuthenticatedUser,
+    permission: Permission,
+    reminder: ReminderRow,
+  ): Promise<void> {
     const scope = actor.permissions?.permissions.get(permission);
     if (actor.isSuperAdmin || scope === 'ALL') return;
+    if (scope === 'OWN') {
+      const entity =
+        reminder.entityType === 'Vehicle'
+          ? await this.prisma.vehicle.findFirst({
+              where: { id: reminder.entityId, createdById: actor.id, deletedAt: null },
+              select: { id: true },
+            })
+          : reminder.entityType === 'Driver'
+            ? await this.prisma.driver.findFirst({
+                where: { id: reminder.entityId, createdById: actor.id, deletedAt: null },
+                select: { id: true },
+              })
+            : null;
+      if (entity) return;
+    }
     throw VfmErrors.scopeDenied([
-      { path: [permission], message: 'Ova akcija zahtijeva dozvolu opsega ALL.', code: 'scope_denied' },
+      { path: [permission], message: 'Podsjetnik nije u vašem OWN opsegu.', code: 'scope_denied' },
     ]);
   }
 

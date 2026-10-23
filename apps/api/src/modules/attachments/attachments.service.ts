@@ -398,7 +398,7 @@ export class AttachmentsService {
 
   async remove(id: string, actor: AttachmentActor): Promise<AttachmentMutation<null>> {
     const current = await this.loadOrThrow(id);
-    this.assertUploadScope(actor, current);
+    this.assertDeleteScope(actor, current);
 
     await this.prisma.attachment.update({
       where: { id },
@@ -424,11 +424,19 @@ export class AttachmentsService {
     return row as AttachmentRow;
   }
 
-  /** `attachment:upload` s `ALL` opsegom smije mijenjati tuđe priloge. */
+  /** Kompletiranje/zamjena je ograničena na vlastiti upload bez `attachment:view:ALL`. */
   private assertUploadScope(actor: AttachmentActor, row: AttachmentRow): void {
     if (row.uploadedById === actor.id || this.hasAllScope(actor)) return;
     throw new VfmException('PERMISSION_DENIED', 'Prilog je uploadovao drugi korisnik.', [
       detail('uploadedById', row.uploadedById),
+    ]);
+  }
+
+  private assertDeleteScope(actor: AttachmentActor, row: AttachmentRow): void {
+    const scope = actor.permissions?.permissions.get('attachment:delete');
+    if (actor.isSuperAdmin || scope === 'ALL' || (scope === 'OWN' && row.uploadedById === actor.id)) return;
+    throw VfmErrors.scopeDenied([
+      { path: ['attachment:delete'], message: 'Prilog nije u vašem delete opsegu.', code: 'scope_denied' },
     ]);
   }
 

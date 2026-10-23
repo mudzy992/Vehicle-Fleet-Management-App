@@ -220,6 +220,13 @@ export class FakeRemindersPrisma {
           (typeof args.where?.createdById !== 'string' || row.createdById === args.where.createdById) &&
           (args.where?.deletedAt !== null || row.deletedAt === null || row.deletedAt === undefined),
       ),
+    findFirst: async (args: { where?: Where } = {}) =>
+      this.drivers.find(
+        (row) =>
+          (typeof args.where?.id !== 'string' || row.id === args.where.id) &&
+          (typeof args.where?.createdById !== 'string' || row.createdById === args.where.createdById) &&
+          (args.where?.deletedAt !== null || row.deletedAt === null || row.deletedAt === undefined),
+      ) ?? null,
   };
   vehicle = {
     findMany: async (args: { where?: Where } = {}) =>
@@ -228,6 +235,13 @@ export class FakeRemindersPrisma {
           (typeof args.where?.createdById !== 'string' || row.createdById === args.where.createdById) &&
           (args.where?.deletedAt !== null || row.deletedAt === null || row.deletedAt === undefined),
       ),
+    findFirst: async (args: { where?: Where } = {}) =>
+      this.vehicles.find(
+        (row) =>
+          (typeof args.where?.id !== 'string' || row.id === args.where.id) &&
+          (typeof args.where?.createdById !== 'string' || row.createdById === args.where.createdById) &&
+          (args.where?.deletedAt !== null || row.deletedAt === null || row.deletedAt === undefined),
+      ) ?? null,
   };
 }
 

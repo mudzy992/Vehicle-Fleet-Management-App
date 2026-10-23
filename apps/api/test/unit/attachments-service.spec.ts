@@ -7,13 +7,15 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AttachmentsService,
   type AttachmentStorageOptions,
   type UploadedFileLike,
 } from '../../src/modules/attachments/attachments.service.js';
 import { sha256Hex } from '../../src/modules/attachments/attachment-files.js';
+
+vi.mock('../../src/prisma/prisma.service.js', () => ({ PrismaService: class PrismaService {} }));
 
 const JPEG = Buffer.concat([
   Buffer.from([0xff, 0xd8]),
@@ -87,15 +89,36 @@ class FakeAttachmentsPrisma {
 
 const ADMIN = {
   id: 'user-admin',
-  permissions: { isSuperAdmin: false, permissions: new Map([['attachment:view', 'ALL']]) },
+  permissions: {
+    isSuperAdmin: false,
+    permissions: new Map([
+      ['attachment:view', 'ALL'],
+      ['attachment:upload', 'ALL'],
+      ['attachment:delete', 'OWN'],
+    ]),
+  },
 };
 const USER = {
   id: 'user-1',
-  permissions: { isSuperAdmin: false, permissions: new Map([['attachment:view', 'OWN']]) },
+  permissions: {
+    isSuperAdmin: false,
+    permissions: new Map([
+      ['attachment:view', 'OWN'],
+      ['attachment:upload', 'ALL'],
+      ['attachment:delete', 'OWN'],
+    ]),
+  },
 };
 const OTHER = {
   id: 'user-2',
-  permissions: { isSuperAdmin: false, permissions: new Map([['attachment:view', 'OWN']]) },
+  permissions: {
+    isSuperAdmin: false,
+    permissions: new Map([
+      ['attachment:view', 'OWN'],
+      ['attachment:upload', 'ALL'],
+      ['attachment:delete', 'OWN'],
+    ]),
+  },
 };
 
 function file(buffer: Buffer, name = 'foto.jpg', mimetype = 'image/jpeg'): UploadedFileLike {
@@ -361,6 +384,13 @@ describe('AttachmentsService', () => {
     expect(replacement.data.ownerType).toBe('INSURANCE');
     expect(fake.rows.find((row) => row.id === uploaded.id)!.deletedAt).toBeInstanceOf(Date);
     expect(fake.rows.filter((row) => row.deletedAt === null)).toHaveLength(1);
+  });
+
+  it('attachment:view ALL ne proširuje attachment:delete OWN na tuđi prilog', async () => {
+    const uploaded = await svc.upload(file(JPEG), USER);
+    const error = await catchVfm(svc.remove(uploaded.id, ADMIN));
+    expect(error.code).toBe('SCOPE_DENIED');
+    expect(fake.rows.find((row) => row.id === uploaded.id)?.deletedAt).toBeNull();
   });
 
   it('`remove` je soft-delete — fajl ostaje na disku, zapis nestaje iz API-ja', async () => {

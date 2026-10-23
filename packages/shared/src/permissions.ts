@@ -508,8 +508,8 @@ const MATRIX: readonly MatrixEntry[] = [
   // podsjetnici
   ['reminder:view', 'ALL', 'OWN'],
   ['reminder:manage_policies', null, null],
-  ['reminder:acknowledge', 'ALL', 'ALL'],
-  ['reminder:snooze', 'ALL', 'ALL'],
+  ['reminder:acknowledge', 'ALL', 'OWN'],
+  ['reminder:snooze', 'ALL', 'OWN'],
 
   // izvještaji
   ['report:view', 'ALL', null],
