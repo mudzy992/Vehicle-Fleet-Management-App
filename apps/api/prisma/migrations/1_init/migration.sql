@@ -1549,4 +1549,3 @@ ALTER TABLE "ExportJob" ADD CONSTRAINT "ExportJob_requestedById_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "ExportJob" ADD CONSTRAINT "ExportJob_attachmentId_fkey" FOREIGN KEY ("attachmentId") REFERENCES "Attachment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
