@@ -9,12 +9,16 @@
  * - `active` vraća tačno jednu aktivnu verziju, a za TASK poštuje zadanu formu vrste;
  * - `validateValues` odbija `DRAFT` i vraća greške po polju za objavljenu formu.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { FormValidationResponse } from '@vfm/shared/schemas';
 import { VfmException } from '../../src/common/errors/vfm-error.js';
 import { FormSchemasService } from '../../src/modules/form-schemas/form-schemas.service.js';
 import { matchesIfNoneMatch } from '../../src/modules/form-schemas/form-schemas.controller.js';
 import { FakeFormPrisma, asPrisma } from '../helpers/form-schemas-fake.js';
+
+vi.mock('../../src/prisma/prisma.service.js', () => ({
+  PrismaService: class PrismaService {},
+}));
 
 /**
  * Minimalna kopija primjera „Pranje vozila" (docs/04 §2) — dovoljna za

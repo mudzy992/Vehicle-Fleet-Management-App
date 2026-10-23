@@ -49,7 +49,8 @@ Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view
 - `corepack pnpm --filter @vfm/api exec vitest run --config vitest.integration.config.ts` — prolaz alata; jedan integracijski fajl i oba testa preskočena zbog nedostajućeg `PHASE3_TEST_DATABASE_URL`.
 - `corepack pnpm --filter @vfm/api typecheck` — prolaz.
 - `corepack pnpm --filter @vfm/api test` — prethodni prolaz prije izmjena scope-a podsjetnika: 58 fajlova, 945 jediničnih testova.
-- Ciljani API testovi nakon izmjena scope-a: `reminders-service.spec.ts` — 22 testa; `attachments-service.spec.ts` — 17 testova; `form-migrations-service.spec.ts` — 14 testova.
+- Ciljani API testovi: `tasks.spec.ts`, `form-option-values.spec.ts`, `form-schemas-service.spec.ts`, `form-migrations-service.spec.ts` i `notifications-service.spec.ts` — **84/84** testa prolaze. Testovi izoluju `PrismaService` DI token i ne zahtijevaju generisani Prisma Client niti živu bazu.
+- Dodatni raniji ciljani testovi nakon izmjena scope-a: `reminders-service.spec.ts` — 22 testa; `attachments-service.spec.ts` — 17 testova.
 - `corepack pnpm --filter @vfm/shared exec vitest run test/permissions.spec.ts` — prolaz: 34 testa.
 - `corepack pnpm --filter @vfm/web test` — prethodni prolaz: 23 fajla, 166 testova.
 - ESLint nad izmijenjenim API i shared fajlovima — prolaz; API i web `typecheck` su prošli u ranijem prolazu prije trenutne Prisma blokade.
@@ -59,7 +60,7 @@ Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view
 ## Sljedeći koraci
 
 1. Pokrenuti novi integracijski test na izolovanoj testnoj bazi i dopuniti P13 testovima pragova raspoređivanja, DST-a i historije servisa/guma.
-2. Nastaviti audit preostalih modula (posebno obavijesti, forme i zadaci) i potvrditi task autorizaciju kroz P14 regresijske testove.
+2. Dopuniti runtime P14 provjeru ruta × uloga/opseg; ciljane jedinične provjere zadataka, formi i obavijesti sada prolaze, ali ne zamjenjuju HTTP/E2E sweep.
 3. Izvesti P14 matricu svih OpenAPI ruta × uloge/opseg, uz posebne slučajeve za priloge, potpisane URL-ove i PII; potvrditi da nedozvoljene uloge dobijaju 401/403 na svakoj ruti.
 4. Završiti audit web tokova prema Fazi 3 i dopuniti regresijske testove za potvrđene nedostatke.
 5. Tek nakon dokaza ažurirati DoD u `docs/PLAN_IMPLEMENTACIJE.md`; do tada Faza 3 ostaje otvorena.

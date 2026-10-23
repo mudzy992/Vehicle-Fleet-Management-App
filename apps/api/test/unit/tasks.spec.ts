@@ -1,6 +1,6 @@
 /** Zadaci: snapshot forme, vidljivost/opseg, CAS izmjene i statusne tranzicije. */
 import 'reflect-metadata';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { HTTP_CODE_METADATA } from '@nestjs/common/constants.js';
 import {
   assignTaskSchema,
@@ -23,6 +23,10 @@ import { TasksController } from '../../src/modules/tasks/tasks.controller.js';
 import { TasksService, type TaskActorContext } from '../../src/modules/tasks/tasks.service.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 import { SEED_FORMS } from '../../src/tools/seed-forms.js';
+
+vi.mock('../../src/prisma/prisma.service.js', () => ({
+  PrismaService: class PrismaService {},
+}));
 
 const adminId = '11111111-1111-4111-8111-111111111111';
 const invitedId = '22222222-2222-4222-8222-222222222222';
@@ -772,7 +776,9 @@ describe('TasksService — kreiranje i snapshot forme', () => {
     );
 
     expect(result.data.code).toMatch(/^Z-\d{4}-000001$/u);
-    expect(fake.rawCalls.some((query) => query.includes('pg_advisory_xact_lock') && query.includes('::text'))).toBe(true);
+    expect(
+      fake.rawCalls.some((query) => query.includes('pg_advisory_xact_lock') && query.includes('::text')),
+    ).toBe(true);
     expect(result.data).toMatchObject({
       title: 'Pranje vozila — V-001',
       status: 'OPEN',
