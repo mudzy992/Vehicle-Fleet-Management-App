@@ -9,6 +9,7 @@
  * autoritet — UI samo sakriva akcije radi iskustva).
  */
 import { createBrowserRouter, Navigate } from 'react-router';
+import type { RouteObject } from 'react-router';
 import { AnonymousOnly, RequireAuth, RequirePermission } from './guards.js';
 import { AppShell } from './shell.js';
 import { PlaceholderPage } from '../features/placeholder-page.js';
@@ -37,7 +38,7 @@ import { TaskDetailPage } from '../features/tasks/task-detail-page.js';
 import { TaskCreatePage } from '../features/tasks/task-create-page.js';
 import { NAV_ITEMS } from './nav.js';
 
-export const router = createBrowserRouter([
+export const appRoutes = [
   {
     path: '/prijava',
     element: (
@@ -213,23 +214,27 @@ export const router = createBrowserRouter([
       {
         path: 'izvjestaji',
         element: (
-          <PlaceholderPage
-            title="Izvještaji"
-            code="W22"
-            phase="Faza 7"
-            description="Izvještaji nad SQL view-ovima s izvozom u PDF i Excel."
-          />
+          <RequirePermission permission="report:view">
+            <PlaceholderPage
+              title="Izvještaji"
+              code="W22"
+              phase="Faza 7"
+              description="Izvještaji nad SQL view-ovima s izvozom u PDF i Excel."
+            />
+          </RequirePermission>
         ),
       },
       {
         path: 'obavijesti',
         element: (
-          <PlaceholderPage
-            title="Obavijesti"
-            code="W25"
-            phase="Faza 5"
-            description="In-app obavijesti, prijenos uživo (SSE) i postavke kanala."
-          />
+          <RequirePermission permission="notification:view">
+            <PlaceholderPage
+              title="Obavijesti"
+              code="W25"
+              phase="Faza 5"
+              description="In-app obavijesti, prijenos uživo (SSE) i postavke kanala."
+            />
+          </RequirePermission>
         ),
       },
       {
@@ -261,11 +266,20 @@ export const router = createBrowserRouter([
         element: <ProfilePage />,
       },
       { path: 'dizajn-sistem', element: <DesignSystemPage /> },
-      { path: 'zdravlje', element: <HealthPage /> },
+      {
+        path: 'zdravlje',
+        element: (
+          <RequirePermission permission="system:view_health">
+            <HealthPage />
+          </RequirePermission>
+        ),
+      },
       { path: '*', element: <PlaceholderPage title="Nepostojeća stranica" code="404" phase="—" /> },
     ],
   },
-]);
+] satisfies RouteObject[];
+
+export const router = createBrowserRouter(appRoutes);
 
 /** Ruta → naslov (za breadcrumb i naslov dokumenta). */
 export const ROUTE_TITLES: Readonly<Record<string, string>> = NAV_ITEMS.reduce(
