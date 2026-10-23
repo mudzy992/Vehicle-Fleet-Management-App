@@ -353,6 +353,8 @@ Testovi su s lažnim Prisma klijentom, ne dokazuju DB konkurenciju/montažu.
 
 ### Kompleti guma — Faza 4
 
+`apps/api/test/unit/p14-tire-installations-scope-http.spec.ts` — 2 HTTP testa stvarnog kontrolera/servisa: VEHICLE_IDS filter historije montaža i odbijanje bez permisije prije pristupa bazi.
+
 `apps/api/test/unit/tire-sets.spec.ts` — 10 testova: serverski filteri
 pretrage/sezone/statusa/dostupnosti, sort whitelist i paginacija, serijalizacija
 datuma i vozila aktivne montaže, unos kroz objavljenu `TIRE_SET` formu uz
