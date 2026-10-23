@@ -1,6 +1,9 @@
 /** Zadaci: snapshot forme, vidljivost/opseg, CAS izmjene i statusne tranzicije. */
 import 'reflect-metadata';
-import { describe, expect, it, vi } from 'vitest';
+import type { INestApplication } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Test } from '@nestjs/testing';
+import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
 import { HTTP_CODE_METADATA } from '@nestjs/common/constants.js';
 import {
   assignTaskSchema,
@@ -19,6 +22,10 @@ import {
   updateTaskSchema,
 } from '@vfm/shared/schemas';
 import { VfmException } from '../../src/common/errors/vfm-error.js';
+import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter.js';
+import { PermissionsGuard } from '../../src/common/guards/permissions.guard.js';
+import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
+import { PermissionsService } from '../../src/modules/auth/permissions/permissions.service.js';
 import { TasksController } from '../../src/modules/tasks/tasks.controller.js';
 import { TasksService, type TaskActorContext } from '../../src/modules/tasks/tasks.service.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
@@ -2537,5 +2544,84 @@ describe('TasksController — metadata', () => {
       attachmentIds: [],
     });
     expect(taskAvailableQuerySchema.safeParse({ status: 'OPEN' }).success).toBe(false);
+  });
+});
+
+describe('P14 — task visibility through HTTP', () => {
+  let app: INestApplication;
+  let baseUrl: string;
+  const taskId = 'ffffffff-ffff-4fff-8fff-fffffffffff9';
+
+  beforeAll(async () => {
+    const { fake, permissions, service } = setup();
+    fake.addTask({ id: taskId, code: 'Z-2026-000099', status: 'IN_PROGRESS' });
+    fake.addAssignment(taskId, invitedId, 'INVITED');
+    Object.assign(permissions, {
+      snapshot: vi.fn(async () => ({ permissionsVersion: 0 })),
+      currentPermissionsVersion: vi.fn(async () => 0),
+    });
+
+    const moduleRef = await Test.createTestingModule({
+      controllers: [TasksController],
+      providers: [
+        Reflector,
+        PermissionsGuard,
+        { provide: TasksService, useValue: service },
+        { provide: PermissionsService, useValue: permissions },
+      ],
+    }).compile();
+    app = moduleRef.createNestApplication();
+    app.use(
+      async (
+        request: { headers: Record<string, string | string[] | undefined>; user?: AuthenticatedUser },
+        _response: unknown,
+        next: () => void,
+      ) => {
+        const rawUserId = request.headers['x-sweep-user'];
+        const userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
+        if (userId) {
+          const role = userId === adminId ? 'ADMINISTRATOR' : 'OBICNI_KORISNIK';
+          request.user = {
+            id: userId,
+            roles: [role],
+            roleIds: [],
+            clientType: 'WEB',
+            sessionId: 'p14-task-session',
+            jti: 'p14-task-token',
+            tokenVersion: 1,
+            permissionsVersion: 0,
+            isSuperAdmin: false,
+            mustChangePassword: false,
+            status: 'ACTIVE',
+            allowedClientTypes: ['WEB'],
+            permissions: await permissions.effective(userId),
+          };
+        }
+        next();
+      },
+    );
+    app.useGlobalGuards(app.get(PermissionsGuard));
+    app.useGlobalFilters(new AllExceptionsFilter());
+    await app.listen(0, '127.0.0.1');
+    const address = app.getHttpServer().address() as { port: number };
+    baseUrl = `http://127.0.0.1:${address.port}`;
+  }, 30_000);
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  it('dodijeljeni korisnik dobija zadatak, a nepovezani korisnik dobija 404 bez curenja detalja', async () => {
+    const assignedResponse = await fetch(`${baseUrl}/tasks/${taskId}`, {
+      headers: { 'x-sweep-user': invitedId },
+    });
+    expect(assignedResponse.status).toBe(200);
+    expect((await assignedResponse.json()).id).toBe(taskId);
+
+    const outsiderResponse = await fetch(`${baseUrl}/tasks/${taskId}`, {
+      headers: { 'x-sweep-user': outsiderId },
+    });
+    expect(outsiderResponse.status).toBe(404);
+    expect((await outsiderResponse.json()).error.code).toBe('NOT_FOUND');
   });
 });
