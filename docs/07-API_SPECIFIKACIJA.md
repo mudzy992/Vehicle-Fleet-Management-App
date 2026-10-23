@@ -221,10 +221,12 @@ Primjer `PUT /api/v1/roles/matrix`:
 | DELETE | `/drivers/:id/license-categories/:catId` | `driver:update` |
 | GET | `/drivers/:id/tasks` | `task:view` — Faza 4 |
 
-**PII (B-20, R-07):** `phone`, `email`, `dateOfBirth`, `address` i `licenseNumber` vraćaju se
-samo uz `driver:view_pii` (Super Admin uvijek). Bez prava: e-mail `A***@example.ba`, telefon i
-broj dozvole `•••••123`, datum rođenja i adresa `null`, uz `piiRedacted: true`. Datum isteka
-dozvole **nije** PII — nosi ga rok i podsjetnik.
+**PII (B-20, R-07):** `phone`, `email`, `dateOfBirth`, `address`, `licenseNumber`, slobodni
+`notes`/`restrictions`, `formData` i `photoAttachmentId` vraćaju se samo uz `driver:view_pii`
+(Super Admin uvijek). Bez prava: e-mail `A***@example.ba`, telefon i broj dozvole `•••••123`,
+datum rođenja, adresa, slobodni tekst, forma i foto-privitak se maskiraju ili izostavljaju (`null`/`{}`),
+a odgovor nosi `piiRedacted: true`. Isto važi za `notes`/`restrictions` kategorija dozvole. Datum
+isteka dozvole **nije** PII — nosi ga rok i podsjetnik.
 
 ### 2.5 Vozila (`/vehicles`)
 

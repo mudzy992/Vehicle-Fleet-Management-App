@@ -296,8 +296,10 @@ lozinku): prijava prolazi, ali pristup je ograničen dok se lozinka ne promijeni
 
 ### 8.2 Podaci
 - Šifrovanje u tranzitu (TLS 1.2/1.3, Traefik), interne veze kroz privatne Docker mreže.
-- PII polja (`Driver.licenseNumber`, `dateOfBirth`, `address`, `User.email`) dostupna samo uz
-  `view_pii`; u listama se vraćaju redigovana (`A***@example.ba`, `•••••`).
+- PII polja (`Driver.licenseNumber`, `dateOfBirth`, `address`, `phone`, `email`, `notes`,
+  `restrictions`, slobodni `formData`, foto-privitak i napomene/ograničenja kategorija dozvole;
+  `User.email`) dostupna su samo uz odgovarajući `view_pii`. Bez prava se maskiraju ili izostavljaju;
+  u listama se vraćaju redigovana (`A***@example.ba`, `•••••`).
 - EXIF/GPS se uklanja pri uploadu fotografija (`exifStripped=true`).
 - Soft delete + audit; `AuditLog` i `TaskEvent` bez `UPDATE`/`DELETE` (trigger).
 - Backup šifrovan (restic/`pg_dump -Fc` + GPG ili šifrovani off-site).

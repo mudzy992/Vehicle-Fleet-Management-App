@@ -1762,7 +1762,9 @@ export const driverLicenseCategorySchema = z
     category: z.string(),
     issuedAt: z.iso.date().nullable(),
     expiresAt: z.iso.date().nullable(),
+    /** Vraća se samo uz `driver:view_pii` (može sadržavati lične/zdravstvene podatke). */
     restrictions: z.string().nullable(),
+    /** Slobodna napomena se vraća samo uz `driver:view_pii`. */
     notes: z.string().nullable(),
   })
   .strict();
@@ -1809,7 +1811,7 @@ export const driverDetailSchema = driverSummarySchema
     formSchemaId: uuidSchema,
     formSchemaVersionId: uuidSchema,
     formData: z.record(z.string(), z.unknown()),
-    /** `true` kad su PII polja maskirana/izostavljena (nema `driver:view_pii`). */
+    /** `true` kad su PII, slobodni tekst i dinamički podaci izostavljeni bez `driver:view_pii`. */
     piiRedacted: z.boolean(),
     createdAt: z.iso.datetime(),
   })
@@ -3395,5 +3397,7 @@ export type NotificationListResponse = z.output<typeof notificationListResponseS
 export const notificationUnreadCountSchema = z.object({ count: z.number().int().nonnegative() }).strict();
 export type NotificationUnreadCount = z.output<typeof notificationUnreadCountSchema>;
 
-export const notificationMarkAllReadSchema = z.object({ updatedCount: z.number().int().nonnegative() }).strict();
+export const notificationMarkAllReadSchema = z
+  .object({ updatedCount: z.number().int().nonnegative() })
+  .strict();
 export type NotificationMarkAllRead = z.output<typeof notificationMarkAllReadSchema>;

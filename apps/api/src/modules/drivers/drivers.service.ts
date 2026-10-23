@@ -8,10 +8,10 @@
  *    prema tačnoj verziji forme (P11) i smije popuniti samo kolone s whitelist-a
  *    — za `DRIVER` whitelist ne postoji, pa svako mapiranje pada s
  *    `NORMALIZATION_MISMATCH`.
- * 2. **PII se ne vraća bez prava** (`driver:view_pii`, R-07): `phone`, `email`,
- *    `dateOfBirth`, `address` i `licenseNumber` su maskirani/izostavljeni, a
- *    odgovor nosi `piiRedacted`. Datum isteka dozvole **nije** PII — nosi ga
- *    rok i podsjetnik.
+ * 2. **PII se ne vraća bez prava** (`driver:view_pii`, R-07): kontaktni i
+ *    identifikacioni podaci, slobodni tekst, dinamički `formData`, foto-privitak
+ *    i napomene/ograničenja kategorija dozvole se maskiraju ili izostavljaju;
+ *    odgovor nosi `piiRedacted`. Rok i kategorija dozvole ostaju dostupni.
  * 3. **Arhiviranje ne briše evidencije.** `archive` mijenja samo `status`
  *    (`Driver` nema `archivedAt` — to polje ima `Vehicle`); `delete` je
  *    soft-delete (`deletedAt`), pa istorija ostaje.
@@ -488,7 +488,8 @@ export class DriversService {
       where: { driverId },
       orderBy: { category: 'asc' },
     });
-    return { items: (rows as LicenseRow[]).map((row) => this.toCategory(row)) };
+    const piiAllowed = allows(actor, 'driver:view_pii');
+    return { items: (rows as LicenseRow[]).map((row) => this.toCategory(row, piiAllowed)) };
   }
 
   async addLicenseCategory(
@@ -524,7 +525,7 @@ export class DriversService {
     });
 
     return {
-      data: this.toCategory(created as LicenseRow),
+      data: this.toCategory(created as LicenseRow, allows(actor, 'driver:view_pii')),
       after: this.categorySnapshot(created as LicenseRow),
     };
   }
@@ -553,7 +554,7 @@ export class DriversService {
     });
 
     return {
-      data: this.toCategory(updated as LicenseRow),
+      data: this.toCategory(updated as LicenseRow, allows(actor, 'driver:view_pii')),
       before: this.categorySnapshot(current),
       after: this.categorySnapshot(updated as LicenseRow),
     };
@@ -831,25 +832,25 @@ export class DriversService {
       licenseNumber: piiAllowed ? row.licenseNumber : maskDocumentNumber(row.licenseNumber),
       licenseIssuedAt: dateOnly(row.licenseIssuedAt),
       licenseIssuingAuthority: row.licenseIssuingAuthority,
-      restrictions: row.restrictions,
-      notes: row.notes,
-      photoAttachmentId: row.photoAttachmentId,
+      restrictions: piiAllowed ? row.restrictions : null,
+      notes: piiAllowed ? row.notes : null,
+      photoAttachmentId: piiAllowed ? row.photoAttachmentId : null,
       formSchemaId: row.formSchemaId,
       formSchemaVersionId: row.formSchemaVersionId,
-      formData: (row.formData ?? {}) as Record<string, unknown>,
+      formData: piiAllowed ? ((row.formData ?? {}) as Record<string, unknown>) : {},
       piiRedacted: !piiAllowed,
       createdAt: row.createdAt.toISOString(),
     };
   }
 
-  private toCategory(row: LicenseRow): DriverLicenseCategory {
+  private toCategory(row: LicenseRow, piiAllowed: boolean): DriverLicenseCategory {
     return {
       id: row.id,
       category: row.category,
       issuedAt: dateOnly(row.issuedAt),
       expiresAt: dateOnly(row.expiresAt),
-      restrictions: row.restrictions,
-      notes: row.notes,
+      restrictions: piiAllowed ? row.restrictions : null,
+      notes: piiAllowed ? row.notes : null,
     };
   }
 

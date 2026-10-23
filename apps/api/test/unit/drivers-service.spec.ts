@@ -5,7 +5,8 @@
  * `driver:view_pii`, arhiviranje ne briše zapis, `version` štiti od paralelnih
  * izmjena, a kategorija dozvole je jedinstvena po vozaču.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
 import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import {
   DriversService,
@@ -23,6 +24,8 @@ import {
   FakeDriverPrisma,
   inDays,
 } from '../helpers/drivers-fake.js';
+
+vi.mock('../../src/prisma/prisma.service.js', () => ({ PrismaService: class PrismaService {} }));
 
 const VIEW_PII = 'driver:view_pii';
 
@@ -113,7 +116,9 @@ describe('DriversService — kreiranje', () => {
     expect(created.data.dateOfBirth).toBeNull();
     expect(created.data.address).toBeNull();
     expect(created.data.formSchemaVersionId).toBe(versionId);
-    expect(created.data.formData).toEqual({ emergencyContact: 'Selma 061 000 000' });
+    expect(created.data.notes).toBeNull();
+    expect(created.data.photoAttachmentId).toBeNull();
+    expect(created.data.formData).toEqual({});
   });
 
   it('sa `driver:view_pii` vraća puna PII polja', async () => {
@@ -127,6 +132,7 @@ describe('DriversService — kreiranje', () => {
     expect(created.data.phone).toBe('+387 61 111 222');
     expect(created.data.licenseNumber).toBe('BA-123456');
     expect(created.data.dateOfBirth).toBe('1985-04-12');
+    expect(created.data.formData).toEqual({ emergencyContact: 'Selma 061 000 000' });
   });
 
   it('Super Admin vidi PII bez eksplicitne permisije (R-07)', async () => {
@@ -453,6 +459,26 @@ describe('DriversService — kategorije dozvole', () => {
     expect(created.data.category).toBe('CE');
     const list = await svc.listLicenseCategories(row.id, actor(['driver:view']));
     expect(list.items).toHaveLength(1);
+  });
+
+  it('rediguje slobodne napomene kategorije bez `driver:view_pii`', async () => {
+    const { fake, svc } = service();
+    const row = fake.addDriver();
+    await svc.addLicenseCategory(
+      row.id,
+      { category: 'C', restrictions: 'Zdravstveno ograničenje', notes: 'Kontakt: 061 000 000' },
+      undefined,
+      actor(['driver:update']),
+    );
+
+    const redacted = await svc.listLicenseCategories(row.id, actor(['driver:view']));
+    const full = await svc.listLicenseCategories(row.id, actor(['driver:view', VIEW_PII]));
+
+    expect(redacted.items[0]).toMatchObject({ restrictions: null, notes: null });
+    expect(full.items[0]).toMatchObject({
+      restrictions: 'Zdravstveno ograničenje',
+      notes: 'Kontakt: 061 000 000',
+    });
   });
 
   it('dupla kategorija je `DUPLICATE_ENTRY`', async () => {
