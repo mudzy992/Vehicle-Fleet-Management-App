@@ -37,7 +37,7 @@ Ne koristiti produkcijski URL: test obavlja probne upise, iako ih završava roll
 
 ## P14 — autorizacija
 
-P14 je i dalje otvoren: `docs/09-TEST_PLAN.md` traži OpenAPI-wide provjeru dozvola, uključujući sadržaj priloga i potpisane URL-ove. Dodan je regresijski test `p14-route-authorization-coverage.spec.ts` koji skenira HTTP rute modula i health kontrolera, provjerava deklarisane permisije/opsege i javne/session-only izuzetke te poredi guard-level odluke za SUPER_ADMIN, ADMINISTRATOR i OBICNI_KORISNIK s efektivnim pravima iz seed matrice. Ovo nije HTTP/E2E provjera; sweep stvarnih ruta i uloga/opsega (`authorization-sweep.e2e.spec.ts`) ostaje na čekanju.
+P14 je i dalje otvoren: `docs/09-TEST_PLAN.md` traži OpenAPI-wide provjeru dozvola, uključujući sadržaj priloga i potpisane URL-ove. `p14-route-authorization-coverage.spec.ts` skenira rute modula i health kontrolera, validira metadata i poredi guard odluke s seed pravima triju sistemskih uloga. Dodatni `p14-http-permission-guard.spec.ts` za svaku takvu metadata deklaraciju montira privremenu Nest HTTP rutu i provjerava 200/403 za SUPER_ADMIN, ADMINISTRATOR i OBICNI_KORISNIK te da 403 zahtjev ne ulazi u handler. To testira stvarni `PermissionsGuard` kroz HTTP, ali ne pokreće stvarne kontrolere/servise ni resource-scope provjere; puni OpenAPI HTTP/E2E sweep ostaje na čekanju.
 
 Audit je potvrdio razliku prema doslovnom P14 očekivanju: potpisani URL je ranije radio kao javni bearer token bez sesije. Ispravljena je zaštita: izdavanje URL-a i preuzimanje sada traže `attachment:view`; ruta s tokenom više nije javna, ponovo provjerava opseg priloga, a HMAC potpis veže token za ID korisnika i rok važenja. Web klijent preuzima bajtove uz memorijski access token umjesto otvaranja javnog linka. Brisanje sada primjenjuje `attachment:delete` scope zasebno; `attachment:view:ALL` ne daje brisanje tuđih upload-a pod `delete:OWN`. Dodani su regresijski testovi za metapodatke permisije, vezivanje tokena za korisnika, autentifikovano preuzimanje i brisanje; puna P14 matrica svih OpenAPI ruta i dalje nije izvršena.
 
@@ -50,6 +50,7 @@ Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view
 ## Verifikacija u ovom prolazu
 
 - `corepack pnpm --filter @vfm/api exec vitest run test/unit/p14-route-authorization-coverage.spec.ts` — prolaz: sve rute su deklarisane/izuzete po pravilu, permisije/opsezi su validni, a odluka guard-a je poređena s seed grantovima tri sistemske role.
+- `corepack pnpm --filter @vfm/api exec vitest run test/unit/p14-http-permission-guard.spec.ts` — prolaz: HTTP guard sweep nad svim routama s permisijskim metadata (rute su generisane iz stvarnih deklaracija); odbijeni zahtjevi daju 403 i handler se ne izvršava.
 - `corepack pnpm --filter @vfm/api exec vitest run --config vitest.integration.config.ts` — prolaz alata; jedan integracijski fajl i oba testa preskočena zbog nedostajućeg `PHASE3_TEST_DATABASE_URL`.
 - `corepack pnpm --filter @vfm/api typecheck` — prolaz.
 - `corepack pnpm --filter @vfm/api test` — prethodni prolaz prije izmjena scope-a podsjetnika: 58 fajlova, 945 jediničnih testova.
@@ -64,7 +65,7 @@ Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view
 
 ## Sljedeća stavka za nastavak
 
-**P14 runtime HTTP sweep**: provjera ruta × sistemske uloge/opseg kroz API zahtjeve, uključujući priloge, potpisane URL-ove i PII. Dosadašnji guard-level/servisni testovi ne dokazuju HTTP odgovor niti da odbijeni zahtjev ne procuri podatke.
+**P14 puni OpenAPI HTTP/E2E sweep** nad stvarnim kontrolerima i servisima: ruta × sistemska uloga/opseg, uključujući priloge, potpisane URL-ove i PII. Guard-level HTTP harness sada provjerava 200/403 nad metadata rutama, ali ne dokazuje odgovore produkcijskih kontrolera, resource-scope provjere ni odsustvo curenja kroz servise.
 
 ## Sljedeći koraci
 
