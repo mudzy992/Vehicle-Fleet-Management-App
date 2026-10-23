@@ -21,7 +21,10 @@ const SERVICE_TWO = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd2';
 type Scenario = 'VEHICLE_ONE' | 'NO_VIEW';
 function actorFor(scenario: Scenario): AuthenticatedUser {
   const grants: readonly PermissionGrant[] = scenario === 'VEHICLE_ONE'
-    ? [{ permission: 'service:view', scope: 'VEHICLE_IDS', scopeVehicleIds: [VEHICLE_ONE] }]
+    ? [
+        { permission: 'service:view', scope: 'VEHICLE_IDS', scopeVehicleIds: [VEHICLE_ONE] },
+        { permission: 'service:update', scope: 'VEHICLE_IDS', scopeVehicleIds: [VEHICLE_ONE] },
+      ]
     : [];
   return {
     id: `p14-service-items-${scenario.toLowerCase()}`, roles: ['CUSTOM'], roleIds: [],
@@ -40,9 +43,16 @@ describe('P14 — service items scope HTTP rute', () => {
     [SERVICE_TWO, { id: SERVICE_TWO, vehicleId: VEHICLE_TWO, createdById: 'owner-2', version: 1, totalCost: 2250, items: [] }],
   ]);
   const findFirst = vi.fn(async ({ where }: { where: { id: string } }) => rows.get(where.id) ?? null);
+  const updateMany = vi.fn(async () => ({ count: 1 }));
+  const transaction = {
+    serviceRecord: { findFirst, updateMany },
+  };
+  const prisma = {
+    serviceRecord: { findFirst },
+    $transaction: vi.fn(async (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)),
+  } as unknown as PrismaService;
 
   beforeAll(async () => {
-    const prisma = { serviceRecord: { findFirst } } as unknown as PrismaService;
     const moduleRef = await Test.createTestingModule({
       controllers: [ServiceItemsController],
       providers: [
@@ -80,6 +90,17 @@ describe('P14 — service items scope HTTP rute', () => {
     });
     expect(unassigned.status).toBe(403);
     expect(((await unassigned.json()) as { error: { code: string } }).error.code).toBe('SCOPE_DENIED');
+  });
+
+  it('service:update VEHICLE_IDS odbija zamjenu stavki tuđeg servisa prije mutacije', async () => {
+    const response = await fetch(`${baseUrl}/services/${SERVICE_TWO}/items`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', 'x-sweep-role': 'VEHICLE_ONE' },
+      body: JSON.stringify({ version: 1, items: [] }),
+    });
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe('SCOPE_DENIED');
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
   it('bez service:view zahtjev se odbija prije čitanja servisnog zapisa', async () => {
