@@ -1,5 +1,5 @@
 /**
- * Statička P14 zaštita: svaka HTTP ruta modula mora deklarisati dozvolu/scope,
+ * Statička P14 zaštita: svaka HTTP ruta API kontrolera mora deklarisati dozvolu/scope,
  * biti eksplicitno javna ili biti jedna od samoposlužnih auth ruta koje štiti
  * globalni JWT guard. Test ne uvozi kontrolere, pa ne zavisi od Prisma Clienta.
  */
@@ -9,13 +9,16 @@ import { describe, expect, it } from 'vitest';
 import ts from 'typescript';
 import { ALL_PERMISSIONS, PERMISSION_SCOPE_VALUES } from '@vfm/shared';
 
-const MODULES_DIR = resolve(process.cwd(), 'src/modules');
+const CONTROLLER_DIRS = [resolve(process.cwd(), 'src/modules'), resolve(process.cwd(), 'src/health')];
 const ROUTE_DECORATORS = new Set(['Get', 'Post', 'Put', 'Patch', 'Delete', 'Head', 'Options']);
 const AUTH_DECORATORS = new Set(['Public', 'RequirePermissions', 'RequireAnyPermission', 'RequireScope']);
 const PUBLIC_ROUTES = new Set([
   'AuthController.login',
   'AuthController.refresh',
   'AuthController.resetPassword',
+  'HealthController.liveness',
+  'HealthController.readiness',
+  'HealthController.startup',
 ]);
 const SESSION_ONLY_ROUTES = new Set([
   'AuthController.logout',
@@ -53,7 +56,7 @@ describe('P14 — deklaracije autorizacije kontrolera', () => {
     const discoveredPublic: string[] = [];
     const invalidDeclarations: string[] = [];
 
-    for (const file of sourceFiles(MODULES_DIR)) {
+    for (const file of CONTROLLER_DIRS.flatMap(sourceFiles)) {
       const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
       for (const statement of source.statements) {
         if (!ts.isClassDeclaration(statement) || !statement.name?.text.endsWith('Controller')) continue;
