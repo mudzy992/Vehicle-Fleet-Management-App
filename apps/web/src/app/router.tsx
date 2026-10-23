@@ -263,7 +263,11 @@ export const appRoutes = [
       },
       {
         path: 'profil',
-        element: <ProfilePage />,
+        element: (
+          <RequirePermission permission="auth:login">
+            <ProfilePage />
+          </RequirePermission>
+        ),
       },
       { path: 'dizajn-sistem', element: <DesignSystemPage /> },
       {
