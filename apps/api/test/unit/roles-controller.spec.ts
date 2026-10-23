@@ -9,7 +9,7 @@
  * - **redoslijed ruta** — `GET /roles/matrix` mora biti registrovan prije
  *   `GET /roles/:id`, inače `matrix` završi kao UUID parametar i vrati 400.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import type { RoleDetail, RoleMatrixUpdateInput, RoleMatrixUpdateResult, RoleSummary } from '@vfm/shared/schemas';
 import { AuditContext } from '../../src/common/audit/audit.types.js';
@@ -29,6 +29,8 @@ import { PrismaModule } from '../../src/prisma/prisma.module.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 import { FakePrismaClient, asPrismaService } from '../helpers/fake-prisma.js';
 import { ADMIN_SNAPSHOT, FakeRedis, fakeRedisService } from '../helpers/rbac-fakes.js';
+
+vi.mock('../../src/prisma/prisma.service.js', () => ({ PrismaService: class PrismaService {} }));
 
 const ROLE_ID = '018f0000-0000-7000-8000-0000000000b1';
 const ACTOR_ID = ADMIN_SNAPSHOT.userId;

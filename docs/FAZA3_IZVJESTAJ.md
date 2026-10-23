@@ -49,7 +49,7 @@ Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view
 - `corepack pnpm --filter @vfm/api exec vitest run --config vitest.integration.config.ts` — prolaz alata; jedan integracijski fajl i oba testa preskočena zbog nedostajućeg `PHASE3_TEST_DATABASE_URL`.
 - `corepack pnpm --filter @vfm/api typecheck` — prolaz.
 - `corepack pnpm --filter @vfm/api test` — prethodni prolaz prije izmjena scope-a podsjetnika: 58 fajlova, 945 jediničnih testova.
-- Ciljani API testovi: `tasks.spec.ts`, `form-option-values.spec.ts`, `form-schemas-service.spec.ts`, `form-migrations-service.spec.ts` i `notifications-service.spec.ts` — **84/84** testa prolaze. Testovi izoluju `PrismaService` DI token i ne zahtijevaju generisani Prisma Client niti živu bazu.
+- Ciljani API testovi (11 fajlova: auth guardovi, permissions service, users/roles/attachments kontroleri, rute P14, zadaci, forme/migracije/opcije i obavijesti) — **204/204** jediničnih testova prolaze. `PrismaService` je izolovan/mockovan gdje je potreban; ovo nije HTTP/E2E sweep i ne dokazuje autorizaciju nad živom bazom.
 - Dodatni raniji ciljani testovi nakon izmjena scope-a: `reminders-service.spec.ts` — 22 testa; `attachments-service.spec.ts` — 17 testova.
 - `corepack pnpm --filter @vfm/shared exec vitest run test/permissions.spec.ts` — prolaz: 34 testa.
 - `corepack pnpm --filter @vfm/web test` — prethodni prolaz: 23 fajla, 166 testova.

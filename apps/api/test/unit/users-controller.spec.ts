@@ -9,7 +9,7 @@
  * - **nema curenja tajni u audit**: privremena lozinka i reset token nikad ne
  *   idu u `AuditContext`/`AuditLog`.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import type { CreateUserResult, PasswordResetIssued, UserDetail } from '@vfm/shared/schemas';
 import { AuditContext } from '../../src/common/audit/audit.types.js';
@@ -29,6 +29,8 @@ import { UsersModule } from '../../src/modules/users/users.module.js';
 import { UsersService } from '../../src/modules/users/users.service.js';
 import { FakePrismaClient, asPrismaService } from '../helpers/fake-prisma.js';
 import { FakeRedis, fakeRedisService } from '../helpers/rbac-fakes.js';
+
+vi.mock('../../src/prisma/prisma.service.js', () => ({ PrismaService: class PrismaService {} }));
 
 const USER_ID = '018f0000-0000-7000-8000-000000000002';
 const ROLE_ID = '018f0000-0000-7000-8000-0000000000b1';
