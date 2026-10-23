@@ -24,6 +24,7 @@ function actorFor(scenario: Scenario): AuthenticatedUser {
     ? [
         { permission: 'reminder:view', scope: 'OWN', scopeVehicleIds: [] },
         { permission: 'reminder:acknowledge', scope: 'OWN', scopeVehicleIds: [] },
+        { permission: 'reminder:snooze', scope: 'OWN', scopeVehicleIds: [] },
       ]
     : [];
   return {
@@ -104,6 +105,20 @@ describe('P14 — OWN scope podsjetnika kroz HTTP', () => {
     expect(response.status).toBe(403);
     expect(((await response.json()) as { error: { code: string } }).error.code).toBe('SCOPE_DENIED');
     expect(vehicleFindFirst).toHaveBeenCalledWith({
+      where: { id: VEHICLE_TWO, createdById: USER_ONE, deletedAt: null }, select: { id: true },
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('reminder:snooze OWN ne dopušta odgodu podsjetnika za tuđe vozilo', async () => {
+    const response = await fetch(`${baseUrl}/reminders/${REMINDER_TWO}/snooze`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-sweep-role': 'USER_ONE' },
+      body: JSON.stringify({ days: 2 }),
+    });
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe('SCOPE_DENIED');
+    expect(vehicleFindFirst).toHaveBeenLastCalledWith({
       where: { id: VEHICLE_TWO, createdById: USER_ONE, deletedAt: null }, select: { id: true },
     });
     expect(update).not.toHaveBeenCalled();
