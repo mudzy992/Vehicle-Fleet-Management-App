@@ -37,7 +37,7 @@ Ne koristiti produkcijski URL: test obavlja probne upise, iako ih završava roll
 
 ## P14 — autorizacija
 
-P14 je i dalje otvoren: `docs/09-TEST_PLAN.md` traži OpenAPI-wide provjeru dozvola, uključujući sadržaj priloga i potpisane URL-ove. Dodan je statički regresijski test `p14-route-authorization-coverage.spec.ts` koji traži autorizacijsku deklaraciju na svakoj HTTP ruti i tačno ograničava javne/session-only auth izuzetke; runtime sweep svih ruta i uloga (`authorization-sweep.e2e.spec.ts`) ostaje na čekanju.
+P14 je i dalje otvoren: `docs/09-TEST_PLAN.md` traži OpenAPI-wide provjeru dozvola, uključujući sadržaj priloga i potpisane URL-ove. Dodan je statički regresijski test `p14-route-authorization-coverage.spec.ts` koji traži autorizacijsku deklaraciju na svakoj HTTP ruti, provjerava da su permisije/opsezi iz kataloga i tačno ograničava javne/session-only auth izuzetke; runtime sweep svih ruta i uloga (`authorization-sweep.e2e.spec.ts`) ostaje na čekanju.
 
 Audit je potvrdio razliku prema doslovnom P14 očekivanju: potpisani URL je ranije radio kao javni bearer token bez sesije. Ispravljena je zaštita: izdavanje URL-a i preuzimanje sada traže `attachment:view`; ruta s tokenom više nije javna, ponovo provjerava opseg priloga, a HMAC potpis veže token za ID korisnika i rok važenja. Web klijent preuzima bajtove uz memorijski access token umjesto otvaranja javnog linka. Brisanje sada primjenjuje `attachment:delete` scope zasebno; `attachment:view:ALL` ne daje brisanje tuđih upload-a pod `delete:OWN`. Dodani su regresijski testovi za metapodatke permisije, vezivanje tokena za korisnika, autentifikovano preuzimanje i brisanje; puna P14 matrica svih OpenAPI ruta i dalje nije izvršena.
 

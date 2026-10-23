@@ -7,6 +7,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import ts from 'typescript';
+import { ALL_PERMISSIONS, PERMISSION_SCOPE_VALUES } from '@vfm/shared';
 
 const MODULES_DIR = resolve(process.cwd(), 'src/modules');
 const ROUTE_DECORATORS = new Set(['Get', 'Post', 'Put', 'Patch', 'Delete', 'Head', 'Options']);
@@ -42,30 +43,70 @@ function decoratorName(decorator: ts.Decorator): string | null {
   return null;
 }
 
+function decoratorArguments(decorator: ts.Decorator): readonly ts.Expression[] {
+  return ts.isCallExpression(decorator.expression) ? decorator.expression.arguments : [];
+}
+
 describe('P14 — deklaracije autorizacije kontrolera', () => {
   it('svaka HTTP ruta je zaštićena, eksplicitno javna ili session-only auth ruta', () => {
     const unsecured: string[] = [];
     const discoveredPublic: string[] = [];
+    const invalidDeclarations: string[] = [];
 
     for (const file of sourceFiles(MODULES_DIR)) {
       const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
       for (const statement of source.statements) {
         if (!ts.isClassDeclaration(statement) || !statement.name?.text.endsWith('Controller')) continue;
         const controllerName = statement.name.text;
-        const classDecorators = decoratorsOf(statement).map(decoratorName);
+        const classDecoratorNodes = decoratorsOf(statement);
 
         for (const member of statement.members) {
           if (!ts.isMethodDeclaration(member) || !member.name || !ts.isIdentifier(member.name)) continue;
           const methodName = member.name.text;
-          const routeDecorators = decoratorsOf(member).map(decoratorName);
+          const routeDecoratorNodes = decoratorsOf(member);
+          const routeDecorators = routeDecoratorNodes.map(decoratorName);
           if (!routeDecorators.some((name) => name !== null && ROUTE_DECORATORS.has(name))) continue;
 
           const route = `${controllerName}.${methodName}`;
-          const allDecorators = [...classDecorators, ...routeDecorators];
+          const allDecoratorNodes = [...classDecoratorNodes, ...routeDecoratorNodes];
+          const allDecorators = allDecoratorNodes.map(decoratorName);
           if (allDecorators.includes('Public')) discoveredPublic.push(route);
 
           const hasAuthorization = allDecorators.some((name) => name !== null && AUTH_DECORATORS.has(name));
           if (!hasAuthorization && !SESSION_ONLY_ROUTES.has(route)) unsecured.push(`${file}:${route}`);
+
+          for (const decorator of allDecoratorNodes) {
+            const name = decoratorName(decorator);
+            if (name !== 'RequirePermissions' && name !== 'RequireAnyPermission' && name !== 'RequireScope') {
+              continue;
+            }
+            const arguments_ = decoratorArguments(decorator);
+            const requiredCount = name === 'RequireScope' ? 2 : arguments_.length;
+            const permissionNodes = name === 'RequireScope' ? arguments_.slice(0, 1) : arguments_;
+            const permissions = permissionNodes.filter(ts.isStringLiteralLike).map((node) => node.text);
+            if (permissions.length !== permissionNodes.length || permissions.length === 0) {
+              invalidDeclarations.push(`${file}:${route} (${name}: permisija nije literalni string)`);
+            } else {
+              for (const permission of permissions) {
+                if (!ALL_PERMISSIONS.includes(permission as (typeof ALL_PERMISSIONS)[number])) {
+                  invalidDeclarations.push(`${file}:${route} (${name}: nepoznata permisija ${permission})`);
+                }
+              }
+            }
+            if (name === 'RequireScope') {
+              const scope = arguments_[1];
+              if (!scope || !ts.isStringLiteralLike(scope)) {
+                invalidDeclarations.push(`${file}:${route} (RequireScope: opseg nije literalni string)`);
+              } else if (
+                !PERMISSION_SCOPE_VALUES.includes(scope.text as (typeof PERMISSION_SCOPE_VALUES)[number])
+              ) {
+                invalidDeclarations.push(`${file}:${route} (RequireScope: nepoznat opseg ${scope.text})`);
+              }
+            }
+            if (name === 'RequireScope' && arguments_.length !== requiredCount) {
+              invalidDeclarations.push(`${file}:${route} (RequireScope: očekivana su dva argumenta)`);
+            }
+          }
         }
       }
     }
