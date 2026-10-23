@@ -23,9 +23,9 @@ U repozitoriju već postoje API moduli i web ekrani za vozila, vozače, registra
 
 Postoje jedinični testovi za idempotentnost i raspoređivanje podsjetnika, preklapanje perioda na nivou servisa, kilometražu i priloge. Oni koriste zamjenske objekte i ne dokazuju da su PostgreSQL ograničenja i indeksi zaista aktivni u bazi.
 
-Dodat je `apps/api/test/integration/phase3-database.integration.spec.ts`. Na namjenskoj testnoj bazi test u jednoj transakciji provjerava da baza odbija preklapanje registracija i osiguranja (`23P01`) i duplirani ključ podsjetnika (`23505`); transakcija se uvijek vraća. Test traži objavljene forme i inicijalizovanu politiku podsjetnika, pa prije pokretanja treba izvršiti migracije i seed nad testnom bazom.
+Dodat je `apps/api/test/integration/phase3-database.integration.spec.ts`. Na namjenskoj testnoj bazi test u jednoj transakciji provjerava da baza odbija preklapanje registracija/osiguranja (`23P01`) i duplirani ključ podsjetnika (`23505`), te potvrđuje hronološko čitanje historije servisa i montaža guma. Transakcija se uvijek vraća. Test traži objavljene VEHICLE, REGISTRATION, INSURANCE i SERVICE forme i inicijalizovanu politiku podsjetnika; prije pokretanja izvršiti migracije i seed nad testnom bazom.
 
-U ovom okruženju test je otkriven, ali preskočen jer `PHASE3_TEST_DATABASE_URL` nije postavljen. To nije dokaz prolaza P13. Nisu pronađeni namjenski integracijski testovi za pragove podsjetnika, promjenu ljetno/zimskog računanja vremena niti historiju servisa/guma na stvarnoj bazi.
+U ovom okruženju test je otkriven, ali preskočen jer `PHASE3_TEST_DATABASE_URL` nije postavljen. To nije dokaz prolaza P13. Pragovi, DST i izračuni podsjetnika i dalje imaju jedinične pokriće, ali nije pokrenuta provjera njihove stvarne DB integracije.
 
 Pokretanje protiv **isključivo namjenske testne baze**:
 
@@ -59,7 +59,7 @@ Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view
 
 ## Sljedeći koraci
 
-1. Pokrenuti novi integracijski test na izolovanoj testnoj bazi i dopuniti P13 testovima pragova raspoređivanja, DST-a i historije servisa/guma.
+1. Pokrenuti ažurirani integracijski test na izolovanoj testnoj bazi; zatim, ako je potrebno, proširiti DB integraciju scheduler pragova i DST ponašanja.
 2. Dopuniti runtime P14 provjeru ruta × uloga/opseg; ciljane jedinične provjere zadataka, formi i obavijesti sada prolaze, ali ne zamjenjuju HTTP/E2E sweep.
 3. Izvesti P14 matricu svih OpenAPI ruta × uloge/opseg, uz posebne slučajeve za priloge, potpisane URL-ove i PII; potvrditi da nedozvoljene uloge dobijaju 401/403 na svakoj ruti.
 4. Završiti audit web tokova prema Fazi 3 i dopuniti regresijske testove za potvrđene nedostatke.

@@ -31,21 +31,22 @@ describe.skipIf(!databaseUrl)('Faza 3 — PostgreSQL integracijski ugovori (P13)
       const vehicleForm = await publishedForm('VEHICLE');
       const registrationForm = await publishedForm('REGISTRATION');
       const insuranceForm = await publishedForm('INSURANCE');
-      if (!vehicleForm || !registrationForm || !insuranceForm) {
+      const serviceForm = await publishedForm('SERVICE');
+      if (!vehicleForm || !registrationForm || !insuranceForm || !serviceForm) {
         throw new Error(
-          'Testna baza nema objavljene VEHICLE, REGISTRATION i INSURANCE forme (pokrenuti seed).',
+          'Testna baza nema objavljene VEHICLE, REGISTRATION, INSURANCE i SERVICE forme (pokrenuti seed).',
         );
       }
 
       await client.query(
-        `INSERT INTO "Vehicle" ("id", "internalNo", "make", "model", "fuelType", "formSchemaId", "formSchemaVersionId")
-         VALUES ($1, $2, 'Test', 'P13', 'DIESEL', $3, $4)`,
+        `INSERT INTO "Vehicle" ("id", "internalNo", "make", "model", "fuelType", "formSchemaId", "formSchemaVersionId", "updatedAt")
+         VALUES ($1, $2, 'Test', 'P13', 'DIESEL', $3, $4, CURRENT_TIMESTAMP)`,
         [vehicleId, `P13-${vehicleId.slice(0, 8)}`, vehicleForm.schemaId, vehicleForm.versionId],
       );
 
       await client.query(
-        `INSERT INTO "RegistrationRecord" ("id", "vehicleId", "formSchemaId", "formSchemaVersionId", "registrationNumber", "validFrom", "validUntil")
-         VALUES ($1, $2, $3, $4, $5, DATE '2035-01-01', DATE '2035-12-31')`,
+        `INSERT INTO "RegistrationRecord" ("id", "vehicleId", "formSchemaId", "formSchemaVersionId", "registrationNumber", "validFrom", "validUntil", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, DATE '2035-01-01', DATE '2035-12-31', CURRENT_TIMESTAMP)`,
         [
           registrationId,
           vehicleId,
@@ -55,8 +56,8 @@ describe.skipIf(!databaseUrl)('Faza 3 — PostgreSQL integracijski ugovori (P13)
         ],
       );
       await expectOverlap(
-        `INSERT INTO "RegistrationRecord" ("id", "vehicleId", "formSchemaId", "formSchemaVersionId", "registrationNumber", "validFrom", "validUntil")
-         VALUES ($1, $2, $3, $4, $5, DATE '2035-12-31', DATE '2036-12-31')`,
+        `INSERT INTO "RegistrationRecord" ("id", "vehicleId", "formSchemaId", "formSchemaVersionId", "registrationNumber", "validFrom", "validUntil", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, DATE '2035-12-31', DATE '2036-12-31', CURRENT_TIMESTAMP)`,
         [
           randomUUID(),
           vehicleId,
@@ -67,15 +68,65 @@ describe.skipIf(!databaseUrl)('Faza 3 — PostgreSQL integracijski ugovori (P13)
       );
 
       await client.query(
-        `INSERT INTO "InsuranceRecord" ("id", "vehicleId", "formSchemaId", "formSchemaVersionId", "validFrom", "validUntil")
-         VALUES ($1, $2, $3, $4, DATE '2035-01-01', DATE '2035-12-31')`,
+        `INSERT INTO "InsuranceRecord" ("id", "vehicleId", "formSchemaId", "formSchemaVersionId", "validFrom", "validUntil", "updatedAt")
+         VALUES ($1, $2, $3, $4, DATE '2035-01-01', DATE '2035-12-31', CURRENT_TIMESTAMP)`,
         [insuranceId, vehicleId, insuranceForm.schemaId, insuranceForm.versionId],
       );
       await expectOverlap(
-        `INSERT INTO "InsuranceRecord" ("id", "vehicleId", "formSchemaId", "formSchemaVersionId", "validFrom", "validUntil")
-         VALUES ($1, $2, $3, $4, DATE '2035-12-31', DATE '2036-12-31')`,
+        `INSERT INTO "InsuranceRecord" ("id", "vehicleId", "formSchemaId", "formSchemaVersionId", "validFrom", "validUntil", "updatedAt")
+         VALUES ($1, $2, $3, $4, DATE '2035-12-31', DATE '2036-12-31', CURRENT_TIMESTAMP)`,
         [randomUUID(), vehicleId, insuranceForm.schemaId, insuranceForm.versionId],
       );
+
+      const olderServiceId = randomUUID();
+      const newerServiceId = randomUUID();
+      for (const [id, serviceDate, totalCost] of [
+        [olderServiceId, '2034-04-01', 12_500],
+        [newerServiceId, '2035-04-01', 8_000],
+      ] as const) {
+        await client.query(
+          `INSERT INTO "ServiceRecord" ("id", "vehicleId", "formSchemaId", "formSchemaVersionId", "serviceDate", "serviceType", "totalCost", "updatedAt")
+           VALUES ($1, $2, $3, $4, $5::date, 'INSPECTION', $6, CURRENT_TIMESTAMP)`,
+          [id, vehicleId, serviceForm.schemaId, serviceForm.versionId, serviceDate, totalCost],
+        );
+      }
+      const serviceHistory = await client.query<{ id: string; serviceDate: string }>(
+        `SELECT "id", to_char("serviceDate", 'YYYY-MM-DD') AS "serviceDate"
+           FROM "ServiceRecord" WHERE "vehicleId" = $1 ORDER BY "serviceDate" DESC`,
+        [vehicleId],
+      );
+      expect(serviceHistory.rows).toEqual([
+        { id: newerServiceId, serviceDate: '2035-04-01' },
+        { id: olderServiceId, serviceDate: '2034-04-01' },
+      ]);
+
+      const tireSetId = randomUUID();
+      await client.query(
+        `INSERT INTO "TireSet" ("id", "code", "season", "updatedAt")
+         VALUES ($1, $2, 'WINTER', CURRENT_TIMESTAMP)`,
+        [tireSetId, `P13-${tireSetId.slice(0, 8)}`],
+      );
+      const olderInstallationId = randomUUID();
+      const newerInstallationId = randomUUID();
+      await client.query(
+        `INSERT INTO "TireInstallation" ("id", "setId", "vehicleId", "mountedAt", "mountedOdometerKm", "dismountedAt", "dismountedOdometerKm", "daysInUse", "kmDriven", "updatedAt")
+         VALUES ($1, $2, $3, DATE '2034-10-01', 10000, DATE '2035-03-01', 14000, 151, 4000, CURRENT_TIMESTAMP)`,
+        [olderInstallationId, tireSetId, vehicleId],
+      );
+      await client.query(
+        `INSERT INTO "TireInstallation" ("id", "setId", "vehicleId", "mountedAt", "mountedOdometerKm", "updatedAt")
+         VALUES ($1, $2, $3, DATE '2035-10-01', 15000, CURRENT_TIMESTAMP)`,
+        [newerInstallationId, tireSetId, vehicleId],
+      );
+      const tireHistory = await client.query<{ id: string; mountedAt: string; kmDriven: number | null }>(
+        `SELECT "id", to_char("mountedAt", 'YYYY-MM-DD') AS "mountedAt", "kmDriven"
+           FROM "TireInstallation" WHERE "vehicleId" = $1 ORDER BY "mountedAt" DESC`,
+        [vehicleId],
+      );
+      expect(tireHistory.rows).toEqual([
+        { id: newerInstallationId, mountedAt: '2035-10-01', kmDriven: null },
+        { id: olderInstallationId, mountedAt: '2034-10-01', kmDriven: 4000 },
+      ]);
 
       const policy = await client.query<{ id: string }>(`SELECT "id" FROM "ReminderPolicy" LIMIT 1`);
       if (!policy.rows[0]) throw new Error('Testna baza nema ReminderPolicy red (pokrenuti seed).');
