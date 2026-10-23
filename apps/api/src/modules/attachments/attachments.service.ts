@@ -109,6 +109,12 @@ export interface AttachmentActor {
   readonly permissions?: {
     readonly isSuperAdmin: boolean;
     readonly permissions: ReadonlyMap<string, string>;
+    readonly grants?: readonly {
+      readonly permission: string;
+      readonly scope: string;
+      readonly scopeVehicleIds?: readonly string[];
+      readonly scopeDriverIds?: readonly string[];
+    }[];
   };
 }
 
@@ -254,8 +260,19 @@ export class AttachmentsService {
     input: CompleteAttachmentInput,
     actor: AttachmentActor,
   ): Promise<AttachmentMutation<Attachment>> {
+    if (input.taskId !== undefined && (input.ownerType !== 'TASK' || input.taskId !== input.ownerId)) {
+      throw VfmErrors.validationError([
+        {
+          path: ['taskId'],
+          message: 'taskId mora odgovarati ownerId kada je vlasnik priloga TASK.',
+          code: 'custom',
+        },
+      ]);
+    }
+
     const current = await this.loadOrThrow(id);
     this.assertUploadScope(actor, current);
+    await this.assertOwnerScope(actor, input);
 
     const updated = await this.prisma.attachment.update({
       where: { id },
@@ -263,7 +280,7 @@ export class AttachmentsService {
         ownerType: input.ownerType,
         ownerId: input.ownerId,
         stage: input.stage,
-        taskId: input.taskId ?? null,
+        taskId: input.ownerType === 'TASK' ? input.ownerId : null,
         formFieldKey: input.formFieldKey ?? null,
       } as unknown as Prisma.AttachmentUncheckedUpdateInput,
       select: SELECT,
@@ -368,6 +385,13 @@ export class AttachmentsService {
   ): Promise<AttachmentMutation<Attachment>> {
     const current = await this.loadOrThrow(id);
     this.assertUploadScope(actor, current);
+    await this.assertOwnerScope(actor, {
+      id: current.id,
+      ownerType: current.ownerType,
+      ownerId: current.ownerId,
+      stage: current.stage,
+      ...(current.taskId ? { taskId: current.taskId } : {}),
+    });
 
     const uploaded = await this.upload(file, actor);
 
@@ -424,9 +448,184 @@ export class AttachmentsService {
     return row as AttachmentRow;
   }
 
-  /** Kompletiranje/zamjena je ograničena na vlastiti upload bez `attachment:view:ALL`. */
+  private async assertOwnerScope(actor: AttachmentActor, input: CompleteAttachmentInput): Promise<void> {
+    // Read scope is not a write grant: only Super Admin bypasses the target's mutation scope.
+    if (actor.isSuperAdmin) return;
+
+    let allowed = false;
+    switch (input.ownerType) {
+      case 'OTHER':
+        allowed = input.ownerId === actor.id;
+        break;
+      case 'VEHICLE': {
+        const row = await this.prisma.vehicle.findFirst({
+          where: { id: input.ownerId, deletedAt: null },
+          select: { id: true, createdById: true },
+        });
+        if (!row) throw VfmErrors.notFound('vozilo');
+        allowed = this.hasResourceScope(actor, 'vehicle:update', {
+          ownerId: row.createdById,
+          vehicleId: row.id,
+        });
+        break;
+      }
+      case 'DRIVER': {
+        const row = await this.prisma.driver.findFirst({
+          where: { id: input.ownerId, deletedAt: null },
+          select: { id: true, createdById: true },
+        });
+        if (!row) throw VfmErrors.notFound('vozač');
+        allowed = this.hasResourceScope(actor, 'driver:update', {
+          ownerId: row.createdById,
+          driverId: row.id,
+        });
+        break;
+      }
+      case 'SERVICE': {
+        const row = await this.prisma.serviceRecord.findFirst({
+          where: { id: input.ownerId, deletedAt: null },
+          select: { createdById: true, vehicleId: true },
+        });
+        if (!row) throw VfmErrors.notFound('servisni zapis');
+        allowed = this.hasResourceScope(actor, 'service:update', {
+          ownerId: row.createdById,
+          vehicleId: row.vehicleId,
+        });
+        break;
+      }
+      case 'REGISTRATION': {
+        const row = await this.prisma.registrationRecord.findFirst({
+          where: { id: input.ownerId, deletedAt: null },
+          select: { createdById: true, vehicleId: true },
+        });
+        if (!row) throw VfmErrors.notFound('registracija');
+        allowed = this.hasResourceScope(actor, 'registration:update', {
+          ownerId: row.createdById,
+          vehicleId: row.vehicleId,
+        });
+        break;
+      }
+      case 'INSURANCE': {
+        const row = await this.prisma.insuranceRecord.findFirst({
+          where: { id: input.ownerId, deletedAt: null },
+          select: { createdById: true, vehicleId: true },
+        });
+        if (!row) throw VfmErrors.notFound('osiguranje');
+        allowed = this.hasResourceScope(actor, 'insurance:update', {
+          ownerId: row.createdById,
+          vehicleId: row.vehicleId,
+        });
+        break;
+      }
+      case 'TASK': {
+        const row = await this.prisma.task.findFirst({
+          where: { id: input.ownerId, deletedAt: null },
+          select: { createdById: true, assigneeUserId: true, vehicleId: true, status: true },
+        });
+        if (!row) throw VfmErrors.notFound('zadatak');
+        const updateScope = actor.permissions?.permissions.get('task:update');
+        const canUpdateTask =
+          (updateScope === 'ALL' && row.status !== 'COMPLETED' && row.status !== 'CANCELLED') ||
+          (updateScope === 'OWN' &&
+            row.status === 'OPEN' &&
+            (row.createdById === actor.id || row.assigneeUserId === actor.id));
+        const resource = { vehicleId: row.vehicleId };
+        const canCompleteTask =
+          row.status === 'IN_PROGRESS' &&
+          row.assigneeUserId === actor.id &&
+          this.hasResourceScope(actor, 'task:complete', { ...resource, ownerId: row.assigneeUserId });
+        const canOverrideCompletion =
+          row.status === 'IN_PROGRESS' &&
+          this.hasResourceScope(actor, 'task:complete_override', {
+            ...resource,
+            ownerId: row.createdById,
+          });
+        allowed = canUpdateTask || canCompleteTask || canOverrideCompletion;
+        break;
+      }
+      case 'TIRE': {
+        const row = await this.prisma.tire.findFirst({
+          where: { id: input.ownerId, deletedAt: null },
+          select: {
+            set: {
+              select: {
+                createdById: true,
+                installations: {
+                  where: { deletedAt: null },
+                  select: { vehicleId: true },
+                },
+              },
+            },
+          },
+        });
+        if (!row) throw VfmErrors.notFound('guma');
+        const set = row.set;
+        allowed = Boolean(
+          set &&
+          this.hasResourceScope(actor, 'tire:update', {
+            ownerId: set.createdById,
+            vehicleIds: set.installations.map((installation) => installation.vehicleId),
+          }),
+        );
+        break;
+      }
+      case 'REPORT_EXPORT': {
+        const row = await this.prisma.exportJob.findFirst({
+          where: { id: input.ownerId },
+          select: { requestedById: true },
+        });
+        if (!row) throw VfmErrors.notFound('izvoz');
+        allowed = this.hasResourceScope(actor, 'report:export', { ownerId: row.requestedById });
+        break;
+      }
+    }
+
+    if (!allowed) {
+      throw VfmErrors.scopeDenied([
+        {
+          path: ['ownerType', 'ownerId'],
+          message: 'Nemate dozvolu za vezivanje priloga na ovaj zapis.',
+          code: 'scope_denied',
+        },
+      ]);
+    }
+  }
+
+  private hasResourceScope(
+    actor: AttachmentActor,
+    permission: string,
+    resource: {
+      ownerId?: string | null;
+      vehicleId?: string | null;
+      vehicleIds?: readonly string[];
+      driverId?: string | null;
+    },
+  ): boolean {
+    if (actor.isSuperAdmin) return true;
+    const scope = actor.permissions?.permissions.get(permission);
+    if (scope === 'ALL') return true;
+    if (scope === 'OWN') return resource.ownerId === actor.id;
+    const grants = actor.permissions?.grants ?? [];
+    if (scope === 'VEHICLE_IDS') {
+      const ids = grants
+        .filter((grant) => grant.permission === permission && grant.scope === scope)
+        .flatMap((grant) => grant.scopeVehicleIds ?? []);
+      return [resource.vehicleId, ...(resource.vehicleIds ?? [])].some(
+        (id) => id !== null && id !== undefined && ids.includes(id),
+      );
+    }
+    if (scope === 'DRIVER_IDS') {
+      const ids = grants
+        .filter((grant) => grant.permission === permission && grant.scope === scope)
+        .flatMap((grant) => grant.scopeDriverIds ?? []);
+      return resource.driverId !== null && resource.driverId !== undefined && ids.includes(resource.driverId);
+    }
+    return false;
+  }
+
+  /** Čitanje svih priloga ne daje pravo dovršiti ni zamijeniti tuđi upload. */
   private assertUploadScope(actor: AttachmentActor, row: AttachmentRow): void {
-    if (row.uploadedById === actor.id || this.hasAllScope(actor)) return;
+    if (row.uploadedById === actor.id || actor.isSuperAdmin) return;
     throw new VfmException('PERMISSION_DENIED', 'Prilog je uploadovao drugi korisnik.', [
       detail('uploadedById', row.uploadedById),
     ]);

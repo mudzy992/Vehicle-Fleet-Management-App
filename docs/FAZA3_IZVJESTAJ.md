@@ -1,6 +1,6 @@
 # Faza 3 — izvještaj o implementaciji i provjeri
 
-**Datum presjeka:** 22.10.2026.  
+**Datum presjeka:** 22.10.2026.
 **Status:** aktivna — postojeći moduli su predmet audita; DoD nije potvrđen.
 
 ## Sažetak
@@ -15,7 +15,7 @@ U repozitoriju već postoje API moduli i web ekrani za vozila, vozače, registra
 | Servisi i stavke | List/detail, kreiranje, izmjena/brisanje i stavke računa provjeravaju `service:view/create/update/delete` opseg; lista kombinuje korisničke filtere i scope u AND uslovu. | Jedinični testovi opsega prolaze; P14 end-to-end nije izvršen |
 | Gume | Kompleti i historija montaža provjeravaju scope na list/detail/mutacijama; filteri se spajaju sa scope-om, a prikaz kompleta uklanja vozila izvan opsega. | Regresijski testovi prolaze; P14 end-to-end nije izvršen |
 | Podsjetnici | Scheduler koristi `dedupeKey`, `createMany(skipDuplicates: true)` i `Europe/Sarajevo`; `reminder:view` sa `OWN` ograničava listu na vozila/vozače koje je korisnik kreirao, a acknowledge/snooze provjeravaju `OWN` nad povezanim vozilom/vozačem, uz `ALL` za administratora. | Ciljani regresijski testovi prolaze; P14 end-to-end nije izvršen |
-| Prilozi                   | List/get/url/content koriste `attachment:view`; brisanje provjerava `attachment:delete` scope tako da `view:ALL` ne nadjačava `delete:OWN`.                             | Ciljani regresijski test prolazi; P14 nije potvrđen end-to-end |
+| Prilozi                   | List/get/url/content koriste `attachment:view`; brisanje provjerava `attachment:delete` scope tako da `view:ALL` ne nadjačava `delete:OWN`; `complete` i `replace` provjeravaju write scope ciljnog zapisa i vlasništvo nad uploadom (read `ALL` ne daje write pravo), uključujući `task:complete_override`; `taskId` ne može vezati prilog za drugi zapis. | Ciljani regresijski test prolazi; P14 nije potvrđen end-to-end |
 | Forme i migracije         | Globalni `form:view` ostaje za definicije; lista/detalj migracije (sa `before/after` uzorcima) zahtijevaju `form:migrate_records`.                                  | Ciljani metadata test prolazi; P14 nije potvrđen end-to-end |
 | Web ekrani                | Postoje feature moduli za vozila, vozače i podsjetnike; P14 test prolaza kroz sve API rute još nije pronađen.                                                   | Audit u toku                                              |
 

@@ -46,6 +46,7 @@ function matches(row: FakeRow, where: Where): boolean {
 
 class FakeAttachmentsPrisma {
   readonly rows: FakeRow[] = [];
+  vehicleCreatorId = 'user-1';
   private seq = 0;
 
   readonly attachment = {
@@ -85,6 +86,25 @@ class FakeAttachmentsPrisma {
       return { ...row };
     },
   };
+  readonly vehicle = {
+    findFirst: async (args: { where: { id: string; deletedAt?: null } }) =>
+      args.where.deletedAt === null ? { id: args.where.id, createdById: this.vehicleCreatorId } : null,
+  };
+  readonly insuranceRecord = {
+    findFirst: async (args: { where: { id: string; deletedAt?: null } }) =>
+      args.where.deletedAt === null ? { createdById: 'user-1', vehicleId: 'vehicle-1' } : null,
+  };
+  readonly task = {
+    findFirst: async (args: { where: { id: string; deletedAt?: null } }) =>
+      args.where.deletedAt === null
+        ? {
+            createdById: 'task-creator',
+            assigneeUserId: 'task-assignee',
+            vehicleId: 'vehicle-scoped',
+            status: 'IN_PROGRESS',
+          }
+        : null,
+  };
 }
 
 const ADMIN = {
@@ -95,6 +115,7 @@ const ADMIN = {
       ['attachment:view', 'ALL'],
       ['attachment:upload', 'ALL'],
       ['attachment:delete', 'OWN'],
+      ['vehicle:update', 'ALL'],
     ]),
   },
 };
@@ -106,6 +127,8 @@ const USER = {
       ['attachment:view', 'OWN'],
       ['attachment:upload', 'ALL'],
       ['attachment:delete', 'OWN'],
+      ['vehicle:update', 'OWN'],
+      ['insurance:update', 'OWN'],
     ]),
   },
 };
@@ -117,6 +140,7 @@ const OTHER = {
       ['attachment:view', 'OWN'],
       ['attachment:upload', 'ALL'],
       ['attachment:delete', 'OWN'],
+      ['vehicle:update', 'OWN'],
     ]),
   },
 };
@@ -244,6 +268,27 @@ describe('AttachmentsService', () => {
     expect(outcome.after).toMatchObject({ ownerType: 'VEHICLE' });
   });
 
+  it('complete odbija vezivanje upload-a na vozilo izvan vehicle:update scope-a', async () => {
+    const uploaded = await svc.upload(file(JPEG), OTHER);
+    fake.vehicleCreatorId = USER.id;
+
+    const error = await catchVfm(
+      svc.complete(
+        uploaded.id,
+        {
+          id: uploaded.id,
+          ownerType: 'VEHICLE',
+          ownerId: '018f0000-0000-7000-8000-000000000001',
+          stage: 'GENERAL',
+        },
+        OTHER,
+      ),
+    );
+
+    expect(error.code).toBe('SCOPE_DENIED');
+    expect(fake.rows[0]).toMatchObject({ ownerType: 'OTHER', ownerId: OTHER.id });
+  });
+
   it('tuđi prilog bez `ALL` opsega → `PERMISSION_DENIED`', async () => {
     const uploaded = await svc.upload(file(JPEG), USER);
     const error = await catchVfm(
@@ -260,6 +305,201 @@ describe('AttachmentsService', () => {
     );
 
     expect(error.code).toBe('PERMISSION_DENIED');
+  });
+
+  it('task:update VEHICLE_IDS ne nadjačava pravila za izmjenu zadatka', async () => {
+    const actor = {
+      id: 'user-manager',
+      permissions: {
+        isSuperAdmin: false,
+        permissions: new Map([
+          ['attachment:upload', 'ALL'],
+          ['task:update', 'VEHICLE_IDS'],
+        ]),
+        grants: [{ permission: 'task:update', scope: 'VEHICLE_IDS', scopeVehicleIds: ['vehicle-scoped'] }],
+      },
+    };
+    const uploaded = await svc.upload(file(JPEG), actor);
+
+    await expect(
+      svc.complete(
+        uploaded.id,
+        {
+          id: uploaded.id,
+          ownerType: 'TASK',
+          ownerId: '018f0000-0000-7000-8000-000000000004',
+          stage: 'GENERAL',
+        },
+        actor,
+      ),
+    ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
+  });
+
+  it('task:complete sa VEHICLE_IDS i dalje zahtijeva da akter bude izvršilac', async () => {
+    const actor = {
+      id: 'user-manager',
+      permissions: {
+        isSuperAdmin: false,
+        permissions: new Map([
+          ['attachment:upload', 'ALL'],
+          ['task:complete', 'VEHICLE_IDS'],
+        ]),
+        grants: [{ permission: 'task:complete', scope: 'VEHICLE_IDS', scopeVehicleIds: ['vehicle-scoped'] }],
+      },
+    };
+    const uploaded = await svc.upload(file(JPEG), actor);
+
+    await expect(
+      svc.complete(
+        uploaded.id,
+        {
+          id: uploaded.id,
+          ownerType: 'TASK',
+          ownerId: '018f0000-0000-7000-8000-000000000004',
+          stage: 'ON_COMPLETE',
+        },
+        actor,
+      ),
+    ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
+  });
+
+  it('task:complete_override dopušta vezivanje unutar VEHICLE_IDS opsega', async () => {
+    const actor = {
+      id: 'user-manager',
+      permissions: {
+        isSuperAdmin: false,
+        permissions: new Map([
+          ['attachment:upload', 'ALL'],
+          ['task:complete_override', 'VEHICLE_IDS'],
+        ]),
+        grants: [
+          {
+            permission: 'task:complete_override',
+            scope: 'VEHICLE_IDS',
+            scopeVehicleIds: ['vehicle-scoped'],
+          },
+        ],
+      },
+    };
+    const uploaded = await svc.upload(file(JPEG), actor);
+
+    const result = await svc.complete(
+      uploaded.id,
+      {
+        id: uploaded.id,
+        ownerType: 'TASK',
+        ownerId: '018f0000-0000-7000-8000-000000000004',
+        stage: 'ON_COMPLETE',
+      },
+      actor,
+    );
+
+    expect(result.data.ownerType).toBe('TASK');
+    expect(result.data.taskId).toBe('018f0000-0000-7000-8000-000000000004');
+  });
+
+  it('odbija taskId koji pokušava povezati prilog s drugim zapisom', async () => {
+    const uploaded = await svc.upload(file(JPEG), ADMIN);
+
+    await expect(
+      svc.complete(
+        uploaded.id,
+        {
+          id: uploaded.id,
+          ownerType: 'VEHICLE',
+          ownerId: '018f0000-0000-7000-8000-000000000001',
+          stage: 'GENERAL',
+          taskId: '018f0000-0000-7000-8000-000000000004',
+        },
+        ADMIN,
+      ),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
+  it('attachment:view:ALL ne daje pravo vezivanja na zapis bez write scope-a', async () => {
+    const viewer = {
+      id: 'user-viewer',
+      permissions: {
+        isSuperAdmin: false,
+        permissions: new Map([
+          ['attachment:view', 'ALL'],
+          ['attachment:upload', 'ALL'],
+        ]),
+      },
+    };
+    const uploaded = await svc.upload(file(JPEG), viewer);
+
+    await expect(
+      svc.complete(
+        uploaded.id,
+        {
+          id: uploaded.id,
+          ownerType: 'VEHICLE',
+          ownerId: '018f0000-0000-7000-8000-000000000001',
+          stage: 'GENERAL',
+        },
+        viewer,
+      ),
+    ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
+  });
+
+  it('zamjena zahtijeva i dalje važeći write scope ciljnog zapisa', async () => {
+    const actor = {
+      id: 'user-1',
+      permissions: {
+        isSuperAdmin: false,
+        permissions: new Map([
+          ['attachment:upload', 'ALL'],
+          ['vehicle:update', 'OWN'],
+        ]),
+      },
+    };
+    const uploaded = await svc.upload(file(JPEG), actor);
+    await svc.complete(
+      uploaded.id,
+      {
+        id: uploaded.id,
+        ownerType: 'VEHICLE',
+        ownerId: '018f0000-0000-7000-8000-000000000001',
+        stage: 'GENERAL',
+      },
+      actor,
+    );
+    actor.permissions.permissions.delete('vehicle:update');
+
+    await expect(
+      svc.replace(uploaded.id, file(PDF, 'new.pdf', 'application/pdf'), actor),
+    ).rejects.toMatchObject({
+      code: 'SCOPE_DENIED',
+    });
+  });
+
+  it('attachment:view:ALL ne dopušta dovršiti tuđi upload', async () => {
+    const viewer = {
+      id: 'user-viewer',
+      permissions: {
+        isSuperAdmin: false,
+        permissions: new Map([
+          ['attachment:view', 'ALL'],
+          ['attachment:upload', 'ALL'],
+          ['vehicle:update', 'ALL'],
+        ]),
+      },
+    };
+    const uploaded = await svc.upload(file(JPEG), USER);
+
+    await expect(
+      svc.complete(
+        uploaded.id,
+        {
+          id: uploaded.id,
+          ownerType: 'VEHICLE',
+          ownerId: '018f0000-0000-7000-8000-000000000001',
+          stage: 'GENERAL',
+        },
+        viewer,
+      ),
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
   });
 
   it('Super Admin smije mijenjati tuđi prilog', async () => {

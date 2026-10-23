@@ -391,13 +391,13 @@ nije dio ugovora.
 | Metoda | Put | P | Napomena |
 |---|---|---|---|
 | POST | `/attachments` (multipart) `Idem` | `attachment:upload` | vraća `{id, sha256, sizeBytes, mimeType}`; magic-byte provjera |
-| POST | `/attachments/complete` | `attachment:upload` | vezuje upload na vlasnika (`ownerType/ownerId/stage/fieldKey`) |
+| POST | `/attachments/complete` | `attachment:upload` | veže vlastiti upload uz zapis u okviru actorovog odgovarajućeg write/complete scope-a za taj tip vlasnika (tuđi upload samo Super Admin) |
 | GET | `/attachments/:id` | `attachment:view` | metapodaci |
 | GET | `/attachments/:id/content` | `attachment:view` | stream uz provjeru opsega; `Content-Disposition: attachment`; audit `FILE_ACCESS` |
 | GET | `/attachments?ownerType=&ownerId=&page=` | `attachment:view` | lista priloga jednog zapisa; bez `ALL` opsega samo vlastiti upload-i |
 | GET | `/attachments/:id/url` | `attachment:view` | HMAC potpisani URL (TTL `FILE_SIGNED_URL_TTL_SECONDS`), vezan za korisnika |
 | GET | `/attachments/:id/content/:token` | `attachment:view` | stream uz sesiju, provjeru opsega i korisnički vezan potpis; audit `FILE_ACCESS` |
-| POST | `/attachments/:id/replace` | `attachment:upload` | nova verzija (stara ostaje u historiji, soft-delete) |
+| POST | `/attachments/:id/replace` | `attachment:upload` | nova verzija zahtijeva vlastiti upload i write scope ciljnog zapisa; tuđi upload samo Super Admin (stara ostaje u historiji, soft-delete) |
 | DELETE | `/attachments/:id` | `attachment:delete` | soft delete (fajl ostaje na disku) |
 
 Napomene (Faza 3):
@@ -410,7 +410,8 @@ Napomene (Faza 3):
 - **Idempotentnost:** `@@unique([ownerType, ownerId, sha256])` — ponovni upload istog
   sadržaja vraća postojeći zapis, ne duplikat.
 - **`POST /attachments/complete`** prima `{ id, ownerType, ownerId, stage?, taskId?, formFieldKey? }`;
-  do tada je prilog vezan na uploadera (`ownerType: OTHER`).
+  do tada je prilog vezan na uploadera (`ownerType: OTHER`). `taskId` je dozvoljen samo uz
+  `ownerType: TASK`, mora biti jednak `ownerId`, a za TASK se veza automatski postavlja.
 - **Pohrana:** host bind-mount (`VFM_STORAGE_CONTAINER_PATH`), ključ
   `YYYY/MM/<sha[0..2]>/<uuid>.<ext>`; fajl se **nikad** ne servira direktno s diska (B-15).
 
