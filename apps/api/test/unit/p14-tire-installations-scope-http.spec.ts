@@ -32,7 +32,7 @@ describe('P14 — tire installation scope HTTP rute', () => {
   let app: INestApplication;
   let baseUrl: string;
   const count = vi.fn(async () => 0);
-  const findMany = vi.fn(async () => []);
+  const findMany = vi.fn(async (_args: { where?: unknown }) => []);
 
   beforeAll(async () => {
     const prisma = { tireInstallation: { count, findMany } } as unknown as PrismaService;
