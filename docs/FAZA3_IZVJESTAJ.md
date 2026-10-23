@@ -37,7 +37,7 @@ Ne koristiti produkcijski URL: test obavlja probne upise, iako ih završava roll
 
 ## P14 — autorizacija
 
-P14 je i dalje otvoren: `docs/09-TEST_PLAN.md` traži OpenAPI-wide provjeru dozvola, uključujući sadržaj priloga i potpisane URL-ove. `p14-route-authorization-coverage.spec.ts` skenira rute modula i health kontrolera, validira metadata i poredi guard odluke s seed pravima triju sistemskih uloga. Dodatni `p14-http-permission-guard.spec.ts` za svaku takvu metadata deklaraciju montira privremenu Nest HTTP rutu i provjerava 200/403 za SUPER_ADMIN, ADMINISTRATOR i OBICNI_KORISNIK te da 403 zahtjev ne ulazi u handler. `p14-attachments-http-guard.spec.ts` pokreće stvarni `AttachmentsController` kroz HTTP uz zamjenski servis: nedozvoljenim korisnicima vraća 403 prije poziva servisa, neispravan potpisani token vraća 401 bez bajtova, a `attachment:view:ALL` sam ne daje `attachment:delete`. Puni OpenAPI sweep stvarnih kontrolera/servisa i resursnih opsega ostaje na čekanju.
+P14 je i dalje otvoren: `docs/09-TEST_PLAN.md` traži OpenAPI-wide provjeru dozvola, uključujući sadržaj priloga i potpisane URL-ove. `p14-route-authorization-coverage.spec.ts` skenira rute modula i health kontrolera, validira metadata i poredi guard odluke s seed pravima triju sistemskih uloga. Dodatni `p14-http-permission-guard.spec.ts` za svaku takvu metadata deklaraciju montira privremenu Nest HTTP rutu i provjerava 200/403 za SUPER_ADMIN, ADMINISTRATOR i OBICNI_KORISNIK te da 403 zahtjev ne ulazi u handler. `p14-attachments-http-guard.spec.ts` pokreće stvarni `AttachmentsController` kroz HTTP uz zamjenski servis: nedozvoljenim korisnicima vraća 403 prije poziva servisa, neispravan potpisani token vraća 401 bez bajtova, a `attachment:view:ALL` sam ne daje `attachment:delete`. `p14-drivers-pii-http.spec.ts` pokreće stvarni `DriversController` i `DriversService` s fake Prisma: ADMINISTRATOR dobija redigovan PII, SUPER_ADMIN puni PII, obični korisnik biva odbijen, a `DRIVER_IDS` opseg ne dopušta pristup neobuhvaćenom vozaču. Puni OpenAPI sweep stvarnih kontrolera/servisa i opsega ostaje na čekanju.
 
 Audit je potvrdio razliku prema doslovnom P14 očekivanju: potpisani URL je ranije radio kao javni bearer token bez sesije. Ispravljena je zaštita: izdavanje URL-a i preuzimanje sada traže `attachment:view`; ruta s tokenom više nije javna, ponovo provjerava opseg priloga, a HMAC potpis veže token za ID korisnika i rok važenja. Web klijent preuzima bajtove uz memorijski access token umjesto otvaranja javnog linka. Brisanje sada primjenjuje `attachment:delete` scope zasebno; `attachment:view:ALL` ne daje brisanje tuđih upload-a pod `delete:OWN`. Dodani su regresijski testovi za metapodatke permisije, vezivanje tokena za korisnika, autentifikovano preuzimanje i brisanje; puna P14 matrica svih OpenAPI ruta i dalje nije izvršena.
 
@@ -52,6 +52,7 @@ Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view
 - `corepack pnpm --filter @vfm/api exec vitest run test/unit/p14-route-authorization-coverage.spec.ts` — prolaz: sve rute su deklarisane/izuzete po pravilu, permisije/opsezi su validni, a odluka guard-a je poređena s seed grantovima tri sistemske role.
 - `corepack pnpm --filter @vfm/api exec vitest run test/unit/p14-http-permission-guard.spec.ts` — prolaz: HTTP guard sweep nad svim rutama s permisijskim metadata; odbijeni zahtjevi daju 403 i handler se ne izvršava.
 - `corepack pnpm --filter @vfm/api exec vitest run test/unit/p14-attachments-http-guard.spec.ts` — prolaz: 4 HTTP test slučaja stvarnog `AttachmentsController`-a uz zamjenski servis.
+- `corepack pnpm --filter @vfm/api exec vitest run test/unit/p14-drivers-pii-http.spec.ts` — prolaz: 3 HTTP test slučaja stvarnog `DriversController`-a i `DriversService`-a uz fake Prisma; pokriveni su PII redakcija i `DRIVER_IDS` scope.
 - `corepack pnpm --filter @vfm/api exec vitest run --config vitest.integration.config.ts` — prolaz alata; jedan integracijski fajl i oba testa preskočena zbog nedostajućeg `PHASE3_TEST_DATABASE_URL`.
 - `corepack pnpm --filter @vfm/api typecheck` — prolaz.
 - `corepack pnpm --filter @vfm/api test` — prethodni prolaz prije izmjena scope-a podsjetnika: 58 fajlova, 945 jediničnih testova.
@@ -66,7 +67,7 @@ Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view
 
 ## Sljedeća stavka za nastavak
 
-**P14 puni OpenAPI HTTP/E2E sweep** nad stvarnim kontrolerima i servisima: preostale rute × sistemska uloga/opseg, uključujući PII i resource-scope provjere. Guard-level harness pokriva sve permission metadata deklaracije, a stvarni `AttachmentsController` je proban uz fake servis; ostali kontroleri/servisi i provjera curenja podataka još nisu obuhvaćeni.
+**P14 puni OpenAPI HTTP/E2E sweep** nad preostalim kontrolerima i servisima: sistemske uloge × opsezi, te svi osjetljivi PII i dokumentni tokovi. Guard-level harness pokriva sve permission metadata deklaracije; attachment kontroler je testiran uz fake servis, a driver kontroler i PII servis uz fake Prisma. Potrebna je još šira pokrivenost stvarnih ruta, ostalih scope logika i produkcijskih servisa/pohrane.
 
 ## Sljedeći koraci
 
