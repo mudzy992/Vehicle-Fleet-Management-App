@@ -43,6 +43,8 @@ Audit je potvrdio razliku prema doslovnom P14 očekivanju: potpisani URL je rani
 
 Web audit je našao da su „Izvještaji“, „Obavijesti“, „Zdravlje sistema“ i „Profil“ bili sakriveni/filtrirani po pravu u navigaciji, ali se neki ekrani mogli otvoriti direktnim URL-om. Rute sada koriste `RequirePermission` (`report:view`, `notification:view`, `system:view_health`, `auth:login`). Regresijski test provjerava svih 16 stavki navigacije s permisijom prema odgovarajućoj router ruti. Ovo je UX/autorizacijski guard web klijenta, ne zamjena za backend provjeru. API health probe rute ostaju javne za Docker/Coolify.
 
+`/obavijesti` i `/izvjestaji` su i dalje skeletni ekrani po planu: centar obavijesti je predviđen za Fazu 5 (W19), a izvještaji/izvoz za Fazu 7 (W28). Njihova puna funkcionalnost nije dio trenutnog audita Faze 3; u nastavku se preskače do odgovarajućih faza.
+
 Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view`/list endpoint ne smije se smatrati ekvivalentom prava nad konkretnim vozilom, vozačem ili prilogom. Lista/detalj migracija sada traže `form:migrate_records`, jer preview i stavke mogu sadržavati before/after podatke. List/detail rute vozila, vozača, registracija i osiguranja, historija kilometraže i kategorije dozvole imaju serversko filtriranje/provjeru opsega. Write rute ovih resursa sada provjeravaju scope za kreiranje, izmjenu, arhivu/brisanje, odometar i kategorije dozvole. Servisi i stavke računa provjeravaju scope prema kreatoru zapisa ili vozilu, a list filter se spaja sa scope uslovom pomoću `AND`. Kompleti guma i historija montaža provjeravaju scope za list/detail i mutacije; povezani prikaz vozila i zapisi korištenja ograničavaju se prema dodijeljenim vozilima. Podsjetnici filtriraju `OWN` prema kreatoru povezanog vozila/vozača; acknowledge/snooze provjeravaju scope nad istim resursom (`OWN` ili `ALL`). Regresijski testovi pokrivaju odbijanje izvan opsega i spajanje query/scope uslova. PII politika i ostale rute još nisu kompletno verifikovane; P14 nije zatvoren.
 
 ## Verifikacija u ovom prolazu
@@ -60,10 +62,13 @@ Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view
 - Trenutni API `typecheck` i puna testna serija blokirani su nedostajućim generisanim Prisma klijentom: `prisma generate` nije mogao preuzeti `schema-engine` sa `binaries.prisma.sh` (TLS veza odbijena). Ne zaobilaziti ograničenje; ciljani podsjetnik test prolazi uz mock za PrismaService.
 - Nije pokrenuta živa DB/API provjera. Korisnik je prijavio da su commitovi koje je ručno mergao iz ove grane u `main` redeployani bez pada backend/frontend servisa; to je korisnički prijavljen rezultat, ne nezavisna provjera, i ne obuhvata izmjene iz ovog prolaza dok se ne mergeaju.
 
+## Sljedeća stavka za nastavak
+
+**P14 runtime HTTP sweep**: provjera ruta × sistemske uloge/opseg kroz API zahtjeve, uključujući priloge, potpisane URL-ove i PII. Dosadašnji guard-level/servisni testovi ne dokazuju HTTP odgovor niti da odbijeni zahtjev ne procuri podatke.
+
 ## Sljedeći koraci
 
-1. Pokrenuti ažurirani integracijski test na izolovanoj testnoj bazi; zatim, ako je potrebno, proširiti DB integraciju scheduler pragova i DST ponašanja.
-2. Dopuniti runtime P14 provjeru ruta × uloga/opseg; ciljane jedinične provjere zadataka, formi i obavijesti sada prolaze, ali ne zamjenjuju HTTP/E2E sweep.
-3. Izvesti P14 matricu svih OpenAPI ruta × uloge/opseg, uz posebne slučajeve za priloge, potpisane URL-ove i PII; potvrditi da nedozvoljene uloge dobijaju 401/403 na svakoj ruti.
-4. Završiti audit web tokova prema Fazi 3 i dopuniti regresijske testove za potvrđene nedostatke.
-5. Tek nakon dokaza ažurirati DoD u `docs/PLAN_IMPLEMENTACIJE.md`; do tada Faza 3 ostaje otvorena.
+1. Nastaviti P14 runtime sweep nad svim OpenAPI rutama i ulogama/opsezima; obuhvatiti priloge, potpisane URL-ove i PII.
+2. P13 integracijski test je spreman, ali pokretanje na namjenskoj bazi čeka `PHASE3_TEST_DATABASE_URL`; nakon pokretanja razmotriti DB scenarije pragova/DST-a.
+3. Web audit nastaviti samo za tokove obuhvaćene Fazom 3; ne implementirati sada centre obavijesti ni izvještaje.
+4. Tek nakon dokaza ažurirati DoD u `docs/PLAN_IMPLEMENTACIJE.md`; do tada Faza 3 ostaje otvorena.
