@@ -141,9 +141,9 @@ const SELECT = {
 
 interface AttachmentRow {
   id: string;
-  ownerType: string;
+  ownerType: Attachment['ownerType'];
   ownerId: string;
-  stage: string;
+  stage: Attachment['stage'];
   fileName: string;
   storageKey: string;
   mimeType: string;
