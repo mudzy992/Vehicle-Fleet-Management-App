@@ -23,7 +23,7 @@ U repozitoriju već postoje API moduli i web ekrani za vozila, vozače, registra
 
 Postoje jedinični testovi za idempotentnost i raspoređivanje podsjetnika, preklapanje perioda na nivou servisa, kilometražu i priloge. Oni koriste zamjenske objekte i ne dokazuju da su PostgreSQL ograničenja i indeksi zaista aktivni u bazi.
 
-Dodat je `apps/api/test/integration/phase3-database.integration.spec.ts`. Na namjenskoj testnoj bazi test u jednoj transakciji provjerava da baza odbija preklapanje registracija/osiguranja (`23P01`) i duplirani ključ podsjetnika (`23505`), te potvrđuje hronološko čitanje historije servisa i montaža guma. Transakcija se uvijek vraća. Test traži objavljene VEHICLE, REGISTRATION, INSURANCE i SERVICE forme i inicijalizovanu politiku podsjetnika; prije pokretanja izvršiti migracije i seed nad testnom bazom.
+Dodat je `apps/api/test/integration/phase3-database.integration.spec.ts`. Na namjenskoj testnoj bazi test u jednoj transakciji provjerava da baza odbija preklapanje registracija/osiguranja (`23P01`) i duplirani ključ podsjetnika (`23505`), te potvrđuje hronološko čitanje historije servisa i montaža guma i odbijanje druge aktivne montaže istog seta (`23505`). Transakcija se uvijek vraća. Test traži objavljene VEHICLE, REGISTRATION, INSURANCE i SERVICE forme i inicijalizovanu politiku podsjetnika; prije pokretanja izvršiti migracije i seed nad testnom bazom.
 
 U ovom okruženju test je otkriven, ali preskočen jer `PHASE3_TEST_DATABASE_URL` nije postavljen. To nije dokaz prolaza P13. Pragovi, DST i izračuni podsjetnika i dalje imaju jedinične pokriće, ali nije pokrenuta provjera njihove stvarne DB integracije.
 

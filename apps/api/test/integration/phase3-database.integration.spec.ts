@@ -127,6 +127,19 @@ describe.skipIf(!databaseUrl)('Faza 3 — PostgreSQL integracijski ugovori (P13)
         { id: newerInstallationId, mountedAt: '2035-10-01', kmDriven: null },
         { id: olderInstallationId, mountedAt: '2034-10-01', kmDriven: 4000 },
       ]);
+      await client.query('SAVEPOINT duplicate_active_tire_set');
+      let activeTireCode: string | undefined;
+      try {
+        await client.query(
+          `INSERT INTO "TireInstallation" ("id", "setId", "vehicleId", "mountedAt", "mountedOdometerKm", "updatedAt")
+           VALUES ($1, $2, $3, DATE '2036-01-01', 20000, CURRENT_TIMESTAMP)`,
+          [randomUUID(), tireSetId, vehicleId],
+        );
+      } catch (error) {
+        activeTireCode = (error as { code?: string }).code;
+        await client.query('ROLLBACK TO SAVEPOINT duplicate_active_tire_set');
+      }
+      expect(activeTireCode).toBe('23505');
 
       const policy = await client.query<{ id: string }>(`SELECT "id" FROM "ReminderPolicy" LIMIT 1`);
       if (!policy.rows[0]) throw new Error('Testna baza nema ReminderPolicy red (pokrenuti seed).');
