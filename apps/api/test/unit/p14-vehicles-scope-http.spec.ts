@@ -22,21 +22,33 @@ vi.mock('../../src/prisma/prisma.service.js', () => ({ PrismaService: class Pris
 const VEHICLE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 type SweepScenario =
-  'SUPER_ADMIN' | 'ADMINISTRATOR' | 'OBICNI_KORISNIK' | 'NO_GRANTS' | 'ASSIGNED' | 'UNASSIGNED';
+  | 'SUPER_ADMIN'
+  | 'ADMINISTRATOR'
+  | 'OBICNI_KORISNIK'
+  | 'NO_GRANTS'
+  | 'ASSIGNED'
+  | 'UNASSIGNED'
+  | 'ODOMETER_ASSIGNED'
+  | 'ODOMETER_UNASSIGNED';
 
 function actorFor(scenario: SweepScenario): AuthenticatedUser {
   const role: RoleCode =
     scenario === 'SUPER_ADMIN' || scenario === 'ADMINISTRATOR' || scenario === 'OBICNI_KORISNIK'
       ? scenario
       : 'CUSTOM';
+  const isVehicleViewScenario = scenario === 'ASSIGNED' || scenario === 'UNASSIGNED';
+  const isOdometerScenario = scenario === 'ODOMETER_ASSIGNED' || scenario === 'ODOMETER_UNASSIGNED';
+  const grantedIds =
+    scenario === 'ASSIGNED' || scenario === 'ODOMETER_ASSIGNED'
+      ? [VEHICLE_ID]
+      : ['bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'];
   const grants: readonly PermissionGrant[] =
-    scenario === 'ASSIGNED' || scenario === 'UNASSIGNED'
+    isVehicleViewScenario || isOdometerScenario
       ? [
           {
-            permission: 'vehicle:view',
+            permission: isVehicleViewScenario ? 'vehicle:view' : 'odometer:view',
             scope: 'VEHICLE_IDS',
-            scopeVehicleIds:
-              scenario === 'ASSIGNED' ? [VEHICLE_ID] : ['bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'],
+            scopeVehicleIds: grantedIds,
           },
         ]
       : defaultGrantsForRole(role);
@@ -134,6 +146,20 @@ describe('P14 — vehicle scope HTTP rute', () => {
 
     const unassigned = await fetch(`${baseUrl}/vehicles/${VEHICLE_ID}`, {
       headers: { 'x-sweep-role': 'UNASSIGNED' },
+    });
+    expect(unassigned.status).toBe(403);
+    expect(((await unassigned.json()) as { error: { code: string } }).error.code).toBe('SCOPE_DENIED');
+  });
+
+  it('odometer:view VEHICLE_IDS opseg provjerava vozilo na HTTP ruti kilometraže', async () => {
+    const assigned = await fetch(`${baseUrl}/vehicles/${VEHICLE_ID}/odometer?page=1&pageSize=20`, {
+      headers: { 'x-sweep-role': 'ODOMETER_ASSIGNED' },
+    });
+    expect(assigned.status).toBe(200);
+    expect((await assigned.json()) as { total: number }).toMatchObject({ total: 0 });
+
+    const unassigned = await fetch(`${baseUrl}/vehicles/${VEHICLE_ID}/odometer?page=1&pageSize=20`, {
+      headers: { 'x-sweep-role': 'ODOMETER_UNASSIGNED' },
     });
     expect(unassigned.status).toBe(403);
     expect(((await unassigned.json()) as { error: { code: string } }).error.code).toBe('SCOPE_DENIED');
