@@ -14,13 +14,15 @@ import { PrismaService } from '../../src/prisma/prisma.service.js';
 vi.mock('../../src/prisma/prisma.service.js', () => ({ PrismaService: class PrismaService {} }));
 
 const ROLE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
-type Scenario = 'CREATE' | 'ARCHIVE' | 'NO_PERMISSION';
+type Scenario = 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'NO_PERMISSION';
 function actorFor(scenario: Scenario): AuthenticatedUser {
   const grants: readonly PermissionGrant[] = scenario === 'CREATE'
     ? [{ permission: 'role:create', scope: 'ALL', scopeVehicleIds: [] }]
-    : scenario === 'ARCHIVE'
-      ? [{ permission: 'role:archive', scope: 'ALL', scopeVehicleIds: [] }]
-      : [];
+    : scenario === 'UPDATE'
+      ? [{ permission: 'role:update', scope: 'ALL', scopeVehicleIds: [] }]
+      : scenario === 'ARCHIVE'
+        ? [{ permission: 'role:archive', scope: 'ALL', scopeVehicleIds: [] }]
+        : [];
   return {
     id: `p14-role-lifecycle-${scenario.toLowerCase()}`, roles: ['CUSTOM'], roleIds: [], clientType: 'WEB',
     sessionId: `p14-role-lifecycle-session-${scenario.toLowerCase()}`, jti: `p14-role-lifecycle-${scenario.toLowerCase()}`,
@@ -37,6 +39,10 @@ describe('P14 — kreiranje i arhiviranje uloga kroz HTTP', () => {
     create: vi.fn(async () => ({
       before: undefined, after: { code: 'P14_ROLE' },
       data: { id: ROLE_ID, code: 'P14_ROLE', name: 'P14 uloga' },
+    })),
+    update: vi.fn(async () => ({
+      before: { name: 'Stara uloga' }, after: { name: 'Nova uloga' },
+      data: { id: ROLE_ID, code: 'P14_ROLE', name: 'Nova uloga' },
     })),
     archive: vi.fn(async () => ({
       before: { archivedAt: null }, after: { archivedAt: '2026-10-23T00:00:00.000Z' },
@@ -71,7 +77,7 @@ describe('P14 — kreiranje i arhiviranje uloga kroz HTTP', () => {
 
   afterAll(async () => { await app?.close(); });
 
-  it('role:create i role:archive se provjeravaju zasebno prije mutacije', async () => {
+  it('role:create, role:update i role:archive se provjeravaju zasebno prije mutacije', async () => {
     const validCreate = { code: 'P14_ROLE', name: 'P14 uloga' };
     const deniedCreate = await fetch(`${baseUrl}/roles`, {
       method: 'POST',
@@ -88,6 +94,22 @@ describe('P14 — kreiranje i arhiviranje uloga kroz HTTP', () => {
     });
     expect(allowedCreate.status).toBe(201);
     expect(service.create).toHaveBeenCalledOnce();
+
+    const deniedUpdate = await fetch(`${baseUrl}/roles/${ROLE_ID}`, {
+      method: 'PATCH',
+      headers: { 'x-role-lifecycle': 'CREATE', 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Nova uloga' }),
+    });
+    expect(deniedUpdate.status).toBe(403);
+    expect(service.update).not.toHaveBeenCalled();
+
+    const allowedUpdate = await fetch(`${baseUrl}/roles/${ROLE_ID}`, {
+      method: 'PATCH',
+      headers: { 'x-role-lifecycle': 'UPDATE', 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Nova uloga' }),
+    });
+    expect(allowedUpdate.status).toBe(200);
+    expect(service.update).toHaveBeenCalledOnce();
 
     const deniedArchive = await fetch(`${baseUrl}/roles/${ROLE_ID}/archive`, {
       method: 'POST',
