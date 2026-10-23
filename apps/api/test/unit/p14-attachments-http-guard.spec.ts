@@ -124,7 +124,9 @@ describe('P14 — attachment HTTP rute i PermissionsGuard', () => {
 
     expect(urlResponse.status).toBe(403);
     expect(contentResponse.status).toBe(403);
-    expect((await contentResponse.json()).error.code).toBe('PERMISSION_DENIED');
+    expect(((await contentResponse.json()) as { error: { code: string } }).error.code).toBe(
+      'PERMISSION_DENIED',
+    );
     expect(service.get).not.toHaveBeenCalled();
     expect(service.verifySignedToken).not.toHaveBeenCalled();
     expect(service.content).not.toHaveBeenCalled();
@@ -137,7 +139,7 @@ describe('P14 — attachment HTTP rute i PermissionsGuard', () => {
     });
 
     expect(response.status).toBe(403);
-    expect((await response.json()).error.code).toBe('PERMISSION_DENIED');
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe('PERMISSION_DENIED');
     expect(service.remove).not.toHaveBeenCalled();
   });
 

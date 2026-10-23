@@ -73,7 +73,7 @@ function authorizationOf(decorator: ts.Decorator): RouteAuthorization['metadata'
   const args = expression.arguments;
   const permissionArgs = name === 'RequireScope' ? args.slice(0, 1) : args;
   if (permissionArgs.length === 0 || !permissionArgs.every(ts.isStringLiteralLike)) return null;
-  const permissions = permissionArgs.map((argument) => argument.text as Permission);
+  const permissions = permissionArgs.map((argument) => (argument as ts.StringLiteralLike).text as Permission);
   if (!permissions.every((permission) => ALL_PERMISSIONS.includes(permission))) return null;
   const scopeArgument = name === 'RequireScope' ? args[1] : undefined;
   if (scopeArgument && !ts.isStringLiteralLike(scopeArgument)) return null;

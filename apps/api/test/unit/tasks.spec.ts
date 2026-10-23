@@ -2594,7 +2594,9 @@ describe('P14 — task visibility through HTTP', () => {
             mustChangePassword: false,
             status: 'ACTIVE',
             allowedClientTypes: ['WEB'],
-            permissions: await permissions.effective(userId),
+            permissions: (await permissions.effective(userId)) as NonNullable<
+              AuthenticatedUser['permissions']
+            >,
           };
         }
         next();
@@ -2616,12 +2618,12 @@ describe('P14 — task visibility through HTTP', () => {
       headers: { 'x-sweep-user': invitedId },
     });
     expect(assignedResponse.status).toBe(200);
-    expect((await assignedResponse.json()).id).toBe(taskId);
+    expect(((await assignedResponse.json()) as { id: string }).id).toBe(taskId);
 
     const outsiderResponse = await fetch(`${baseUrl}/tasks/${taskId}`, {
       headers: { 'x-sweep-user': outsiderId },
     });
     expect(outsiderResponse.status).toBe(404);
-    expect((await outsiderResponse.json()).error.code).toBe('NOT_FOUND');
+    expect(((await outsiderResponse.json()) as { error: { code: string } }).error.code).toBe('NOT_FOUND');
   });
 });

@@ -110,7 +110,7 @@ describe('P14 — vehicle scope HTTP rute', () => {
     const response = await fetch(`${baseUrl}/vehicles/${VEHICLE_ID}`, {
       headers: { 'x-sweep-role': 'OBICNI_KORISNIK' },
     });
-    const body = await response.json();
+    const body = (await response.json()) as Record<string, unknown>;
 
     expect(response.status).toBe(200);
     expect(body.id).toBe(VEHICLE_ID);
@@ -123,7 +123,7 @@ describe('P14 — vehicle scope HTTP rute', () => {
     });
 
     expect(response.status).toBe(403);
-    expect((await response.json()).error.code).toBe('PERMISSION_DENIED');
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe('PERMISSION_DENIED');
   });
 
   it('VEHICLE_IDS opseg dopušta dodijeljeno vozilo, a drugo odbija na servisnoj granici', async () => {
@@ -136,6 +136,6 @@ describe('P14 — vehicle scope HTTP rute', () => {
       headers: { 'x-sweep-role': 'UNASSIGNED' },
     });
     expect(unassigned.status).toBe(403);
-    expect((await unassigned.json()).error.code).toBe('SCOPE_DENIED');
+    expect(((await unassigned.json()) as { error: { code: string } }).error.code).toBe('SCOPE_DENIED');
   });
 });

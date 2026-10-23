@@ -124,7 +124,7 @@ describe('P14 — driver PII HTTP response', () => {
     const response = await fetch(`${baseUrl}/drivers/${DRIVER_ID}`, {
       headers: { 'x-sweep-role': 'ADMINISTRATOR' },
     });
-    const body = await response.json();
+    const body = (await response.json()) as Record<string, unknown>;
 
     expect(response.status).toBe(200);
     expect(body.piiRedacted).toBe(true);
@@ -143,14 +143,14 @@ describe('P14 — driver PII HTTP response', () => {
     });
 
     expect(response.status).toBe(403);
-    expect((await response.json()).error.code).toBe('SCOPE_DENIED');
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe('SCOPE_DENIED');
   });
 
   it('SUPER_ADMIN dobija PII kroz istu rutu; OBICNI_KORISNIK bez driver:view dobija 403', async () => {
     const privilegedResponse = await fetch(`${baseUrl}/drivers/${DRIVER_ID}`, {
       headers: { 'x-sweep-role': 'SUPER_ADMIN' },
     });
-    const privilegedBody = await privilegedResponse.json();
+    const privilegedBody = (await privilegedResponse.json()) as Record<string, unknown>;
     expect(privilegedResponse.status).toBe(200);
     expect(privilegedBody.piiRedacted).toBe(false);
     expect(privilegedBody.phone).toBe('+387 61 111 222');
@@ -165,6 +165,8 @@ describe('P14 — driver PII HTTP response', () => {
       headers: { 'x-sweep-role': 'OBICNI_KORISNIK' },
     });
     expect(deniedResponse.status).toBe(403);
-    expect((await deniedResponse.json()).error.code).toBe('PERMISSION_DENIED');
+    expect(((await deniedResponse.json()) as { error: { code: string } }).error.code).toBe(
+      'PERMISSION_DENIED',
+    );
   });
 });

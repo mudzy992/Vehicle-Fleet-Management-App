@@ -114,7 +114,7 @@ describe('P14 — user PII HTTP response', () => {
     const ownResponse = await fetch(`${baseUrl}/users/${ACTOR_ID}`, {
       headers: { 'x-sweep-role': 'VIEW_WITH_OWN_PII' },
     });
-    const own = await ownResponse.json();
+    const own = (await ownResponse.json()) as Record<string, unknown>;
     expect(ownResponse.status).toBe(200);
     expect(own.piiRedacted).toBe(false);
     expect(own.email).toBe('actor.private@example.ba');
@@ -123,7 +123,7 @@ describe('P14 — user PII HTTP response', () => {
     const otherResponse = await fetch(`${baseUrl}/users/${TARGET_ID}`, {
       headers: { 'x-sweep-role': 'VIEW_WITH_OWN_PII' },
     });
-    const other = await otherResponse.json();
+    const other = (await otherResponse.json()) as Record<string, unknown>;
     expect(otherResponse.status).toBe(200);
     expect(other.piiRedacted).toBe(true);
     expect(other.email).toBe('t***@example.ba');
@@ -134,7 +134,7 @@ describe('P14 — user PII HTTP response', () => {
     const response = await fetch(`${baseUrl}/users/${TARGET_ID}`, {
       headers: { 'x-sweep-role': 'VIEW_WITHOUT_PII' },
     });
-    const body = await response.json();
+    const body = (await response.json()) as Record<string, unknown>;
 
     expect(response.status).toBe(200);
     expect(body.piiRedacted).toBe(true);

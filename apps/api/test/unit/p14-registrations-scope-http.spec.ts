@@ -107,7 +107,7 @@ describe('P14 — registrations scope HTTP rute', () => {
     const firstResponse = await fetch(`${baseUrl}/registrations?page=1&pageSize=20`, {
       headers: { 'x-sweep-role': 'VEHICLE_ONE' },
     });
-    const firstBody = await firstResponse.json();
+    const firstBody = (await firstResponse.json()) as { total: number; items: Array<{ vehicleId: string }> };
     expect(firstResponse.status).toBe(200);
     expect(firstBody.total).toBe(1);
     expect(firstBody.items.map((item: { vehicleId: string }) => item.vehicleId)).toEqual([VEHICLE_ONE]);
@@ -115,7 +115,10 @@ describe('P14 — registrations scope HTTP rute', () => {
     const secondResponse = await fetch(`${baseUrl}/registrations?page=1&pageSize=20`, {
       headers: { 'x-sweep-role': 'VEHICLE_TWO' },
     });
-    const secondBody = await secondResponse.json();
+    const secondBody = (await secondResponse.json()) as {
+      total: number;
+      items: Array<{ vehicleId: string }>;
+    };
     expect(secondResponse.status).toBe(200);
     expect(secondBody.total).toBe(1);
     expect(secondBody.items.map((item: { vehicleId: string }) => item.vehicleId)).toEqual([VEHICLE_TWO]);
@@ -127,6 +130,6 @@ describe('P14 — registrations scope HTTP rute', () => {
     });
 
     expect(response.status).toBe(403);
-    expect((await response.json()).error.code).toBe('PERMISSION_DENIED');
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe('PERMISSION_DENIED');
   });
 });
