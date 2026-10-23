@@ -6,14 +6,18 @@
  * originalno stanje), uz pravilo da zapisi koji ne prolaze novu verziju ostaju
  * na staroj (`skipped`), nikad se ne gube.
  */
-import { describe, expect, it } from 'vitest';
+import 'reflect-metadata';
+import { describe, expect, it, vi } from 'vitest';
 import { VfmException } from '../../src/common/errors/vfm-error.js';
 import { FormSchemasService } from '../../src/modules/form-schemas/form-schemas.service.js';
+import { FormMigrationsController } from '../../src/modules/form-migrations/form-migrations.controller.js';
 import {
   FormMigrationsService,
   MIGRATION_BATCH_SIZE,
 } from '../../src/modules/form-migrations/form-migrations.service.js';
 import { FakeFormPrisma, asPrisma } from '../helpers/form-schemas-fake.js';
+
+vi.mock('../../src/prisma/prisma.service.js', () => ({ PrismaService: class PrismaService {} }));
 
 const ACTOR = '018f0000-0000-7000-8000-0000000000aa';
 
@@ -401,6 +405,16 @@ describe('FormMigrationsService — apply i rollback', () => {
 
     expect(applied.summary?.ok).toBe(12);
     expect((prisma.records.get('task') ?? []).every((row) => row.formSchemaVersionId === v2)).toBe(true);
+  });
+});
+
+describe('FormMigrationsController — autorizacija čitanja', () => {
+  it('štiti listu i uzorak before/after permisijom form:migrate_records', () => {
+    for (const handler of [FormMigrationsController.prototype.list, FormMigrationsController.prototype.get]) {
+      expect(Reflect.getMetadata('vfm:requiredPermissions', handler).permissions).toEqual([
+        'form:migrate_records',
+      ]);
+    }
   });
 });
 

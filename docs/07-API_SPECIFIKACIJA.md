@@ -320,9 +320,9 @@ Detalji engine-a: `04-FORM_ENGINE.md` §8–§12. Sve rute traže `form:*` permi
 | POST | `/form-schemas/:id/versions/:vid/publish` | `form:publish_version` | `{ changeNote, allowWebOnly?, confirmNormalizedRemoval? }`; audit `FORM_PUBLISH` |
 | POST | `/form-schemas/:id/versions/:vid/retire` | `form:retire_version` | `{ changeNote }`; aktivna verzija samo ako postoji druga objavljena; audit `FORM_RETIRE` |
 | GET | `/form-schemas/:id/diff?from=&to=` | `form:view` | strukturni diff dvije verzije (dodano/uklonjeno/izmijenjeno) |
-| GET | `/form-migrations?formSchemaId=` | `form:view` | lista migracija (najnovije prve) |
+| GET | `/form-migrations?formSchemaId=` | `form:migrate_records` | administrativna lista migracija (najnovije prve) |
 | POST | `/form-migrations` | `form:migrate_records` | P12: `{ formSchemaId, fromVersionId, toVersionId, targetEntityType, entityIds?, filter?, notes? }` → `PENDING` |
-| GET | `/form-migrations/:id` | `form:view` | stanje + summary + uzorak stavki |
+| GET | `/form-migrations/:id` | `form:migrate_records` | administrativno stanje + summary + uzorak stavki (mogu sadržavati before/after podatke) |
 | POST | `/form-migrations/:id/preview` | `form:migrate_records` | računa `before/after` po zapisu; **ništa ne mijenja** |
 | POST | `/form-migrations/:id/apply` | `form:migrate_records` | `{ changeNote }`; batch 500 u transakciji; audit `FORM_MIGRATE` |
 | POST | `/form-migrations/:id/rollback` | `form:migrate_records` | `{ changeNote, entityIds? }`; vraća `before`, audit `FORM_MIGRATE` |

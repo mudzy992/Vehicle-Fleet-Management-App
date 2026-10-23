@@ -3,9 +3,9 @@
  *
  * | Ruta                          | Permisija              | Audit         |
  * | ----------------------------- | ---------------------- | ------------- |
- * | `GET /form-migrations`        | `form:view`            | —             |
+ * | `GET /form-migrations`        | `form:migrate_records` | —             |
  * | `POST /form-migrations`       | `form:migrate_records` | `FORM_MIGRATE`|
- * | `GET /form-migrations/:id`    | `form:view`            | —             |
+ * | `GET /form-migrations/:id`    | `form:migrate_records` | —             |
  * | `POST .../:id/preview`        | `form:migrate_records` | —             |
  * | `POST .../:id/apply`          | `form:migrate_records` | `FORM_MIGRATE`|
  * | `POST .../:id/rollback`       | `form:migrate_records` | `FORM_MIGRATE`|
@@ -38,7 +38,7 @@ export class FormMigrationsController {
   constructor(private readonly migrations: FormMigrationsService) {}
 
   @Get()
-  @RequirePermissions('form:view')
+  @RequirePermissions('form:migrate_records')
   list(
     @Query('formSchemaId', new ZodValidationPipe(uuidSchema.optional(), 'query'))
     formSchemaId: string | undefined,
@@ -66,7 +66,7 @@ export class FormMigrationsController {
   }
 
   @Get(':id')
-  @RequirePermissions('form:view')
+  @RequirePermissions('form:migrate_records')
   get(@Param('id', new ZodValidationPipe(uuidSchema, 'param')) id: string): Promise<FormMigrationPreview> {
     return this.migrations.get(id);
   }
