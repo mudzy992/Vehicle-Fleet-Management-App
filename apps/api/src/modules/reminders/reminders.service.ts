@@ -17,7 +17,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { ApiErrorDetail } from '@vfm/shared';
+import type { ApiErrorDetail, Permission } from '@vfm/shared';
 import { toLocalDateString } from '@vfm/shared';
 import type {
   ReminderListQuery,
@@ -30,7 +30,8 @@ import type {
   UpdateReminderPolicyInput,
 } from '@vfm/shared/schemas';
 import type { Prisma } from '../../generated/prisma/client.js';
-import { VfmException } from '../../common/errors/vfm-error.js';
+import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
 export interface ReminderMutation<T> {
@@ -175,8 +176,10 @@ export class RemindersService {
   //  Čitanje
   // ---------------------------------------------------------------------------
 
-  async list(query: ReminderListQuery): Promise<ReminderListResponse> {
-    const where = this.buildWhere(query);
+  async list(query: ReminderListQuery, actor?: AuthenticatedUser): Promise<ReminderListResponse> {
+    const queryWhere = this.buildWhere(query);
+    const permissionWhere = actor ? await this.reminderViewScope(actor) : undefined;
+    const where = permissionWhere ? { AND: [queryWhere, permissionWhere] } : queryWhere;
     const [total, rows] = await Promise.all([
       this.prisma.scheduledReminder.count({ where }),
       this.prisma.scheduledReminder.findMany({
@@ -248,7 +251,14 @@ export class RemindersService {
   //  Stanja podsjetnika
   // ---------------------------------------------------------------------------
 
-  async acknowledge(id: string, actorId?: string): Promise<ReminderMutation<ScheduledReminder>> {
+  async acknowledge(
+    id: string,
+    actorOrId?: AuthenticatedUser | string,
+  ): Promise<ReminderMutation<ScheduledReminder>> {
+    if (actorOrId && typeof actorOrId !== 'string') {
+      this.assertAllScope(actorOrId, 'reminder:acknowledge');
+    }
+    const actorId = typeof actorOrId === 'string' ? actorOrId : actorOrId?.id;
     const current = await this.loadOrThrow(id);
     if (current.status === 'ACKNOWLEDGED') {
       return { data: this.toReminder(current) };
@@ -276,7 +286,12 @@ export class RemindersService {
     };
   }
 
-  async snooze(id: string, input: SnoozeReminderInput): Promise<ReminderMutation<ScheduledReminder>> {
+  async snooze(
+    id: string,
+    input: SnoozeReminderInput,
+    actor?: AuthenticatedUser,
+  ): Promise<ReminderMutation<ScheduledReminder>> {
+    if (actor) this.assertAllScope(actor, 'reminder:snooze');
     const current = await this.loadOrThrow(id);
     if (['ACKNOWLEDGED', 'CANCELLED', 'SENT'].includes(current.status)) {
       throw new VfmException('VALIDATION_ERROR', 'Podsjetnik se više ne može odgoditi.', [
@@ -465,6 +480,45 @@ export class RemindersService {
   // ---------------------------------------------------------------------------
   //  Pomoćne
   // ---------------------------------------------------------------------------
+
+  private async reminderViewScope(actor: AuthenticatedUser): Promise<Record<string, unknown> | undefined> {
+    const permission: Permission = 'reminder:view';
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return undefined;
+    if (scope !== 'OWN') {
+      throw VfmErrors.scopeDenied([
+        { path: [permission], message: 'Nemate pristup podsjetnicima u ovom opsegu.', code: 'scope_denied' },
+      ]);
+    }
+
+    const [vehicles, drivers] = await Promise.all([
+      this.prisma.vehicle.findMany({
+        where: { deletedAt: null, createdById: actor.id },
+        select: { id: true },
+      }),
+      this.prisma.driver.findMany({
+        where: { deletedAt: null, createdById: actor.id },
+        select: { id: true },
+      }),
+    ]);
+    const vehicleIds = vehicles.map((vehicle) => vehicle.id);
+    const driverIds = drivers.map((driver) => driver.id);
+    if (vehicleIds.length === 0 && driverIds.length === 0) return { id: { in: [] } };
+    return {
+      OR: [
+        ...(vehicleIds.length ? [{ entityType: 'Vehicle', entityId: { in: vehicleIds } }] : []),
+        ...(driverIds.length ? [{ entityType: 'Driver', entityId: { in: driverIds } }] : []),
+      ],
+    };
+  }
+
+  private assertAllScope(actor: AuthenticatedUser, permission: Permission): void {
+    const scope = actor.permissions?.permissions.get(permission);
+    if (actor.isSuperAdmin || scope === 'ALL') return;
+    throw VfmErrors.scopeDenied([
+      { path: [permission], message: 'Ova akcija zahtijeva dozvolu opsega ALL.', code: 'scope_denied' },
+    ]);
+  }
 
   private buildWhere(query: ReminderListQuery): Record<string, unknown> {
     const where: Record<string, unknown> = {};

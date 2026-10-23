@@ -7,7 +7,8 @@
  * - `dedupeKey` je jedan po (zapis, vrsta, prag);
  * - potvrda/odgađanje mijenjaju stanje, ne brišu zapis.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import {
   DEFAULT_THRESHOLD_DAYS,
   RemindersService,
@@ -18,6 +19,8 @@ import {
 } from '../../src/modules/reminders/reminders.service.js';
 import type { ReminderListQuery } from '@vfm/shared/schemas';
 import { asPrisma, catchVfm, FakeRemindersPrisma } from '../helpers/reminders-fake.js';
+
+vi.mock('../../src/prisma/prisma.service.js', () => ({ PrismaService: class PrismaService {} }));
 
 const NOW = new Date('2026-10-20T10:00:00.000Z');
 
@@ -30,6 +33,19 @@ function service(fake = new FakeRemindersPrisma()): {
 
 function query(overrides: Partial<ReminderListQuery> = {}): ReminderListQuery {
   return { page: 1, pageSize: 25, sortOrder: 'asc', ...overrides } as ReminderListQuery;
+}
+
+function scopeActor(permission: string, scope: 'ALL' | 'OWN'): AuthenticatedUser {
+  return {
+    id: 'user-own',
+    isSuperAdmin: false,
+    permissions: {
+      isSuperAdmin: false,
+      list: [permission],
+      permissions: new Map([[permission, scope]]),
+      grants: [{ permission, scope, scopeVehicleIds: [] }],
+    },
+  } as unknown as AuthenticatedUser;
 }
 
 describe('vremenska zona', () => {
@@ -253,6 +269,41 @@ describe('RemindersService — politike i lista', () => {
     expect((await svc.list(query({ dueWithinDays: 30 }))).total).toBe(
       fake.reminders.filter((row) => row.fireAt.getTime() <= Date.now() + 30 * 86_400_000).length,
     );
+  });
+
+  it('OWN lista ograničava podsjetnike na vozila i vozače koje je korisnik kreirao', async () => {
+    const { fake, svc } = service();
+    fake.vehicles.push(
+      { id: 'veh-own', nextServiceDueDate: null, nextServiceDueKm: null, createdById: 'user-own' },
+      { id: 'veh-other', nextServiceDueDate: null, nextServiceDueKm: null, createdById: 'user-other' },
+    );
+    fake.drivers.push(
+      { id: 'driver-own', licenseExpiresAt: null, createdById: 'user-own' },
+      { id: 'driver-other', licenseExpiresAt: null, createdById: 'user-other' },
+    );
+    fake.addReminder({ entityType: 'Vehicle', entityId: 'veh-own' });
+    fake.addReminder({ entityType: 'Vehicle', entityId: 'veh-other' });
+    fake.addReminder({ entityType: 'Driver', entityId: 'driver-own' });
+    fake.addReminder({ entityType: 'Driver', entityId: 'driver-other' });
+
+    const scoped = await svc.list(query(), scopeActor('reminder:view', 'OWN'));
+    const filtered = await svc.list(query({ entityId: 'veh-other' }), scopeActor('reminder:view', 'OWN'));
+
+    expect(scoped.items.map((item) => item.entityId).sort()).toEqual(['driver-own', 'veh-own']);
+    expect(filtered.total).toBe(0);
+  });
+
+  it('acknowledge i snooze odbijaju scope koji nije ALL', async () => {
+    const { svc } = service();
+    const acknowledgeError = await catchVfm(
+      svc.acknowledge('reminder-id', scopeActor('reminder:acknowledge', 'OWN')),
+    );
+    const snoozeError = await catchVfm(
+      svc.snooze('reminder-id', { days: 2 }, scopeActor('reminder:snooze', 'OWN')),
+    );
+
+    expect(acknowledgeError.code).toBe('SCOPE_DENIED');
+    expect(snoozeError.code).toBe('SCOPE_DENIED');
   });
 
   it('lista politika vraća sve vrste', async () => {

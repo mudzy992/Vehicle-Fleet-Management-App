@@ -43,11 +43,18 @@ export class FakeRemindersPrisma {
   readonly reminders: FakeReminderRow[] = [];
   readonly registrations: Array<{ id: string; vehicleId: string; validUntil: Date }> = [];
   readonly insurances: Array<{ id: string; vehicleId: string; validUntil: Date }> = [];
-  readonly drivers: Array<{ id: string; licenseExpiresAt: Date | null }> = [];
+  readonly drivers: Array<{
+    id: string;
+    licenseExpiresAt: Date | null;
+    createdById?: string | null;
+    deletedAt?: Date | null;
+  }> = [];
   readonly vehicles: Array<{
     id: string;
     nextServiceDueDate: Date | null;
     nextServiceDueKm: number | null;
+    createdById?: string | null;
+    deletedAt?: Date | null;
   }> = [];
 
   private seq = 0;
@@ -178,23 +185,50 @@ export class FakeRemindersPrisma {
   };
 
   private filter(where: Where): FakeReminderRow[] {
-    return this.reminders.filter((row) => {
-      if (typeof where.kind === 'string' && row.kind !== where.kind) return false;
-      if (typeof where.status === 'string' && row.status !== where.status) return false;
-      if (typeof where.entityType === 'string' && row.entityType !== where.entityType) return false;
-      if (typeof where.entityId === 'string' && row.entityId !== where.entityId) return false;
-      if (where.fireAt && typeof where.fireAt === 'object') {
-        const lte = (where.fireAt as { lte?: Date }).lte;
+    const matches = (row: FakeReminderRow, condition: Where): boolean => {
+      if (Array.isArray(condition.AND) && !condition.AND.every((item) => matches(row, item as Where)))
+        return false;
+      if (Array.isArray(condition.OR) && !condition.OR.some((item) => matches(row, item as Where)))
+        return false;
+      if (typeof condition.kind === 'string' && row.kind !== condition.kind) return false;
+      if (typeof condition.status === 'string' && row.status !== condition.status) return false;
+      if (typeof condition.entityType === 'string' && row.entityType !== condition.entityType) return false;
+      if (typeof condition.entityId === 'string' && row.entityId !== condition.entityId) return false;
+      if (condition.entityId && typeof condition.entityId === 'object') {
+        const ids = (condition.entityId as { in?: string[] }).in;
+        if (ids && !ids.includes(row.entityId)) return false;
+      }
+      if (condition.id && typeof condition.id === 'object') {
+        const ids = (condition.id as { in?: string[] }).in;
+        if (ids && !ids.includes(row.id)) return false;
+      }
+      if (condition.fireAt && typeof condition.fireAt === 'object') {
+        const lte = (condition.fireAt as { lte?: Date }).lte;
         if (lte && row.fireAt > lte) return false;
       }
       return true;
-    });
+    };
+    return this.reminders.filter((row) => matches(row, where));
   }
 
   registrationRecord = { findMany: async () => this.registrations };
   insuranceRecord = { findMany: async () => this.insurances };
-  driver = { findMany: async () => this.drivers };
-  vehicle = { findMany: async () => this.vehicles };
+  driver = {
+    findMany: async (args: { where?: Where } = {}) =>
+      this.drivers.filter(
+        (row) =>
+          (typeof args.where?.createdById !== 'string' || row.createdById === args.where.createdById) &&
+          (args.where?.deletedAt !== null || row.deletedAt === null || row.deletedAt === undefined),
+      ),
+  };
+  vehicle = {
+    findMany: async (args: { where?: Where } = {}) =>
+      this.vehicles.filter(
+        (row) =>
+          (typeof args.where?.createdById !== 'string' || row.createdById === args.where.createdById) &&
+          (args.where?.deletedAt !== null || row.deletedAt === null || row.deletedAt === undefined),
+      ),
+  };
 }
 
 function asPrisma(fake: FakeRemindersPrisma): never {

@@ -45,8 +45,9 @@ export class RemindersController {
   @RequirePermissions('reminder:view')
   list(
     @Query(new ZodValidationPipe(reminderListQuerySchema, 'query')) query: ReminderListQuery,
+    @CurrentUser() actor: AuthenticatedUser,
   ): Promise<ReminderListResponse> {
-    return this.reminders.list(query);
+    return this.reminders.list(query, actor);
   }
 
   @Get('policies')
@@ -90,10 +91,10 @@ export class RemindersController {
   @Audit('UPDATE', { severity: 'INFO', resource: 'ScheduledReminder' })
   async acknowledge(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
-    @CurrentUser() actor: AuthenticatedUser | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<ScheduledReminder> {
-    const outcome = await this.reminders.acknowledge(id, actor?.id);
+    const outcome = await this.reminders.acknowledge(id, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(outcome.before)
@@ -108,9 +109,10 @@ export class RemindersController {
   async snooze(
     @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
     @Body(new ZodValidationPipe(snoozeReminderSchema, 'body')) input: SnoozeReminderInput,
+    @CurrentUser() actor: AuthenticatedUser,
     @Req() request: VfmRequest,
   ): Promise<ScheduledReminder> {
-    const outcome = await this.reminders.snooze(id, input);
+    const outcome = await this.reminders.snooze(id, input, actor);
     AuditContext.from(request)
       .setEntityId(id)
       .setBefore(outcome.before)

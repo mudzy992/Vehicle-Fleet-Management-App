@@ -14,7 +14,7 @@ U repozitoriju već postoje API moduli i web ekrani za vozila, vozače, registra
 | Registracije i osiguranje | List/detail filtriraju `OWN`/`VEHICLE_IDS`; create provjerava ciljano vozilo, update/delete zapis, `ALL` ostaje dozvoljen. Ručna migracija zabranjuje preklapanje perioda. | Resursni scope je pokriven u servisima; DB integracija još nije izvršena |
 | Servisi i stavke | List/detail, kreiranje, izmjena/brisanje i stavke računa provjeravaju `service:view/create/update/delete` opseg; lista kombinuje korisničke filtere i scope u AND uslovu. | Jedinični testovi opsega prolaze; P14 end-to-end nije izvršen |
 | Gume | Kompleti i historija montaža provjeravaju scope na list/detail/mutacijama; filteri se spajaju sa scope-om, a prikaz kompleta uklanja vozila izvan opsega. | Regresijski testovi prolaze; P14 end-to-end nije izvršen |
-| Podsjetnici               | Scheduler koristi `dedupeKey`, `createMany(skipDuplicates: true)` i `Europe/Sarajevo`; postoje jedinični testovi.                                               | P13 djelimično pokriven                                   |
+| Podsjetnici | Scheduler koristi `dedupeKey`, `createMany(skipDuplicates: true)` i `Europe/Sarajevo`; `reminder:view` sa `OWN` ograničava listu na vozila/vozače koje je korisnik kreirao, a acknowledge/snooze traže `ALL`. | Ciljani regresijski testovi prolaze; P14 end-to-end nije izvršen |
 | Prilozi                   | Postoje provjere opsega kod list/get/url/content sesije i audit pristupa.                                                                                       | P14 nije potvrđen end-to-end                              |
 | Web ekrani                | Postoje feature moduli za vozila, vozače i podsjetnike; P14 test prolaza kroz sve API rute još nije pronađen.                                                   | Audit u toku                                              |
 
@@ -40,15 +40,17 @@ P14 je i dalje otvoren: `docs/09-TEST_PLAN.md` traži OpenAPI-wide provjeru dozv
 
 Audit je potvrdio razliku prema doslovnom P14 očekivanju: potpisani URL je ranije radio kao javni bearer token bez sesije. Ispravljena je zaštita: izdavanje URL-a i preuzimanje sada traže `attachment:view`; ruta s tokenom više nije javna, ponovo provjerava opseg priloga, a HMAC potpis veže token za ID korisnika i rok važenja. Web klijent preuzima bajtove uz memorijski access token umjesto otvaranja javnog linka. Dodani su regresijski testovi za metapodatke permisije, vezivanje tokena za korisnika i autentifikovano preuzimanje; puna P14 matrica svih OpenAPI ruta i dalje nije izvršena.
 
-Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view`/list endpoint ne smije se smatrati ekvivalentom prava nad konkretnim vozilom, vozačem ili prilogom. List/detail rute vozila, vozača, registracija i osiguranja, historija kilometraže i kategorije dozvole imaju serversko filtriranje/provjeru opsega. Write rute ovih resursa sada provjeravaju scope za kreiranje, izmjenu, arhivu/brisanje, odometar i kategorije dozvole. Servisi i stavke računa provjeravaju scope prema kreatoru zapisa ili vozilu, a list filter se spaja sa scope uslovom pomoću `AND`. Kompleti guma i historija montaža sada provjeravaju scope za list/detail i mutacije; povezani prikaz vozila i zapisi korištenja ograničavaju se prema dodijeljenim vozilima. Regresijski testovi pokrivaju odbijanje izvan opsega i spajanje query/scope uslova. PII politika i ostale rute još nisu kompletno verifikovane; P14 nije zatvoren.
+Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view`/list endpoint ne smije se smatrati ekvivalentom prava nad konkretnim vozilom, vozačem ili prilogom. List/detail rute vozila, vozača, registracija i osiguranja, historija kilometraže i kategorije dozvole imaju serversko filtriranje/provjeru opsega. Write rute ovih resursa sada provjeravaju scope za kreiranje, izmjenu, arhivu/brisanje, odometar i kategorije dozvole. Servisi i stavke računa provjeravaju scope prema kreatoru zapisa ili vozilu, a list filter se spaja sa scope uslovom pomoću `AND`. Kompleti guma i historija montaža provjeravaju scope za list/detail i mutacije; povezani prikaz vozila i zapisi korištenja ograničavaju se prema dodijeljenim vozilima. Podsjetnici filtriraju `OWN` prema kreatoru povezanog vozila/vozača; acknowledge/snooze provjeravaju `ALL` scope. Regresijski testovi pokrivaju odbijanje izvan opsega i spajanje query/scope uslova. PII politika i ostale rute još nisu kompletno verifikovane; P14 nije zatvoren.
 
 ## Verifikacija u ovom prolazu
 
 - `corepack pnpm --filter @vfm/api exec vitest run --config vitest.integration.config.ts` — prolaz alata; jedan integracijski fajl i oba testa preskočena zbog nedostajućeg `PHASE3_TEST_DATABASE_URL`.
 - `corepack pnpm --filter @vfm/api typecheck` — prolaz.
-- `corepack pnpm --filter @vfm/api test` — prolaz: 58 fajlova, 945 jediničnih testova.
-- `corepack pnpm --filter @vfm/web test` — prolaz: 23 fajla, 166 testova.
-- API i web `typecheck` — prolaz; ESLint nad izmijenjenim API/web fajlovima — prolaz.
+- `corepack pnpm --filter @vfm/api test` — prethodni prolaz prije izmjena scope-a podsjetnika: 58 fajlova, 945 jediničnih testova.
+- `corepack pnpm --filter @vfm/api exec vitest run test/unit/reminders-service.spec.ts` — prolaz nakon izmjena scope-a: 22 testa.
+- `corepack pnpm --filter @vfm/web test` — prethodni prolaz: 23 fajla, 166 testova.
+- API i web `typecheck` — prolaz u ranijem prolazu; ESLint nad API fajlovima u ovom prolazu još nije ponovljen.
+- Trenutni API `typecheck` i puna testna serija blokirani su nedostajućim generisanim Prisma klijentom: `prisma generate` nije mogao preuzeti `schema-engine` sa `binaries.prisma.sh` (TLS veza odbijena). Ne zaobilaziti ograničenje; ciljani podsjetnik test prolazi uz mock za PrismaService.
 - Nije pokrenuta živa DB/API provjera. Korisnik je prijavio da su commitovi koje je ručno mergao iz ove grane u `main` redeployani bez pada backend/frontend servisa; to je korisnički prijavljen rezultat, ne nezavisna provjera, i ne obuhvata izmjene iz ovog prolaza dok se ne mergeaju.
 
 ## Sljedeći koraci
