@@ -1,12 +1,21 @@
 /** Kompleti guma — lista, verzionisani unos, jedinstveni kod i permisije. */
 import 'reflect-metadata';
-import { describe, expect, it, vi } from 'vitest';
+import type { INestApplication } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Test } from '@nestjs/testing';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { evaluateEffectivePermissions, type PermissionGrant } from '@vfm/shared';
+import { PermissionsGuard } from '../../src/common/guards/permissions.guard.js';
+import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter.js';
+import { PermissionsService } from '../../src/modules/auth/permissions/permissions.service.js';
 import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import { createTireSetSchema, tireSetListQuerySchema, tireSetViewSchema } from '@vfm/shared/schemas';
 import { TireSetsController } from '../../src/modules/tires/tires.controller.js';
 import { TiresService } from '../../src/modules/tires/tires.service.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 import { SEED_FORMS } from '../../src/tools/seed-forms.js';
+
+vi.mock('../../src/prisma/prisma.service.js', () => ({ PrismaService: class PrismaService {} }));
 
 const actorId = '11111111-1111-4111-8111-111111111111';
 const formSchemaId = '22222222-2222-4222-8222-222222222222';
@@ -270,5 +279,108 @@ describe('Gume — kompleti', () => {
       action: 'CREATE',
       resource: 'TireSet',
     });
+  });
+});
+
+describe('P14 — tire-set scope through HTTP', () => {
+  let app: INestApplication;
+  let baseUrl: string;
+  const scenarioActor = (scenario: 'ASSIGNED' | 'UNASSIGNED' | 'NO_VIEW'): AuthenticatedUser => {
+    const grants: readonly PermissionGrant[] =
+      scenario === 'NO_VIEW'
+        ? []
+        : [
+            {
+              permission: 'tire:view',
+              scope: 'VEHICLE_IDS',
+              scopeVehicleIds: [scenario === 'ASSIGNED' ? vehicleId : otherVehicleId],
+            },
+          ];
+    return {
+      id: `p14-tire-${scenario.toLowerCase()}`,
+      roles: ['CUSTOM'],
+      roleIds: [],
+      clientType: 'WEB',
+      sessionId: 'p14-tire-session',
+      jti: 'p14-tire-token',
+      tokenVersion: 1,
+      permissionsVersion: 0,
+      isSuperAdmin: false,
+      mustChangePassword: false,
+      status: 'ACTIVE',
+      allowedClientTypes: ['WEB'],
+      permissions: evaluateEffectivePermissions({ roles: ['CUSTOM'], grants, clientType: 'WEB' }),
+    };
+  };
+
+  beforeAll(async () => {
+    const { svc, tireSet, prisma, row } = setup();
+    tireSet.findFirst.mockResolvedValue({ ...row, formData: {}, createdById: null });
+    Object.assign(prisma, {
+      tireInstallation: {
+        findFirst: vi.fn(async ({ where }: { where: { vehicleId: { in?: readonly string[] } } }) =>
+          where.vehicleId.in?.includes(vehicleId) ? { id: actorId } : null,
+        ),
+      },
+    });
+
+    const moduleRef = await Test.createTestingModule({
+      controllers: [TireSetsController],
+      providers: [
+        Reflector,
+        PermissionsGuard,
+        { provide: TiresService, useValue: svc },
+        {
+          provide: PermissionsService,
+          useValue: {
+            snapshot: vi.fn(async () => ({ permissionsVersion: 0 })),
+            currentPermissionsVersion: vi.fn(async () => 0),
+          },
+        },
+      ],
+    }).compile();
+    app = moduleRef.createNestApplication();
+    app.use(
+      (
+        request: { headers: Record<string, string | string[] | undefined>; user?: AuthenticatedUser },
+        _response: unknown,
+        next: () => void,
+      ) => {
+        const rawScenario = request.headers['x-sweep-role'];
+        const scenario = Array.isArray(rawScenario) ? rawScenario[0] : rawScenario;
+        if (scenario) request.user = scenarioActor(scenario as 'ASSIGNED' | 'UNASSIGNED' | 'NO_VIEW');
+        next();
+      },
+    );
+    app.useGlobalGuards(app.get(PermissionsGuard));
+    app.useGlobalFilters(new AllExceptionsFilter());
+    await app.listen(0, '127.0.0.1');
+    const address = app.getHttpServer().address() as { port: number };
+    baseUrl = `http://127.0.0.1:${address.port}`;
+  }, 30_000);
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  it('dodijeljeni tire:view VEHICLE_IDS korisnik vidi komplet, a drugi dobija scope denial', async () => {
+    const assigned = await fetch(`${baseUrl}/tire-sets/55555555-5555-4555-8555-555555555555`, {
+      headers: { 'x-sweep-role': 'ASSIGNED' },
+    });
+    expect(assigned.status).toBe(200);
+
+    const unassigned = await fetch(`${baseUrl}/tire-sets/55555555-5555-4555-8555-555555555555`, {
+      headers: { 'x-sweep-role': 'UNASSIGNED' },
+    });
+    expect(unassigned.status).toBe(403);
+    expect(((await unassigned.json()) as { error: { code: string } }).error.code).toBe('SCOPE_DENIED');
+  });
+
+  it('bez tire:view endpoint odbija zahtjev na guardu', async () => {
+    const response = await fetch(`${baseUrl}/tire-sets/55555555-5555-4555-8555-555555555555`, {
+      headers: { 'x-sweep-role': 'NO_VIEW' },
+    });
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe('PERMISSION_DENIED');
   });
 });
