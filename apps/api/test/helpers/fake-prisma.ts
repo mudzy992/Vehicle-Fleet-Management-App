@@ -695,6 +695,12 @@ export class FakePrismaClient {
       this.taskTypes.set(String(data.id), data);
       return clone(data);
     },
+    update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.taskTypes.get(args.where.id);
+      if (!row) throw new Error(`FakePrisma: vrsta zadatka ${args.where.id} ne postoji.`);
+      applyUpdate(row, args.data);
+      return clone(row);
+    },
   };
 
   readonly fieldKeyRegistry = {
