@@ -146,8 +146,10 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     env:
-      TEST_DATABASE_URL: postgresql://vfm:vfm_test_only@localhost:5432/vfm_test?schema=public
-      TEST_REDIS_URL: redis://localhost:6379/0
+      DATABASE_URL: postgresql://vfm:vfm_test_only@localhost:5432/vfm_test?schema=public
+      PHASE3_TEST_DATABASE_URL: postgresql://vfm:vfm_test_only@localhost:5432/vfm_test?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -156,6 +158,23 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: test -f pnpm-lock.yaml && pnpm install --frozen-lockfile || echo "skip"
+      - name: Izgradi workspace pakete za Prisma seed
+        run: |
+          pnpm --filter @vfm/shared build
+          pnpm --filter @vfm/form-engine build
+      - name: Generiši Prisma client
+        run: pnpm --filter @vfm/api prisma:generate
+      - name: Primijeni migracije na izolovanu CI bazu
+        env:
+          ENV_PROFILE: tool
+          NODE_ENV: production
+        run: pnpm --filter @vfm/api prisma:migrate:deploy
+      - name: Seed konfiguracije testne baze
+        env:
+          ENV_PROFILE: tool
+          NODE_ENV: production
+          SEED_DEMO_DATA: "false"
+        run: pnpm --filter @vfm/api seed
       #  Guard-ovi postoje jer `vitest run` bez ijednog testa pada, a
       #  `test:stress` skripta još ne postoji (P6 dolazi s Faza 3).
       - name: Integration
