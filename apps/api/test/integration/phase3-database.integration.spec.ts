@@ -2,6 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+interface TestPrismaTransaction {
+  $executeRaw(strings: TemplateStringsArray, ...values: unknown[]): Promise<number>;
+  $queryRaw<T>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T>;
+}
+
+interface TestPrismaClient {
+  $disconnect(): Promise<void>;
+  $transaction<T>(callback: (tx: unknown) => Promise<T>): Promise<T>;
+}
+
 /**
  * P13 provjere PostgreSQL ograničenja. Koristi isključivo namjenski testni DB;
  * cijeli test radi u transakciji koja se uvijek vraća (ROLLBACK).
@@ -11,14 +21,27 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const databaseUrl = process.env.PHASE3_TEST_DATABASE_URL;
 describe.skipIf(!databaseUrl)('Faza 3 — PostgreSQL integracijski ugovori (P13)', () => {
   let client: Client;
+  let prisma: TestPrismaClient | undefined;
+  let createRemindersScanner:
+    | ((tx: TestPrismaTransaction) => { scan(now: Date): Promise<{ candidates: number; created: number }> })
+    | undefined;
 
   beforeAll(async () => {
     client = new Client({ connectionString: databaseUrl });
     await client.connect();
+    // Prisma client generation is a CI setup step; lazy import keeps DB-less local runs skippable.
+    const [{ PrismaPg }, { PrismaClient }, { RemindersService }] = await Promise.all([
+      import('@prisma/adapter-pg'),
+      import('../../src/generated/prisma/client.js'),
+      import('../../src/modules/reminders/reminders.service.js'),
+    ]);
+    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) }) as unknown as TestPrismaClient;
+    createRemindersScanner = (tx) => new RemindersService(tx as never);
   });
 
   afterAll(async () => {
     await client?.end();
+    await prisma?.$disconnect();
   });
 
   it('odbija preklapanje registracija i osiguranja te deduplicira podsjetnike', async () => {
@@ -166,6 +189,137 @@ describe.skipIf(!databaseUrl)('Faza 3 — PostgreSQL integracijski ugovori (P13)
     } finally {
       await client.query('ROLLBACK');
     }
+  });
+
+  it('generiše pragove 14/7/3/1 jednom i čuva 06:00 Europe/Sarajevo kroz DST prelaze', async () => {
+    const vehicleForm = await publishedForm('VEHICLE');
+    const registrationForm = await publishedForm('REGISTRATION');
+    if (!vehicleForm || !registrationForm) {
+      throw new Error('Testna baza nema objavljene VEHICLE i REGISTRATION forme (pokrenuti seed).');
+    }
+
+    const springVehicleId = randomUUID();
+    const autumnVehicleId = randomUUID();
+    const dueDates = [
+      {
+        vehicleId: springVehicleId,
+        dueDate: '2027-04-04',
+        internalNo: `P13-SPR-${springVehicleId.slice(0, 8)}`,
+      },
+      {
+        vehicleId: autumnVehicleId,
+        dueDate: '2027-11-14',
+        internalNo: `P13-AUT-${autumnVehicleId.slice(0, 8)}`,
+      },
+    ] as const;
+    let firstScan: { candidates: number; created: number } | undefined;
+    let secondScan: { candidates: number; created: number } | undefined;
+    let savedRows: Array<{
+      entityId: string;
+      dueDate: Date;
+      thresholdDays: number;
+      fireAt: Date;
+    }> = [];
+
+    class RollbackFixtures extends Error {}
+    const db = prisma;
+    const buildScanner = createRemindersScanner;
+    if (!db || !buildScanner) throw new Error('Prisma integracijski klijent nije inicijalizovan.');
+
+    try {
+      await db.$transaction(async (tx) => {
+        const transaction = tx as TestPrismaTransaction;
+        // Ograniči sken na ovu determinističku probu, pa vrati i politike i redove rollback-om.
+        await transaction.$executeRaw`UPDATE "ReminderPolicy" SET "enabled" = false`;
+        // Seed može ostaviti aktivne demo registracije; privremeno ih isključi iz skena.
+        await transaction.$executeRaw`
+          UPDATE "RegistrationRecord" SET "status" = 'CANCELLED'::"RecordStatus"
+           WHERE "status" = 'ACTIVE'::"RecordStatus" AND "deletedAt" IS NULL
+        `;
+        await transaction.$executeRaw`
+          UPDATE "ReminderPolicy"
+             SET "enabled" = true, "thresholdsDays" = ARRAY[14, 7, 3, 1]::INTEGER[], "updatedAt" = CURRENT_TIMESTAMP
+           WHERE "kind" = 'REGISTRATION'
+        `;
+
+        for (const fixture of dueDates) {
+          await transaction.$executeRaw`
+            INSERT INTO "Vehicle" ("id", "internalNo", "make", "model", "fuelType", "formSchemaId", "formSchemaVersionId", "updatedAt")
+            VALUES (
+              ${fixture.vehicleId}::uuid,
+              ${fixture.internalNo},
+              'Test',
+              'P13 DST',
+              'DIESEL',
+              ${vehicleForm.schemaId}::uuid,
+              ${vehicleForm.versionId}::uuid,
+              CURRENT_TIMESTAMP
+            )
+          `;
+          const registrationId = randomUUID();
+          await transaction.$executeRaw`
+            INSERT INTO "RegistrationRecord" ("id", "vehicleId", "formSchemaId", "formSchemaVersionId", "registrationNumber", "validFrom", "validUntil", "updatedAt")
+            VALUES (
+              ${registrationId}::uuid,
+              ${fixture.vehicleId}::uuid,
+              ${registrationForm.schemaId}::uuid,
+              ${registrationForm.versionId}::uuid,
+              ${`P13-${registrationId.slice(0, 8)}`},
+              DATE '2025-01-01',
+              ${fixture.dueDate}::date,
+              CURRENT_TIMESTAMP
+            )
+          `;
+        }
+
+        const scanner = buildScanner(transaction);
+        firstScan = await scanner.scan(new Date('2026-01-01T00:00:00.000Z'));
+        secondScan = await scanner.scan(new Date('2026-01-01T00:00:00.000Z'));
+        savedRows = await transaction.$queryRaw<Array<{
+          entityId: string;
+          dueDate: Date;
+          thresholdDays: number;
+          fireAt: Date;
+        }>>`
+          SELECT "entityId", "dueDate", "thresholdDays", "fireAt"
+            FROM "ScheduledReminder"
+           WHERE "kind" = 'REGISTRATION'
+             AND "entityId" IN (${springVehicleId}::uuid, ${autumnVehicleId}::uuid)
+           ORDER BY "dueDate" ASC, "thresholdDays" DESC
+        `;
+
+        // Interactive transaction rollback-i sve fixture redove i izmjenu politike.
+        throw new RollbackFixtures();
+      });
+    } catch (error) {
+      if (!(error instanceof RollbackFixtures)) throw error;
+    }
+
+    expect(firstScan).toMatchObject({ candidates: 8, created: 8 });
+    expect(secondScan).toMatchObject({ candidates: 8, created: 0 });
+    expect(savedRows).toHaveLength(8);
+    const rollbackCheck = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS "count" FROM "Vehicle" WHERE "id" = ANY($1::uuid[])`,
+      [[springVehicleId, autumnVehicleId]],
+    );
+    expect(Number(rollbackCheck.rows[0]?.count ?? 0)).toBe(0);
+    const reminderRollbackCheck = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS "count" FROM "ScheduledReminder" WHERE "entityId" = ANY($1::uuid[])`,
+      [[springVehicleId, autumnVehicleId]],
+    );
+    expect(Number(reminderRollbackCheck.rows[0]?.count ?? 0)).toBe(0);
+    expect(
+      savedRows.map((row) => [row.dueDate.toISOString().slice(0, 10), row.thresholdDays, row.fireAt.toISOString()]),
+    ).toEqual([
+      ['2027-04-04', 14, '2027-03-21T05:00:00.000Z'],
+      ['2027-04-04', 7, '2027-03-28T04:00:00.000Z'],
+      ['2027-04-04', 3, '2027-04-01T04:00:00.000Z'],
+      ['2027-04-04', 1, '2027-04-03T04:00:00.000Z'],
+      ['2027-11-14', 14, '2027-10-31T05:00:00.000Z'],
+      ['2027-11-14', 7, '2027-11-07T05:00:00.000Z'],
+      ['2027-11-14', 3, '2027-11-11T05:00:00.000Z'],
+      ['2027-11-14', 1, '2027-11-13T05:00:00.000Z'],
+    ]);
   });
 
   async function publishedForm(subject: string): Promise<{ schemaId: string; versionId: string } | null> {
