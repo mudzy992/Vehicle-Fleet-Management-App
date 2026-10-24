@@ -389,6 +389,14 @@ async function seedForms(prisma: PrismaClient): Promise<{
   const byKey = new Map<string, { formSchemaId: string; versionId: string }>();
 
   for (const form of SEED_FORMS) {
+    const linkedTaskType = SEED_TASK_TYPES.find((taskType) => taskType.formKey === form.key);
+    const taskType = linkedTaskType
+      ? await prisma.taskType.findUnique({ where: { code: linkedTaskType.code }, select: { id: true } })
+      : null;
+    if (form.subject === 'TASK' && !taskType) {
+      throw new Error(`Seed forma zadatka "${form.key}" nema prethodno seedovanu vrstu zadatka.`);
+    }
+
     const parsed = parseDefinition(form.definition);
     if (!parsed.ok) {
       throw new Error(
@@ -428,6 +436,7 @@ async function seedForms(prisma: PrismaClient): Promise<{
           key: form.key,
           name: form.name,
           subject: form.subject,
+          ...(taskType ? { taskTypeId: taskType.id } : {}),
           description: form.description,
           status: 'ACTIVE',
           ownerModule: form.ownerModule,
@@ -486,9 +495,19 @@ async function seedTaskTypes(
   for (const taskType of SEED_TASK_TYPES) {
     const existing = await prisma.taskType.findUnique({
       where: { code: taskType.code },
-      select: { id: true },
+      select: { id: true, formSchemaId: true },
     });
-    if (existing) continue;
+    if (existing) {
+      const defaultForm = taskType.formKey ? formsByKey.get(taskType.formKey) : undefined;
+      // Samo dopuni praznu default formu; ne prepisuj administratorsku vezu.
+      if (defaultForm && !existing.formSchemaId) {
+        await prisma.taskType.update({
+          where: { id: existing.id },
+          data: { formSchemaId: defaultForm.formSchemaId },
+        });
+      }
+      continue;
+    }
 
     await prisma.taskType.create({
       data: {
@@ -738,8 +757,11 @@ export async function runSeed(prisma: PrismaClient, env: { NODE_ENV: string }): 
   const permissions = await seedPermissions(prisma);
   const roles = await seedRoles(prisma);
   const grantsAdded = await seedGrants(prisma);
+  // FormSchema.subject=TASK ima DB check constraint koji zahtijeva TaskType FK.
+  // Kreiramo katalog vrsta prije forme, a zatim povezujemo default forme.
+  const taskTypesCreated = await seedTaskTypes(prisma, new Map());
   const forms = await seedForms(prisma);
-  const taskTypesCreated = await seedTaskTypes(prisma, forms.byKey);
+  await seedTaskTypes(prisma, forms.byKey);
   const vehicleForm = forms.byKey.get('vehicle');
   if (!vehicleForm) {
     throw new Error('Seed: forma "vehicle" nije dostupna — vozila se ne mogu vezati na formu.');
