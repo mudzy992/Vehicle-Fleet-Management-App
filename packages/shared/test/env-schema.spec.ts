@@ -330,6 +330,8 @@ describe('izvedene vrijednosti', () => {
   it('redisConfig koristi različitog ACL korisnika po ulozi (least privilege)', () => {
     const env = parseEnv({
       REDIS_HOST: 'redis-global',
+      REDIS_TLS: 'true',
+      REDIS_CA_CERT_PATH: '/run/secrets/redis-ca.crt',
       REDIS_PASSWORD_API: 'api-pass',
       REDIS_PASSWORD_WORKER: 'worker-pass',
       REDIS_PASSWORD_READONLY: 'ro-pass',
@@ -339,6 +341,8 @@ describe('izvedene vrijednosti', () => {
     expect(api.username).toBe('vfm-api');
     expect(api.password).toBe('api-pass');
     expect(api.host).toBe('redis-global');
+    expect(api.tls).toBe(true);
+    expect(api.caCertPath).toBe('/run/secrets/redis-ca.crt');
 
     expect(redisConfig(env, 'worker').username).toBe('vfm-worker');
     expect(redisConfig(env, 'readonly').username).toBe('vfm-readonly');

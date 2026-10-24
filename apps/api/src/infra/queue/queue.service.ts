@@ -24,7 +24,7 @@ import { QUEUE_NAMES, REDIS_ACL_KEY_PATTERN } from '@vfm/shared';
 import type { QueueName } from '@vfm/shared';
 import type { BaseEnv } from '@vfm/shared/env';
 import { queueKeyPrefix, redisConfig, validateRedisAclScope } from '@vfm/shared/env';
-import { RedisService } from '../redis/redis.service.js';
+import { RedisService, redisTlsOptions } from '../redis/redis.service.js';
 import { getEnv } from '../../config/env.js';
 
 export interface EnqueueResult {
@@ -237,6 +237,7 @@ export class QueueService implements OnModuleDestroy {
   private buildConnection(): ConnectionOptions | undefined {
     if (!this.redis.isEnabled) return undefined;
     const config = redisConfig(this.env, 'worker');
+    const tls = redisTlsOptions(config);
     return {
       host: config.host,
       port: config.port,
@@ -245,7 +246,7 @@ export class QueueService implements OnModuleDestroy {
       db: config.db,
       maxRetriesPerRequest: null,
       enableReadyCheck: true,
-      ...(config.tls ? { tls: {} } : {}),
+      ...(tls ? { tls } : {}),
     };
   }
 

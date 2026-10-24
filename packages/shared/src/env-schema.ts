@@ -200,6 +200,7 @@ export const baseEnvSchema = z.object({
   REDIS_HOST: optionalString,
   REDIS_PORT: port(6379),
   REDIS_TLS: bool(false),
+  REDIS_CA_CERT_PATH: optionalString,
   REDIS_USER_API: z.string().min(1).default(REDIS_ACL_USERS.api),
   REDIS_PASSWORD_API: optionalString,
   REDIS_USER_WORKER: z.string().min(1).default(REDIS_ACL_USERS.worker),
@@ -535,6 +536,7 @@ export interface RedisConnectionConfig {
   readonly password?: string;
   readonly db: number;
   readonly tls: boolean;
+  readonly caCertPath?: string;
 }
 
 /**
@@ -561,6 +563,7 @@ export function redisConfig(env: BaseEnv, role: RedisRole): RedisConnectionConfi
     ...(map[role].password ? { password: map[role].password } : {}),
     db: env.REDIS_DB,
     tls: env.REDIS_TLS,
+    ...(env.REDIS_CA_CERT_PATH ? { caCertPath: env.REDIS_CA_CERT_PATH } : {}),
   };
 }
 

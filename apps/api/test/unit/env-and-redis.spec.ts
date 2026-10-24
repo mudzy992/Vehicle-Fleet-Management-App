@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { getEnv, getRawEnv, inspectEnv, __resetEnvCache } from '../../src/config/env.js';
-import { RedisService } from '../../src/infra/redis/redis.service.js';
+import { buildRedisOptions, RedisService } from '../../src/infra/redis/redis.service.js';
 import { QUEUE_KEY_PREFIX, REDIS_NS, bullQueueKey, isInsideRedisAclScope } from '@vfm/shared';
 import { queueKeyPrefix, validateRedisAclScope } from '@vfm/shared/env';
 
@@ -60,6 +61,29 @@ describe('config/env', () => {
     expect(env.REDIS_USER_API).toBe('vfm-api');
     expect(env.REDIS_USER_WORKER).toBe('vfm-worker');
     expect(env.REDIS_USER_READONLY).toBe('vfm-readonly');
+  });
+});
+
+describe('Redis TLS CA', () => {
+  it('koristi montirani CA certifikat za provjeru TLS peer-a', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'vfm-redis-ca-'));
+    const caCertPath = join(directory, 'redis-ca.crt');
+    const certificate = Buffer.from('test redis root CA certificate');
+    writeFileSync(caCertPath, certificate);
+
+    try {
+      const options = buildRedisOptions({
+        host: 'redis.example.test',
+        port: 6379,
+        username: 'vfm-worker',
+        db: 0,
+        tls: true,
+        caCertPath,
+      });
+      expect(options.tls).toMatchObject({ rejectUnauthorized: true, ca: certificate });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
 

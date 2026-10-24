@@ -267,7 +267,8 @@ ključeve i poslovi se nikad ne obrađuju.
 |---|---|---|
 | `REDIS_HOST` | `redis-<uuid>` (Coolify) | — (mreža `redis_net`) |
 | `REDIS_PORT` | `6379` | — |
-| `REDIS_TLS` | `false` | ako `true`, klijent koristi `rediss://` |
+| `REDIS_TLS` | `false` (Coolify worker: `true`) | ako `true`, klijent koristi TLS (`rediss://`) |
+| `REDIS_CA_CERT_PATH` | `/run/secrets/redis-ca.crt` | opcionalni PEM CA za TLS provjeru; Coolify worker ga montira read-only (nije ACL pravilo) |
 | `REDIS_DB` | `0` | ACL ne ograničava DB indeks → držati **0** (ključevi su već odvojeni prefixom) |
 | `REDIS_NETWORK` | `redis_net` | naziv eksterne Docker mreže |
 | `REDIS_NET_EXTERNAL` | `true` | da li je mreža eksterna (Coolify) |
