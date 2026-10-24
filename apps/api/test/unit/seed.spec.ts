@@ -106,10 +106,15 @@ describe('seed', () => {
     expect(summary.registrationsCreated).toBe(2);
     expect(summary.serviceRecordsCreated).toBe(4);
     expect(fake.serviceRecords).toHaveLength(4);
+    expect(fake.serviceRecords.every((record) => record.formSchemaVersionId)).toBe(true);
+    expect(fake.serviceRecords.every((record) => (record.items as unknown[]).length === 2)).toBe(true);
+    expect(fake.serviceRecords.reduce((sum, record) => sum + Number(record.totalCost), 0)).toBe(126_000);
     expect(summary.tireSetsCreated).toBe(3);
     expect(fake.tireSets.size).toBe(3);
+    expect([...fake.tireSets.values()].every((set) => set.formSchemaVersionId)).toBe(true);
     expect(summary.tireInstallationsCreated).toBe(2);
     expect(fake.tireInstallations).toHaveLength(2);
+    expect(fake.tireInstallations.every((installation) => installation.formSchemaVersionId)).toBe(true);
     expect(fake.tireInstallations.filter((row) => row.dismountedAt === null)).toHaveLength(1);
     const untils = fake.registrations
       .map((row) => (row.validUntil as Date).toISOString().slice(0, 10))
@@ -192,6 +197,12 @@ describe('seed', () => {
     expect(summary.vehiclesCreated).toBe(0);
     expect(summary.driversCreated).toBe(0);
     expect(summary.registrationsCreated).toBe(0);
+    expect(summary.serviceRecordsCreated).toBe(0);
+    expect(summary.tireSetsCreated).toBe(0);
+    expect(summary.tireInstallationsCreated).toBe(0);
+    expect(fake.serviceRecords).toHaveLength(0);
+    expect(fake.tireSets.size).toBe(0);
+    expect(fake.tireInstallations).toHaveLength(0);
     // Politike podsjetnika se seeduju i u produkciji (nisu demo podaci).
     expect(summary.reminderPoliciesCreated).toBe(8);
     // Vrste zadataka su konfiguracija, pa se seeduju i u produkciji.
