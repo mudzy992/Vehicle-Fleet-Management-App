@@ -199,6 +199,8 @@ jobs:
           else
             echo "preskočeno: nema stress testova (P6 dolazi s Faza 3)"
           fi
+      - name: P15 — provjera perzistencije na izolovanom Compose stacku
+        run: bash scripts/persistence-restart.ops.sh
 
   # ---------------------------------------------------------------------------
   # 5) Sigurnost (uvijek)
