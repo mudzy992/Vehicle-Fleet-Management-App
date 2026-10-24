@@ -1,7 +1,7 @@
 # Faza 3 — izvještaj o implementaciji i provjeri
 
-**Datum presjeka:** 22.10.2026.
-**Status:** aktivna — postojeći moduli su predmet audita; DoD nije potvrđen.
+**Datum presjeka:** 24.10.2026.
+**Status:** aktivna — P13 prihvatni DB test i P14 code-level autorizacijski sweep su pokriveni; kompletan DoD Faze 3 i live E2E nisu potvrđeni.
 
 ## Sažetak
 
@@ -11,7 +11,7 @@ U repozitoriju već postoje API moduli i web ekrani za vozila, vozače, registra
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | Vozila i kilometraža      | API servis i jedinični testovi postoje; read scope `OWN`/`VEHICLE_IDS` i `ALL` je sačuvan. Mutacije provjeravaju scope za update/archive/delete, odometar i ograničavaju create na `OWN`/`ALL`.                                                                                                                                                             | Resursni scope + HTTP deny sweep pokriveni; DB/live E2E nije pokretan       |
 | Vozači i PII              | API/web moduli postoje; PII polja, slobodni tekst, dinamički `formData` i foto-privitak se rediguju bez `driver:view_pii`; PII se sada dodatno provjerava po konkretnom redu: `ALL` globalno, `OWN` samo kreatoru, `DRIVER_IDS` samo za dodijeljeni ID. List/detail/kategorije čitaju `OWN`/`DRIVER_IDS`; mutacije provjeravaju scope. | PII OWN/DRIVER_IDS i globalni HTTP deny sweep testirani; DB/live E2E nije pokretan                                |
-| Registracije i osiguranje | List/detail filtriraju `OWN`/`VEHICLE_IDS`; create provjerava ciljano vozilo, update/delete zapis, `ALL` ostaje dozvoljen. Ručna migracija zabranjuje preklapanje perioda.                                                                                                                                                                                  | Resursni scope je pokriven u servisima; DB integracija još nije izvršena |
+| Registracije i osiguranje | List/detail filtriraju `OWN`/`VEHICLE_IDS`; create provjerava ciljano vozilo, update/delete zapis, `ALL` ostaje dozvoljen. Ručna migracija zabranjuje preklapanje perioda.                                                                                                                                                                                  | Resursni scope je pokriven; P13 DB ograničenja provjerena na prolaznoj CI PostgreSQL bazi |
 | Servisi i stavke          | List/detail, kreiranje, izmjena/brisanje i stavke računa provjeravaju `service:view/create/update/delete` opseg; lista kombinuje korisničke filtere i scope u AND uslovu.                                                                                                                                                                                   | Scope regresije + globalni HTTP deny sweep pokriveni; DB/live E2E nije pokretan            |
 | Gume                      | Kompleti i historija montaža provjeravaju scope na list/detail/mutacijama; filteri se spajaju sa scope-om, a prikaz kompleta uklanja vozila izvan opsega.                                                                                                                                                                                                   | Scope regresije + globalni HTTP deny sweep pokriveni; DB/live E2E nije pokretan                 |
 | Podsjetnici               | Scheduler koristi `dedupeKey`, `createMany(skipDuplicates: true)` i `Europe/Sarajevo`; `reminder:view` sa `OWN` ograničava listu na vozila/vozače koje je korisnik kreirao, a acknowledge/snooze provjeravaju `OWN` nad povezanim vozilom/vozačem, uz `ALL` za administratora.                                                                              | Scope regresije + globalni HTTP deny sweep pokriveni; DB/live E2E nije pokretan         |
@@ -25,15 +25,17 @@ Postoje jedinični testovi za idempotentnost i raspoređivanje podsjetnika, prek
 
 Dodat je `apps/api/test/integration/phase3-database.integration.spec.ts`. Na namjenskoj testnoj bazi test u jednoj transakciji provjerava da baza odbija preklapanje registracija/osiguranja (`23P01`) i duplirani ključ podsjetnika (`23505`), te potvrđuje hronološko čitanje historije servisa i montaža guma i odbijanje druge aktivne montaže istog seta (`23505`). Transakcija se uvijek vraća. Test traži objavljene VEHICLE, REGISTRATION, INSURANCE i SERVICE forme i inicijalizovanu politiku podsjetnika; prije pokretanja izvršiti migracije i seed nad testnom bazom.
 
-U ovom okruženju test je otkriven, ali preskočen jer `PHASE3_TEST_DATABASE_URL` nije postavljen. To nije dokaz prolaza P13. Pragovi, DST i izračuni podsjetnika i dalje imaju jedinične pokriće, ali nije pokrenuta provjera njihove stvarne DB integracije.
+P13 je izvršen u GitHub Actions CI runu **40074867416** (`bb76c02`, zaključak: `success`) na PostgreSQL 17 servisnoj bazi koja se kreira samo za taj job. Workflow sada usklađuje `PHASE3_TEST_DATABASE_URL`, primjenjuje Prisma migracije i pokreće seed konfiguracije prije integracijskih testova. Test P13 je time izvršen i prošao; transakcijski probni upisi su vraćeni rollback-om. Prije toga seed je otkrio i popravka je riješila redoslijed kreiranja `TaskType` i TASK forme koji je kršio `ck_form_schema_task_requires_type`.
 
-Pokretanje protiv **isključivo namjenske testne baze**:
+Ovo **nije** test na korisnikovoj live/produkcijskoj bazi niti live E2E nad deploymentom. Varijable GitHuba koje korisnik je dodao nisu korištene; zbog DB upisa i seed/migracija, produkcijski URL se namjerno nije ciljao. Pragovi, DST i izračuni podsjetnika i dalje imaju jedinično pokriće; ovaj P13 test provjerava stvarne PostgreSQL indekse/ograničenja za navedene scenarije.
+
+Pokretanje ručno je dozvoljeno samo protiv **namjenske, izolovane testne baze**:
 
 ```bash
 PHASE3_TEST_DATABASE_URL="postgresql://.../vfm_test" corepack pnpm --filter @vfm/api test:integration
 ```
 
-Ne koristiti produkcijski URL: test obavlja probne upise, iako ih završava rollback-om.
+Prije testa ručno pripremiti migracije i seed; nikad ne koristiti produkcijski URL.
 
 ## P14 — autorizacija
 
@@ -62,7 +64,7 @@ Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view
 - `corepack pnpm --filter @vfm/api exec vitest run test/unit/tasks.spec.ts` — prolaz: uključuje HTTP provjeru stvarnog `TasksController`/`TasksService`; vidljivost zadatka je ograničena na povezane korisnike.
 - `corepack pnpm --filter @vfm/api exec vitest run test/unit/p14-services-scope-http.spec.ts` — prolaz: 2 HTTP slučaja stvarnih `ServicesController`/`ServicesService`; provjereni su VEHICLE_IDS filtriranje i direktni pristup zapisu.
 - `corepack pnpm --filter @vfm/api exec vitest run test/unit/tire-sets.spec.ts` — prolaz: uključuje 2 HTTP provjere stvarnog `TireSetsController`/`TiresService` za VEHICLE_IDS scope.
-- `corepack pnpm --filter @vfm/api exec vitest run --config vitest.integration.config.ts` — prolaz alata; jedan integracijski fajl i oba testa preskočena zbog nedostajućeg `PHASE3_TEST_DATABASE_URL`.
+- GitHub Actions CI **40074867416** — `integration tests` job prolazi: migracije, seed, pa `test:integration` nad ephemeral PostgreSQL 17; `PHASE3_TEST_DATABASE_URL` je postavljen, pa P13 nije preskočen.
 - `corepack pnpm --filter @vfm/api typecheck` — prolaz.
 - `corepack pnpm --filter @vfm/api test` — prethodni prolaz prije izmjena scope-a podsjetnika: 58 fajlova, 945 jediničnih testova.
 - Ciljani API testovi (11 fajlova: auth guardovi, permissions service, users/roles/attachments kontroleri, rute P14, zadaci, forme/migracije/opcije i obavijesti) — **204/204** jediničnih testova prolaze. `PrismaService` je izolovan/mockovan gdje je potreban; ovo nije HTTP/E2E sweep i ne dokazuje autorizaciju nad živom bazom.
@@ -80,7 +82,7 @@ Dodatno, raniji F2-O2 i resursni opsezi ostaju relevantni: generički `form:view
 
 ## Sljedeći koraci
 
-1. Pokrenuti puni API CI nakon izmjena i pratiti sve jobove do ishoda; eventualni DB/live E2E P14 raditi samo na izolovanoj testnoj bazi i testnoj pohrani, nikad na produkciji.
-2. P13 integracijski test je spreman, ali pokretanje na namjenskoj bazi čeka `PHASE3_TEST_DATABASE_URL`; nakon pokretanja razmotriti DB scenarije pragova/DST-a.
+1. P13 je zatvoren prolazom CI runa **40074867416** na prolaznoj PostgreSQL 17 bazi; nikakva veza s produkcijskom bazom nije otvorena.
+2. DB/live E2E P14, ako bude potreban, izvoditi samo na izolovanoj testnoj bazi i testnoj pohrani, nikad na produkciji.
 3. Web audit nastaviti samo za tokove obuhvaćene Fazom 3; ne implementirati sada centre obavijesti ni izvještaje.
-4. Tek nakon dokaza ažurirati DoD u `docs/PLAN_IMPLEMENTACIJE.md`; do tada Faza 3 ostaje otvorena.
+4. Tek nakon svih kriterija Faze 3 ažurirati DoD u `docs/PLAN_IMPLEMENTACIJE.md`; Faza 3 ostaje otvorena.
