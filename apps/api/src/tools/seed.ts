@@ -991,10 +991,10 @@ async function seedDemoTires(
         mountedAt,
         mountedOdometerKm: cycle.mountedKm,
         dismountedAt,
-        dismountedOdometerKm: 'dismountedKm' in cycle ? cycle.dismountedKm : null,
+        dismountedOdometerKm: cycle === completed ? completed.dismountedKm : null,
         positions: [...cycle.positions],
-        kmDriven: 'kmDriven' in cycle ? cycle.kmDriven : null,
-        daysInUse: 'daysInUse' in cycle ? cycle.daysInUse : null,
+        kmDriven: cycle === completed ? completed.kmDriven : null,
+        daysInUse: cycle === completed ? completed.daysInUse : null,
         formSchemaId: forms.installation.formSchemaId,
         formSchemaVersionId: forms.installation.versionId,
         formData: {
