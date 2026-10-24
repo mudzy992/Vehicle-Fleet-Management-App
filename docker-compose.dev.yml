@@ -30,7 +30,7 @@ services:
   # ---------------------------------------------------------------------------
   vfm-postgres:
     image: postgres:17-alpine
-    container_name: vfm-postgres
+    container_name: ${VFM_DEV_POSTGRES_CONTAINER:-vfm-postgres}
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-vfm}
@@ -171,6 +171,6 @@ networks:
 
 volumes:
   vfm_pgdata:
-    name: vfm_pgdata
+    name: ${VFM_DEV_PG_VOLUME:-vfm_pgdata}
   vfm_redisdata:
     name: vfm_redisdata
