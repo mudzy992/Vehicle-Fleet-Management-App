@@ -31,5 +31,11 @@
     "prettier": "3.9.10",
     "turbo": "2.11.9",
     "typescript": "5.9.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "body-parser": "2.4.0",
+      "multer": "2.5.0"
+    }
   }
 }
