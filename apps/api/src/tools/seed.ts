@@ -250,6 +250,9 @@ interface SeedSummary {
   readonly driversCreated: number;
   /** Demo registracije: jedna istekla, jedna ističe za 3 dana. */
   readonly registrationsCreated: number;
+  readonly serviceRecordsCreated: number;
+  readonly tireSetsCreated: number;
+  readonly tireInstallationsCreated: number;
   readonly reminderPoliciesCreated: number;
   readonly formSchemaCreated: boolean;
   /** Koje su forme kreirane, a koje su već imale objavljenu verziju. */
@@ -726,6 +729,289 @@ async function seedDemoRegistrations(
   return created;
 }
 
+/** Četiri fiktivna servisa s računskim stavkama za demo pregled Faze 4. */
+const DEMO_SERVICES = [
+  {
+    invoiceNumber: 'DEMO-SVC-001',
+    internalNo: 'VFM-001',
+    daysAgo: 365,
+    odometerKm: 130_000,
+    serviceType: 'REDOVNI_SERVIS',
+    description: 'Ulje i filteri — raniji demo servis.',
+    partsCost: 18_500,
+    laborCost: 12_000,
+    nextDueDays: 365,
+    nextDueKm: 145_000,
+  },
+  {
+    invoiceNumber: 'DEMO-SVC-002',
+    internalNo: 'VFM-001',
+    daysAgo: 45,
+    odometerKm: 146_000,
+    serviceType: 'REDOVNI_SERVIS',
+    description: 'Redovni servis i pregled kočnica.',
+    partsCost: 24_000,
+    laborCost: 15_000,
+    nextDueDays: 320,
+    nextDueKm: 161_000,
+  },
+  {
+    invoiceNumber: 'DEMO-SVC-003',
+    internalNo: 'VFM-002',
+    daysAgo: 90,
+    odometerKm: 88_000,
+    serviceType: 'VANREDNI_SERVIS',
+    description: 'Zamjena kočionih pločica.',
+    partsCost: 21_000,
+    laborCost: 9_000,
+    nextDueDays: 275,
+    nextDueKm: 103_000,
+  },
+  {
+    invoiceNumber: 'DEMO-SVC-004',
+    internalNo: 'VFM-003',
+    daysAgo: 60,
+    odometerKm: 55_000,
+    serviceType: 'REDOVNI_SERVIS',
+    description: 'Zamjena ulja i filtera.',
+    partsCost: 16_500,
+    laborCost: 10_000,
+    nextDueDays: 305,
+    nextDueKm: 70_000,
+  },
+] as const;
+
+/** Seed demo servisa je idempotentan po stabilnom broju računa. */
+async function seedDemoServices(
+  prisma: PrismaClient,
+  form: { formSchemaId: string; versionId: string },
+  vehicles: ReadonlyArray<{ id: string; internalNo: string }>,
+): Promise<number> {
+  let created = 0;
+  const touchedVehicles = new Set<string>();
+
+  for (const demo of DEMO_SERVICES) {
+    const vehicle = vehicles.find((row) => row.internalNo === demo.internalNo);
+    if (!vehicle) continue;
+    const exists = await prisma.serviceRecord.findFirst({
+      where: { vehicleId: vehicle.id, invoiceNumber: demo.invoiceNumber },
+      select: { id: true },
+    });
+    if (exists) continue;
+
+    const serviceDate = toDatabaseDate(dateFromNow(-demo.daysAgo))!;
+    const totalCost = demo.partsCost + demo.laborCost;
+    await prisma.serviceRecord.create({
+      data: {
+        id: randomUUID(),
+        vehicleId: vehicle.id,
+        formSchemaId: form.formSchemaId,
+        formSchemaVersionId: form.versionId,
+        formData: {},
+        serviceDate,
+        odometerKm: demo.odometerKm,
+        serviceType: demo.serviceType,
+        workshopName: 'Demo servis d.o.o.',
+        description: demo.description,
+        partsReplaced: 'Demo stavka',
+        laborCost: demo.laborCost,
+        partsCost: demo.partsCost,
+        totalCost,
+        currency: 'BAM',
+        nextServiceDueDate: toDatabaseDate(dateFromNow(demo.nextDueDays)),
+        nextServiceDueKm: demo.nextDueKm,
+        invoiceNumber: demo.invoiceNumber,
+        attachmentIds: [],
+        status: 'ACTIVE',
+        notes: 'Fiktivni servis iz seed-a.',
+        items: {
+          create: [
+            {
+              id: randomUUID(),
+              kind: 'PART',
+              name: 'Dijelovi i potrošni materijal',
+              quantity: 1,
+              unitPrice: demo.partsCost,
+              totalPrice: demo.partsCost,
+              position: 0,
+            },
+            {
+              id: randomUUID(),
+              kind: 'LABOR',
+              name: 'Rad servisa',
+              quantity: 1,
+              unitPrice: demo.laborCost,
+              totalPrice: demo.laborCost,
+              position: 1,
+            },
+          ],
+        },
+      },
+    });
+    created += 1;
+    touchedVehicles.add(vehicle.id);
+  }
+
+  // Sinhronizuj denormalizovane rokove samo za vozila kojima je ovaj prolaz dodao zapis.
+  for (const vehicleId of touchedVehicles) {
+    const latest = await prisma.serviceRecord.findFirst({
+      where: { vehicleId, deletedAt: null, status: 'ACTIVE' },
+      orderBy: [{ serviceDate: 'desc' }, { id: 'desc' }],
+      select: { nextServiceDueDate: true, nextServiceDueKm: true },
+    });
+    if (!latest) continue;
+    await prisma.vehicle.updateMany({
+      where: { id: vehicleId },
+      data: {
+        nextServiceDueDate: latest.nextServiceDueDate,
+        nextServiceDueKm: latest.nextServiceDueKm,
+      },
+    });
+  }
+
+  return created;
+}
+
+const DEMO_TIRE_SETS = [
+  {
+    code: 'DEMO-TIRE-SUMMER-01',
+    season: 'SUMMER',
+    brand: 'DemoTire',
+    model: 'Touring S',
+    size: '205/55 R16',
+    purchaseDaysAgo: 500,
+    purchasePrice: 48_000,
+    currentLocation: 'Skladište A-01',
+  },
+  {
+    code: 'DEMO-TIRE-WINTER-01',
+    season: 'WINTER',
+    brand: 'DemoTire',
+    model: 'Winter W',
+    size: '205/55 R16',
+    purchaseDaysAgo: 300,
+    purchasePrice: 52_000,
+    currentLocation: null,
+  },
+  {
+    code: 'DEMO-TIRE-ALLSEASON-01',
+    season: 'ALL_SEASON',
+    brand: 'DemoTire',
+    model: 'AllSeason A',
+    size: '195/65 R15',
+    purchaseDaysAgo: 120,
+    purchasePrice: 44_000,
+    currentLocation: 'Skladište B-02',
+  },
+] as const;
+
+/** Tri demo kompleta i dva ciklusa montaže (jedan završen, jedan aktivan). */
+async function seedDemoTires(
+  prisma: PrismaClient,
+  forms: {
+    tireSet: { formSchemaId: string; versionId: string };
+    installation: { formSchemaId: string; versionId: string };
+  },
+  vehicles: ReadonlyArray<{ id: string; internalNo: string }>,
+): Promise<{ setsCreated: number; installationsCreated: number }> {
+  const sets = new Map<string, string>();
+  let setsCreated = 0;
+  for (const [index, demo] of DEMO_TIRE_SETS.entries()) {
+    const existing = await prisma.tireSet.findFirst({
+      where: { code: demo.code, deletedAt: null },
+      select: { id: true },
+    });
+    if (existing) {
+      sets.set(demo.code, existing.id);
+      continue;
+    }
+    const row = await prisma.tireSet.create({
+      data: {
+        id: randomUUID(),
+        code: demo.code,
+        brand: demo.brand,
+        model: demo.model,
+        size: demo.size,
+        season: demo.season,
+        tireCount: 4,
+        purchaseDate: toDatabaseDate(dateFromNow(-demo.purchaseDaysAgo)),
+        purchasePrice: demo.purchasePrice,
+        currency: 'BAM',
+        status: index === 1 ? 'MOUNTED' : 'IN_STOCK',
+        currentLocation: demo.currentLocation,
+        formSchemaId: forms.tireSet.formSchemaId,
+        formSchemaVersionId: forms.tireSet.versionId,
+        formData: {},
+        notes: 'Fiktivan komplet guma iz seed-a.',
+      },
+      select: { id: true },
+    });
+    sets.set(demo.code, row.id);
+    setsCreated += 1;
+  }
+
+  const completed = {
+    setCode: 'DEMO-TIRE-SUMMER-01',
+    internalNo: 'VFM-002',
+    mountedDaysAgo: 180,
+    dismountedDaysAgo: 120,
+    mountedKm: 80_000,
+    dismountedKm: 85_500,
+    positions: ['FL', 'FR', 'RL', 'RR'] as const,
+    kmDriven: 5_500,
+    daysInUse: 60,
+  };
+  const active = {
+    setCode: 'DEMO-TIRE-WINTER-01',
+    internalNo: 'VFM-001',
+    mountedDaysAgo: 10,
+    mountedKm: 148_000,
+    positions: ['FL', 'FR', 'RL', 'RR'] as const,
+  };
+  let installationsCreated = 0;
+
+  for (const cycle of [completed, active]) {
+    const setId = sets.get(cycle.setCode);
+    const vehicle = vehicles.find((row) => row.internalNo === cycle.internalNo);
+    if (!setId || !vehicle) continue;
+    const mountedAt = toDatabaseDate(dateFromNow(-cycle.mountedDaysAgo))!;
+    const exists = await prisma.tireInstallation.findFirst({
+      where: { setId, vehicleId: vehicle.id, mountedAt },
+      select: { id: true },
+    });
+    if (exists) continue;
+
+    const dismountedAt = 'dismountedDaysAgo' in cycle
+      ? toDatabaseDate(dateFromNow(-cycle.dismountedDaysAgo))
+      : null;
+    await prisma.tireInstallation.create({
+      data: {
+        id: randomUUID(),
+        setId,
+        vehicleId: vehicle.id,
+        mountedAt,
+        mountedOdometerKm: cycle.mountedKm,
+        dismountedAt,
+        dismountedOdometerKm: 'dismountedKm' in cycle ? cycle.dismountedKm : null,
+        positions: [...cycle.positions],
+        kmDriven: 'kmDriven' in cycle ? cycle.kmDriven : null,
+        daysInUse: 'daysInUse' in cycle ? cycle.daysInUse : null,
+        formSchemaId: forms.installation.formSchemaId,
+        formSchemaVersionId: forms.installation.versionId,
+        formData: {
+          mountedAt: dateFromNow(-cycle.mountedDaysAgo),
+          mountedOdometerKm: cycle.mountedKm,
+          positions: [...cycle.positions],
+        },
+        notes: 'Fiktivni ciklus montaže iz seed-a.',
+      },
+    });
+    installationsCreated += 1;
+  }
+
+  return { setsCreated, installationsCreated };
+}
+
 /** Default politike podsjetnika (prag 5 dana) — bez njih skener nema šta raditi. */
 async function seedReminderPolicies(prisma: PrismaClient): Promise<number> {
   let created = 0;
@@ -769,6 +1055,9 @@ export async function runSeed(prisma: PrismaClient, env: { NODE_ENV: string }): 
 
   const driverForm = forms.byKey.get('vozac');
   const registrationForm = forms.byKey.get('registracija_vozila');
+  const serviceForm = forms.byKey.get('servis_vozila');
+  const tireSetForm = forms.byKey.get('komplet_guma');
+  const tireInstallationForm = forms.byKey.get('montaza_guma');
 
   const allowDemo = demoAllowed(env);
   const demoUsers = allowDemo ? await seedDemoUsers(prisma, passwords) : [];
@@ -784,6 +1073,11 @@ export async function runSeed(prisma: PrismaClient, env: { NODE_ENV: string }): 
     : [];
   const registrationsCreated =
     allowDemo && registrationForm ? await seedDemoRegistrations(prisma, registrationForm, demoVehicles) : 0;
+  const serviceRecordsCreated =
+    allowDemo && serviceForm ? await seedDemoServices(prisma, serviceForm, demoVehicles) : 0;
+  const tireSeed = allowDemo && tireSetForm && tireInstallationForm
+    ? await seedDemoTires(prisma, { tireSet: tireSetForm, installation: tireInstallationForm }, demoVehicles)
+    : { setsCreated: 0, installationsCreated: 0 };
 
   // Politike nisu demo podaci — skener ih treba i u produkciji.
   const reminderPoliciesCreated = await seedReminderPolicies(prisma);
@@ -797,6 +1091,9 @@ export async function runSeed(prisma: PrismaClient, env: { NODE_ENV: string }): 
     vehiclesCreated,
     driversCreated,
     registrationsCreated,
+    serviceRecordsCreated,
+    tireSetsCreated: tireSeed.setsCreated,
+    tireInstallationsCreated: tireSeed.installationsCreated,
     reminderPoliciesCreated,
     formSchemaCreated: forms.created.includes('vehicle'),
     forms: { created: forms.created, existing: forms.existing },
