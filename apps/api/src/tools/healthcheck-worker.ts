@@ -20,6 +20,7 @@
  */
 import { inspectEnv } from '../config/env.js';
 import { redisConfig } from '@vfm/shared/env';
+import { redisTlsOptions } from '../infra/redis/redis-tls.js';
 
 const HEARTBEAT_KEY = 'vfm:metrics:worker:heartbeat';
 /** Heartbeat stariji od ovoga smatra se nevažećim (2× interval upisa + TTL rezerva). */
@@ -47,6 +48,7 @@ async function main(): Promise<number> {
   }
 
   const config = redisConfig(env, 'worker');
+  const tls = redisTlsOptions(config);
 
   try {
     const { default: Redis } = await import('ioredis');
@@ -61,7 +63,7 @@ async function main(): Promise<number> {
       enableOfflineQueue: false,
       connectTimeout: 5000,
       retryStrategy: () => null,
-      ...(config.tls ? { tls: {} } : {}),
+      ...(tls ? { tls } : {}),
     });
 
     await client.connect();

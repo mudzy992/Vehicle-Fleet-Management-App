@@ -27,6 +27,7 @@ import { inspectEnv } from '../config/env.js';
 import { setupLogger } from '../config/logger.js';
 import type { PinoLoggerService } from '../config/logger.js';
 import { queueConcurrency, queueFullName } from '../infra/queue/queue.service.js';
+import { redisTlsOptions } from '../infra/redis/redis-tls.js';
 import { REMINDER_SCAN_JOB, scheduleReminderScan } from '../infra/queue/reminder-scheduler.js';
 import { runReminderScanJob } from '../infra/queue/reminder-job.js';
 import { PrismaClient } from '../generated/prisma/client.js';
@@ -92,6 +93,7 @@ async function main(): Promise<number> {
       `prefiks ključeva "${prefix}" → ${prefix}:<red>:* unutar ${REDIS_ACL_KEY_PATTERN})`,
   );
 
+  const tls = redisTlsOptions(config);
   const connection = {
     host: config.host,
     port: config.port,
@@ -100,7 +102,7 @@ async function main(): Promise<number> {
     db: config.db,
     maxRetriesPerRequest: null,
     enableReadyCheck: true,
-    ...(config.tls ? { tls: {} } : {}),
+    ...(tls ? { tls } : {}),
   };
 
   const context: WorkerContext = { workers: [], logger };

@@ -15,10 +15,10 @@
  * ⚠️ Svi ključevi moraju biti unutar `vfm:*` jer je ACL ograničen na `~vfm:*`.
  *    Novi namespace → `REDIS_NS` u `@vfm/shared` **i** `REDIS_ACL.md`.
  */
-import { readFileSync } from 'node:fs';
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import Redis, { type RedisOptions } from 'ioredis';
 import { REDIS_NS } from '@vfm/shared';
+import { redisTlsOptions } from './redis-tls.js';
 import type { BaseEnv, RedisConnectionConfig } from '@vfm/shared/env';
 import { redisConfig } from '@vfm/shared/env';
 import { getEnv } from '../../config/env.js';
@@ -36,17 +36,6 @@ export interface RedisConnectionInfo {
 
 /** Koliko puta pokušavamo reconnect prije nego javimo DOWN. */
 const MAX_RECONNECT_ATTEMPTS = 20;
-
-/** TLS koristi sistemske CA certifikate ili dodatni PEM certifikat iz mounted secret fajla. */
-export function redisTlsOptions(
-  config: Pick<RedisConnectionConfig, 'tls' | 'caCertPath'>,
-): NonNullable<RedisOptions['tls']> | undefined {
-  if (!config.tls) return undefined;
-  return {
-    rejectUnauthorized: true,
-    ...(config.caCertPath ? { ca: readFileSync(config.caCertPath) } : {}),
-  };
-}
 
 /** BullMQ zahtijeva `maxRetriesPerRequest: null` na svojim konekcijama. */
 export function buildRedisOptions(

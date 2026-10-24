@@ -30,6 +30,7 @@ import { connect } from 'node:net';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { redisConfig } from '@vfm/shared/env';
+import { redisTlsOptions } from '../infra/redis/redis-tls.js';
 import type { BaseEnv } from '@vfm/shared/env';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { inspectEnv } from '../config/env.js';
@@ -346,6 +347,7 @@ async function acquireMigrateLock(
   try {
     const { default: Redis } = await import('ioredis');
     const config = redisConfig(env, 'worker');
+    const tls = redisTlsOptions(config);
     const client = new Redis({
       host: config.host,
       port: config.port,
@@ -355,7 +357,7 @@ async function acquireMigrateLock(
       lazyConnect: true,
       maxRetriesPerRequest: 1,
       retryStrategy: () => null,
-      ...(config.tls ? { tls: {} } : {}),
+      ...(tls ? { tls } : {}),
     });
 
     await client.connect();

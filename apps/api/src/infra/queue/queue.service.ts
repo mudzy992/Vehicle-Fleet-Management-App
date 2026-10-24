@@ -24,7 +24,8 @@ import { QUEUE_NAMES, REDIS_ACL_KEY_PATTERN } from '@vfm/shared';
 import type { QueueName } from '@vfm/shared';
 import type { BaseEnv } from '@vfm/shared/env';
 import { queueKeyPrefix, redisConfig, validateRedisAclScope } from '@vfm/shared/env';
-import { RedisService, redisTlsOptions } from '../redis/redis.service.js';
+import { RedisService } from '../redis/redis.service.js';
+import { redisTlsOptions } from '../redis/redis-tls.js';
 import { getEnv } from '../../config/env.js';
 
 export interface EnqueueResult {
