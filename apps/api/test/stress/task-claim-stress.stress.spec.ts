@@ -90,11 +90,8 @@ describe.skipIf(!isIsolatedCiDatabase)('Faza 5 — P6 stress atomskog claim-a', 
 
   afterAll(async () => {
     await prisma?.$disconnect();
-    if (!pool) return;
-    await pool.query('DELETE FROM "OutboxEvent" WHERE "aggregateId" = $1::uuid', [taskId]);
-    await pool.query('DELETE FROM "Task" WHERE "id" = $1::uuid', [taskId]);
-    await pool.query('DELETE FROM "User" WHERE "id" = $1::uuid', [actorId]);
-    await pool.end();
+    // TaskEvent je append-only; fixture ostaje samo u disposable CI bazi koja se gasi nakon joba.
+    await pool?.end();
   });
 
   it('200 stvarnih claim poziva daju jednog pobjednika i tačno jedan event/outbox zapis', async () => {
