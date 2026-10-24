@@ -39,7 +39,7 @@ PII za User se dodatno provjerava po konkretnom redu: `user:view_pii:ALL` vidi s
 
 ### Cross-phase opažanje
 
-`apps/api/src/modules/drivers/drivers.service.ts` ima zasebnu PII pomoćnu provjeru zasnovanu na flat permission listi. Driver modul pripada Fazi 3, pa ovdje nije prepravljan. Prije zatvaranja Faze 3 obavezno provjeriti `driver:view_pii` scope (posebno `OWN` naspram globalnog PII prikaza) i dodati ciljane testove. Ovo je otvoren follow-up, ne tvrdnja da je popravljen ovim Faza 1 patchom.
+**Riješeno u nastavku Faze 3:** flat provjera `driver:view_pii` zamijenjena je rednom scope provjerom. `ALL` otkriva PII globalno, `OWN` samo kada je akter kreator konkretnog vozača, a `DRIVER_IDS` samo za ID prisutan u grantovima; ostali/neprimjenjivi opsezi ostavljaju PII redigovan. Ista odluka se primjenjuje na detalj vozača i osjetljive podatke kategorija dozvole. `p14-drivers-pii-http.spec.ts` sada pokriva OWN/DRIVER_IDS match i mismatch. Ovaj follow-up je zatvoren za logiku i regresijski HTTP test; puni P14 OpenAPI sweep i dalje je zasebno otvoren.
 
 ## 4. Testovi i dokaz
 
@@ -65,7 +65,7 @@ PII za User se dodatno provjerava po konkretnom redu: `user:view_pii:ALL` vidi s
 2. Pokrenuti live test za refresh CAS i reset-token CAS na PostgreSQL-u; unit fake serijalizuje `$transaction` callbacke i nije zamjena za DB izolacijski dokaz.
 3. Pokrenuti Redis test s PEXPIRE/ACL/timeout kvarom i potvrditi cleanup/log metrike.
 4. Izvršiti HTTP P1/P2/P3/P14 i browser E2E scenarije; posebno Super Admin mobile, session logout-one, refresh/reuse i password-reset race.
-5. Prije završetka Faze 3 vratiti se na `driver:view_pii` scope follow-up.
+5. ✅ `driver:view_pii` scope follow-up za Fazu 3 — redna PII provjera i OWN/DRIVER_IDS HTTP regresije dodane su (vidi cross-phase opažanje iznad).
 6. FCM i Firebase ostaju neaktivni; ova faza ih ne uključuje.
 
 ## 6. Neizmijenjeni uslovi

@@ -167,11 +167,26 @@ function dateOnly(value: Date | null): string | null {
   return value ? toLocalDateString(value) : null;
 }
 
-/** Ima li akter pravo (Super Admin ima sve — R-07). */
-function allows(actor: AuthenticatedUser | undefined, permission: string): boolean {
+/**
+ * PII permisija se provjerava nad konkretnim vozačem, ne kao flat lista.
+ * `OWN` znači zapis koji je akter kreirao; `DRIVER_IDS` zahtijeva eksplicitni ID.
+ */
+function allowsDriverPii(actor: AuthenticatedUser | undefined, driver: DriverRow): boolean {
   if (!actor) return false;
   if (actor.isSuperAdmin) return true;
-  return actor.permissions?.list.includes(permission) ?? false;
+  const permission = 'driver:view_pii';
+  const scope = actor.permissions?.permissions.get(permission);
+  if (scope === 'ALL') return true;
+  if (scope === 'OWN') return driver.createdById === actor.id;
+  if (scope === 'DRIVER_IDS') {
+    return actor.permissions?.grants.some(
+      (grant) =>
+        grant.permission === permission &&
+        grant.scope === 'DRIVER_IDS' &&
+        grant.scopeDriverIds?.includes(driver.id),
+    ) ?? false;
+  }
+  return false;
 }
 
 /** `2026-04-01` → broj dana od danas (negativan = isteklo). */
@@ -246,7 +261,7 @@ export class DriversService {
   async get(id: string, actor: AuthenticatedUser): Promise<DriverDetail> {
     const row = await this.loadOrThrow(id);
     this.assertScope(actor, 'driver:view', row);
-    return this.toDetail(row, allows(actor, 'driver:view_pii'));
+    return this.toDetail(row, allowsDriverPii(actor, row));
   }
 
   // ---------------------------------------------------------------------------
@@ -298,7 +313,7 @@ export class DriversService {
     });
 
     return {
-      data: this.toDetail(created, allows(actor, 'driver:view_pii')),
+      data: this.toDetail(created, allowsDriverPii(actor, created)),
       after: this.auditSnapshot(created),
     };
   }
@@ -401,7 +416,7 @@ export class DriversService {
     });
 
     return {
-      data: this.toDetail(updated, allows(actor, 'driver:view_pii')),
+      data: this.toDetail(updated, allowsDriverPii(actor, updated)),
       before: this.auditSnapshot(current),
       after: this.auditSnapshot(updated),
     };
@@ -415,7 +430,7 @@ export class DriversService {
     const current = await this.loadOrThrow(id);
     if (actor) this.assertScope(actor, 'driver:archive', current);
     if (current.status === 'ARCHIVED') {
-      return { data: this.toDetail(current, allows(actor, 'driver:view_pii')) };
+      return { data: this.toDetail(current, allowsDriverPii(actor, current)) };
     }
 
     const archived = await this.prisma.driver.update({
@@ -430,7 +445,7 @@ export class DriversService {
     });
 
     return {
-      data: this.toDetail(archived as DriverRow, allows(actor, 'driver:view_pii')),
+      data: this.toDetail(archived as DriverRow, allowsDriverPii(actor, archived as DriverRow)),
       before: this.auditSnapshot(current),
       after: this.auditSnapshot(archived as DriverRow),
     };
@@ -451,7 +466,7 @@ export class DriversService {
     });
 
     return {
-      data: this.toDetail(restored as DriverRow, allows(actor, 'driver:view_pii')),
+      data: this.toDetail(restored as DriverRow, allowsDriverPii(actor, restored as DriverRow)),
       before: this.auditSnapshot(current),
       after: this.auditSnapshot(restored as DriverRow),
     };
@@ -488,7 +503,7 @@ export class DriversService {
       where: { driverId },
       orderBy: { category: 'asc' },
     });
-    const piiAllowed = allows(actor, 'driver:view_pii');
+    const piiAllowed = allowsDriverPii(actor, driver);
     return { items: (rows as LicenseRow[]).map((row) => this.toCategory(row, piiAllowed)) };
   }
 
@@ -525,7 +540,7 @@ export class DriversService {
     });
 
     return {
-      data: this.toCategory(created as LicenseRow, allows(actor, 'driver:view_pii')),
+      data: this.toCategory(created as LicenseRow, allowsDriverPii(actor, driver)),
       after: this.categorySnapshot(created as LicenseRow),
     };
   }
@@ -554,7 +569,7 @@ export class DriversService {
     });
 
     return {
-      data: this.toCategory(updated as LicenseRow, allows(actor, 'driver:view_pii')),
+      data: this.toCategory(updated as LicenseRow, allowsDriverPii(actor, driver)),
       before: this.categorySnapshot(current),
       after: this.categorySnapshot(updated as LicenseRow),
     };

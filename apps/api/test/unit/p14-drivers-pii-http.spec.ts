@@ -24,10 +24,23 @@ const FORM_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const FORM_VERSION_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 function actorFor(roleName: string): AuthenticatedUser {
-  const role = roleName as RoleCode;
+  const piiScenario = roleName.startsWith('PII_');
+  const role = (piiScenario ? 'CUSTOM' : roleName) as RoleCode;
   const isSuperAdmin = role === 'SUPER_ADMIN';
-  const grants: readonly PermissionGrant[] =
-    roleName === 'SCOPED_VIEW'
+  const piiPermission: PermissionGrant =
+    roleName.startsWith('PII_OWN_')
+      ? { permission: 'driver:view_pii', scope: 'OWN', scopeDriverIds: [] }
+      : {
+          permission: 'driver:view_pii',
+          scope: 'DRIVER_IDS',
+          scopeDriverIds: [roleName === 'PII_IDS_MATCH' ? DRIVER_ID : 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'],
+        };
+  const grants: readonly PermissionGrant[] = piiScenario
+    ? [
+        { permission: 'driver:view', scope: 'ALL', scopeVehicleIds: [] },
+        piiPermission,
+      ]
+    : roleName === 'SCOPED_VIEW'
       ? [
           {
             permission: 'driver:view',
@@ -36,8 +49,9 @@ function actorFor(roleName: string): AuthenticatedUser {
           },
         ]
       : defaultGrantsForRole(role);
+  const actorId = roleName === 'PII_OWN_MATCH' ? 'p14-pii-own-match' : `p14-${roleName.toLowerCase()}`;
   return {
-    id: `p14-${roleName.toLowerCase()}`,
+    id: actorId,
     email: 'actor@example.ba',
     roles: [role],
     roleIds: [],
@@ -64,6 +78,7 @@ describe('P14 — driver PII HTTP response', () => {
   const prisma = new FakeDriverPrisma();
   prisma.addDriver({
     id: DRIVER_ID,
+    createdById: 'p14-pii-own-match',
     firstName: 'Fikret',
     lastName: 'Hodžić',
     phone: '+387 61 111 222',
@@ -144,6 +159,23 @@ describe('P14 — driver PII HTTP response', () => {
 
     expect(response.status).toBe(403);
     expect(((await response.json()) as { error: { code: string } }).error.code).toBe('SCOPE_DENIED');
+  });
+
+  it('driver:view_pii:OWN i DRIVER_IDS otkrivaju PII samo za odgovarajući zapis', async () => {
+    for (const [scenario, piiExpected] of [
+      ['PII_OWN_MATCH', true],
+      ['PII_OWN_OTHER', false],
+      ['PII_IDS_MATCH', true],
+      ['PII_IDS_OTHER', false],
+    ] as const) {
+      const response = await fetch(`${baseUrl}/drivers/${DRIVER_ID}`, {
+        headers: { 'x-sweep-role': scenario },
+      });
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(response.status, scenario).toBe(200);
+      expect(body.piiRedacted, scenario).toBe(!piiExpected);
+      expect(body.email, scenario).toBe(piiExpected ? 'fikret.hodzic@example.ba' : 'f***@example.ba');
+    }
   });
 
   it('SUPER_ADMIN dobija PII kroz istu rutu; OBICNI_KORISNIK bez driver:view dobija 403', async () => {
