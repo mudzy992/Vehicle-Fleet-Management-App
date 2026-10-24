@@ -1002,7 +1002,6 @@ async function seedDemoTires(
           mountedOdometerKm: cycle.mountedKm,
           positions: [...cycle.positions],
         },
-        notes: 'Fiktivni ciklus montaže iz seed-a.',
       },
     });
     installationsCreated += 1;
