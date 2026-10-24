@@ -93,7 +93,7 @@ describe.skipIf(!databaseIsolatedForCi)('Faza 4 — konkurentna montaža komplet
         `DELETE FROM "OutboxEvent"
           WHERE "aggregateType" = 'TireInstallation'
             AND "aggregateId" IN (
-              SELECT "id"::text FROM "TireInstallation" WHERE "setId" = $1::uuid
+              SELECT "id" FROM "TireInstallation" WHERE "setId" = $1::uuid
             )`,
         [tireSetId],
       );
