@@ -23,7 +23,7 @@ Ovaj fajl je **hub**. Sve ostalo je u `docs/` i povezano ovdje. Ako se nešto mi
 | [`03-MODEL_PODATAKA.md`](03-MODEL_PODATAKA.md) | Kompletni entiteti, polja, indeksi, unique/CHECK/exclusion ograničenja, poslovna pravila na nivou baze, Prisma smjernice |
 | [`04-FORM_ENGINE.md`](04-FORM_ENGINE.md) | Verzionisanje formi, JSON shema polja, sigurni izrazi (bez JS-a), validacija, migracija historijskih zapisa |
 | [`05-RBAC_PERMISIJE_SIGURNOST.md`](05-RBAC_PERMISIJE_SIGURNOST.md) | Matrica permisija, kodovi permisija, opseg podataka, token model, brza revokacija, zabrana mobilnog pristupa Super Admina, sigurnosne kontrole |
-| [`06-UX_UI_DIZAJN.md`](06-UX_UI_DIZAJN.md) | Dizajn sistem (tokeni, tipografija, boje, komponente), IA, wireframe-ovi web + mobilnih ekrana, microcopy na bosanskom, pristupačnost |
+| [`06-UX_UI_DIZAJN.md`](06-UX_UI_DIZAJN.md) | Zvanični UX/UI izvor: dizajn sistem, IA, wireframe-ovi i pristupačnost; prije većeg redizajna obavezan detaljan audit [referentnog projekta `vehicle-fleet-management-application.zip`](../vehicle-fleet-management-application.zip), uz matricu šta se preuzima, prilagođava ili odbacuje — bez cilja potpune replike |
 | [`07-API_SPECIFIKACIJA.md`](07-API_SPECIFIKACIJA.md) | REST `/api/v1` konvencije, kompletan popis endpointa, greške, paginacija, idempotency |
 | [`08-DOCKER_COOLIFY_DEPLOYMENT.md`](08-DOCKER_COOLIFY_DEPLOYMENT.md) | Dockerfile-ovi, compose varijante, `db_net`/`redis_net`, Coolify koraci, HTTPS/DNS/firewall, backup/restore, rollback |
 | [`09-TEST_PLAN.md`](09-TEST_PLAN.md) | Test strategija, 16 obaveznih kriterija prihvatanja mapiranih na testove, e2e scenariji, seed |
@@ -377,6 +377,8 @@ Legenda: **DoD** = Definition of Done. Svaka faza završava s: (1) prolazećim b
 ---
 
 ### FAZA 6 — Expo Android aplikacija (≈ 6–8 dana)
+
+> **UX/UI ulazni kriterij za veći web/mobilni redizajn:** prije implementacije vizuelnog redizajna završiti audit referentnog ZIP-a i isporuke iz [`06-UX_UI_DIZAJN.md` §0](06-UX_UI_DIZAJN.md#0-referentni-projekat-i-metod-redizajna). ZIP je referenca za selektivno preuzimanje/prilagodbu, ne zahtjev za replatformiranje ili potpunu repliku. Ovo ne mijenja funkcionalni redoslijed faza niti pokreće redizajn unaprijed.
 
 **Zadaci**
 1. Login (bez Super Admina — server odbija, ali i UI daje jasnu poruku), refresh token u `expo-secure-store`, biometrijski/PIN lock (opcija).

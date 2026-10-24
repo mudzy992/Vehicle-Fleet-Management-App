@@ -3,6 +3,39 @@
 **Verzija:** 1.0.0 · **Platforme:** web (Vite + React + Tailwind 4 + shadcn/ui), mobilna (Expo/React Native)
 **Jezik:** bosanski (`bs`) · **Pristupačnost:** WCAG 2.2 AA
 
+## 0. Referentni projekat i metod redizajna
+
+### 0.1 Referentni ZIP
+
+`vehicle-fleet-management-application.zip` u korijenu repozitorija je **referentni projekat za UX/UI**, a ne specifikacija koju treba kopirati doslovno. Kada redizajn weba i mobilne aplikacije uđe u plan rada, ZIP se prvo detaljno auditira, a zatim se iz njega preuzimaju i prilagođavaju svi vizuelni i interakcijski obrasci koji odgovaraju VFM-u. Cilj je profesionalan i unificiran VFM dizajn, ne potpuna replika.
+
+ZIP sadrži izvorni kod i implementaciju web ekrana, pa audit nije samo pregled screenshotova. Potrebno je pregledati strukturu ekrana i navigacije, stranice i komponente, stilove i tokene, tipografiju, boje, rasporede i breakpoint-e, stanja i interakcije, kao i dostupne grafičke resurse. Posebno evidentirati šta ZIP zaista sadrži za mobilni UX; web obrasci se ne prenose automatski na telefon.
+
+### 0.2 Audit i odluka o ponovnoj upotrebi
+
+Za svaki relevantan obrazac ili resurs voditi pregled s jednom od odluka:
+
+- **Preuzeti** — koristiti kada odgovara VFM poslovnom toku, arhitekturi, pristupačnosti i vizuelnom jeziku.
+- **Prilagoditi** — zadržati korisnu ideju, ali promijeniti je za VFM role/permisije, web/mobilni kontekst, bosanski sadržaj, responsive ponašanje ili postojeći tehnološki stack.
+- **Ne preuzeti** — zabilježiti razlog, npr. nepodržan tok, nedostupnost, sigurnosni rizik, nedozvoljena licenca ili dupliranje postojećeg VFM obrasca.
+
+Audit treba uključiti i pregled licence, porijekla asseta, zavisnosti i sigurnosti. Ne kopirati cijeli ZIP projekat, backend, bazu, autentifikaciju ili framework u VFM; ne prepisivati postojeće fajlove aplikacije raspakivanjem arhive. Preuzimanje koda ili asseta dozvoljeno je samo nakon provjere licence i tehničke kompatibilnosti; u suprotnom se preuzima samo dokumentovana dizajnerska ideja i implementira nativno u VFM-u.
+
+### 0.3 Obavezni izlazi prije implementacije redizajna
+
+Audit se završava prije većeg redizajna i isporučuje:
+
+1. **Matrica ZIP → VFM:** ekran/obrazac iz ZIP-a, VFM ekvivalent, odluka (preuzeti/prilagoditi/odbaciti), razlog, platforma i faza.
+2. **Jedinstveni dizajn sistem:** imenovani i semantički tokeni za boje (uključujući status/rok i light/dark ako je podržano), tipografiju, spacing skalu, grid, breakpoint-e, dimenzije, radius, elevation/shadow, focus i motion. Tokeni su izvor istine za web i odgovarajuće mobilne tokene.
+3. **Tipografija i sadržaj:** porodice i težine fonta s licencama/fallbackovima, hijerarhija naslova/teksta, format datuma/brojeva/valute i dosljedan bosanski microcopy.
+4. **Katalog komponenti:** tabela, filteri, forme, navigacija, kartice, dialog/drawer, badge/status, toast, skeleton, prazno/stanje greške, permission-denied, offline i upload — uz varijante, ponašanje, keyboard/focus i mapu na postojeće VFM komponente.
+5. **Wireframeovi i tokovi:** web i mobilni layout-i za obuhvaćene ekrane, navigacija, primarni/sekundarni zadaci, responsive ponašanje i ključna stanja; mobilni tokovi se crtaju/validiraju zasebno, ne kao skupljena desktop stranica.
+6. **Plan migracije:** redoslijed po ekranima/fazama, šta se može ponovo iskoristiti, šta treba zamijeniti i acceptance kriteriji vizuelne/regresijske provjere.
+
+Svaki predloženi obrazac mora odgovarati postojećim VFM permisijama i serverskim pravilima; UI ne smije otkrivati nedostupne podatke niti obećavati akciju koju backend odbija. Zadržati WCAG 2.2 AA, touch targete i principe iz ovog dokumenta. Dizajn sistem, web i React Native prikazi trebaju dijeliti semantiku i tokene, uz platformi primjerene komponente i interakcije.
+
+**Ovo je pripremni zahtjev, ne nalog za redizajn sada.** Audit ZIP-a i vizuelna implementacija počinju tek kada odgovarajuća web/mobilna faza ili zasebno odobren redizajn dođe na red.
+
 ---
 
 ## 1. Principi dizajna
