@@ -981,9 +981,8 @@ async function seedDemoTires(
     });
     if (exists) continue;
 
-    const dismountedAt = 'dismountedDaysAgo' in cycle
-      ? toDatabaseDate(dateFromNow(-cycle.dismountedDaysAgo))
-      : null;
+    const dismountedAt =
+      cycle === completed ? toDatabaseDate(dateFromNow(-completed.dismountedDaysAgo)) : null;
     await prisma.tireInstallation.create({
       data: {
         id: randomUUID(),
@@ -1075,9 +1074,14 @@ export async function runSeed(prisma: PrismaClient, env: { NODE_ENV: string }): 
     allowDemo && registrationForm ? await seedDemoRegistrations(prisma, registrationForm, demoVehicles) : 0;
   const serviceRecordsCreated =
     allowDemo && serviceForm ? await seedDemoServices(prisma, serviceForm, demoVehicles) : 0;
-  const tireSeed = allowDemo && tireSetForm && tireInstallationForm
-    ? await seedDemoTires(prisma, { tireSet: tireSetForm, installation: tireInstallationForm }, demoVehicles)
-    : { setsCreated: 0, installationsCreated: 0 };
+  const tireSeed =
+    allowDemo && tireSetForm && tireInstallationForm
+      ? await seedDemoTires(
+          prisma,
+          { tireSet: tireSetForm, installation: tireInstallationForm },
+          demoVehicles,
+        )
+      : { setsCreated: 0, installationsCreated: 0 };
 
   // Politike nisu demo podaci — skener ih treba i u produkciji.
   const reminderPoliciesCreated = await seedReminderPolicies(prisma);

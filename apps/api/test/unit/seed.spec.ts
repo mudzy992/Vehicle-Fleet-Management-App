@@ -104,6 +104,13 @@ describe('seed', () => {
 
     // Demo registracije: jedna istekla, jedna ističe za 3 dana.
     expect(summary.registrationsCreated).toBe(2);
+    expect(summary.serviceRecordsCreated).toBe(4);
+    expect(fake.serviceRecords).toHaveLength(4);
+    expect(summary.tireSetsCreated).toBe(3);
+    expect(fake.tireSets.size).toBe(3);
+    expect(summary.tireInstallationsCreated).toBe(2);
+    expect(fake.tireInstallations).toHaveLength(2);
+    expect(fake.tireInstallations.filter((row) => row.dismountedAt === null)).toHaveLength(1);
     const untils = fake.registrations
       .map((row) => (row.validUntil as Date).toISOString().slice(0, 10))
       .sort();
@@ -142,6 +149,12 @@ describe('seed', () => {
     expect(second.vehiclesCreated).toBe(0);
     expect(second.driversCreated).toBe(0);
     expect(second.registrationsCreated).toBe(0);
+    expect(second.serviceRecordsCreated).toBe(0);
+    expect(second.tireSetsCreated).toBe(0);
+    expect(second.tireInstallationsCreated).toBe(0);
+    expect(fake.serviceRecords).toHaveLength(4);
+    expect(fake.tireSets.size).toBe(3);
+    expect(fake.tireInstallations).toHaveLength(2);
     expect(second.taskTypesCreated).toBe(0);
     expect(second.reminderPoliciesCreated).toBe(0);
     expect(second.demoUsers).toEqual([]);

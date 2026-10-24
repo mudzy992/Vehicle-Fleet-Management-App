@@ -263,6 +263,9 @@ export class FakePrismaClient {
   readonly formSchemaVersions: FakeFormSchemaVersionRow[] = [];
   readonly taskTypes = new Map<string, Record<string, unknown>>();
   readonly vehicles = new Map<string, FakeVehicleRow>();
+  readonly serviceRecords: Array<Record<string, unknown>> = [];
+  readonly tireSets = new Map<string, Record<string, unknown>>();
+  readonly tireInstallations: Array<Record<string, unknown>> = [];
   readonly authAttempts: FakeAuthAttemptRow[] = [];
   readonly auditLogs: FakeAuditLogRow[] = [];
 
@@ -750,6 +753,60 @@ export class FakePrismaClient {
       if (!row) return { count: 0 };
       Object.assign(row, args.data);
       return { count: 1 };
+    },
+  };
+
+  readonly serviceRecord = {
+    findFirst: async (args: { where: Record<string, unknown>; orderBy?: unknown }) => {
+      const matching = this.serviceRecords.filter((row) =>
+        Object.entries(args.where).every(([key, value]) => row[key] === value),
+      );
+      if (args.orderBy && matching.length > 1) {
+        matching.sort(
+          (a, b) => ((b.serviceDate as Date).getTime() ?? 0) - ((a.serviceDate as Date).getTime() ?? 0),
+        );
+      }
+      return matching[0] ? clone(matching[0]) : null;
+    },
+    create: async (args: { data: Record<string, unknown> }) => {
+      const data = { ...args.data };
+      const nestedItems = data.items as { create?: unknown[] } | undefined;
+      delete data.items;
+      this.serviceRecords.push({
+        deletedAt: null,
+        status: 'ACTIVE',
+        ...data,
+        items: nestedItems?.create ?? [],
+      });
+      return clone(this.serviceRecords[this.serviceRecords.length - 1]);
+    },
+  };
+
+  readonly tireSet = {
+    findFirst: async (args: { where: { code: string } }) => {
+      const row = [...this.tireSets.values()].find((item) => item.code === args.where.code);
+      return row ? clone(row) : null;
+    },
+    create: async (args: { data: Record<string, unknown> }) => {
+      const row = { ...args.data };
+      this.tireSets.set(String(row.id), row);
+      return clone(row);
+    },
+  };
+
+  readonly tireInstallation = {
+    findFirst: async (args: { where: { setId: string; vehicleId: string; mountedAt: Date } }) => {
+      const row = this.tireInstallations.find(
+        (item) =>
+          item.setId === args.where.setId &&
+          item.vehicleId === args.where.vehicleId &&
+          (item.mountedAt as Date).getTime() === args.where.mountedAt.getTime(),
+      );
+      return row ? clone(row) : null;
+    },
+    create: async (args: { data: Record<string, unknown> }) => {
+      this.tireInstallations.push({ ...args.data });
+      return clone(args.data);
     },
   };
 
