@@ -382,6 +382,8 @@ export const baseEnvSchema = z.object({
   DEV_REDIS_PASSWORD_API: optionalString,
   DEV_REDIS_PASSWORD_WORKER: optionalString,
   DEV_REDIS_PASSWORD_READONLY: optionalString,
+  VFM_DEV_POSTGRES_CONTAINER: z.string().min(1).default('vfm-postgres'),
+  VFM_DEV_PG_VOLUME: z.string().min(1).default('vfm_pgdata'),
   TEST_DATABASE_URL: optionalString,
   TEST_REDIS_URL: optionalString,
   DEV_POSTGRES_PORT: port(5433),
