@@ -39,7 +39,7 @@ PII za User se dodatno provjerava po konkretnom redu: `user:view_pii:ALL` vidi s
 
 ### Cross-phase opažanje
 
-**Riješeno u nastavku Faze 3:** flat provjera `driver:view_pii` zamijenjena je rednom scope provjerom. `ALL` otkriva PII globalno, `OWN` samo kada je akter kreator konkretnog vozača, a `DRIVER_IDS` samo za ID prisutan u grantovima; ostali/neprimjenjivi opsezi ostavljaju PII redigovan. Ista odluka se primjenjuje na detalj vozača i osjetljive podatke kategorija dozvole. `p14-drivers-pii-http.spec.ts` sada pokriva OWN/DRIVER_IDS match i mismatch. Ovaj follow-up je zatvoren za logiku i regresijski HTTP test; puni P14 OpenAPI sweep i dalje je zasebno otvoren.
+**Riješeno u nastavku Faze 3:** flat provjera `driver:view_pii` zamijenjena je rednom scope provjerom. `ALL` otkriva PII globalno, `OWN` samo kada je akter kreator konkretnog vozača, a `DRIVER_IDS` samo za ID prisutan u grantovima; ostali/neprimjenjivi opsezi ostavljaju PII redigovan. Ista odluka se primjenjuje na detalj vozača i osjetljive podatke kategorija dozvole. `p14-drivers-pii-http.spec.ts` sada pokriva OWN/DRIVER_IDS match i mismatch. Ovaj follow-up je zatvoren za logiku i regresijski HTTP test. `p14-controller-http-sweep.spec.ts` sada pokriva sve stvarne kontrolere i svaku zaštićenu rutu za sistemske uloge bez prava; globalni code-level P14 sweep je zatvoren. DB/live E2E nije pokretan i zahtijeva izolovano testno okruženje.
 
 ## 4. Testovi i dokaz
 
