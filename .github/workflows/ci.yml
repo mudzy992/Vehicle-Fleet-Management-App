@@ -174,7 +174,19 @@ jobs:
           ENV_PROFILE: tool
           NODE_ENV: production
           SEED_DEMO_DATA: "false"
-        run: pnpm --filter @vfm/api seed
+        run: |
+          set +e
+          pnpm --filter @vfm/api seed 2>&1 | tee /tmp/p13-seed.log
+          seed_status=${PIPESTATUS[0]}
+          if [ "$seed_status" -ne 0 ]; then
+            {
+              echo '### CI test-database seed output (last 80 lines)'
+              echo '```text'
+              tail -n 80 /tmp/p13-seed.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$seed_status"
       #  Guard-ovi postoje jer `vitest run` bez ijednog testa pada, a
       #  `test:stress` skripta još ne postoji (P6 dolazi s Faza 3).
       - name: Integration
