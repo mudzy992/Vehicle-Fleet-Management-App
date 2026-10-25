@@ -108,7 +108,7 @@ export class NotificationsService {
   }
 
   async list(userId: string, query: NotificationListQuery): Promise<NotificationListResponse> {
-    const where = { userId, ...(query.unreadOnly ? { isRead: false } : {}) };
+    const where = { userId, inAppVisible: true, ...(query.unreadOnly ? { isRead: false } : {}) };
     const [rows, total] = await Promise.all([
       this.prisma.notification.findMany({
         where,
@@ -129,13 +129,15 @@ export class NotificationsService {
   }
 
   async unreadCount(userId: string): Promise<NotificationUnreadCount> {
-    const count = await this.prisma.notification.count({ where: { userId, isRead: false } });
+    const count = await this.prisma.notification.count({
+      where: { userId, inAppVisible: true, isRead: false },
+    });
     return { count };
   }
 
   async markAllRead(userId: string): Promise<NotificationMarkAllRead> {
     const result = await this.prisma.notification.updateMany({
-      where: { userId, isRead: false },
+      where: { userId, inAppVisible: true, isRead: false },
       data: { isRead: true, readAt: new Date(), status: 'READ' },
     });
     return { updatedCount: result.count };
@@ -143,18 +145,18 @@ export class NotificationsService {
 
   async markRead(userId: string, id: string): Promise<NotificationView> {
     const current = await this.prisma.notification.findFirst({
-      where: { id, userId },
+      where: { id, userId, inAppVisible: true },
       select: { id: true, isRead: true },
     });
     if (!current) throw VfmErrors.notFound('obavijest');
     if (!current.isRead) {
       await this.prisma.notification.updateMany({
-        where: { id, userId, isRead: false },
+        where: { id, userId, inAppVisible: true, isRead: false },
         data: { isRead: true, readAt: new Date(), status: 'READ' },
       });
     }
     const updated = await this.prisma.notification.findFirst({
-      where: { id, userId },
+      where: { id, userId, inAppVisible: true },
       select: NOTIFICATION_SELECT,
     });
     if (!updated) throw VfmErrors.notFound('obavijest');

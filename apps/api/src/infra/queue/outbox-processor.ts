@@ -20,10 +20,30 @@ interface OutboxTransaction {
   readonly notificationPreference: {
     findMany(args: {
       where: { userId: { in: string[] }; type: string };
-      select: { userId: true; channelInApp: true };
-    }): Promise<Array<{ userId: string; channelInApp: boolean }>>;
+      select: { userId: true; channelInApp: true; channelFcm: true };
+    }): Promise<Array<{ userId: string; channelInApp: boolean; channelFcm: boolean }>>;
   };
   readonly notification: {
+    createMany(args: {
+      data: Array<Record<string, unknown>>;
+      skipDuplicates: true;
+    }): Promise<{ count: number }>;
+    findMany(args: {
+      where: { notificationKey: { in: string[] } };
+      select: { id: true; userId: true; notificationKey: true };
+    }): Promise<Array<{ id: string; userId: string; notificationKey: string }>>;
+  };
+  readonly deviceToken: {
+    findMany(args: {
+      where: { userId: { in: string[] }; status: 'ACTIVE' };
+      select: { id: true; userId: true };
+    }): Promise<Array<{ id: string; userId: string }>>;
+  };
+  readonly notificationDelivery: {
+    findMany(args: {
+      where: { notificationId: { in: string[] }; channel: 'FCM'; deviceTokenId: { not: null } };
+      select: { notificationId: true; deviceTokenId: true };
+    }): Promise<Array<{ notificationId: string; deviceTokenId: string | null }>>;
     createMany(args: {
       data: Array<Record<string, unknown>>;
       skipDuplicates: true;
@@ -135,15 +155,27 @@ export async function processOutboxBatch(
           recipientUserIds.length > 0
             ? await tx.notificationPreference.findMany({
                 where: { userId: { in: recipientUserIds }, type: event.eventType },
-                select: { userId: true, channelInApp: true },
+                select: { userId: true, channelInApp: true, channelFcm: true },
               })
             : [];
-        const muted = new Set(
-          prefs.filter((preference) => !preference.channelInApp).map((preference) => preference.userId),
+        const preferenceByUser = new Map(prefs.map((preference) => [preference.userId, preference]));
+        const fcmEnabledUserIds = recipientUserIds.filter(
+          (userId) => preferenceByUser.get(userId)?.channelFcm ?? true,
         );
+        const activeTokens =
+          fcmEnabledUserIds.length > 0
+            ? await tx.deviceToken.findMany({
+                where: { userId: { in: fcmEnabledUserIds }, status: 'ACTIVE' },
+                select: { id: true, userId: true },
+              })
+            : [];
+        const usersWithActiveTokens = new Set(activeTokens.map((token) => token.userId));
         const copy = notificationCopy(event);
         const notificationData = recipientUserIds
-          .filter((userId) => !muted.has(userId))
+          .filter((userId) => {
+            const preference = preferenceByUser.get(userId);
+            return (preference?.channelInApp ?? true) || usersWithActiveTokens.has(userId);
+          })
           .map((userId) => ({
             id: randomUUID(),
             userId,
@@ -156,12 +188,57 @@ export async function processOutboxBatch(
             priority: typeof payload.priority === 'string' ? payload.priority : 'NORMAL',
             status: 'PENDING',
             isRead: false,
+            inAppVisible: preferenceByUser.get(userId)?.channelInApp ?? true,
             outboxEventId: event.id,
             notificationKey: `${event.id}:${userId}`,
             dedupeKey: `${event.id}:${userId}`,
           }));
         if (notificationData.length > 0) {
           await tx.notification.createMany({ data: notificationData, skipDuplicates: true });
+          const notifications = await tx.notification.findMany({
+            where: {
+              notificationKey: { in: notificationData.map((notification) => notification.notificationKey) },
+            },
+            select: { id: true, userId: true, notificationKey: true },
+          });
+          const notificationIds = notifications.map((notification) => notification.id);
+          const existingDeliveries =
+            notificationIds.length > 0
+              ? await tx.notificationDelivery.findMany({
+                  where: {
+                    notificationId: { in: notificationIds },
+                    channel: 'FCM',
+                    deviceTokenId: { not: null },
+                  },
+                  select: { notificationId: true, deviceTokenId: true },
+                })
+              : [];
+          const existingKeys = new Set(
+            existingDeliveries.map((delivery) => `${delivery.notificationId}:${delivery.deviceTokenId}`),
+          );
+          const notificationByUser = new Map(
+            notifications.map((notification) => [notification.userId, notification]),
+          );
+          const deliveries = activeTokens.flatMap((token) => {
+            const notification = notificationByUser.get(token.userId);
+            if (!notification) return [];
+            const key = `${notification.id}:${token.id}`;
+            return existingKeys.has(key)
+              ? []
+              : [
+                  {
+                    id: randomUUID(),
+                    notificationId: notification.id,
+                    channel: 'FCM',
+                    deviceTokenId: token.id,
+                    status: 'QUEUED',
+                    attempts: 0,
+                  },
+                ];
+          });
+          if (deliveries.length > 0) {
+            await tx.notificationDelivery.createMany({ data: deliveries, skipDuplicates: true });
+          }
         }
         const updated = await tx.outboxEvent.updateMany({
           where: { id: event.id, status: 'PROCESSING', lockedBy: workerId },

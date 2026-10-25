@@ -228,9 +228,11 @@ enum NotificationStatus {
 
 enum DeliveryStatus {
   QUEUED
+  PROCESSING
   SENT
   DELIVERED
   FAILED
+  DEAD
   TOKEN_INVALID
 }
 
@@ -1293,6 +1295,7 @@ model Notification {
   priority        String             @default("NORMAL")
   status          NotificationStatus @default(PENDING)
   isRead          Boolean            @default(false)
+  inAppVisible    Boolean            @default(true)
   readAt          DateTime?          @db.Timestamptz(6)
   createdAt       DateTime           @default(now()) @db.Timestamptz(6)
   sentAt          DateTime?          @db.Timestamptz(6)
@@ -1308,6 +1311,7 @@ model Notification {
   //   in-app obavijest po događaju.
 
   @@index([userId, isRead, createdAt(sort: Desc)])
+  @@index([userId, inAppVisible, isRead, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@map("Notification")
 }
@@ -1322,6 +1326,9 @@ model NotificationDelivery {
   errorCode         String?
   errorMessage      String?
   attempts          Int            @default(0)
+  availableAt       DateTime       @default(now()) @db.Timestamptz(6)
+  lockedAt          DateTime?      @db.Timestamptz(6)
+  lockedBy          String?
   sentAt            DateTime?      @db.Timestamptz(6)
   deliveredAt       DateTime?      @db.Timestamptz(6)
   createdAt         DateTime       @default(now()) @db.Timestamptz(6)
@@ -1330,8 +1337,10 @@ model NotificationDelivery {
   deviceToken  DeviceToken? @relation(fields: [deviceTokenId], references: [id], onDelete: SetNull)
   // SQL: CHECK (channel IN ('FCM','SSE','EMAIL','IN_APP')).
 
+  @@unique([notificationId, channel, deviceTokenId])
   @@index([notificationId])
   @@index([status, createdAt])
+  @@index([status, availableAt])
   @@map("NotificationDelivery")
 }
 

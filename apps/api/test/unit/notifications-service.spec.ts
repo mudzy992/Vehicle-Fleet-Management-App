@@ -115,7 +115,7 @@ describe('NotificationsService', () => {
     });
     expect(prisma.notification.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId: 'user-1', isRead: false },
+        where: { userId: 'user-1', inAppVisible: true, isRead: false },
         skip: 10,
         take: 10,
         orderBy: { createdAt: 'desc' },
@@ -127,7 +127,9 @@ describe('NotificationsService', () => {
     const { prisma, service } = makeHarness();
     prisma.notification.count.mockResolvedValue(7);
     await expect(service.unreadCount('user-1')).resolves.toEqual({ count: 7 });
-    expect(prisma.notification.count).toHaveBeenCalledWith({ where: { userId: 'user-1', isRead: false } });
+    expect(prisma.notification.count).toHaveBeenCalledWith({
+      where: { userId: 'user-1', inAppVisible: true, isRead: false },
+    });
   });
 
   it('označava sve vlastite nepročitane kao pročitane', async () => {
@@ -136,7 +138,7 @@ describe('NotificationsService', () => {
     await expect(service.markAllRead('user-1')).resolves.toEqual({ updatedCount: 4 });
     expect(prisma.notification.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId: 'user-1', isRead: false },
+        where: { userId: 'user-1', inAppVisible: true, isRead: false },
         data: expect.objectContaining({ isRead: true, status: 'READ' }),
       }),
     );
@@ -157,7 +159,7 @@ describe('NotificationsService', () => {
       readAt: '2026-01-02T00:00:00.000Z',
     });
     expect(prisma.notification.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: ROW.id, userId: 'user-1', isRead: false } }),
+      expect.objectContaining({ where: { id: ROW.id, userId: 'user-1', inAppVisible: true, isRead: false } }),
     );
   });
 

@@ -107,7 +107,7 @@ describe('P14 — vlasništvo nad obavijestima kroz HTTP', () => {
     });
     expect(listResponse.status).toBe(200);
     expect(await listResponse.json()).toMatchObject({ items: [], total: 0 });
-    expect(findMany.mock.calls.at(-1)?.[0].where).toEqual({ userId: USER_ONE });
+    expect(findMany.mock.calls.at(-1)?.[0].where).toEqual({ userId: USER_ONE, inAppVisible: true });
 
     const otherUserRead = await fetch(`${baseUrl}/notifications/${NOTIFICATION_ID}/read`, {
       method: 'POST',
@@ -115,7 +115,7 @@ describe('P14 — vlasništvo nad obavijestima kroz HTTP', () => {
     });
     expect(otherUserRead.status).toBe(404);
     expect(findFirst).toHaveBeenLastCalledWith({
-      where: { id: NOTIFICATION_ID, userId: USER_ONE },
+      where: { id: NOTIFICATION_ID, userId: USER_ONE, inAppVisible: true },
       select: { id: true, isRead: true },
     });
   });

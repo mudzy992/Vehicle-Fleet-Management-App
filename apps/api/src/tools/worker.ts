@@ -31,6 +31,8 @@ import { redisTlsOptions } from '../infra/redis/redis-tls.js';
 import { REMINDER_SCAN_JOB, scheduleReminderScan } from '../infra/queue/reminder-scheduler.js';
 import { runReminderScanJob } from '../infra/queue/reminder-job.js';
 import { processOutboxBatch, type OutboxPrisma } from '../infra/queue/outbox-processor.js';
+import { processFcmDeliveryBatch } from '../infra/queue/fcm-delivery-processor.js';
+import { FirebaseAdminFcmGateway } from '../infra/queue/firebase-admin-fcm.gateway.js';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { buildPrismaAdapter, prismaConnectionOptions } from '../prisma/prisma.service.js';
 
@@ -135,6 +137,8 @@ async function main(): Promise<number> {
 
   // Trajna obrada OutboxEvent redova (P-05): DB je autoritet, Redis nije jedino skladište.
   const outboxPrisma = new PrismaClient({ adapter: buildPrismaAdapter(prismaConnectionOptions(env)) });
+  const fcmGateway = env.FIREBASE_ENABLED ? new FirebaseAdminFcmGateway(env) : undefined;
+  if (!fcmGateway) logger.log('FCM dostava je isključena (FIREBASE_ENABLED=false).');
   let outboxPollPromise: Promise<void> | undefined;
   const pollOutbox = (): Promise<void> => {
     if (outboxPollPromise) return outboxPollPromise;
@@ -149,6 +153,18 @@ async function main(): Promise<number> {
             `Outbox: preuzeto ${result.claimed}, obrađeno ${result.processed}, ` +
               `odgođeno ${result.failed}, DEAD ${result.dead}.`,
           );
+        }
+        if (fcmGateway) {
+          const fcm = await processFcmDeliveryBatch(outboxPrisma as never, fcmGateway, {
+            batchSize: env.OUTBOX_BATCH_SIZE,
+            maxAttempts: 5,
+          });
+          if (fcm.claimed > 0) {
+            logger.log(
+              `FCM: preuzeto ${fcm.claimed}, poslano ${fcm.sent}, retry ${fcm.retried}, ` +
+                `nevažeći tokeni ${fcm.invalid}, iscrpljeno ${fcm.dead}.`,
+            );
+          }
         }
       } catch (error) {
         logger.error(
