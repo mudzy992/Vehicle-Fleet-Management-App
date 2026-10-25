@@ -6,12 +6,11 @@ appId: ba.ba101.voznipark
 - tapOn:
     id: "login-email"
 - inputText: ${TEST_ADMIN_EMAIL}
+- assertVisible: ${TEST_ADMIN_EMAIL}
 - tapOn:
     id: "login-password"
 - inputText: ${TEST_ADMIN_PASSWORD}
-- hideKeyboard
-- tapOn:
-    id: "login-submit"
+- pressKey: ENTER
 - assertVisible:
     id: "task-create-open"
 - tapOn:
