@@ -554,7 +554,7 @@ Redis `Idempotency-Key` replaya i punog Nest HTTP lanca. P5 sada ima
 `apps/api/test/integration/task-open-visibility.integration.spec.ts`,
 CI-gated na disposable PostgreSQL-u: poziva stvarne HTTP GET available,
 POST claim i GET detail rute uz transactional outbox i provjeru dviju
-Notification stavki. CI run mora potvrditi test prije prihvatanja P5.
+Notification stavki. CI run **40192057825** potvrđuje P5 test.
 P6 i dalje zahtijeva HTTP/idempotency replay dokaz nad izolovanom bazom.
 
 ### Završetak i override — četvrta cjelina Faze 5
