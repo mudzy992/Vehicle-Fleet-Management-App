@@ -62,6 +62,8 @@ export interface OutboxProcessorOptions {
   readonly leaseMs?: number;
   readonly now?: () => Date;
   readonly workerId?: string;
+  /** Test/maintenance-only allowlist; normal worker processing omits it. */
+  readonly eventIds?: readonly string[];
 }
 
 export interface OutboxBatchResult {
@@ -118,12 +120,19 @@ export async function processOutboxBatch(
   const now = options.now ?? (() => new Date());
   const workerId = options.workerId ?? randomUUID();
   const leaseMs = options.leaseMs ?? 5 * 60_000;
+  const eventIdsJson = options.eventIds === undefined ? null : JSON.stringify(options.eventIds);
   const claimed = await prisma.$queryRaw<OutboxRow[]>`
     WITH candidates AS (
       SELECT "id"
         FROM "OutboxEvent"
-       WHERE ("status" IN ('PENDING', 'FAILED') AND "availableAt" <= ${now()})
-          OR ("status" = 'PROCESSING' AND "lockedAt" < ${new Date(now().getTime() - leaseMs)})
+       WHERE (
+              ("status" IN ('PENDING', 'FAILED') AND "availableAt" <= ${now()})
+           OR ("status" = 'PROCESSING' AND "lockedAt" < ${new Date(now().getTime() - leaseMs)})
+       )
+         AND (
+           ${eventIdsJson}::jsonb IS NULL
+           OR "id" IN (SELECT jsonb_array_elements_text(${eventIdsJson}::jsonb)::uuid)
+         )
        ORDER BY "availableAt" ASC, "createdAt" ASC
        LIMIT ${options.batchSize}
        FOR UPDATE SKIP LOCKED

@@ -122,7 +122,12 @@ describe.skipIf(!isolatedCiDatabase)('Outbox → notification + FCM queue (isola
     const client = prisma;
     const process = processBatch;
     if (!client || !process || !sql) throw new Error('Outbox test nije inicijalizovan.');
-    const options = { batchSize: 10, maxAttempts: 2, workerId: randomUUID() };
+    const options = {
+      batchSize: 10,
+      maxAttempts: 2,
+      workerId: randomUUID(),
+      eventIds: [successEventId, mutedEventId, fcmOnlyEventId, retryEventId, invalidTokenEventId],
+    };
     const first = await process(client as never as OutboxPrisma, options);
     expect(first).toEqual({ claimed: 5, processed: 4, failed: 1, dead: 0 });
 

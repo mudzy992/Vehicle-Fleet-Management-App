@@ -189,6 +189,7 @@ describe.skipIf(!isIsolatedCiDatabase)('P5 — vidljivost otvorenog zadatka i ob
       batchSize: 10,
       maxAttempts: 2,
       workerId: randomUUID(),
+      eventIds: [outboxEventId],
     });
     expect(createdBatch).toEqual({ claimed: 1, processed: 1, failed: 0, dead: 0 });
     const initialNotifications = await sql.query<{ userId: string; count: string }>(
@@ -233,6 +234,7 @@ describe.skipIf(!isIsolatedCiDatabase)('P5 — vidljivost otvorenog zadatka i ob
       batchSize: 10,
       maxAttempts: 2,
       workerId: randomUUID(),
+      eventIds: [claimedOutbox.rows[0]!.id],
     });
     expect(claimBatch).toEqual({ claimed: 1, processed: 1, failed: 0, dead: 0 });
     const secondUserClaimNotification = await sql.query<{ count: string }>(
