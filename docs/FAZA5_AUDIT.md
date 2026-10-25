@@ -62,4 +62,4 @@ Prije implementacije treba potvrditi da je ova podjela (globalni allow/deny + se
 
 ## Sljedeći uski korak
 
-P5, P6 i P8 acceptance testovi prolaze u izolovanom CI-ju (**40192057825**, **40213791946**, **40213033583**); P7 HTTP/DB glavni tok prolazi (**40212483559**). Sljedeće: odrediti pristup za mobilni P4 E2E. P7 fault-injection rollback i eventualna atomska veza AuditLog/task transakcije ostaju otvoreni. Admin politika zahtijeva potvrdu podjele iznad prije endpoint/model/UI implementacije. Ne označavati Fazu 5 završenom.
+P5, P6 i P8 acceptance testovi prolaze u izolovanom CI-ju (**40192057825**, **40213791946**, **40213033583**); P7 HTTP/DB glavni tok prolazi (**40212483559**). P4 E2E pristup je definisan, ali blokiran nedostatkom Maestro flow/runnera, Android emulator joba i disposable API fixturea; ne pokretati prema produkciji. P7 fault-injection rollback i eventualna atomska veza AuditLog/task transakcije ostaju otvoreni. Admin politika zahtijeva potvrdu podjele iznad prije endpoint/model/UI implementacije. Ne označavati Fazu 5 završenom.
