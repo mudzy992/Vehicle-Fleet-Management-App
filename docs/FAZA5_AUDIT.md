@@ -49,7 +49,7 @@
 | P4 | Task-create API permisije pokrivene P14 HTTP sweepom; web task-create komponentni testovi postoje. | Nema mobilnog create wizard/Maestro E2E testa koji provjerava kreiranje i vidljivost u listi/webu; nema mobilnog UI dokazivanja da FAB nestaje bez prava. |
 | P5 | `task-open-visibility.integration.spec.ts`: dva korisnika kroz HTTP GET `/tasks/available`, stvarni DB outbox i dvije Notification stavke, HTTP claim pa GET detalja drugom korisniku. | Potvrđeno CI **40192057825** na izolovanoj PostgreSQL bazi. |
 | P6 | CI stress `40190059428`: 200 poziva stvarnog `TasksService.claim()` prema izolovanom PostgreSQL-u; tačno jedan claim/event/ASSIGNEE. | Nije puni acceptance tok kroz HTTP/Redis Idempotency-Key; trenutni stress koristi isti korisnički akter za sve pozive, za razliku od mješovitih korisnika iz test plana. |
-| P7 | Unit testovi provjeravaju 403 NOT_ASSIGNEE, izvršioca i override granu/event podatke. | Nema DB integration potvrde za stvarni rollback, TaskEvent `OVERRIDE_COMPLETED` i AuditLog `COMPLETE` zajedno kroz transakcijski tok. |
+| P7 | `task-complete-authorization.integration.spec.ts` kroz Nest HTTP + izolovani PostgreSQL provjerava 403 `NOT_ASSIGNEE` bez promjene statusa/eventa, 200 za izvršioca, te override 200 uz `TaskEvent(OVERRIDE_COMPLETED)`, `completedById` i `AuditLog(COMPLETE, override=true)`. CI **40212483559** prolazi. | Nema fault-injection testa koji izaziva grešku nakon DB mutacije i eksplicitno potvrđuje rollback. `AuditLog` se upisuje asinhrono kroz interceptor, izvan task transakcije; treba potvrditi prihvatljivost eventualnog audita ili promijeniti dizajn ako se traži atomska garancija. |
 | P8 | CI outbox/FCM integration s mock gateway-em provjerava retry, invalid token, deduplikaciju i SENT. | Test ne veže fixture za stvarni Task; zato ne potvrđuje da stvarni task ostaje IN_PROGRESS dok FCM pada i nakon retry nema duplih Notification redova. |
 
 ## Admin politika primaoca i tipova obavijesti
@@ -62,4 +62,4 @@ Prije implementacije treba potvrditi da je ova podjela (globalni allow/deny + se
 
 ## Sljedeći uski korak
 
-P5 je potvrđen CI-jem. Sljedeće: dodati DB integration dokaze za P7/P8, uskladiti P6 stress s acceptance putem idempotentnog HTTP toka i odrediti izvediv testni pristup za mobilni P4 E2E. Admin politika primaoca/tipova je analizirana, ali zahtijeva potvrdu podjele iznad prije endpoint/model/UI implementacije. Ne označavati Fazu 5 završenom.
+P5 i P7 HTTP/DB integration testovi prolaze u CI-ju (**40192057825**, **40212483559**). Sljedeće: P8 povezati s task fixture-om i dokazati retry bez duplikata; zatim uskladiti P6 stress s acceptance putem HTTP/Idempotency-Key i odrediti pristup za mobilni P4 E2E. P7 rollback fault-injection i atomska veza AuditLog/task transakcije ostaju otvoreni. Admin politika zahtijeva potvrdu podjele iznad prije endpoint/model/UI implementacije. Ne označavati Fazu 5 završenom.
