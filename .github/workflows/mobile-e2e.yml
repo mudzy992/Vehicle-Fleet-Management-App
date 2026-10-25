@@ -186,7 +186,7 @@ jobs:
           emulator-boot-timeout: 600
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             cd apps/mobile
             EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api/v1 corepack pnpm exec expo run:android --variant release --no-bundler
             cd ../..
