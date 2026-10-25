@@ -550,8 +550,12 @@ serverskog statusa ili `mine` filtera.
 Paralelni jedinični test nije P6 dokaz: lažni klijent izvršava
 `updateMany` sinhrono u jednom JavaScript procesu, bez PostgreSQL
 zaključavanja redova, djelimičnog jedinstvenog indeksa, rollbacka,
-Redis `Idempotency-Key` replaya i punog Nest HTTP lanca. P5/P6 i dalje
-zahtijevaju integration/stress test iz §3 nad pravom bazom na Coolifyu.
+Redis `Idempotency-Key` replaya i punog Nest HTTP lanca. P5 sada ima
+`apps/api/test/integration/task-open-visibility.integration.spec.ts`,
+CI-gated na disposable PostgreSQL-u: poziva stvarne HTTP GET available,
+POST claim i GET detail rute uz transactional outbox i provjeru dviju
+Notification stavki. CI run mora potvrditi test prije prihvatanja P5.
+P6 i dalje zahtijeva HTTP/idempotency replay dokaz nad izolovanom bazom.
 
 ### Završetak i override — četvrta cjelina Faze 5
 

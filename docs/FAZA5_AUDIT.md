@@ -47,11 +47,11 @@
 | Kriterij | Dokaz koji postoji | Šta nedostaje za prihvatanje |
 |---|---|---|
 | P4 | Task-create API permisije pokrivene P14 HTTP sweepom; web task-create komponentni testovi postoje. | Nema mobilnog create wizard/Maestro E2E testa koji provjerava kreiranje i vidljivost u listi/webu; nema mobilnog UI dokazivanja da FAB nestaje bez prava. |
-| P5 | Unit testovi `available`/recipient logike; izolovani outbox integration test potvrđuje deduplikaciju i preference za obavijesti. | Nema integracijskog scenarija s dva stvarna korisnika koji potvrđuje oba GET `/tasks/available`, dvije Notification stavke, outbox PROCESSED i assignee ime nakon claim-a. |
+| P5 | Dodat `task-open-visibility.integration.spec.ts`: dva korisnika kroz HTTP GET `/tasks/available`, stvarni DB outbox i dvije Notification stavke, HTTP claim pa GET detalja drugom korisniku. | CI treba potvrditi novi isolated-DB scenario; lokalno je test ispravno preskočen jer nema izolovane CI PostgreSQL baze. |
 | P6 | CI stress `40190059428`: 200 poziva stvarnog `TasksService.claim()` prema izolovanom PostgreSQL-u; tačno jedan claim/event/ASSIGNEE. | Nije puni acceptance tok kroz HTTP/Redis Idempotency-Key; trenutni stress koristi isti korisnički akter za sve pozive, za razliku od mješovitih korisnika iz test plana. |
 | P7 | Unit testovi provjeravaju 403 NOT_ASSIGNEE, izvršioca i override granu/event podatke. | Nema DB integration potvrde za stvarni rollback, TaskEvent `OVERRIDE_COMPLETED` i AuditLog `COMPLETE` zajedno kroz transakcijski tok. |
 | P8 | CI outbox/FCM integration s mock gateway-em provjerava retry, invalid token, deduplikaciju i SENT. | Test ne veže fixture za stvarni Task; zato ne potvrđuje da stvarni task ostaje IN_PROGRESS dok FCM pada i nakon retry nema duplih Notification redova. |
 
 ## Sljedeći uski korak
 
-Definisati admin politiku primaoca/tipova, zatim dodati DB/HTTP integration dokaze za P5/P7/P8, uskladiti P6 stress s acceptance putem idempotentnog HTTP toka i odrediti izvediv testni pristup za mobilni P4 E2E. Ne označavati Fazu 5 završenom.
+Potvrditi novi P5 DB/HTTP integration test u CI; zatim dodati DB integration dokaze za P7/P8, definisati admin politiku primaoca/tipova, uskladiti P6 stress s acceptance putem idempotentnog HTTP toka i odrediti izvediv testni pristup za mobilni P4 E2E. Ne označavati Fazu 5 završenom.
