@@ -1,6 +1,6 @@
 # Faza 5 — početni audit i otvoreni kriteriji
 
-**Datum presjeka:** 25.10.2026.  
+**Datum presjeka:** 25.10.2026.
 **Status:** aktivna, nepotpuna. Ovo je audit koda, ne potvrda završetka Faze 5.
 
 ## Nalazi prema `docs/PLAN_IMPLEMENTACIJE.md` §6
@@ -52,6 +52,14 @@
 | P7 | Unit testovi provjeravaju 403 NOT_ASSIGNEE, izvršioca i override granu/event podatke. | Nema DB integration potvrde za stvarni rollback, TaskEvent `OVERRIDE_COMPLETED` i AuditLog `COMPLETE` zajedno kroz transakcijski tok. |
 | P8 | CI outbox/FCM integration s mock gateway-em provjerava retry, invalid token, deduplikaciju i SENT. | Test ne veže fixture za stvarni Task; zato ne potvrđuje da stvarni task ostaje IN_PROGRESS dok FCM pada i nakon retry nema duplih Notification redova. |
 
+## Admin politika primaoca i tipova obavijesti
+
+`NotificationPreference` je trenutno per-user/per-type (`channelInApp`, `channelFcm`), a API čita i mijenja samo preference prijavljenog korisnika uz `notification:manage_preferences`. Outbox prima listu primalaca iz serverskog `TaskEvent` payloada; primaoci se, dakle, izvode iz domenskog događaja, a ne iz korisničkog zahtjeva. U pregledanim rutama/modelima nema odvojene globalne Super Admin politike.
+
+To nije isto što opisuje PLAN IMPLEMENTACIJE §6 (Super Admin uključuje/isključuje tipove događaja i primaoce). Sigurnosno preporučeni razdvojeni model: (1) globalna politika može isključiti podržan tip/kanal ili odabrati dozvoljenu publiku, (2) servis i dalje izračunava primaoce iz događaja i validira publiku, (3) korisnička preference mogu samo dodatno isključiti vlastiti kanal — ne mogu dodati primaoce niti nadjačati globalno isključenje. Ne prihvatati proizvoljne user ID-jeve iz event API-ja, i ne izlagati sirove tokene u admin UI-ju. Ovo je preporuka za implementaciju; globalni endpoint/model/UI i migracija još ne postoje, pa se stavka ne može označiti prihvaćenom.
+
+Prije implementacije treba potvrditi da je ova podjela (globalni allow/deny + serverski izračun publike + korisnički opt-out) odgovarajuća poslovnoj namjeri. Trenutna DB šema nema audience rule/role target model, a event tipovi i validne publike trebaju ostati eksplicitna allowlista, ne proizvoljna konfiguracija.
+
 ## Sljedeći uski korak
 
-P5 je potvrđen CI-jem. Sljedeće: dodati DB integration dokaze za P7/P8, definisati admin politiku primaoca/tipova, uskladiti P6 stress s acceptance putem idempotentnog HTTP toka i odrediti izvediv testni pristup za mobilni P4 E2E. Ne označavati Fazu 5 završenom.
+P5 je potvrđen CI-jem. Sljedeće: dodati DB integration dokaze za P7/P8, uskladiti P6 stress s acceptance putem idempotentnog HTTP toka i odrediti izvediv testni pristup za mobilni P4 E2E. Admin politika primaoca/tipova je analizirana, ali zahtijeva potvrdu podjele iznad prije endpoint/model/UI implementacije. Ne označavati Fazu 5 završenom.
