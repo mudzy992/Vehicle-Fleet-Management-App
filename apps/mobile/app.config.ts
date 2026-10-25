@@ -1,5 +1,13 @@
 import { existsSync } from 'node:fs';
+import { withAndroidManifest, type ConfigPlugin } from 'expo/config-plugins';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
+
+const withCleartextForLocalApi: ConfigPlugin = (config) =>
+  withAndroidManifest(config, (modConfig) => {
+    const application = modConfig.modResults.manifest.application?.[0];
+    if (application) application.$['android:usesCleartextTraffic'] = 'true';
+    return modConfig;
+  });
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const versionCode = Number(process.env.ANDROID_VERSION_CODE ?? config.android?.versionCode ?? 1);
@@ -10,8 +18,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const android = { ...config.android };
   if (existsSync('./google-services.json')) android.googleServicesFile = './google-services.json';
   else delete android.googleServicesFile;
-
-  return {
+  const expoConfig: ExpoConfig = {
     ...config,
     name: config.name ?? 'Vozni park',
     slug: config.slug ?? 'vfm-mobile',
@@ -22,4 +29,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       versionCode,
     },
   };
+
+  // Android blocks cleartext HTTP by default. Enable it only when an HTTP API
+  // URL is explicitly configured; production EAS profiles use HTTPS.
+  return process.env.EXPO_PUBLIC_API_URL?.startsWith('http://')
+    ? withCleartextForLocalApi(expoConfig)
+    : expoConfig;
 };

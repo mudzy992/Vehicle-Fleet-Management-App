@@ -164,6 +164,8 @@ apps/api/src/generated/
 # EAS / Expo
 apps/mobile/.expo/
 apps/mobile/dist/
+apps/mobile/android/
+apps/mobile/ios/
 # Lokalni env fajlovi (već pokriveno gore, ali eksplicitno)
 .env.local
 .env.*.local

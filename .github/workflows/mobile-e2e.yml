@@ -1,0 +1,186 @@
+name: Mobile E2E
+
+on:
+  push:
+    branches: [main, "arena/**"]
+    paths:
+      - "apps/mobile/**"
+      - "apps/api/src/**"
+      - "apps/api/prisma/**"
+      - "packages/shared/src/**"
+      - "packages/form-engine/**"
+      - "packages/form-renderer/**"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/mobile-e2e.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - "apps/api/src/**"
+      - "apps/api/prisma/**"
+      - "packages/shared/src/**"
+      - "packages/form-engine/**"
+      - "packages/form-renderer/**"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/mobile-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile-task-create:
+    name: P4 Maestro task-create (isolated CI stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: vfm
+          POSTGRES_PASSWORD: vfm_mobile_e2e_only
+          POSTGRES_DB: vfm_mobile_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vfm -d vfm_mobile_e2e"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://vfm:vfm_mobile_e2e_only@localhost:5432/vfm_mobile_e2e?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Instaliraj root workspace pakete
+        run: pnpm install --frozen-lockfile
+      - name: Izgradi pakete koji se dijele s mobilnom aplikacijom
+        run: |
+          pnpm --filter @vfm/shared build
+          pnpm --filter @vfm/form-engine build
+      - name: Generiši Prisma client
+        run: pnpm --filter @vfm/api prisma:generate
+      - name: Migriraj samo disposable E2E bazu
+        env:
+          ENV_PROFILE: tool
+          NODE_ENV: production
+        run: pnpm --filter @vfm/api prisma:migrate:deploy
+      - name: Instaliraj zasebne Expo zavisnosti
+        working-directory: apps/mobile
+        run: pnpm install --frozen-lockfile
+      - name: Seed konfiguraciju i fiktivne E2E podatke
+        env:
+          ENV_PROFILE: tool
+          NODE_ENV: production
+          SEED_DEMO_DATA: "true"
+        run: |
+          set -euo pipefail
+          seed_log="$RUNNER_TEMP/mobile-e2e-seed.log"
+          trap 'rm -f "$seed_log"' EXIT
+          if ! pnpm --filter @vfm/api seed >"$seed_log" 2>&1; then
+            sed -E 's/(admin@vfm\.local|vozac@vfm\.local).*/\1 [MASKED]/' "$seed_log" | tail -n 40
+            exit 1
+          fi
+          SEED_LOG_PATH="$seed_log" node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const log = readFileSync(process.env.SEED_LOG_PATH, 'utf8');
+          const passwordFor = (email) => {
+            const line = log.split(/\r?\n/u).find((entry) => entry.includes(email) && entry.includes('→'));
+            return line?.slice(line.lastIndexOf('→') + 1).trim();
+          };
+          const adminPassword = passwordFor('admin@vfm.local');
+          const userPassword = passwordFor('vozac@vfm.local');
+          if (!adminPassword || !userPassword) throw new Error('Seed nije izdao oba jednokratna demo naloga.');
+          console.log(`::add-mask::${adminPassword}`);
+          console.log(`::add-mask::${userPassword}`);
+          appendFileSync(process.env.GITHUB_ENV, [
+            'TEST_ADMIN_EMAIL=admin@vfm.local',
+            `TEST_ADMIN_PASSWORD=${adminPassword}`,
+            'TEST_USER_EMAIL=vozac@vfm.local',
+            `TEST_USER_PASSWORD=${userPassword}`,
+            `TEST_RUN_ID=${process.env.GITHUB_RUN_ID}`,
+            '',
+          ].join('\n'));
+          NODE
+          rm -f "$seed_log"
+      - name: Aktiviraj privremene naloge samo u E2E bazi
+        working-directory: apps/api
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from 'pg';
+          const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+          await client.connect();
+          try {
+            const result = await client.query(
+              'UPDATE "User" SET "status" = \'ACTIVE\', "mustChangePassword" = false, "updatedAt" = CURRENT_TIMESTAMP WHERE "email" = ANY($1::text[])',
+              [['admin@vfm.local', 'vozac@vfm.local']],
+            );
+            if (result.rowCount !== 2) throw new Error(`Očekivana su 2 demo naloga; ažurirano ${result.rowCount}.`);
+          } finally {
+            await client.end();
+          }
+          NODE
+      - name: Napravi kratkotrajne API tajne za ovaj job
+        run: |
+          {
+            echo "JWT_ACCESS_SECRET=$(openssl rand -hex 32)"
+            echo "JWT_REFRESH_SECRET=$(openssl rand -hex 32)"
+          } >> "$GITHUB_ENV"
+      - name: Pokreni API samo nad disposable CI PostgreSQL/Redis servisima
+        env:
+          ENV_PROFILE: api
+          NODE_ENV: test
+          API_HOST: 0.0.0.0
+          API_PORT: "3000"
+          LOG_LEVEL: warn
+        run: |
+          set -euo pipefail
+          nohup pnpm --filter @vfm/api dev >"$RUNNER_TEMP/mobile-e2e-api.log" 2>&1 </dev/null &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/health/live >/dev/null; then
+              echo "E2E API is ready on the local runner."
+              exit 0
+            fi
+            sleep 2
+          done
+          tail -n 60 "$RUNNER_TEMP/mobile-e2e-api.log"
+          exit 1
+      - name: Instaliraj Maestro CLI
+        env:
+          MAESTRO_VERSION: 2.11.0
+        run: |
+          curl -fsSL https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+          "$HOME/.maestro/bin/maestro" --version
+      - name: Android emulator build i P4 UI/API acceptance
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-boot-timeout: 600
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            cd apps/mobile
+            EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api/v1 corepack pnpm exec expo run:android --variant release --no-bundler
+            cd ../..
+            maestro test -e TEST_ADMIN_EMAIL="$TEST_ADMIN_EMAIL" -e TEST_ADMIN_PASSWORD="$TEST_ADMIN_PASSWORD" -e TEST_RUN_ID="$TEST_RUN_ID" apps/mobile/.maestro/task-create-admin.yaml
+            maestro test -e TEST_USER_EMAIL="$TEST_USER_EMAIL" -e TEST_USER_PASSWORD="$TEST_USER_PASSWORD" apps/mobile/.maestro/task-create-no-permission.yaml
+            P4_E2E_API_URL=http://127.0.0.1:3000/api/v1 node apps/mobile/scripts/verify-p4-api.mjs

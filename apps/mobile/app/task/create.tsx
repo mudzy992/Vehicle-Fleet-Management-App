@@ -255,10 +255,10 @@ export default function CreateTaskScreen() {
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>1. Vrsta i vozilo</Text>
             <Text style={styles.label}>Vrsta zadatka</Text>
-            <View style={styles.choices}>{taskTypes.map((item) => <Choice key={item.id} active={item.id === taskTypeId} label={item.name} detail={item.description ?? item.code} onPress={() => selectType(item)} />)}</View>
+            <View style={styles.choices}>{taskTypes.map((item) => <Choice key={item.id} testID={`task-create-type-${item.code.toLowerCase()}`} active={item.id === taskTypeId} label={item.name} detail={item.description ?? item.code} onPress={() => selectType(item)} />)}</View>
             {selectedType?.requiresVehicle ? <>
               <Text style={styles.label}>Vozilo</Text>
-              {vehicles.length ? <View style={styles.choices}>{vehicles.map((item) => <Choice key={item.id} active={item.id === vehicleId} label={`${item.internalNo} · ${item.make} ${item.model}`} detail={item.plateNumber ?? 'Bez registarske oznake'} onPress={() => setVehicleId(item.id)} />)}</View> : <Text style={styles.error}>Nema vozila za izbor ili nemate dozvolu vehicle:view.</Text>}
+              {vehicles.length ? <View style={styles.choices}>{vehicles.map((item) => <Choice key={item.id} testID={`task-create-vehicle-${item.internalNo.toLowerCase()}`} active={item.id === vehicleId} label={`${item.internalNo} · ${item.make} ${item.model}`} detail={item.plateNumber ?? 'Bez registarske oznake'} onPress={() => setVehicleId(item.id)} />)}</View> : <Text style={styles.error}>Nema vozila za izbor ili nemate dozvolu vehicle:view.</Text>}
             </> : <Text style={styles.muted}>Ova vrsta zadatka ne zahtijeva vozilo.</Text>}
           </View>
         ) : null}
@@ -269,7 +269,7 @@ export default function CreateTaskScreen() {
             <Text style={styles.muted}>{selectedType?.name}{selectedType?.requiresVehicle && vehicleId ? ` · ${vehicles.find((item) => item.id === vehicleId)?.internalNo ?? ''}` : ''}</Text>
             {activeForm && !activeForm.mobileCompatible ? <Text style={styles.error}>Objavljena forma nije označena kao kompatibilna s mobilnom aplikacijom.</Text> : null}
             <Text style={styles.label}>Naslov (opciono)</Text>
-            <TextInput value={title} onChangeText={setTitle} placeholder="Automatski se predlaže iz vrste i vozila" maxLength={160} style={styles.input} />
+            <TextInput testID="task-create-title" accessibilityLabel="Naslov zadatka" value={title} onChangeText={setTitle} placeholder="Automatski se predlaže iz vrste i vozila" maxLength={160} style={styles.input} />
             <Text style={styles.label}>Opis (opciono)</Text>
             <TextInput value={description} onChangeText={setDescription} placeholder="Dodatne upute" multiline maxLength={2000} style={[styles.input, styles.textarea]} />
             <Text style={styles.label}>Prioritet</Text>
@@ -321,21 +321,21 @@ export default function CreateTaskScreen() {
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
         <View style={styles.actions}>
           {step > 1 ? <ActionButton label="Nazad" secondary disabled={submitting || uploadingField !== null} onPress={() => setStep((current) => (current - 1) as 1 | 2 | 3)} /> : null}
-          {step === 1 ? <ActionButton label="Nastavi" disabled={!selectedType || (selectedType.requiresVehicle && !vehicleId)} onPress={() => { setError(null); setStep(2); }} /> : null}
-          {step === 2 ? <ActionButton label="Nastavi na obrazac" disabled={!activeForm || !activeForm.mobileCompatible || formLoading || (selectedType?.requiresVehicle === true && !vehicleId)} onPress={continueFromDetails} /> : null}
-          {step === 3 ? <ActionButton label={submitting ? 'Kreiram…' : 'Kreiraj zadatak'} disabled={!model || submitting || uploadingField !== null} onPress={() => void submit()} /> : null}
+          {step === 1 ? <ActionButton testID="task-create-next-step-1" label="Nastavi" disabled={!selectedType || (selectedType.requiresVehicle && !vehicleId)} onPress={() => { setError(null); setStep(2); }} /> : null}
+          {step === 2 ? <ActionButton testID="task-create-next-step-2" label="Nastavi na obrazac" disabled={!activeForm || !activeForm.mobileCompatible || formLoading || (selectedType?.requiresVehicle === true && !vehicleId)} onPress={continueFromDetails} /> : null}
+          {step === 3 ? <ActionButton testID="task-create-submit" label={submitting ? 'Kreiram…' : 'Kreiraj zadatak'} disabled={!model || submitting || uploadingField !== null} onPress={() => void submit()} /> : null}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-function Choice({ active, label, detail, onPress, selectionRole = 'radio' }: { active: boolean; label: string; detail?: string; selectionRole?: 'radio' | 'checkbox'; onPress(): void }) {
-  return <Pressable onPress={onPress} accessibilityRole={selectionRole} accessibilityState={{ selected: active }} style={[styles.choice, active && styles.choiceActive]}><Text style={[styles.choiceLabel, active && styles.choiceLabelActive]}>{label}</Text>{detail ? <Text style={styles.choiceDetail}>{detail}</Text> : null}</Pressable>;
+function Choice({ active, label, detail, onPress, selectionRole = 'radio', testID }: { active: boolean; label: string; detail?: string; selectionRole?: 'radio' | 'checkbox'; testID?: string; onPress(): void }) {
+  return <Pressable testID={testID} accessibilityLabel={label} onPress={onPress} accessibilityRole={selectionRole} accessibilityState={{ selected: active }} style={[styles.choice, active && styles.choiceActive]}><Text style={[styles.choiceLabel, active && styles.choiceLabelActive]}>{label}</Text>{detail ? <Text style={styles.choiceDetail}>{detail}</Text> : null}</Pressable>;
 }
 
-function ActionButton({ label, onPress, disabled = false, secondary = false }: { label: string; onPress(): void; disabled?: boolean; secondary?: boolean }) {
-  return <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled} style={[styles.action, secondary && styles.actionSecondary, disabled && styles.disabled]}><Text style={[styles.actionText, secondary && styles.actionTextSecondary]}>{label}</Text></Pressable>;
+function ActionButton({ label, onPress, disabled = false, secondary = false, testID }: { label: string; onPress(): void; disabled?: boolean; secondary?: boolean; testID?: string }) {
+  return <Pressable testID={testID} accessibilityRole="button" onPress={onPress} disabled={disabled} style={[styles.action, secondary && styles.actionSecondary, disabled && styles.disabled]}><Text style={[styles.actionText, secondary && styles.actionTextSecondary]}>{label}</Text></Pressable>;
 }
 
 const styles = StyleSheet.create({

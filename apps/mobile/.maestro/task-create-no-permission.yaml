@@ -1,0 +1,16 @@
+appId: ba.ba101.voznipark
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Prijava"
+- tapOn:
+    text: "E-mail"
+- inputText: ${TEST_USER_EMAIL}
+- tapOn:
+    text: "Lozinka"
+- inputText: ${TEST_USER_PASSWORD}
+- hideKeyboard
+- tapOn: "Prijavi se"
+- assertNotVisible: "Prijava"
+- assertNotVisible:
+    id: "task-create-open"

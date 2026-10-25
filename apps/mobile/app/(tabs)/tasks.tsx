@@ -64,7 +64,7 @@ export default function TasksScreen() {
           <Text style={styles.subtitle}>{mode === 'MINE' ? 'Zadaci povezani s vašim nalogom.' : 'Preuzmite zadatak koji možete izvršiti.'}</Text>
         </View>
         <View style={styles.headingActions}>
-          {user?.permissions.includes('task:create') ? <Link href="/task/create" asChild><Pressable accessibilityRole="button" accessibilityLabel="Kreiraj zadatak" style={styles.create}><Text style={styles.createText}>+ Novi</Text></Pressable></Link> : null}
+          {user?.permissions.includes('task:create') ? <Link href="/task/create" asChild><Pressable testID="task-create-open" accessibilityRole="button" accessibilityLabel="Kreiraj zadatak" style={styles.create}><Text style={styles.createText}>+ Novi</Text></Pressable></Link> : null}
           <Pressable onPress={() => void load(true)} accessibilityRole="button" accessibilityLabel="Osvježi zadatke" style={styles.refresh}>
             <Text style={styles.refreshText}>↻</Text>
           </Pressable>

@@ -1,0 +1,38 @@
+appId: ba.ba101.voznipark
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Prijava"
+- tapOn:
+    text: "E-mail"
+- inputText: ${TEST_ADMIN_EMAIL}
+- tapOn:
+    text: "Lozinka"
+- inputText: ${TEST_ADMIN_PASSWORD}
+- hideKeyboard
+- tapOn: "Prijavi se"
+- assertVisible:
+    id: "task-create-open"
+- tapOn:
+    id: "task-create-open"
+- assertVisible: "Novi zadatak"
+- tapOn:
+    id: "task-create-type-wash"
+- tapOn:
+    id: "task-create-vehicle-vfm-001"
+- tapOn:
+    id: "task-create-next-step-1"
+- tapOn:
+    id: "task-create-title"
+- inputText: "P4-E2E-${TEST_RUN_ID}"
+- hideKeyboard
+- tapOn:
+    id: "task-create-next-step-2"
+- assertVisible: "Vrsta pranja"
+- tapOn: "Unutrašnje"
+- tapOn:
+    id: "task-create-submit"
+- assertVisible: "P4-E2E-${TEST_RUN_ID}"
+- pressKey: BACK
+- assertVisible: "Moji zadaci"
+- assertVisible: "P4-E2E-${TEST_RUN_ID}"
