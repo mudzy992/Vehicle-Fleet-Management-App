@@ -345,6 +345,8 @@ Legenda: **DoD** = Definition of Done. Svaka faza završava s: (1) prolazećim b
 
 ### FAZA 5 — Zadaci, atomsko preuzimanje, outbox, FCM (≈ 8–10 dana)
 
+**Status (25.10.2026.): administrativno zatvorena po izričitoj korisničkoj odluci.** Zatvaranje je uz dokumentovane izuzetke, a ne tvrdnja da su svi kriteriji dokazani: P4 mobilni E2E se prenosi u Fazu 6; atomska veza uspješnog AuditLog upisa s task transakcijom nije potvrđena; globalna admin politika obavijesti i vlasnička FCM konfiguracija su odgođene. Detalji i CI dokazi: [`docs/FAZA5_AUDIT.md`](FAZA5_AUDIT.md).
+
 **Najkritičnija faza — tok iz §19 projektnog zadatka.**
 
 **Zadaci**

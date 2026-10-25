@@ -1,7 +1,7 @@
-# Faza 5 — početni audit i otvoreni kriteriji
+# Faza 5 — audit dokaza i zatvaranje
 
 **Datum presjeka:** 25.10.2026.
-**Status:** aktivna, nepotpuna. Ovo je audit koda, ne potvrda završetka Faze 5.
+**Status:** administrativno zatvorena po izričitoj odluci korisnika (25.10.2026.), uz navedene izuzetke i prenesene zadatke. Zatvaranje ne tvrdi da su svi acceptance kriteriji dokazani: P4 mobilni E2E ostaje neprovjeren i prenosi se u Fazu 6; atomsku AuditLog/task transakciju ne potvrđujemo; globalna admin politika obavijesti i vlasnička FCM konfiguracija ostaju odgođene.
 
 ## Nalazi prema `docs/PLAN_IMPLEMENTACIJE.md` §6
 
@@ -34,7 +34,7 @@
 - DeviceToken API: `GET/POST/DELETE /api/v1/devices/tokens`; vlasnik se određuje isključivo iz prijavljenog korisnika. SHA-256 hash služi deduplikaciji; sirovi token se čuva za FCM, ali se ne vraća, a audit ga redaktuje. Isti token ne može registrovati drugi korisnik dok ga prethodni vlasnik ne opozove. Ciljani service/HTTP + P14 testovi (12), Prisma select-registry test i CI-guarded isolated-DB lifecycle test prolaze.
 - CI **40187616341**: isolated integration (uklj. DeviceToken lifecycle), P6/P15 i security su prošli; typecheck/unit našli su neispravan Vitest mock tip i nedostajući `DEVICE_TOKEN_SELECT` u registru. Popravke su potvrđene punim CI runom **40187788005** (unit+coverage, integration, typecheck, build/Docker i security).
 - CI **40186049858**: Prisma client generation i migration deployment prošli; integration je otkrio dva tokena na istom testnom korisniku (2 umjesto 1 dostave), a unit zastarjelu očekivanu listu migracija; dependency audit prijavio je ranjiv `node-forge`. Fixture je razdvojen po vlasniku uređaja, lista migracija ažurirana, a `firebase-admin` podignut na 14.5.0 (`pnpm audit --audit-level=high` prolazi). CI **40186411541** prošao je unit, lint/typecheck, build/Docker i security, ali je integration otkrio zastarjelu aserciju broja `PROCESSED` događaja (3 umjesto 2). CI **40186692509** potvrdio je punu integraciju, unit+coverage, migration, lint/typecheck, dependency/security scan, build i Docker.
-- Firebase ostaje isključen bez vlasničke konfiguracije. Ne čitaju se niti mijenjaju produkcijske tajne; `P16` backup/restore ostaje odgođen. Faza 5 ostaje aktivna/nepotpuna.
+- Firebase ostaje isključen bez vlasničke konfiguracije. Ne čitaju se niti mijenjaju produkcijske tajne; `P16` backup/restore ostaje odgođen. U trenutku ovog pregleda faza je bila aktivna; administrativno zatvaranje odobreno je naknadno, uz izuzetke navedene na vrhu ovog audita.
 
 ## SSE i naredne provjere (25.10.2026.)
 
@@ -46,7 +46,7 @@
 
 | Kriterij | Dokaz koji postoji | Šta nedostaje za prihvatanje |
 |---|---|---|
-| P4 | Task-create API permisije pokrivene P14 HTTP sweepom; web task-create komponentni testovi postoje. | Nema mobilnog create wizard/Maestro E2E testa koji provjerava kreiranje i vidljivost u listi/webu; nema mobilnog UI dokazivanja da FAB nestaje bez prava. |
+| P4 | Task-create API permisije pokrivene P14 HTTP sweepom; web task-create komponentni testovi postoje. | Mobilni create wizard/Maestro E2E nije izvršen. Kriterij nije poništen: prenosi se u Fazu 6, nad izolovanim disposable API/emulator okruženjem, nikada produkcijom. |
 | P5 | `task-open-visibility.integration.spec.ts`: dva korisnika kroz HTTP GET `/tasks/available`, stvarni DB outbox i dvije Notification stavke, HTTP claim pa GET detalja drugom korisniku. | Potvrđeno CI **40192057825** na izolovanoj PostgreSQL bazi. |
 | P6 | `task-claim-http-idempotency.stress.spec.ts`: 200 HTTP POST claim zahtjeva s 199 jedinstvenih korisnika i jednim ponovljenim akterom, stvarni Redis idempotency interceptor i izolovana PostgreSQL; jedan 200, 199 `TASK_ALREADY_CLAIMED`, jedan `IN_PROGRESS`, ASSIGNEE, CLAIMED event i Outbox; replay uspješnog istog ključa vraća isti status/body bez novih redova. CI **40213791946** prolazi. | Glavni acceptance tok je potvrđen. Postojeći direktni `TasksService.claim()` stress ostaje komplementarna provjera. |
 | P7 | `task-complete-authorization.integration.spec.ts` pokriva 403 `NOT_ASSIGNEE`, uspješan claim-holder completion i override uz `TaskEvent`/`AuditLog`. Dodatni fault-injection test postavlja DB trigger koji odbija `TaskEvent` nakon `Task` update-a; kroz Nest HTTP provjerava 500, rollback status/version/completedAt, nula `TaskEvent`/`TASK_COMPLETED` OutboxEvent i failure `AuditLog` (`success=false`). CI **40217060801** prolazi. | Rollback atomiciteta `Task`/`TaskEvent`/Outbox je potvrđen. `AuditLog` i dalje ide asinhrono kroz interceptor izvan task transakcije; atomsku vezu uspješnog audita s task commitom ne potvrđujemo niti mijenjamo bez odluke o dizajnu. |
@@ -60,6 +60,6 @@ To nije isto što opisuje PLAN IMPLEMENTACIJE §6 (Super Admin uključuje/isklju
 
 Prije implementacije treba potvrditi da je ova podjela (globalni allow/deny + serverski izračun publike + korisnički opt-out) odgovarajuća poslovnoj namjeri. Trenutna DB šema nema audience rule/role target model, a event tipovi i validne publike trebaju ostati eksplicitna allowlista, ne proizvoljna konfiguracija.
 
-## Sljedeći uski korak
+## Preneseni zadaci nakon zatvaranja
 
-P5, P6 i P8 acceptance testovi prolaze u izolovanom CI-ju (**40192057825**, **40213791946**, **40213033583**); P7 authorization/rollback HTTP/DB testovi prolaze (**40217060801**). P4 E2E pristup je definisan, ali blokiran nedostatkom Maestro flow/runnera, Android emulator joba i disposable API fixturea; ne pokretati prema produkciji. Atomsku vezu uspješnog AuditLog zapisa s task transakcijom ne potvrđujemo; ostaje otvorena odluka o dizajnu. Admin politika zahtijeva potvrdu podjele iznad prije endpoint/model/UI implementacije. Ne označavati Fazu 5 završenom.
+P5/P6/P8 acceptance testovi prolaze u izolovanom CI-ju (**40192057825**, **40213791946**, **40213033583**); P7 authorization/rollback HTTP/DB testovi prolaze (**40217060801**). Faza 5 je zatvorena po korisničkoj odluci uz vidljivo evidentirane izuzetke: P4 mobilni E2E ide u Fazu 6; atomsku vezu uspješnog AuditLog zapisa s task transakcijom ne tvrdimo; globalna admin politika obavijesti čeka poslovnu potvrdu prije implementacije; FCM ostaje isključen do vlasničke konfiguracije. Produkcijska baza/servisi/tajne nisu korišteni.
