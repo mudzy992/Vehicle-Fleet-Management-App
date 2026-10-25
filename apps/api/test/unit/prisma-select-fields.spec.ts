@@ -31,6 +31,11 @@ const SELECT_REGISTRY: ReadonlyArray<{ file: string; constant: string; model: st
   { file: 'modules/drivers/drivers.service.ts', constant: 'DRIVER_SELECT', model: 'Driver' },
   { file: 'modules/insurances/insurances.service.ts', constant: 'SELECT', model: 'InsuranceRecord' },
   {
+    file: 'modules/notifications/device-tokens.service.ts',
+    constant: 'DEVICE_TOKEN_SELECT',
+    model: 'DeviceToken',
+  },
+  {
     file: 'modules/registrations/registrations.service.ts',
     constant: 'SELECT',
     model: 'RegistrationRecord',
@@ -62,7 +67,11 @@ const SELECT_REGISTRY: ReadonlyArray<{ file: string; constant: string; model: st
     model: 'TireInstallation',
   },
   { file: 'modules/reminders/reminders.service.ts', constant: 'SELECT', model: 'ScheduledReminder' },
-  { file: 'modules/notifications/notifications.service.ts', constant: 'NOTIFICATION_SELECT', model: 'Notification' },
+  {
+    file: 'modules/notifications/notifications.service.ts',
+    constant: 'NOTIFICATION_SELECT',
+    model: 'Notification',
+  },
   { file: 'modules/users/users.service.ts', constant: 'USER_SELECT', model: 'User' },
   { file: 'modules/vehicles/vehicles.service.ts', constant: 'VEHICLE_SELECT', model: 'Vehicle' },
 ];

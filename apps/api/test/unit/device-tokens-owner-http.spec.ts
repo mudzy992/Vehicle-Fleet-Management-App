@@ -132,7 +132,7 @@ describe('DeviceToken HTTP — owner scope', () => {
     const response = await fetch(`${baseUrl}/devices/tokens`, { headers: { 'x-test-actor': 'USER_ONE' } });
     expect(response.status).toBe(200);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: USER_ONE } }));
-    const body = await response.json();
+    const body = (await response.json()) as { items: Array<Record<string, unknown>> };
     expect(body.items[0]).toMatchObject({ id: DEVICE_ID, platform: 'android', status: 'ACTIVE' });
     expect(body.items[0]).not.toHaveProperty('token');
     expect(body.items[0]).not.toHaveProperty('tokenHash');
@@ -151,7 +151,7 @@ describe('DeviceToken HTTP — owner scope', () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ userId: USER_ONE, platform: 'ios' }) }),
     );
-    const body = await response.json();
+    const body = (await response.json()) as Record<string, unknown>;
     expect(body).not.toHaveProperty('token');
     expect(body).not.toHaveProperty('tokenHash');
 

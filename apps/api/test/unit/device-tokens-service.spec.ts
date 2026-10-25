@@ -34,7 +34,7 @@ function harness() {
   const prisma = {
     deviceToken: {
       findMany: vi.fn(async () => [ROW]),
-      findUnique: vi.fn(async () => null),
+      findUnique: vi.fn(async (): Promise<{ id: string; userId: string } | null> => null),
       create: vi.fn(async () => ROW),
       update: vi.fn(async () => ROW),
     },
