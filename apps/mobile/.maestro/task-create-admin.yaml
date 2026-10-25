@@ -10,7 +10,7 @@ appId: ba.ba101.voznipark
 - tapOn:
     id: "login-password"
 - inputText: ${TEST_ADMIN_PASSWORD}
-- pressKey: ENTER
+- pressKey: Enter
 - assertVisible:
     id: "task-create-open"
 - tapOn:
