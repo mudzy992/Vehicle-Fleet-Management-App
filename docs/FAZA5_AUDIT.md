@@ -50,7 +50,7 @@
 | P5 | `task-open-visibility.integration.spec.ts`: dva korisnika kroz HTTP GET `/tasks/available`, stvarni DB outbox i dvije Notification stavke, HTTP claim pa GET detalja drugom korisniku. | Potvrđeno CI **40192057825** na izolovanoj PostgreSQL bazi. |
 | P6 | CI stress `40190059428`: 200 poziva stvarnog `TasksService.claim()` prema izolovanom PostgreSQL-u; tačno jedan claim/event/ASSIGNEE. | Nije puni acceptance tok kroz HTTP/Redis Idempotency-Key; trenutni stress koristi isti korisnički akter za sve pozive, za razliku od mješovitih korisnika iz test plana. |
 | P7 | `task-complete-authorization.integration.spec.ts` kroz Nest HTTP + izolovani PostgreSQL provjerava 403 `NOT_ASSIGNEE` bez promjene statusa/eventa, 200 za izvršioca, te override 200 uz `TaskEvent(OVERRIDE_COMPLETED)`, `completedById` i `AuditLog(COMPLETE, override=true)`. CI **40212483559** prolazi. | Nema fault-injection testa koji izaziva grešku nakon DB mutacije i eksplicitno potvrđuje rollback. `AuditLog` se upisuje asinhrono kroz interceptor, izvan task transakcije; treba potvrditi prihvatljivost eventualnog audita ili promijeniti dizajn ako se traži atomska garancija. |
-| P8 | CI outbox/FCM integration s mock gateway-em provjerava retry, invalid token, deduplikaciju i SENT. | Test ne veže fixture za stvarni Task; zato ne potvrđuje da stvarni task ostaje IN_PROGRESS dok FCM pada i nakon retry nema duplih Notification redova. |
+| P8 | `outbox-fcm-task-state.integration.spec.ts` veže mock FCM timeout i retry na stvarni `IN_PROGRESS` Task; provjerava nepromijenjen status/assignee/version/updatedAt, jednu Notification/Delivery, `FAILED attempts=1` pa `SENT attempts=2`; CI **40213033583** prolazi. | P8 glavni acceptance tok je potvrđen. Outbox ostaje `PROCESSED`; retry se dešava na `NotificationDelivery`, ne kroz ponovnu obradu OutboxEventa. |
 
 ## Admin politika primaoca i tipova obavijesti
 
@@ -62,4 +62,4 @@ Prije implementacije treba potvrditi da je ova podjela (globalni allow/deny + se
 
 ## Sljedeći uski korak
 
-P5 i P7 HTTP/DB integration testovi prolaze u CI-ju (**40192057825**, **40212483559**). Sljedeće: P8 povezati s task fixture-om i dokazati retry bez duplikata; zatim uskladiti P6 stress s acceptance putem HTTP/Idempotency-Key i odrediti pristup za mobilni P4 E2E. P7 rollback fault-injection i atomska veza AuditLog/task transakcije ostaju otvoreni. Admin politika zahtijeva potvrdu podjele iznad prije endpoint/model/UI implementacije. Ne označavati Fazu 5 završenom.
+P5, P7 i P8 HTTP/DB integration dokazi prolaze u izolovanom CI-ju (**40192057825**, **40212483559**, **40213033583**). Sljedeće: uskladiti P6 stress s acceptance putem HTTP/Idempotency-Key i odrediti pristup za mobilni P4 E2E. P7 fault-injection rollback i eventualna atomska veza AuditLog/task transakcije ostaju otvoreni. Admin politika zahtijeva potvrdu podjele iznad prije endpoint/model/UI implementacije. Ne označavati Fazu 5 završenom.
