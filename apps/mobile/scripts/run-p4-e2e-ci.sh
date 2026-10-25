@@ -2,7 +2,9 @@
 set -euo pipefail
 
 sanitize_maestro_debug() {
+  local exit_status=$?
   local file
+  local -a logs=()
   while IFS= read -r -d '' file; do
     case "$file" in
       *.log|*.json|*.yaml|*.txt)
@@ -10,9 +12,20 @@ sanitize_maestro_debug() {
           -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" \
           -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
           "$file"
+        [[ "$file" == */maestro.log ]] && logs+=("$file")
         ;;
     esac
   done < <(find "$RUNNER_TEMP" -maxdepth 3 -type f -path '*/maestro-debug-*/*' -print0 2>/dev/null || true)
+  if (( exit_status != 0 )); then
+    for file in "${logs[@]}"; do
+      echo "::group::Sanitized Maestro debug log"
+      tail -n 120 "$file" | while IFS= read -r line; do
+        echo "::error title=Maestro diagnostic::$line"
+      done
+      echo "::endgroup::"
+    done
+  fi
+  return "$exit_status"
 }
 trap sanitize_maestro_debug EXIT
 
