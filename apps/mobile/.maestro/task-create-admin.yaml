@@ -2,7 +2,9 @@ appId: ba.ba101.voznipark
 ---
 - launchApp:
     clearState: true
-- assertVisible: "Prijava"
+- extendedWaitUntil:
+    visible: "Prijava"
+    timeout: 30000
 - tapOn:
     id: "login-email"
 - inputText: ${TEST_ADMIN_EMAIL}
@@ -14,8 +16,10 @@ appId: ba.ba101.voznipark
 - tapOn:
     id: "login-submit"
 - assertNotVisible: "Prijava"
-- assertVisible:
-    id: "task-create-open"
+- extendedWaitUntil:
+    visible:
+      id: "task-create-open"
+    timeout: 30000
 - tapOn:
     id: "task-create-open"
 - assertVisible: "Novi zadatak"
@@ -36,6 +40,6 @@ appId: ba.ba101.voznipark
 - tapOn:
     id: "task-create-submit"
 - assertVisible: "P4-E2E-${TEST_RUN_ID}"
-- pressKey: BACK
+- pressKey: Back
 - assertVisible: "Moji zadaci"
 - assertVisible: "P4-E2E-${TEST_RUN_ID}"

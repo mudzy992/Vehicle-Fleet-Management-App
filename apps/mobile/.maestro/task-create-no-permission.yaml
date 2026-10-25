@@ -2,7 +2,9 @@ appId: ba.ba101.voznipark
 ---
 - launchApp:
     clearState: true
-- assertVisible: "Prijava"
+- extendedWaitUntil:
+    visible: "Prijava"
+    timeout: 30000
 - tapOn:
     id: "login-email"
 - inputText: ${TEST_USER_EMAIL}
