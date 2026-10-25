@@ -372,8 +372,9 @@ class FakeTasksPrisma {
       claimedAt: null,
       completedAt: null,
       completedById: null,
-      dueAt: new Date('2026-10-25T10:00:00Z'),
-      dueDate: new Date('2026-10-25T00:00:00Z'),
+      // Defaultni rok je namjerno u budućnosti da testovi ne zavise od sata CI runnera.
+      dueAt: new Date('2030-10-25T10:00:00Z'),
+      dueDate: new Date('2030-10-25T00:00:00Z'),
       cancelledAt: null,
       cancelReason: null,
       reopenedAt: null,
