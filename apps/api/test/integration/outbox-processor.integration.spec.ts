@@ -23,6 +23,7 @@ describe.skipIf(!isolatedCiDatabase)('Outbox → notification + FCM queue (isola
   let processBatch: typeof processOutboxBatch | undefined;
   const userId = randomUUID();
   const fcmUserId = randomUUID();
+  const invalidFcmUserId = randomUUID();
   const aggregateId = randomUUID();
   const successEventId = randomUUID();
   const mutedEventId = randomUUID();
@@ -43,24 +44,32 @@ describe.skipIf(!isolatedCiDatabase)('Outbox → notification + FCM queue (isola
     );
     await sql.query(
       `INSERT INTO "User" ("id", "email", "passwordHash", "firstName", "lastName", "status", "updatedAt")
-       VALUES ($1::uuid, $2, 'test-only-not-a-login-hash', 'FCM', 'Test', 'ACTIVE', CURRENT_TIMESTAMP)`,
-      [fcmUserId, `outbox-fcm-${fcmUserId}@vfm.test`],
+       VALUES ($1::uuid, $2, 'test-only-not-a-login-hash', 'FCM', 'Test', 'ACTIVE', CURRENT_TIMESTAMP),
+              ($3::uuid, $4, 'test-only-not-a-login-hash', 'Invalid FCM', 'Test', 'ACTIVE', CURRENT_TIMESTAMP)`,
+      [
+        fcmUserId,
+        `outbox-fcm-${fcmUserId}@vfm.test`,
+        invalidFcmUserId,
+        `outbox-invalid-${invalidFcmUserId}@vfm.test`,
+      ],
     );
     await sql.query(
       `INSERT INTO "NotificationPreference" ("id", "userId", "type", "channelInApp", "channelFcm", "updatedAt")
        VALUES ($1::uuid, $2::uuid, 'TASK_CANCELLED', FALSE, FALSE, CURRENT_TIMESTAMP),
-              ($3::uuid, $4::uuid, 'TASK_ASSIGNED', FALSE, TRUE, CURRENT_TIMESTAMP)`,
-      [randomUUID(), userId, randomUUID(), fcmUserId],
+              ($3::uuid, $4::uuid, 'TASK_ASSIGNED', FALSE, TRUE, CURRENT_TIMESTAMP),
+              ($5::uuid, $6::uuid, 'TASK_ASSIGNED', FALSE, TRUE, CURRENT_TIMESTAMP)`,
+      [randomUUID(), userId, randomUUID(), fcmUserId, randomUUID(), invalidFcmUserId],
     );
     await sql.query(
       `INSERT INTO "DeviceToken" ("id", "userId", "token", "tokenHash", "platform")
-       VALUES ($1::uuid, $2::uuid, $3, $4, 'android'), ($5::uuid, $2::uuid, $6, $7, 'android')`,
+       VALUES ($1::uuid, $2::uuid, $3, $4, 'android'), ($5::uuid, $6::uuid, $7, $8, 'android')`,
       [
         fcmTokenId,
         fcmUserId,
         `test-fcm-token-${fcmTokenId}`,
         `test-hash-${fcmTokenId}`,
         invalidFcmTokenId,
+        invalidFcmUserId,
         `test-invalid-fcm-token-${invalidFcmTokenId}`,
         `test-invalid-hash-${invalidFcmTokenId}`,
       ],
@@ -78,7 +87,7 @@ describe.skipIf(!isolatedCiDatabase)('Outbox → notification + FCM queue (isola
       [successEventId, 'TASK_CLAIMED', [userId]],
       [mutedEventId, 'TASK_CANCELLED', [userId]],
       [fcmOnlyEventId, 'TASK_ASSIGNED', [fcmUserId]],
-      [invalidTokenEventId, 'TASK_ASSIGNED', [fcmUserId]],
+      [invalidTokenEventId, 'TASK_ASSIGNED', [invalidFcmUserId]],
       [retryEventId, 'TASK_COMPLETED', ['not-a-uuid']],
     ] as const) {
       await sql.query(
@@ -103,7 +112,9 @@ describe.skipIf(!isolatedCiDatabase)('Outbox → notification + FCM queue (isola
     await sql.query('DELETE FROM "OutboxEvent" WHERE "id" = ANY($1::uuid[])', [
       [successEventId, mutedEventId, fcmOnlyEventId, invalidTokenEventId, retryEventId],
     ]);
-    await sql.query('DELETE FROM "User" WHERE "id" = ANY($1::uuid[])', [[userId, fcmUserId]]);
+    await sql.query('DELETE FROM "User" WHERE "id" = ANY($1::uuid[])', [
+      [userId, fcmUserId, invalidFcmUserId],
+    ]);
     await sql.end();
   });
 
@@ -156,8 +167,8 @@ describe.skipIf(!isolatedCiDatabase)('Outbox → notification + FCM queue (isola
 
     const fcmNow = new Date(Date.now() + 5_000);
     await sql.query(
-      `UPDATE "NotificationPreference" SET "channelFcm" = FALSE WHERE "userId" = $1::uuid AND "type" = 'TASK_ASSIGNED'`,
-      [fcmUserId],
+      `UPDATE "NotificationPreference" SET "channelFcm" = FALSE WHERE "userId" = ANY($1::uuid[]) AND "type" = 'TASK_ASSIGNED'`,
+      [[fcmUserId, invalidFcmUserId]],
     );
     const disabledDelivery = await processFcmDeliveryBatch(
       client as never,
@@ -171,8 +182,8 @@ describe.skipIf(!isolatedCiDatabase)('Outbox → notification + FCM queue (isola
     );
     expect(disabledDelivery.claimed).toBe(0);
     await sql.query(
-      `UPDATE "NotificationPreference" SET "channelFcm" = TRUE WHERE "userId" = $1::uuid AND "type" = 'TASK_ASSIGNED'`,
-      [fcmUserId],
+      `UPDATE "NotificationPreference" SET "channelFcm" = TRUE WHERE "userId" = ANY($1::uuid[]) AND "type" = 'TASK_ASSIGNED'`,
+      [[fcmUserId, invalidFcmUserId]],
     );
 
     const flakyGateway: FcmGateway = {

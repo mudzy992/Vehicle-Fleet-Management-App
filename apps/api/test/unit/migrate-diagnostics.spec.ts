@@ -107,7 +107,7 @@ describe('parsePendingMigrations', () => {
 });
 
 describe('listMigrationNames', () => {
-  it('navodi stvarne migracije u repo-u (0_extensions do 4_super_admin_guard_lock)', () => {
+  it('navodi stvarne migracije u repo-u (0_extensions do 5_notification_delivery_retry)', () => {
     // vitest se pokreće iz `apps/api` (turbo/pnpm postavljaju cwd paketa).
     const dir = resolve(process.cwd(), 'prisma', 'migrations');
     expect(listMigrationNames(dir)).toEqual([
@@ -116,6 +116,7 @@ describe('listMigrationNames', () => {
       '2_manual',
       '3_password_reset_tokens',
       '4_super_admin_guard_lock',
+      '5_notification_delivery_retry',
     ]);
   });
 

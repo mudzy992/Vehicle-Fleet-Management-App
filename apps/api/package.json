@@ -43,7 +43,7 @@
     "@vfm/shared": "workspace:*",
     "bullmq": "6.3.17",
     "dotenv": "18.0.8",
-    "firebase-admin": "13.6.0",
+    "firebase-admin": "14.5.0",
     "ioredis": "6.0.0",
     "pg": "8.23.1",
     "pino": "10.4.0",

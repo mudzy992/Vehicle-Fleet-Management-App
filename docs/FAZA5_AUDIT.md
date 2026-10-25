@@ -31,6 +31,7 @@
 - Commit `04e30e5` stabilizovao je datum fixture-a za overdue task test; ciljano 44 testa prolaze.
 - Dodan je self-service API za vlastite notification kanal-postavke; body ne prihvata `userId` klijenta.
 - FCM tok je implementiran u radnoj promjeni: migration za lease/retry polja, notification visibility po kanalu, Firebase Admin gateway (lazy file-mount credentials) i zaseban delivery processor. Lokalni gateway/processor unit testovi prolaze (7); prošireni ciljani unit/HTTP skup prolazi (20); targetirani TypeScript check processor/gateway-a prolazi. DB integracija/migracija mora biti potvrđena narednim CI runom.
+- CI **40186049858**: Prisma client generation i migration deployment prošli; unit, integration i dependency audit pali. Lokalno je reprodukovana/fiksirana zastarjela očekivana lista migracija i integracijski fixture odvojen po vlasniku uređaja; `firebase-admin` je podignut na 14.5.0, a `pnpm audit --audit-level=high` sada prolazi. GitHub log/artifact preuzimanje vratilo je EOF, zato je tačan preostali integration uzrok još nepotvrđen.
 - Firebase ostaje isključen bez vlasničke konfiguracije. Ne čitaju se niti mijenjaju produkcijske tajne; `P16` backup/restore ostaje odgođen. Faza 5 ostaje aktivna/nepotpuna.
 
 ## Sljedeći uski korak
