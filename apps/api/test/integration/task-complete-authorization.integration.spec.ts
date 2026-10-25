@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
-import type { NextFunction, Request, Response } from 'express';
-import { evaluateEffectivePermissions, type PermissionGrant } from '@vfm/shared';
+import type { NextFunction, Request, Response as ExpressResponse } from 'express';
+import { evaluateEffectivePermissions, type ClientType, type PermissionGrant } from '@vfm/shared';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AUDIT_SINK } from '../../src/common/audit/audit.types.js';
@@ -140,7 +140,7 @@ describe.skipIf(!isIsolatedCiDatabase)('P7 — završetak zadatka, override i Au
     prisma = client;
 
     const permissions = {
-      effective: async (userId: string, clientType: 'WEB' | 'MOBILE') => {
+      effective: async (userId: string, clientType: ClientType) => {
         const grants = grantsByUser.get(userId) ?? [];
         return evaluateEffectivePermissions({
           roles: ['OBICNI_KORISNIK'],
@@ -171,7 +171,7 @@ describe.skipIf(!isIsolatedCiDatabase)('P7 — završetak zadatka, override i Au
     app.use(
       (
         request: Request & { user?: AuthenticatedUser; id?: string },
-        _response: Response,
+        _response: ExpressResponse,
         next: NextFunction,
       ) => {
         const rawUserId = request.headers['x-p7-user'];
