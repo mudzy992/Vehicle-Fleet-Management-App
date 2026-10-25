@@ -40,7 +40,7 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | **P3** | Oduzeto pravo odmah blokira API | 1 | unit ✅ + integration | ✅ `permissions-service.spec.ts`, `auth-guards.spec.ts`, `auth-service.spec.ts` (`me` nakon revokacije); ⏳ `rbac-revocation-latency.integration.spec.ts` | korisnik s `vehicle:create` → `POST /vehicles` 201; oduzeti pravo → isti **access token** (bez re-logina) → `POST /vehicles` 403 u ≤ 5 s; mjeri se `Date.now()` delta i tvrdi `< 5000` |
 | **P4** | Admin kreira zadatak na mobilu | 5, 6 | e2e | Maestro `mobile-task-create.yaml` | login administratora → FAB → wizard → vozilo/tip → potvrdi → zadatak vidljiv u listi i na webu; bez `task:create` → FAB ne postoji **i** `POST /tasks` → 403 |
 | **P5** | Oba korisnika vide/dobiju slobodan zadatak | 5, 6 | integration | `task-open-visibility.integration.spec.ts` | zadatak `OPEN_CLAIM` s 2 pozvana → `GET /tasks/available` vraća zadatak za oba; `Notification` postoji za oba (unique `notificationKey`); outbox `PROCESSED`; nakon claim-a drugi korisnik vidi `assigneeName` |
-| **P6** | Paralelno preuzimanje → tačno 1 izvršilac | 5, 6 | **stress** | `task-claim-concurrency.stress.spec.ts` | `Promise.all` od **200** `POST /tasks/:id/claim` (različiti korisnici + isti korisnik 2×) → tačno **jedan** 200, ostali 409; `Task.status='IN_PROGRESS'`; `TaskAssignment` ima **1** red s `role='ASSIGNEE'`; `TaskEvent` ima **1** `CLAIMED`; ponovljeni poziv s istim `Idempotency-Key` vraća isti odgovor bez novog reda |
+| **P6** | Paralelno preuzimanje → tačno 1 izvršilac | 5, 6 | **stress** | `task-claim-http-idempotency.stress.spec.ts` + `task-claim-stress.stress.spec.ts` (CI **40213791946**) | 200 HTTP `POST /tasks/:id/claim` kroz Nest uz stvarni Redis Idempotency-Key i izolovani PostgreSQL; 199 korisnika, jedan korisnik šalje drugi zahtjev; tačno jedan 200 i 199 `TASK_ALREADY_CLAIMED`; `IN_PROGRESS`, jedan ASSIGNEE/CLAIMED/Outbox; isti ključ pobjednika vraća identičan status/body bez novog reda |
 | **P7** | Samo izvršilac/ovlaštena osoba završava | 5 | integration | `task-complete-authorization.integration.spec.ts` (CI **40212483559**) | korisnik B (nije izvršilac, nema override) → 403 `NOT_ASSIGNEE` bez status/event promjene; izvršilac → 200; korisnik C s `task:complete_override` → 200 + `TaskEvent(OVERRIDE_COMPLETED)` + AuditLog `COMPLETE` s `override=true` + `completedById=C` |
 | **P8** | Push greška ne briše zadatak; retry bez duplikata | 5 | integration | `outbox-fcm-task-state.integration.spec.ts` (CI **40213033583**) | Outbox kreira jednu `Notification` i jednu `NotificationDelivery`; timeout → Delivery `FAILED`, `attempts=1`; retry → `SENT`, `attempts=2`; Outbox ostaje `PROCESSED`; kroz oba pokušaja Task ostaje `IN_PROGRESS` i ne mijenja se `assigneeUserId`, `version` ni `updatedAt` |
 | **P9** | Forma: kreirati, validirati, preview, objaviti | 2 | e2e + unit | `form-publish-workflow.e2e.spec.ts`, `form-engine.unit.spec.ts` | draft → validate (10 provjera) → preview (web + mobilni fixture snapshot) → publish bez `changeNote` → 422 → publish s bilješkom → 200, verzija +1, prethodna `RETIRED`; pokuša li se `PUT` nad objavljenom → 422/DB trigger exception |
@@ -106,30 +106,12 @@ zahtijevaju živi PostgreSQL i Redis (`docker-compose.dev.yml`), što u sandboxu
 
 ---
 
-## 3. Detalj: stress test za P6 (atomski claim)
+## 3. P6 stress (atomski claim + Redis idempotency)
 
-```ts
-// apps/api/test/stress/task-claim-concurrency.stress.spec.ts
-const USERS = await seedUsers(50);                 // 50 običnih korisnika s task:claim
-const task  = await seedTask({ assignMode: 'OPEN_CLAIM', invited: USERS.map(u => u.id) });
+Stvarni acceptance test je `apps/api/test/stress/task-claim-http-idempotency.stress.spec.ts`.
+Radi samo kada `CI=true`, `PHASE3_TEST_DATABASE_URL` pokazuje na `localhost/vfm_test` i Redis je `localhost` — CI workflow koristi disposable PostgreSQL 17 i Redis 7.4 servise. Test kreira korisnike/pozive u toj bazi, podiže Nest HTTP `TasksController` s permission guardom i `IdempotencyInterceptor`, te koristi stvarni Redis za idempotency zapise. Ne koristi produkcijske/staging URL-ove.
 
-const results = await Promise.allSettled(
-  Array.from({ length: 200 }, (_, i) =>
-    request(app.getHttpServer())
-      .post(`/api/v1/tasks/${task.id}/claim`)
-      .set('Authorization', `Bearer ${tokens[i % USERS.length]}`)
-      .set('Idempotency-Key', i < 100 ? `fixed-${i % USERS.length}` : randomUUID()), // dio s istim ključem (retry)
-  ),
-);
-
-const ok    = results.filter(r => r.status === 'fulfilled' && r.value.status === 200);
-const conf  = results.filter(r => r.status === 'fulfilled' && r.value.status === 409);
-expect(ok.length).toBe(1);                                   // tačno jedan izvršilac
-expect(ok.length + conf.length).toBe(200);                   // nema 500
-expect(await countAssignees(task.id)).toBe(1);               // unique partial index
-expect(await countEvents(task.id, 'CLAIMED')).toBe(1);
-expect((await getTask(task.id)).status).toBe('IN_PROGRESS');
-```
+`Promise.all` šalje 200 HTTP claim zahtjeva kroz 199 pozvanih korisnika, uključujući isti korisnik dvaput s odvojenim zahtjevnim ključevima. Rezultat mora biti jedan 200 i 199 konflikata `TASK_ALREADY_CLAIMED`; nakon toga se pobjednički zahtjev ponavlja s potpuno istim `Idempotency-Key` i tijelom, a vraćeni status/body moraju biti identični. SQL potvrđuje `IN_PROGRESS`, tačno jednog ASSIGNEE, jedan `CLAIMED` event i jedan OutboxEvent. CI **40213791946** prolazi; zasebni direktni service stress (`task-claim-stress.stress.spec.ts`) ostaje dodatna provjera.
 
 Dodatno s **k6** (Faza 8): 50 VU, 200 claim-ova/min nad 20 zadataka → 0 grešaka 5xx, p95 < 400 ms,
 i uvijek tačno jedan izvršilac po zadatku (provjera SQL-om nakon testa).
