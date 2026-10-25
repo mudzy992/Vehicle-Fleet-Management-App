@@ -34,11 +34,11 @@ export default function LoginScreen() {
         <Text style={styles.heading}>Prijava</Text>
         <Text style={styles.helper}>Prijavite se službenim korisničkim nalogom.</Text>
         <Text style={styles.label}>E-mail</Text>
-        <TextInput value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" textContentType="emailAddress" accessibilityLabel="E-mail" style={styles.input} returnKeyType="next" />
+        <TextInput testID="login-email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" textContentType="emailAddress" accessibilityLabel="E-mail" style={styles.input} returnKeyType="next" />
         <Text style={styles.label}>Lozinka</Text>
-        <TextInput value={password} onChangeText={setPassword} autoCapitalize="none" autoComplete="current-password" secureTextEntry textContentType="password" accessibilityLabel="Lozinka" style={styles.input} onSubmitEditing={() => void submit()} returnKeyType="go" />
+        <TextInput testID="login-password" value={password} onChangeText={setPassword} autoCapitalize="none" autoComplete="current-password" secureTextEntry textContentType="password" accessibilityLabel="Lozinka" style={styles.input} onSubmitEditing={() => void submit()} returnKeyType="go" />
         {(localError ?? error) ? <Text accessibilityRole="alert" style={styles.error}>{localError ?? error}</Text> : null}
-        <Pressable accessibilityRole="button" accessibilityState={{ disabled: submitting }} onPress={() => void submit()} disabled={submitting || !email || !password} style={({ pressed }) => [styles.button, (pressed || submitting) && styles.buttonPressed, (!email || !password) && styles.buttonDisabled]}>
+        <Pressable testID="login-submit" accessibilityRole="button" accessibilityState={{ disabled: submitting }} onPress={() => void submit()} disabled={submitting || !email || !password} style={({ pressed }) => [styles.button, (pressed || submitting) && styles.buttonPressed, (!email || !password) && styles.buttonDisabled]}>
           <Text style={styles.buttonText}>{submitting ? 'Prijavljujem…' : 'Prijavi se'}</Text>
         </Pressable>
         <Text style={styles.notice}>Pristup mobilnoj aplikaciji provjerava server. Super Admin nalozi koriste web portal.</Text>

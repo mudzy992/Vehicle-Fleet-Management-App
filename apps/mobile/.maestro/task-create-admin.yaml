@@ -4,13 +4,14 @@ appId: ba.ba101.voznipark
     clearState: true
 - assertVisible: "Prijava"
 - tapOn:
-    text: "E-mail"
+    id: "login-email"
 - inputText: ${TEST_ADMIN_EMAIL}
 - tapOn:
-    text: "Lozinka"
+    id: "login-password"
 - inputText: ${TEST_ADMIN_PASSWORD}
 - hideKeyboard
-- tapOn: "Prijavi se"
+- tapOn:
+    id: "login-submit"
 - assertVisible:
     id: "task-create-open"
 - tapOn:
