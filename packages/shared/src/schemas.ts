@@ -25,6 +25,7 @@ import {
   NOTIFICATION_CHANNELS,
   NOTIFICATION_PRIORITIES,
   NOTIFICATION_STATUSES,
+  DEVICE_TOKEN_STATUSES,
   REMINDER_KINDS,
   REMINDER_STATUSES,
   CLIENT_TYPES,
@@ -3391,6 +3392,39 @@ export const notificationPreferenceListSchema = z
   .object({ items: z.array(notificationPreferenceViewSchema) })
   .strict();
 export type NotificationPreferenceList = z.output<typeof notificationPreferenceListSchema>;
+
+/** Registracija push uređaja; userId i tokenHash nikad ne dolaze od klijenta. */
+export const deviceTokenInputSchema = z
+  .object({
+    token: z.string().trim().min(1).max(4096),
+    platform: z.enum(['android', 'ios', 'web']),
+    appVersion: z.string().trim().max(100).optional(),
+    deviceModel: z.string().trim().max(100).optional(),
+    osVersion: z.string().trim().max(100).optional(),
+    locale: z.string().trim().max(32).optional(),
+  })
+  .strict();
+export type DeviceTokenInput = z.output<typeof deviceTokenInputSchema>;
+
+export const deviceTokenViewSchema = z
+  .object({
+    id: uuidSchema,
+    platform: z.enum(['android', 'ios', 'web']),
+    appVersion: z.string().nullable(),
+    deviceModel: z.string().nullable(),
+    osVersion: z.string().nullable(),
+    locale: z.string().nullable(),
+    status: z.enum(DEVICE_TOKEN_STATUSES),
+    lastSeenAt: z.iso.datetime().nullable(),
+    failureCount: z.number().int().nonnegative(),
+    createdAt: z.iso.datetime(),
+    revokedAt: z.iso.datetime().nullable(),
+  })
+  .strict();
+export type DeviceTokenView = z.output<typeof deviceTokenViewSchema>;
+
+export const deviceTokenListSchema = z.object({ items: z.array(deviceTokenViewSchema) }).strict();
+export type DeviceTokenList = z.output<typeof deviceTokenListSchema>;
 
 /** In-app obavijesti — korisnik može čitati samo vlastite zapise. */
 export const notificationListQuerySchema = paginationQuerySchema

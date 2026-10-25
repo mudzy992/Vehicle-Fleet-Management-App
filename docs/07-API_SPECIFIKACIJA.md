@@ -428,7 +428,9 @@ Napomene (Faza 3):
 | ⏳ GET | `/notifications/stream` (SSE) | `notification:view` — real-time za web |
 | ⏳ GET/PUT | `/notifications/preferences` | `notification:manage_preferences` |
 | ⏳ POST | `/notifications/broadcast` | `notification:broadcast` |
-| ⏳ `/devices/tokens/*` | 🔒 — FCM tokeni; FCM nije aktivan |
+| GET | `/devices/tokens` | `notification:manage_preferences` — samo metapodaci vlastitih uređaja, bez tokena/hash-a |
+| POST | `/devices/tokens` `{token, platform, appVersion?, deviceModel?, osVersion?, locale?}` | `notification:manage_preferences` — owner je isključivo prijavljeni korisnik; odgovor nikad ne sadrži token/hash |
+| DELETE | `/devices/tokens/:id` | `notification:manage_preferences` — trajno uklanja samo vlastiti uređaj; tuđi/nepostojeći ID vraća 404 |
 
 ### 2.14 Podsjetnici (`/reminders`)
 

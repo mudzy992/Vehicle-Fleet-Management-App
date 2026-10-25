@@ -26,6 +26,7 @@ import { DriversController } from '../../src/modules/drivers/drivers.controller.
 import { FormMigrationsController } from '../../src/modules/form-migrations/form-migrations.controller.js';
 import { FormSchemasController } from '../../src/modules/form-schemas/form-schemas.controller.js';
 import { InsurancesController } from '../../src/modules/insurances/insurances.controller.js';
+import { DeviceTokensController } from '../../src/modules/notifications/device-tokens.controller.js';
 import { NotificationsController } from '../../src/modules/notifications/notifications.controller.js';
 import { RegistrationsController } from '../../src/modules/registrations/registrations.controller.js';
 import { RemindersController } from '../../src/modules/reminders/reminders.controller.js';
@@ -46,6 +47,7 @@ const CONTROLLERS: readonly Type[] = [
   AttachmentsController,
   AuditLogController,
   AuthController,
+  DeviceTokensController,
   DriversController,
   FormMigrationsController,
   FormSchemasController,

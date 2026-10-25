@@ -1363,6 +1363,7 @@ model DeviceToken {
 
   user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   deliveries NotificationDelivery[]
+  // Sirovi token je potreban za FCM slanje; API ga nikad ne vraća, tokenHash služi deduplikaciji.
   // FCM (R-04): Firebase projekat kreira vlasnik ručno; do tada
   //   FIREBASE_ENABLED=false i push se ne šalje.
 
