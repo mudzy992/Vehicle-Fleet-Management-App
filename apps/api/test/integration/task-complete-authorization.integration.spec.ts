@@ -37,6 +37,7 @@ describe.skipIf(!isIsolatedCiDatabase)('P7 — završetak zadatka, override i Au
   const overrideUserId = randomUUID();
   const assigneeTaskId = randomUUID();
   const overrideTaskId = randomUUID();
+  const rollbackTaskId = randomUUID();
   const taskCodePrefix = `P7-${randomUUID()}`;
 
   const grantsByUser = new Map<string, readonly PermissionGrant[]>([
@@ -101,6 +102,7 @@ describe.skipIf(!isIsolatedCiDatabase)('P7 — završetak zadatka, override i Au
     for (const [taskId, suffix] of [
       [assigneeTaskId, 'assignee'],
       [overrideTaskId, 'override'],
+      [rollbackTaskId, 'rollback'],
     ] as const) {
       await sql.query(
         `INSERT INTO "Task" (
@@ -246,6 +248,22 @@ describe.skipIf(!isIsolatedCiDatabase)('P7 — završetak zadatka, override i Au
     throw new Error(`AuditLog COMPLETE nije upisan za P7 task ${taskId}.`);
   }
 
+  async function waitForAuditRequest(
+    requestId: string,
+  ): Promise<{ success: boolean; reason: string | null }> {
+    if (!sql) throw new Error('P7 test nije inicijalizovan.');
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const result = await sql.query<{ success: boolean; reason: string | null }>(
+        `SELECT ("metadata"->>'success')::boolean AS "success", "reason"
+           FROM "AuditLog" WHERE "requestId" = $1 AND "action" = 'COMPLETE'`,
+        [requestId],
+      );
+      if (result.rows[0]) return result.rows[0];
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error(`AuditLog COMPLETE nije upisan za request ${requestId}.`);
+  }
+
   it('odbija neizvršioca, dopušta izvršioca i bilježi transakcijski override u TaskEvent/AuditLog', async () => {
     if (!sql || !app) throw new Error('P7 test nije inicijalizovan.');
 
@@ -313,5 +331,70 @@ describe.skipIf(!isIsolatedCiDatabase)('P7 — završetak zadatka, override i Au
     expect(auditRecord.rows).toEqual([
       { action: 'COMPLETE', actorId: overrideUserId, entityId: overrideTaskId },
     ]);
+  }, 60_000);
+
+  it('vraća task i outbox mutacije kada TaskEvent insert padne unutar transakcije', async () => {
+    if (!sql || !app) throw new Error('P7 test nije inicijalizovan.');
+
+    const suffix = randomUUID().replaceAll('-', '');
+    const functionName = `p7_fail_event_${suffix}`;
+    const triggerName = `p7_fail_event_${suffix}`;
+    await sql.query(`
+      CREATE FUNCTION "${functionName}"() RETURNS trigger
+      LANGUAGE plpgsql AS $p7$
+      BEGIN
+        IF NEW."taskId" = '${rollbackTaskId}'::uuid THEN
+          RAISE EXCEPTION 'P7_INJECTED_TASK_EVENT_FAILURE';
+        END IF;
+        RETURN NEW;
+      END;
+      $p7$;
+      CREATE TRIGGER "${triggerName}"
+      BEFORE INSERT ON "TaskEvent"
+      FOR EACH ROW EXECUTE FUNCTION "${functionName}"();
+    `);
+
+    let response: Response;
+    try {
+      response = await completeTask(rollbackTaskId, assigneeId);
+    } finally {
+      await sql.query(`DROP TRIGGER IF EXISTS "${triggerName}" ON "TaskEvent"`);
+      await sql.query(`DROP FUNCTION IF EXISTS "${functionName}"()`);
+    }
+
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as { error?: { code?: string; requestId?: string } };
+    expect(body.error?.code).toBe('INTERNAL_ERROR');
+    const requestId = body.error?.requestId;
+    expect(requestId).toBeTruthy();
+    if (!requestId) throw new Error('P7 rollback response nema requestId.');
+
+    const state = await sql.query<{
+      status: string;
+      version: number;
+      completedAt: Date | null;
+      eventCount: string;
+      completionOutboxCount: string;
+    }>(
+      `SELECT t."status", t."version", t."completedAt",
+              COUNT(DISTINCT e."id")::text AS "eventCount",
+              (SELECT COUNT(*)::text FROM "OutboxEvent" o
+                WHERE o."aggregateId" = t."id" AND o."eventType" = 'TASK_COMPLETED') AS "completionOutboxCount"
+         FROM "Task" t LEFT JOIN "TaskEvent" e ON e."taskId" = t."id"
+        WHERE t."id" = $1::uuid GROUP BY t."id"`,
+      [rollbackTaskId],
+    );
+    expect(state.rows).toEqual([
+      {
+        status: 'IN_PROGRESS',
+        version: 1,
+        completedAt: null,
+        eventCount: '0',
+        completionOutboxCount: '0',
+      },
+    ]);
+
+    const failedAudit = await waitForAuditRequest(requestId);
+    expect(failedAudit).toEqual({ success: false, reason: 'INTERNAL_ERROR' });
   }, 60_000);
 });
