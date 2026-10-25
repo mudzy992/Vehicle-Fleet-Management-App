@@ -248,9 +248,9 @@ describe.skipIf(!isolatedCiDatabase)('Outbox → notification + FCM queue (isola
 
     const statuses = await sql.query<{ status: string; attempts: number }>(
       `SELECT "status", "attempts" FROM "OutboxEvent" WHERE "id" = ANY($1::uuid[]) ORDER BY "id"`,
-      [[successEventId, mutedEventId, fcmOnlyEventId, retryEventId]],
+      [[successEventId, mutedEventId, fcmOnlyEventId, invalidTokenEventId, retryEventId]],
     );
-    expect(statuses.rows.filter((row) => row.status === 'PROCESSED')).toHaveLength(2);
+    expect(statuses.rows.filter((row) => row.status === 'PROCESSED')).toHaveLength(4);
     expect(statuses.rows.find((row) => row.status === 'DEAD')).toMatchObject({ status: 'DEAD', attempts: 2 });
 
     const third = await process(client as never as OutboxPrisma, {
