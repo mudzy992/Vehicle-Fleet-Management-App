@@ -151,14 +151,21 @@ jobs:
         run: |
           set -euo pipefail
           nohup pnpm --filter @vfm/api dev >"$RUNNER_TEMP/mobile-e2e-api.log" 2>&1 </dev/null &
+          api_pid=$!
           for attempt in $(seq 1 60); do
             if curl --fail --silent http://127.0.0.1:3000/health/live >/dev/null; then
               echo "E2E API is ready on the local runner."
               exit 0
             fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              echo "API process exited before the local health probe succeeded."
+              break
+            fi
             sleep 2
           done
-          tail -n 60 "$RUNNER_TEMP/mobile-e2e-api.log"
+          tail -n 60 "$RUNNER_TEMP/mobile-e2e-api.log" \
+            | sed -E 's#(postgres(ql)?://[^:/@]+:)[^@/]+@#\1[MASKED]@#g; s#(JWT_(ACCESS|REFRESH)_SECRET=).*#\1[MASKED]#g' \
+            | while IFS= read -r line; do echo "::error title=E2E API startup log::$line"; done
           exit 1
       - name: Instaliraj Maestro CLI
         env:
