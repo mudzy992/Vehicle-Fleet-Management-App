@@ -42,6 +42,16 @@
 - `notification:view` provjerava se na otvaranju i svakom pollu; opoziv prava prekida postojeći stream. API envelope se preskače za SSE. Ciljani API unit/HTTP skup: 23/23 prolaze lokalno; lokalni puni API typecheck nije dostupan jer generisani Prisma klijent nedostaje (CI ga generiše).
 - CI **40190059428** prolazi: unit+coverage, isolated integration, P6/P15, lint/typecheck, security, build i Docker. SSE je pokriven unit/HTTP testovima u tom runu, ali nema zaseban DB-backed stream integration test. Nema produkcijskih testova za SSE. Firebase konfiguraciju ne dirati.
 
+## P4–P8 dokazni jazovi
+
+| Kriterij | Dokaz koji postoji | Šta nedostaje za prihvatanje |
+|---|---|---|
+| P4 | Task-create API permisije pokrivene P14 HTTP sweepom; web task-create komponentni testovi postoje. | Nema mobilnog create wizard/Maestro E2E testa koji provjerava kreiranje i vidljivost u listi/webu; nema mobilnog UI dokazivanja da FAB nestaje bez prava. |
+| P5 | Unit testovi `available`/recipient logike; izolovani outbox integration test potvrđuje deduplikaciju i preference za obavijesti. | Nema integracijskog scenarija s dva stvarna korisnika koji potvrđuje oba GET `/tasks/available`, dvije Notification stavke, outbox PROCESSED i assignee ime nakon claim-a. |
+| P6 | CI stress `40190059428`: 200 poziva stvarnog `TasksService.claim()` prema izolovanom PostgreSQL-u; tačno jedan claim/event/ASSIGNEE. | Nije puni acceptance tok kroz HTTP/Redis Idempotency-Key; trenutni stress koristi isti korisnički akter za sve pozive, za razliku od mješovitih korisnika iz test plana. |
+| P7 | Unit testovi provjeravaju 403 NOT_ASSIGNEE, izvršioca i override granu/event podatke. | Nema DB integration potvrde za stvarni rollback, TaskEvent `OVERRIDE_COMPLETED` i AuditLog `COMPLETE` zajedno kroz transakcijski tok. |
+| P8 | CI outbox/FCM integration s mock gateway-em provjerava retry, invalid token, deduplikaciju i SENT. | Test ne veže fixture za stvarni Task; zato ne potvrđuje da stvarni task ostaje IN_PROGRESS dok FCM pada i nakon retry nema duplih Notification redova. |
+
 ## Sljedeći uski korak
 
-Potvrditi SSE izmjene kroz CI, zatim zatvoriti admin politiku primaoca/tipova i preostale P4–P8 end-to-end dokaze. P6 CI stress već prolazi; P5, P7 i P8 trenutno imaju djelimične/unit ili delivery integration dokaze, ali ne ispunjavaju puni acceptance scenario iz `docs/09-TEST_PLAN.md`. P4 mobilni E2E ostaje neprovjeren. Ne označavati Fazu 5 završenom.
+Definisati admin politiku primaoca/tipova, zatim dodati DB/HTTP integration dokaze za P5/P7/P8, uskladiti P6 stress s acceptance putem idempotentnog HTTP toka i odrediti izvediv testni pristup za mobilni P4 E2E. Ne označavati Fazu 5 završenom.
