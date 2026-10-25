@@ -30,6 +30,7 @@ import { queueConcurrency, queueFullName } from '../infra/queue/queue.service.js
 import { redisTlsOptions } from '../infra/redis/redis-tls.js';
 import { REMINDER_SCAN_JOB, scheduleReminderScan } from '../infra/queue/reminder-scheduler.js';
 import { runReminderScanJob } from '../infra/queue/reminder-job.js';
+import { processOutboxBatch, type OutboxPrisma } from '../infra/queue/outbox-processor.js';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { buildPrismaAdapter, prismaConnectionOptions } from '../prisma/prisma.service.js';
 
@@ -132,6 +133,37 @@ async function main(): Promise<number> {
     );
   }
 
+  // Trajna obrada OutboxEvent redova (P-05): DB je autoritet, Redis nije jedino skladište.
+  const outboxPrisma = new PrismaClient({ adapter: buildPrismaAdapter(prismaConnectionOptions(env)) });
+  let outboxPollPromise: Promise<void> | undefined;
+  const pollOutbox = (): Promise<void> => {
+    if (outboxPollPromise) return outboxPollPromise;
+    outboxPollPromise = (async () => {
+      try {
+        const result = await processOutboxBatch(outboxPrisma as unknown as OutboxPrisma, {
+          batchSize: env.OUTBOX_BATCH_SIZE,
+          maxAttempts: env.OUTBOX_MAX_ATTEMPTS,
+        });
+        if (result.claimed > 0) {
+          logger.log(
+            `Outbox: preuzeto ${result.claimed}, obrađeno ${result.processed}, ` +
+              `odgođeno ${result.failed}, DEAD ${result.dead}.`,
+          );
+        }
+      } catch (error) {
+        logger.error(
+          `Outbox polling greška: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+        );
+      }
+    })().finally(() => {
+      outboxPollPromise = undefined;
+    });
+    return outboxPollPromise;
+  };
+  const outboxTimer = setInterval(() => void pollOutbox(), env.OUTBOX_POLL_INTERVAL_MS);
+  outboxTimer.unref?.();
+  void pollOutbox();
+
   // Heartbeat (compose healthcheck čita ovaj ključ).
   const heartbeatTimer = setInterval(() => {
     void writeHeartbeat(connection, context.workers.length, logger);
@@ -146,6 +178,7 @@ async function main(): Promise<number> {
     shuttingDown = true;
     logger.log(`Primljen ${signal} — zaustavljam workere (drain)…`);
     clearInterval(heartbeatTimer);
+    clearInterval(outboxTimer);
 
     const closing = context.workers.map(async (worker) => {
       try {
@@ -158,6 +191,8 @@ async function main(): Promise<number> {
     });
     await Promise.allSettled(closing);
     await reminderQueue.close().catch(() => undefined);
+    await outboxPollPromise?.catch(() => undefined);
+    await outboxPrisma.$disconnect().catch(() => undefined);
     logger.log('Worker zaustavljen.');
     process.exit(0);
   };
