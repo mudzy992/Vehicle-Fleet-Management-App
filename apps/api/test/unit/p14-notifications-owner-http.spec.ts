@@ -19,17 +19,27 @@ const NOTIFICATION_ID = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3';
 
 type Scenario = 'USER_ONE' | 'NO_VIEW';
 function actorFor(scenario: Scenario): AuthenticatedUser {
-  const grants: readonly PermissionGrant[] = scenario === 'USER_ONE'
-    ? [
-        { permission: 'notification:view', scope: 'ALL', scopeVehicleIds: [] },
-        { permission: 'notification:mark_read', scope: 'ALL', scopeVehicleIds: [] },
-      ]
-    : [];
+  const grants: readonly PermissionGrant[] =
+    scenario === 'USER_ONE'
+      ? [
+          { permission: 'notification:view', scope: 'ALL', scopeVehicleIds: [] },
+          { permission: 'notification:mark_read', scope: 'ALL', scopeVehicleIds: [] },
+          { permission: 'notification:manage_preferences', scope: 'ALL', scopeVehicleIds: [] },
+        ]
+      : [];
   return {
     id: scenario === 'USER_ONE' ? USER_ONE : USER_TWO,
-    roles: ['CUSTOM'], roleIds: [], clientType: 'WEB', sessionId: 'p14-notification-session',
-    jti: 'p14-notification-token', tokenVersion: 1, permissionsVersion: 0,
-    isSuperAdmin: false, mustChangePassword: false, status: 'ACTIVE', allowedClientTypes: ['WEB'],
+    roles: ['CUSTOM'],
+    roleIds: [],
+    clientType: 'WEB',
+    sessionId: 'p14-notification-session',
+    jti: 'p14-notification-token',
+    tokenVersion: 1,
+    permissionsVersion: 0,
+    isSuperAdmin: false,
+    mustChangePassword: false,
+    status: 'ACTIVE',
+    allowedClientTypes: ['WEB'],
     permissions: evaluateEffectivePermissions({ roles: ['CUSTOM'], grants, clientType: 'WEB' }),
   };
 }
@@ -42,33 +52,54 @@ describe('P14 — vlasništvo nad obavijestima kroz HTTP', () => {
   const findFirst = vi.fn(async ({ where }: { where: { id: string; userId: string } }) =>
     where.id === NOTIFICATION_ID && where.userId === USER_TWO ? { id: NOTIFICATION_ID, isRead: false } : null,
   );
+  const findPreferences = vi.fn(async (_args: { where: { userId: string } }) => []);
+  const upsertPreference = vi.fn(async ({ create }: { create: Record<string, unknown> }) => ({
+    ...create,
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  }));
 
   beforeAll(async () => {
-    const prisma = { notification: { findMany, count, findFirst } } as unknown as PrismaService;
+    const prisma = {
+      notification: { findMany, count, findFirst },
+      notificationPreference: { findMany: findPreferences, upsert: upsertPreference },
+    } as unknown as PrismaService;
     const moduleRef = await Test.createTestingModule({
       controllers: [NotificationsController],
       providers: [
-        Reflector, PermissionsGuard, NotificationsService,
+        Reflector,
+        PermissionsGuard,
+        NotificationsService,
         { provide: PrismaService, useValue: prisma },
-        { provide: PermissionsService, useValue: {
-          snapshot: vi.fn(async () => ({ permissionsVersion: 0 })),
-          currentPermissionsVersion: vi.fn(async () => 0),
-        } },
+        {
+          provide: PermissionsService,
+          useValue: {
+            snapshot: vi.fn(async () => ({ permissionsVersion: 0 })),
+            currentPermissionsVersion: vi.fn(async () => 0),
+          },
+        },
       ],
     }).compile();
     app = moduleRef.createNestApplication();
-    app.use((request: { headers: Record<string, string | string[] | undefined>; user?: AuthenticatedUser }, _response: unknown, next: () => void) => {
-      const scenario = request.headers['x-sweep-role'];
-      if (scenario) request.user = actorFor((Array.isArray(scenario) ? scenario[0] : scenario) as Scenario);
-      next();
-    });
+    app.use(
+      (
+        request: { headers: Record<string, string | string[] | undefined>; user?: AuthenticatedUser },
+        _response: unknown,
+        next: () => void,
+      ) => {
+        const scenario = request.headers['x-sweep-role'];
+        if (scenario) request.user = actorFor((Array.isArray(scenario) ? scenario[0] : scenario) as Scenario);
+        next();
+      },
+    );
     app.useGlobalGuards(app.get(PermissionsGuard));
     app.useGlobalFilters(new AllExceptionsFilter());
     await app.listen(0, '127.0.0.1');
     baseUrl = `http://127.0.0.1:${(app.getHttpServer().address() as { port: number }).port}`;
   }, 30_000);
 
-  afterAll(async () => { await app?.close(); });
+  afterAll(async () => {
+    await app?.close();
+  });
 
   it('filtrira listu po akteru i ne otkriva obavijest drugog korisnika', async () => {
     const listResponse = await fetch(`${baseUrl}/notifications?page=1&pageSize=20`, {
@@ -87,6 +118,56 @@ describe('P14 — vlasništvo nad obavijestima kroz HTTP', () => {
       where: { id: NOTIFICATION_ID, userId: USER_ONE },
       select: { id: true, isRead: true },
     });
+  });
+
+  it('čita i mijenja samo postavke korisnika iz access tokena', async () => {
+    const getResponse = await fetch(`${baseUrl}/notifications/preferences`, {
+      headers: { 'x-sweep-role': 'USER_ONE' },
+    });
+    expect(getResponse.status).toBe(200);
+    expect(findPreferences).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { userId: USER_ONE } }),
+    );
+
+    const putResponse = await fetch(`${baseUrl}/notifications/preferences`, {
+      method: 'PUT',
+      headers: { 'x-sweep-role': 'USER_ONE', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'TASK_ASSIGNED',
+        channelFcm: false,
+        channelInApp: true,
+        channelEmail: false,
+      }),
+    });
+    expect(putResponse.status).toBe(200);
+    expect(upsertPreference).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { userId_type: { userId: USER_ONE, type: 'TASK_ASSIGNED' } },
+        create: expect.objectContaining({ userId: USER_ONE }),
+      }),
+    );
+
+    const forgedUser = await fetch(`${baseUrl}/notifications/preferences`, {
+      method: 'PUT',
+      headers: { 'x-sweep-role': 'USER_ONE', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        userId: USER_TWO,
+        type: 'TASK_ASSIGNED',
+        channelFcm: false,
+        channelInApp: true,
+        channelEmail: false,
+      }),
+    });
+    expect(forgedUser.status).toBe(422);
+    expect(upsertPreference).toHaveBeenCalledTimes(1);
+  });
+
+  it('bez notification:manage_preferences odbija postavke prije upita prema bazi', async () => {
+    const response = await fetch(`${baseUrl}/notifications/preferences`, {
+      headers: { 'x-sweep-role': 'NO_VIEW' },
+    });
+    expect(response.status).toBe(403);
+    expect(findPreferences).not.toHaveBeenCalled();
   });
 
   it('bez notification:view odbija HTTP listu prije upita prema bazi', async () => {

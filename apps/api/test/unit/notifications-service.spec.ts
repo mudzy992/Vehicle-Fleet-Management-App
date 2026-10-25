@@ -13,6 +13,10 @@ function makeHarness() {
       findFirst: vi.fn(),
       updateMany: vi.fn(),
     },
+    notificationPreference: {
+      findMany: vi.fn(),
+      upsert: vi.fn(),
+    },
   };
   return { prisma, service: new NotificationsService(prisma as never) };
 }
@@ -34,6 +38,67 @@ const ROW = {
 
 describe('NotificationsService', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('čita samo postavke prijavljenog korisnika', async () => {
+    const { prisma, service } = makeHarness();
+    const updatedAt = new Date('2026-01-02T00:00:00.000Z');
+    prisma.notificationPreference.findMany.mockResolvedValue([
+      {
+        id: ROW.id,
+        type: 'TASK_ASSIGNED',
+        channelFcm: false,
+        channelInApp: true,
+        channelEmail: false,
+        updatedAt,
+      },
+    ]);
+    await expect(service.listPreferences('user-1')).resolves.toEqual({
+      items: [
+        {
+          id: ROW.id,
+          type: 'TASK_ASSIGNED',
+          channelFcm: false,
+          channelInApp: true,
+          channelEmail: false,
+          updatedAt: updatedAt.toISOString(),
+        },
+      ],
+    });
+    expect(prisma.notificationPreference.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1' } }),
+    );
+  });
+
+  it('upsertuje kanale bez prihvatanja drugog userId od klijenta', async () => {
+    const { prisma, service } = makeHarness();
+    const updatedAt = new Date('2026-01-02T00:00:00.000Z');
+    prisma.notificationPreference.upsert.mockImplementation(
+      async ({ create }: { create: Record<string, unknown> }) => ({
+        ...create,
+        updatedAt,
+      }),
+    );
+    await expect(
+      service.upsertPreference('user-1', {
+        type: 'TASK_ASSIGNED',
+        channelFcm: false,
+        channelInApp: true,
+        channelEmail: false,
+      }),
+    ).resolves.toMatchObject({
+      type: 'TASK_ASSIGNED',
+      channelFcm: false,
+      channelInApp: true,
+      channelEmail: false,
+      updatedAt: updatedAt.toISOString(),
+    });
+    expect(prisma.notificationPreference.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId_type: { userId: 'user-1', type: 'TASK_ASSIGNED' } },
+        create: expect.objectContaining({ userId: 'user-1', type: 'TASK_ASSIGNED' }),
+      }),
+    );
+  });
 
   it('vraća samo obavijesti korisnika i filtrira nepročitane uz paginaciju', async () => {
     const { prisma, service } = makeHarness();

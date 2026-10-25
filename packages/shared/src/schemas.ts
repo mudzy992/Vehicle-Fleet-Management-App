@@ -3359,6 +3359,39 @@ export const taskListResponseSchema = z
   .strict();
 export type TaskListResponse = z.output<typeof taskListResponseSchema>;
 
+/** Postavke kanala obavijesti važe isključivo za prijavljenog korisnika. */
+export const notificationPreferenceInputSchema = z
+  .object({
+    type: z
+      .string()
+      .trim()
+      .min(1)
+      .max(100)
+      .regex(/^[A-Z][A-Z0-9_]*$/),
+    channelFcm: z.boolean(),
+    channelInApp: z.boolean(),
+    channelEmail: z.boolean(),
+  })
+  .strict();
+export type NotificationPreferenceInput = z.output<typeof notificationPreferenceInputSchema>;
+
+export const notificationPreferenceViewSchema = z
+  .object({
+    id: uuidSchema,
+    type: z.string(),
+    channelFcm: z.boolean(),
+    channelInApp: z.boolean(),
+    channelEmail: z.boolean(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export type NotificationPreferenceView = z.output<typeof notificationPreferenceViewSchema>;
+
+export const notificationPreferenceListSchema = z
+  .object({ items: z.array(notificationPreferenceViewSchema) })
+  .strict();
+export type NotificationPreferenceList = z.output<typeof notificationPreferenceListSchema>;
+
 /** In-app obavijesti — korisnik može čitati samo vlastite zapise. */
 export const notificationListQuerySchema = paginationQuerySchema
   .extend({ unreadOnly: queryBoolean.default(false) })

@@ -1,6 +1,19 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
-import type { NotificationListQuery, NotificationListResponse, NotificationMarkAllRead, NotificationUnreadCount, NotificationView } from '@vfm/shared/schemas';
-import { notificationListQuerySchema, uuidSchema } from '@vfm/shared/schemas';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Query } from '@nestjs/common';
+import type {
+  NotificationListQuery,
+  NotificationListResponse,
+  NotificationMarkAllRead,
+  NotificationPreferenceInput,
+  NotificationPreferenceList,
+  NotificationPreferenceView,
+  NotificationUnreadCount,
+  NotificationView,
+} from '@vfm/shared/schemas';
+import {
+  notificationListQuerySchema,
+  notificationPreferenceInputSchema,
+  uuidSchema,
+} from '@vfm/shared/schemas';
 import { CurrentUser, RequirePermissions } from '../../common/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.js';
@@ -9,6 +22,22 @@ import { NotificationsService } from './notifications.service.js';
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
+
+  @Get('preferences')
+  @RequirePermissions('notification:manage_preferences')
+  listPreferences(@CurrentUser() actor: AuthenticatedUser | undefined): Promise<NotificationPreferenceList> {
+    return this.notifications.listPreferences(actor!.id);
+  }
+
+  @Put('preferences')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('notification:manage_preferences')
+  upsertPreference(
+    @Body(new ZodValidationPipe(notificationPreferenceInputSchema)) input: NotificationPreferenceInput,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+  ): Promise<NotificationPreferenceView> {
+    return this.notifications.upsertPreference(actor!.id, input);
+  }
 
   @Get()
   @RequirePermissions('notification:view')

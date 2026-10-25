@@ -1,5 +1,15 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { NotificationListQuery, NotificationListResponse, NotificationMarkAllRead, NotificationUnreadCount, NotificationView } from '@vfm/shared/schemas';
+import type {
+  NotificationListQuery,
+  NotificationListResponse,
+  NotificationMarkAllRead,
+  NotificationPreferenceInput,
+  NotificationPreferenceList,
+  NotificationPreferenceView,
+  NotificationUnreadCount,
+  NotificationView,
+} from '@vfm/shared/schemas';
 import { VfmErrors } from '../../common/errors/vfm-error.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
@@ -46,6 +56,57 @@ const NOTIFICATION_SELECT = {
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private preferenceView(row: {
+    id: string;
+    type: string;
+    channelFcm: boolean;
+    channelInApp: boolean;
+    channelEmail: boolean;
+    updatedAt: Date;
+  }): NotificationPreferenceView {
+    return { ...row, updatedAt: row.updatedAt.toISOString() };
+  }
+
+  async listPreferences(userId: string): Promise<NotificationPreferenceList> {
+    const rows = await this.prisma.notificationPreference.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        type: true,
+        channelFcm: true,
+        channelInApp: true,
+        channelEmail: true,
+        updatedAt: true,
+      },
+      orderBy: { type: 'asc' },
+    });
+    return { items: rows.map((row) => this.preferenceView(row)) };
+  }
+
+  async upsertPreference(
+    userId: string,
+    input: NotificationPreferenceInput,
+  ): Promise<NotificationPreferenceView> {
+    const row = await this.prisma.notificationPreference.upsert({
+      where: { userId_type: { userId, type: input.type } },
+      create: { id: randomUUID(), userId, ...input },
+      update: {
+        channelFcm: input.channelFcm,
+        channelInApp: input.channelInApp,
+        channelEmail: input.channelEmail,
+      },
+      select: {
+        id: true,
+        type: true,
+        channelFcm: true,
+        channelInApp: true,
+        channelEmail: true,
+        updatedAt: true,
+      },
+    });
+    return this.preferenceView(row);
+  }
+
   async list(userId: string, query: NotificationListQuery): Promise<NotificationListResponse> {
     const where = { userId, ...(query.unreadOnly ? { isRead: false } : {}) };
     const [rows, total] = await Promise.all([
@@ -81,7 +142,10 @@ export class NotificationsService {
   }
 
   async markRead(userId: string, id: string): Promise<NotificationView> {
-    const current = await this.prisma.notification.findFirst({ where: { id, userId }, select: { id: true, isRead: true } });
+    const current = await this.prisma.notification.findFirst({
+      where: { id, userId },
+      select: { id: true, isRead: true },
+    });
     if (!current) throw VfmErrors.notFound('obavijest');
     if (!current.isRead) {
       await this.prisma.notification.updateMany({
@@ -89,7 +153,10 @@ export class NotificationsService {
         data: { isRead: true, readAt: new Date(), status: 'READ' },
       });
     }
-    const updated = await this.prisma.notification.findFirst({ where: { id, userId }, select: NOTIFICATION_SELECT });
+    const updated = await this.prisma.notification.findFirst({
+      where: { id, userId },
+      select: NOTIFICATION_SELECT,
+    });
     if (!updated) throw VfmErrors.notFound('obavijest');
     return toView(updated as NotificationRow);
   }
