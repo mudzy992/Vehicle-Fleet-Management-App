@@ -189,3 +189,11 @@ jobs:
           emulator-boot-timeout: 600
           disable-animations: true
           script: bash apps/mobile/scripts/run-p4-e2e-ci.sh
+      - name: Sačuvaj očišćene Maestro dijagnostike
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-e2e-maestro-diagnostics
+          path: ${{ runner.temp }}/maestro-debug-*
+          if-no-files-found: ignore
+          retention-days: 1
