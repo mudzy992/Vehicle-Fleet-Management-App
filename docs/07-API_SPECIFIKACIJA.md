@@ -384,9 +384,8 @@ Detaljan implementirani ugovor je u §7.6.
 
 Detaljan implementirani ugovor jezgre zadataka je u §7.7, atomskog
 preuzimanja i slobodnih zadataka u §7.8, a završetka i override prelaza u
-§7.9, release-a u §7.10, a naknadne dodjele u §7.11, dok su komentari u §7.12. Historija zadataka
-ostaje zasebna cjelina; DB outbox redovi se zapisuju, ali worker/FCM/SSE isporuka još
-nije dio ugovora.
+§7.9, release-a u §7.10, a naknadne dodjele u §7.11, dok su komentari u §7.12. Historija zadataka ostaje zasebna cjelina; outbox/FCM worker opisan je u §2.13,
+a task end-to-end HTTP tokovi P4–P8 još traže integracijski dokaz.
 
 ### 2.12 Prilozi (`/attachments`)
 
@@ -425,8 +424,8 @@ Napomene (Faza 3):
 | POST | `/notifications/:id/read` | `notification:mark_read` — označava vlastitu obavijest kao pročitanu |
 | GET | `/notifications/unread-count` | `notification:view` — broj vlastitih nepročitanih |
 | POST | `/notifications/read-all` | `notification:mark_read` — označi sve vlastite nepročitane |
-| ⏳ GET | `/notifications/stream` (SSE) | `notification:view` — real-time za web |
-| ⏳ GET/PUT | `/notifications/preferences` | `notification:manage_preferences` |
+| GET | `/notifications/stream` (SSE; `Accept: text/event-stream`, opciono `Last-Event-ID`) | `notification:view` — vlastite obavijesti + unread-count; DB polling svakih 5 s |
+| GET/PUT | `/notifications/preferences` | `notification:manage_preferences` — prijavljeni korisnik upravlja vlastitim kanalima |
 | ⏳ POST | `/notifications/broadcast` | `notification:broadcast` |
 | GET | `/devices/tokens` | `notification:manage_preferences` — samo metapodaci vlastitih uređaja, bez tokena/hash-a |
 | POST | `/devices/tokens` `{token, platform, appVersion?, deviceModel?, osVersion?, locale?}` | `notification:manage_preferences` — owner je isključivo prijavljeni korisnik; odgovor nikad ne sadrži token/hash |
@@ -587,10 +586,17 @@ data: {"id":"…","type":"TASK_CLAIMED","title":"Emina je preuzela zadatak","lin
 event: unread-count
 data: {"count":3}
 
-: keepalive (svakih 25 s)
+: keepalive (svakih 5 s)
 ```
-Fan-out: `worker`/`api` publikuje na Redis kanal `vfm:sse:{userId}`; API instanca pretplaćena na
-kanale svojih povezanih klijenata. Reconnect: `Last-Event-ID` = `notification.id`.
+Transport je server-side `@Sse` uz vlasničko ograničenje po `userId`. API provjerava nove vidljive
+obavijesti iz PostgreSQL-a u intervalu od 5 sekundi (najviše 100 po poll-u), šalje početni
+`unread-count` i `keepalive`, te koristi `Last-Event-ID` (`notification.id`) za nastavak i
+nadoknadu događaja nakon reconnecta. Bez `Last-Event-ID` šalju se samo nove obavijesti od otvaranja
+streama. Header mora biti UUID; tuđi/nepostojeći ID ne otkriva podatke. SSE zahtjev mora imati
+`Accept: text/event-stream`; klijenti koji šalju Bearer token koriste fetch-stream (native
+`EventSource` ne podržava prilagođeni `Authorization` header). Opoziv `notification:view` prava
+prekida postojeći stream pri sljedećoj provjeri. Ovo je DB-polling MVP umjesto Redis pub/sub
+fan-outa; pod većim brojem konekcija treba uvesti pub/sub.
 
 ---
 

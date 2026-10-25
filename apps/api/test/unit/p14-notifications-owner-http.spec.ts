@@ -75,6 +75,7 @@ describe('P14 — vlasništvo nad obavijestima kroz HTTP', () => {
           useValue: {
             snapshot: vi.fn(async () => ({ permissionsVersion: 0 })),
             currentPermissionsVersion: vi.fn(async () => 0),
+            hasPermission: vi.fn(async (userId: string) => userId === USER_ONE),
           },
         },
       ],
@@ -118,6 +119,24 @@ describe('P14 — vlasništvo nad obavijestima kroz HTTP', () => {
       where: { id: NOTIFICATION_ID, userId: USER_ONE, inAppVisible: true },
       select: { id: true, isRead: true },
     });
+  });
+
+  it('otvara SSE samo uz notification:view i šalje SSE frame bez JSON envelope-a', async () => {
+    const response = await fetch(`${baseUrl}/notifications/stream`, {
+      headers: { 'x-sweep-role': 'USER_ONE', accept: 'text/event-stream' },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('SSE odgovor nema stream body.');
+    const firstFrame = await reader.read();
+    expect(new TextDecoder().decode(firstFrame.value)).toContain('event: unread-count');
+    await reader.cancel();
+
+    const forbidden = await fetch(`${baseUrl}/notifications/stream`, {
+      headers: { 'x-sweep-role': 'NO_VIEW', accept: 'text/event-stream' },
+    });
+    expect(forbidden.status).toBe(403);
   });
 
   it('čita i mijenja samo postavke korisnika iz access tokena', async () => {

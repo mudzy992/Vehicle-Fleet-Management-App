@@ -18,7 +18,8 @@ function makeHarness() {
       upsert: vi.fn(),
     },
   };
-  return { prisma, service: new NotificationsService(prisma as never) };
+  const permissions = { hasPermission: vi.fn(async () => true) };
+  return { prisma, permissions, service: new NotificationsService(prisma as never, permissions as never) };
 }
 
 const ROW = {
@@ -121,6 +122,48 @@ describe('NotificationsService', () => {
         orderBy: { createdAt: 'desc' },
       }),
     );
+  });
+
+  it('SSE šalje samo vidljive vlastite obavijesti, broj nepročitanih i završava pri unsubscribe', async () => {
+    const { prisma, service } = makeHarness();
+    prisma.notification.findMany.mockResolvedValue([ROW]);
+    prisma.notification.count.mockResolvedValue(3);
+
+    const stream = await service.stream('user-1');
+    const events: Array<{ id?: string; type?: string; data: unknown }> = [];
+    const subscription = stream.subscribe((event) => events.push(event));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    subscription.unsubscribe();
+
+    expect(events).toEqual([
+      { id: ROW.id, type: 'notification', data: { ...ROW, createdAt: ROW.createdAt.toISOString() } },
+      { type: 'unread-count', data: { count: 3 } },
+      { type: 'keepalive', data: {} },
+    ]);
+    expect(prisma.notification.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: 'user-1', inAppVisible: true }),
+        take: 100,
+      }),
+    );
+  });
+
+  it('prekida SSE kada notification:view bude opozvan nakon otvaranja', async () => {
+    const { permissions, service } = makeHarness();
+    const stream = await service.stream('user-1');
+    permissions.hasPermission.mockResolvedValue(false);
+
+    const errorPromise = new Promise<unknown>((resolve) => {
+      stream.subscribe({ error: resolve });
+    });
+    await expect(errorPromise).resolves.toMatchObject({ code: 'PERMISSION_DENIED' });
+  });
+
+  it('odbija neispravan Last-Event-ID prije otvaranja streama', async () => {
+    const { service } = makeHarness();
+    await expect(service.stream('user-1', 'not-a-uuid')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
   });
 
   it('vraća broj nepročitanih samo za prijavljenog korisnika', async () => {

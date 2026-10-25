@@ -362,7 +362,7 @@ Legenda: **DoD** = Definition of Done. Svaka faza završava s: (1) prolazećim b
 6. Dodjela: `ASSIGN_DIRECT` (pozvani korisnici jasno prikazani i auditovani), `OPEN_CLAIM` (svi pozvani vide slobodan zadatak), `BROADCAST`.
 7. **Transactional outbox:** u istoj transakciji kao i promjena zadatka piše se `OutboxEvent`; BullMQ worker (`vfm-queue-outbox`) ga konzumira → kreira `Notification` redove (unique `notification_key`) → FCM push s retry/backoff (5 pokušaja) → `FAILED`/`DEAD` nakon iscrpljenih pokušaja; nevažeći tokeni se označavaju `INVALID` i brišu. Greška push-a **ne** utiče na zadatak (test P8).
 8. FCM: Firebase Admin SDK samo u worker/API kontejneru (`FIREBASE_SERVICE_ACCOUNT_PATH` = file mount); `DeviceToken` s unique `(userId, tokenHash)`; `vfm:lock:fcm:*` za serijalizaciju slanja po korisniku.
-9. Notifications API: lista, `POST /notifications/read`, `read-all`, badge count (Redis `vfm:cache:unread:{userId}`), real-time preko SSE (`GET /notifications/stream`) — WebSocket nije potreban u MVP-u.
+9. Notifications API: lista, `POST /notifications/:id/read`, `read-all`, unread count i SSE (`GET /notifications/stream`). Trenutni SSE MVP koristi PostgreSQL polling svakih 5 s s `Last-Event-ID`; Redis pub/sub fan-out i Redis unread-count cache (`vfm:cache:unread:{userId}`) ostaju optimizacija koja nije uvedena. WebSocket nije potreban u MVP-u.
 10. Web: kanban/lista zadataka, wizard "Novi zadatak" (korak po korak), detalji s timeline-om, akcije po permisijama, in-app zvono.
 11. Postavke obavijesti: Super Admin uključuje/isključuje vrste događaja i primaoce (`NotificationPreference`).
 

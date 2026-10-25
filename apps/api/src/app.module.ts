@@ -77,7 +77,7 @@ import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
     InsurancesModule,
     // Podsjetnici (docs/07 §2.14) — idempotentni skener (P-07).
     RemindersModule,
-    // In-app obavijesti (FCM/SSE dostava ostaje odvojena i nije aktivna).
+    // Obavijesti (in-app + SSE polling); FCM ostaje opcionalan do vlasničke konfiguracije.
     NotificationsModule,
     // Prilozi (docs/07 §2.12) — host bind-mount, magic bytes, potpisani URL (B-15).
     AttachmentsModule,

@@ -34,7 +34,7 @@ export class ApiEnvelopeInterceptor implements NestInterceptor {
     const request = http.getRequest<RequestWithId & Request>();
     const response = http.getResponse<Response>();
 
-    if (shouldSkipEnvelope(request)) {
+    if (shouldSkipEnvelope(request) || request.headers?.accept?.includes('text/event-stream')) {
       return next.handle();
     }
 

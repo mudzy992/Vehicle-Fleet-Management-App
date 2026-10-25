@@ -6,10 +6,10 @@ import { ApiEnvelopeInterceptor } from '../../src/common/interceptors/api-envelo
  * Envelope interceptor (docs/07 §1.2): `{ data, meta }` za uspješne odgovore,
  * bez omotača za health i binarne odgovore.
  */
-function createContext(path: string, requestId = 'req-1') {
+function createContext(path: string, requestId = 'req-1', accept?: string) {
   return {
     switchToHttp: () => ({
-      getRequest: () => ({ path, url: path, id: requestId, method: 'GET' }),
+      getRequest: () => ({ path, url: path, id: requestId, method: 'GET', ...(accept ? { headers: { accept } } : {}) }),
       getResponse: () => ({ setHeader: vi.fn() }),
     }),
   };
@@ -58,6 +58,17 @@ describe('ApiEnvelopeInterceptor — omatanje', () => {
 });
 
 describe('ApiEnvelopeInterceptor — izuzeci', () => {
+  it('ne omata SSE stream odgovore', async () => {
+    const event = { type: 'notification', data: { id: 'n1' } };
+    const interceptor = new ApiEnvelopeInterceptor();
+    const result = await lastValueFrom(
+      interceptor.intercept(
+        createContext('/api/v1/notifications/stream', 'req-1', 'text/event-stream') as never,
+        { handle: () => of(event) } as never,
+      ),
+    );
+    expect(result).toBe(event);
+  });
   it('health endpointi se ne omataju (Docker/Coolify probe)', async () => {
     for (const path of ['/health/live', '/health/ready', '/health/startup', '/health/diagnostics']) {
       const result = (await run(path, { status: 'ok' })) as { data?: unknown; status: string };

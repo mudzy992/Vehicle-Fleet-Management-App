@@ -1,4 +1,16 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Put,
+  Query,
+  Sse,
+} from '@nestjs/common';
 import type {
   NotificationListQuery,
   NotificationListResponse,
@@ -52,6 +64,15 @@ export class NotificationsController {
   @RequirePermissions('notification:view')
   unreadCount(@CurrentUser() actor: AuthenticatedUser | undefined): Promise<NotificationUnreadCount> {
     return this.notifications.unreadCount(actor!.id);
+  }
+
+  @Sse('stream')
+  @RequirePermissions('notification:view')
+  stream(
+    @Headers('last-event-id') lastEventId: string | undefined,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
+  ) {
+    return this.notifications.stream(actor!.id, lastEventId, actor!.clientType);
   }
 
   @Post('read-all')

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
+import { Observable } from 'rxjs';
+import type { MessageEvent } from '@nestjs/common';
 import type {
   NotificationListQuery,
   NotificationListResponse,
@@ -12,6 +14,8 @@ import type {
 } from '@vfm/shared/schemas';
 import { VfmErrors } from '../../common/errors/vfm-error.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { PermissionsService } from '../auth/permissions/permissions.service.js';
+import type { ClientType } from '@vfm/shared';
 
 interface NotificationRow {
   id: string;
@@ -54,7 +58,10 @@ const NOTIFICATION_SELECT = {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: PermissionsService,
+  ) {}
 
   private preferenceView(row: {
     id: string;
@@ -105,6 +112,92 @@ export class NotificationsService {
       },
     });
     return this.preferenceView(row);
+  }
+
+  async stream(
+    userId: string,
+    lastEventId?: string,
+    clientType: ClientType = 'WEB',
+  ): Promise<Observable<MessageEvent>> {
+    if (!(await this.permissions.hasPermission(userId, 'notification:view', 'OWN', clientType))) {
+      throw VfmErrors.permissionDenied([
+        {
+          path: ['notification:view'],
+          message: 'Nemate pravo: notification:view.',
+          code: 'permission_denied',
+        },
+      ]);
+    }
+    if (lastEventId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(lastEventId)) {
+      throw VfmErrors.validationError([
+        { path: ['Last-Event-ID'], message: 'Mora biti ispravan UUID obavijesti.', code: 'invalid_format' },
+      ]);
+    }
+
+    const lastEvent = lastEventId
+      ? await this.prisma.notification.findFirst({
+          where: { id: lastEventId, userId, inAppVisible: true },
+          select: { id: true, createdAt: true },
+        })
+      : null;
+    let cursor = lastEvent ?? { id: '', createdAt: new Date() };
+
+    return new Observable<MessageEvent>((subscriber) => {
+      let active = true;
+      let polling = false;
+      let lastUnreadCount: number | undefined;
+      const poll = async () => {
+        if (!active || polling) return;
+        polling = true;
+        try {
+          if (!(await this.permissions.hasPermission(userId, 'notification:view', 'OWN', clientType))) {
+            throw VfmErrors.permissionDenied([
+              {
+                path: ['notification:view'],
+                message: 'Nemate pravo: notification:view.',
+                code: 'permission_denied',
+              },
+            ]);
+          }
+          const rows = await this.prisma.notification.findMany({
+            where: {
+              userId,
+              inAppVisible: true,
+              OR: [
+                { createdAt: { gt: cursor.createdAt } },
+                ...(cursor.id ? [{ createdAt: cursor.createdAt, id: { gt: cursor.id } }] : []),
+              ],
+            },
+            select: NOTIFICATION_SELECT,
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+            take: 100,
+          });
+          for (const row of rows) {
+            const notification = toView(row as NotificationRow);
+            subscriber.next({ id: notification.id, type: 'notification', data: notification });
+            cursor = { id: notification.id, createdAt: row.createdAt };
+          }
+          const count = await this.prisma.notification.count({
+            where: { userId, inAppVisible: true, isRead: false },
+          });
+          if (count !== lastUnreadCount) {
+            lastUnreadCount = count;
+            subscriber.next({ type: 'unread-count', data: { count } });
+          }
+          subscriber.next({ type: 'keepalive', data: {} });
+        } catch (error) {
+          subscriber.error(error);
+        } finally {
+          polling = false;
+        }
+      };
+      void poll();
+      const timer = setInterval(() => void poll(), 5_000);
+      return () => {
+        active = false;
+        clearInterval(timer);
+      };
+    });
   }
 
   async list(userId: string, query: NotificationListQuery): Promise<NotificationListResponse> {
