@@ -170,6 +170,16 @@ describe.skipIf(!isolatedCiDatabase)('Outbox → notification + FCM queue (isola
     );
     expect(replayed.rows[0]).toEqual({ notifications: '1', deliveries: '1' });
 
+    const fcmDeliveryRows = await sql.query<{ id: string }>(
+      `SELECT delivery."id"
+         FROM "NotificationDelivery" delivery
+         JOIN "Notification" notice ON notice."id" = delivery."notificationId"
+        WHERE notice."outboxEventId" = ANY($1::uuid[]) AND delivery."channel" = 'FCM'`,
+      [[fcmOnlyEventId, invalidTokenEventId]],
+    );
+    const fcmDeliveryIds = fcmDeliveryRows.rows.map((row) => row.id);
+    expect(fcmDeliveryIds).toHaveLength(2);
+
     const fcmNow = new Date(Date.now() + 5_000);
     await sql.query(
       `UPDATE "NotificationPreference" SET "channelFcm" = FALSE WHERE "userId" = ANY($1::uuid[]) AND "type" = 'TASK_ASSIGNED'`,
@@ -183,6 +193,7 @@ describe.skipIf(!isolatedCiDatabase)('Outbox → notification + FCM queue (isola
         maxAttempts: 2,
         now: () => fcmNow,
         workerId: randomUUID(),
+        deliveryIds: fcmDeliveryIds,
       },
     );
     expect(disabledDelivery.claimed).toBe(0);
@@ -206,6 +217,7 @@ describe.skipIf(!isolatedCiDatabase)('Outbox → notification + FCM queue (isola
       maxAttempts: 2,
       now: () => fcmNow,
       workerId: randomUUID(),
+      deliveryIds: fcmDeliveryIds,
     });
     expect(firstDelivery).toEqual({ claimed: 2, sent: 0, retried: 1, invalid: 1, dead: 0 });
     const invalidDelivery = await sql.query<{ deliveryStatus: string; tokenStatus: string }>(
@@ -230,6 +242,7 @@ describe.skipIf(!isolatedCiDatabase)('Outbox → notification + FCM queue (isola
       maxAttempts: 2,
       now: () => new Date(fcmNow.getTime() + 2_000),
       workerId: randomUUID(),
+      deliveryIds: fcmDeliveryIds,
     });
     expect(secondDelivery).toEqual({ claimed: 1, sent: 1, retried: 0, invalid: 0, dead: 0 });
     const sentDelivery = await sql.query<{ status: string; attempts: number; messageId: string | null }>(

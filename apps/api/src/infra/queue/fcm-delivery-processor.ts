@@ -53,6 +53,8 @@ export interface FcmProcessorOptions {
   readonly leaseMs?: number;
   readonly now?: () => Date;
   readonly workerId?: string;
+  /** Optional fixture allowlist; normal workers omit it and process the shared queue. */
+  readonly deliveryIds?: readonly string[];
 }
 
 export interface FcmBatchResult {
@@ -87,6 +89,8 @@ export async function processFcmDeliveryBatch(
   const now = options.now ?? (() => new Date());
   const workerId = options.workerId ?? randomUUID();
   const leaseMs = options.leaseMs ?? 5 * 60_000;
+  const allDeliveryIds = options.deliveryIds === undefined;
+  const deliveryIds = options.deliveryIds ?? [];
   const exhausted = await prisma.$executeRaw`
     UPDATE "NotificationDelivery"
        SET "status" = 'DEAD',
@@ -95,6 +99,7 @@ export async function processFcmDeliveryBatch(
            "lockedAt" = NULL,
            "lockedBy" = NULL
      WHERE "channel" = 'FCM'
+       AND (${allDeliveryIds} OR "id" = ANY(${deliveryIds}::uuid[]))
        AND "status" = 'PROCESSING'
        AND "attempts" >= ${options.maxAttempts}
        AND "lockedAt" < ${new Date(now().getTime() - leaseMs)}
@@ -104,6 +109,7 @@ export async function processFcmDeliveryBatch(
       SELECT delivery."id"
         FROM "NotificationDelivery" AS delivery
        WHERE delivery."channel" = 'FCM'
+         AND (${allDeliveryIds} OR delivery."id" = ANY(${deliveryIds}::uuid[]))
          AND EXISTS (
            SELECT 1 FROM "DeviceToken" AS active_token
             WHERE active_token."id" = delivery."deviceTokenId"
