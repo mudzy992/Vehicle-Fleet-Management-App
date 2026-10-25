@@ -4,9 +4,12 @@
 
 ## Pokretanje i provjera
 
-Aplikacija je namjerno zasebna pnpm radna cjelina (`pnpm-workspace.yaml`) i nije uključena u root monorepo gate ili Docker build. Iz `apps/mobile`:
+Aplikacija ima zaseban pnpm workspace/lockfile i nije član root workspace-a, monorepo gate-a niti Docker builda. Ipak, TypeScript/Metro alias-i čitaju izvorne `packages/shared`, `packages/form-engine` i `packages/form-renderer`, pa se prvo instaliraju root paketi, zatim mobilne zavisnosti:
 
 ```bash
+# iz korijena repozitorija
+corepack pnpm install --frozen-lockfile
+cd apps/mobile
 corepack pnpm install --frozen-lockfile
 corepack pnpm typecheck
 corepack pnpm exec expo export --platform android

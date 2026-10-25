@@ -113,6 +113,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+      - name: Instaliraj root zavisnosti paketa korištenih kroz TS/Metro alias-e
+        working-directory: .
+        run: pnpm install --frozen-lockfile
       - name: Instaliraj odvojene Expo dependencije
         run: pnpm install --frozen-lockfile
       - name: Typecheck mobilne aplikacije
