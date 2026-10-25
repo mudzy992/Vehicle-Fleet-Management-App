@@ -176,6 +176,10 @@ jobs:
           curl -fsSL https://get.maestro.mobile.dev | bash
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
           "$HOME/.maestro/bin/maestro" --version
+      - name: Provjeri samo lokalnu prijavu P4 test naloga
+        env:
+          P4_E2E_API_URL: http://127.0.0.1:3000/api/v1
+        run: node apps/mobile/scripts/verify-p4-auth.mjs
       - name: Omogući KVM ubrzanje za emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
