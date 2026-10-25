@@ -94,6 +94,33 @@ jobs:
         run: if [ -f pnpm-lock.yaml ]; then pnpm -w typecheck; else echo "preskočeno (faza 0)"; fi
 
   # ---------------------------------------------------------------------------
+  # 2b) Mobilna aplikacija (zaseban workspace/lockfile; Faza 6)
+  # ---------------------------------------------------------------------------
+  mobile:
+    name: mobile typecheck & Android export
+    runs-on: ubuntu-latest
+    needs: env-sync
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      # Export je provjera bundla, ne aplikacijski test; nikad ne veži CI bundle
+      # za produkcijski API niti pozivaj stvarne servise.
+      EXPO_PUBLIC_API_URL: https://api.ci.invalid/api/v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Instaliraj odvojene Expo dependencije
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck mobilne aplikacije
+        run: pnpm typecheck
+      - name: Android JS export
+        run: pnpm exec expo export --platform android
+
+  # ---------------------------------------------------------------------------
   # 3) Unit testovi
   # ---------------------------------------------------------------------------
   unit:

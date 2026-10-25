@@ -2,10 +2,10 @@
 #  VFM — pnpm workspace
 # =============================================================================
 #  ⚠️ `apps/mobile` (Expo) NAMJERNO nije član workspace-a:
-#     - Expo/React Native ima ~1 GB dependencija i zaseban build lanac (EAS),
-#     - ne builda se u Dockeru niti u CI-u ovog repozitorija,
-#     - instalira se zasebno:  cd apps/mobile && pnpm install
-#     Kada dođe Faza 6, može se dodati ovdje ako se procijeni opravdanim.
+#     - Expo/React Native ima zaseban build lanac (EAS) i lockfile,
+#     - ne builda se u Dockeru niti se spaja s root workspace zavisnostima,
+#     - ima zaseban CI job za typecheck i Android JS export (Faza 6),
+#     - instalira se zasebno:  cd apps/mobile && pnpm install.
 # =============================================================================
 packages:
   - "packages/*"

@@ -7,7 +7,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
-    "check:expo": "expo-doctor"
+    "check:expo": "corepack pnpm dlx expo-doctor"
   },
   "dependencies": {
     "@expo/metro-runtime": "57.0.17",
@@ -35,8 +35,8 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@types/node": "22.20.5",
     "@types/react": "~19.2.4",
-    "eas-cli": "^25.3.0",
     "typescript": "~5.9.3"
   }
 }
