@@ -141,6 +141,8 @@ jobs:
             echo "JWT_ACCESS_SECRET=$(openssl rand -hex 32)"
             echo "JWT_REFRESH_SECRET=$(openssl rand -hex 32)"
           } >> "$GITHUB_ENV"
+      - name: Izgradi kompajlirani API za E2E
+        run: pnpm --filter @vfm/api build
       - name: Pokreni API samo nad disposable CI PostgreSQL/Redis servisima
         env:
           ENV_PROFILE: api
@@ -150,7 +152,7 @@ jobs:
           LOG_LEVEL: warn
         run: |
           set -euo pipefail
-          nohup pnpm --filter @vfm/api dev >"$RUNNER_TEMP/mobile-e2e-api.log" 2>&1 </dev/null &
+          nohup pnpm --filter @vfm/api start >"$RUNNER_TEMP/mobile-e2e-api.log" 2>&1 </dev/null &
           api_pid=$!
           for attempt in $(seq 1 60); do
             if curl --fail --silent http://127.0.0.1:3000/health/live >/dev/null; then
