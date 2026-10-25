@@ -97,6 +97,7 @@ jobs:
             exit 1
           fi
           SEED_LOG_PATH="$seed_log" node --input-type=module <<'NODE'
+          import { randomBytes } from 'node:crypto';
           import { appendFileSync, readFileSync } from 'node:fs';
           const log = readFileSync(process.env.SEED_LOG_PATH, 'utf8');
           const passwordFor = (email) => {
@@ -106,35 +107,27 @@ jobs:
           const adminPassword = passwordFor('admin@vfm.local');
           const userPassword = passwordFor('vozac@vfm.local');
           if (!adminPassword || !userPassword) throw new Error('Seed nije izdao oba jednokratna demo naloga.');
-          console.log(`::add-mask::${adminPassword}`);
-          console.log(`::add-mask::${userPassword}`);
+          const testAdminPassword = randomBytes(32).toString('hex');
+          const testUserPassword = randomBytes(32).toString('hex');
+          for (const password of [adminPassword, userPassword, testAdminPassword, testUserPassword]) {
+            console.log(`::add-mask::${password}`);
+          }
           appendFileSync(process.env.GITHUB_ENV, [
             'TEST_ADMIN_EMAIL=admin@vfm.local',
-            `TEST_ADMIN_PASSWORD=${adminPassword}`,
+            `TEST_ADMIN_PASSWORD=${testAdminPassword}`,
             'TEST_USER_EMAIL=vozac@vfm.local',
-            `TEST_USER_PASSWORD=${userPassword}`,
+            `TEST_USER_PASSWORD=${testUserPassword}`,
             `TEST_RUN_ID=${process.env.GITHUB_RUN_ID}`,
             '',
           ].join('\n'));
           NODE
           rm -f "$seed_log"
-      - name: Aktiviraj privremene naloge samo u E2E bazi
+      - name: Postavi sigurne ASCII lozinke za privremene E2E naloge
         working-directory: apps/api
-        run: |
-          node --input-type=module <<'NODE'
-          import pg from 'pg';
-          const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-          await client.connect();
-          try {
-            const result = await client.query(
-              'UPDATE "User" SET "status" = \'ACTIVE\', "mustChangePassword" = false, "updatedAt" = CURRENT_TIMESTAMP WHERE "email" = ANY($1::text[])',
-              [['admin@vfm.local', 'vozac@vfm.local']],
-            );
-            if (result.rowCount !== 2) throw new Error(`Očekivana su 2 demo naloga; ažurirano ${result.rowCount}.`);
-          } finally {
-            await client.end();
-          }
-          NODE
+        env:
+          ENV_PROFILE: tool
+          NODE_ENV: test
+        run: pnpm exec tsx src/tools/reset-p4-e2e-users.ts
       - name: Napravi kratkotrajne API tajne za ovaj job
         run: |
           {
