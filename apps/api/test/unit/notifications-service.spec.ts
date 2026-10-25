@@ -130,7 +130,7 @@ describe('NotificationsService', () => {
     prisma.notification.count.mockResolvedValue(3);
 
     const stream = await service.stream('user-1');
-    const events: Array<{ id?: string; type?: string; data: unknown }> = [];
+    const events: Array<{ id?: string; type?: string; data?: unknown }> = [];
     const subscription = stream.subscribe((event) => events.push(event));
     await new Promise<void>((resolve) => setImmediate(resolve));
     subscription.unsubscribe();
