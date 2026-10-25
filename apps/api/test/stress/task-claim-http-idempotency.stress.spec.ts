@@ -37,7 +37,7 @@ describe.skipIf(!isIsolatedCiStack)('P6 — HTTP/Redis Idempotency-Key stress (i
   let app: INestApplication | undefined;
   let baseUrl = '';
 
-  const participantIds = Array.from({ length: contenderCount - 1 }, () => randomUUID());
+  const participantIds: string[] = Array.from({ length: contenderCount - 1 }, () => randomUUID());
   const creatorId = randomUUID();
   const taskId = randomUUID();
   const taskCode = `P6HTTP-${randomUUID()}`;
