@@ -177,7 +177,15 @@ jobs:
         working-directory: apps/mobile
         env:
           EXPO_PUBLIC_API_URL: http://10.0.2.2:3000/api/v1
-        run: corepack pnpm exec expo run:android --variant release --no-bundler --no-install
+        run: |
+          set -euo pipefail
+          build_log="$RUNNER_TEMP/android-apk-build.log"
+          if ! { corepack pnpm exec expo prebuild --platform android --no-install && (cd android && ./gradlew --no-daemon assembleRelease); } >"$build_log" 2>&1; then
+            tail -n 40 "$build_log" | while IFS= read -r line; do echo "::error title=Android APK build::$line"; done
+            exit 1
+          fi
+          test -s android/app/build/outputs/apk/release/app-release.apk
+          echo "Release APK built successfully without an active emulator."
       - name: Omogući KVM ubrzanje za emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
