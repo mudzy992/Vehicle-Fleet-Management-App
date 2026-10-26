@@ -183,6 +183,21 @@ run_stage() {
   return "$status"
 }
 
+run_stage android-provision bash -c '
+  set -euo pipefail
+  adb wait-for-device
+  adb shell settings put global device_provisioned 1
+  adb shell settings put secure user_setup_complete 1
+  if adb shell pm list packages com.google.android.googlesdksetup | grep -q com.google.android.googlesdksetup; then
+    adb shell am force-stop com.google.android.googlesdksetup || true
+    adb shell pm disable-user --user 0 com.google.android.googlesdksetup || true
+  fi
+  adb shell input keyevent 82
+  provisioned="$(adb shell settings get global device_provisioned | tr -d "\\r")"
+  setup_complete="$(adb shell settings get secure user_setup_complete | tr -d "\\r")"
+  printf "device_provisioned=%s user_setup_complete=%s\\n" "$provisioned" "$setup_complete"
+  [[ "$provisioned" == 1 && "$setup_complete" == 1 ]]
+'
 run_stage android-install adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
 run_stage maestro-admin maestro test --debug-output "$RUNNER_TEMP/maestro-debug-admin" --flatten-debug-output -e TEST_ADMIN_EMAIL="$TEST_ADMIN_EMAIL" -e TEST_ADMIN_PASSWORD="$TEST_ADMIN_PASSWORD" -e TEST_RUN_ID="$TEST_RUN_ID" apps/mobile/.maestro/task-create-admin.yaml
 run_stage maestro-user maestro test --debug-output "$RUNNER_TEMP/maestro-debug-user" --flatten-debug-output -e TEST_USER_EMAIL="$TEST_USER_EMAIL" -e TEST_USER_PASSWORD="$TEST_USER_PASSWORD" apps/mobile/.maestro/task-create-no-permission.yaml
