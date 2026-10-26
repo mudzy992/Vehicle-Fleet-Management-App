@@ -196,8 +196,11 @@ jobs:
           debug_dir="$RUNNER_TEMP/maestro-debug-admin"
           mkdir -p "$debug_dir"
           echo '::group::Android emulator state'
-          timeout 10s adb devices -l || true
-          timeout 10s adb shell dumpsys activity activities 2>/dev/null | grep -E 'mResumedActivity|topResumedActivity|mFocusedActivity' | tail -n 10 || true
+          timeout 10s adb devices -l | while IFS= read -r line; do echo "::error title=Android device::$line"; done || true
+          timeout 10s adb shell dumpsys activity activities 2>/dev/null \
+            | grep -E 'mResumedActivity|topResumedActivity|mFocusedActivity' \
+            | tail -n 5 \
+            | while IFS= read -r line; do echo "::error title=Android activity::$line"; done || true
           timeout 15s adb exec-out screencap -p > "$debug_dir/failure-screen.png" || rm -f "$debug_dir/failure-screen.png"
           timeout 15s adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
           timeout 10s adb shell cat /sdcard/window.xml > "$RUNNER_TEMP/mobile-e2e-window.xml" || true
@@ -228,12 +231,15 @@ jobs:
                   )
           ET.ElementTree(root).write(destination, encoding='unicode')
           print('UI hierarchy (sensitive values masked):')
-          print('\n'.join(nodes[:120]))
+          for line in nodes[:15]:
+              print(f'::error title=Android UI hierarchy::{line}')
           PY
           timeout 15s adb logcat -d -t 500 2>/dev/null \
             | grep -E 'ReactNativeJS|AndroidRuntime|ActivityTaskManager|FATAL EXCEPTION|Expo|ReactNative' \
-            | tail -n 80 \
-            | sed -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" || true
+            | tail -n 10 \
+            | sed -E -e 's/admin@vfm\\.local|vozac@vfm\\.local/[MASKED EMAIL]/g' \
+                -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
+            | while IFS= read -r line; do echo "::error title=Android runtime diagnostic::$line"; done || true
           echo '::endgroup::'
           rm -f "$RUNNER_TEMP/mobile-e2e-window.xml"
       - name: Sačuvaj očišćene Maestro dijagnostike
