@@ -66,11 +66,20 @@ run_stage() {
             ;;
         esac
       done < <(find "$debug_dir" -maxdepth 8 -type f -print0 2>/dev/null || true)
-      adb logcat -d -t 1000 2>/dev/null \
-        | grep -E 'ReactNativeJS|AndroidRuntime|Expo|FATAL EXCEPTION' \
-        | tail -n 80 \
-        | sed -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
-        | while IFS= read -r line; do echo "::error title=Android app diagnostic::$line"; done || true
+      if command -v adb >/dev/null 2>&1; then
+        adb devices -l | while IFS= read -r line; do echo "::error title=Emulator device::$line"; done
+        adb shell dumpsys activity activities 2>/dev/null \
+          | grep -E 'mResumedActivity|topResumedActivity|mFocusedActivity' \
+          | tail -n 10 \
+          | while IFS= read -r line; do echo "::error title=Android activity::$line"; done || true
+        adb logcat -d -t 300 2>/dev/null \
+          | grep -E 'ReactNativeJS|AndroidRuntime|ActivityTaskManager|FATAL EXCEPTION|Expo|ReactNative' \
+          | tail -n 60 \
+          | sed -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
+          | while IFS= read -r line; do echo "::error title=Android app diagnostic::$line"; done || true
+      else
+        echo '::error title=Emulator diagnostic::adb is unavailable in the E2E script environment.'
+      fi
     fi
   fi
   rm -f "$log_file"
