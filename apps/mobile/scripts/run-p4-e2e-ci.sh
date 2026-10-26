@@ -3,6 +3,7 @@ set -euo pipefail
 
 sanitize_maestro_debug() {
   local exit_status=$?
+  set +e
   local file
   local -a diagnostics=()
   while IFS= read -r -d '' file; do
@@ -72,6 +73,8 @@ run_stage() {
   kill "$tail_pid" >/dev/null 2>&1 || true
   wait "$tail_pid" 2>/dev/null || true
   if (( status != 0 )); then
+    set +e
+    echo '::error title=Android diagnostics::Failure handler reached before emulator teardown.'
     echo "::error title=Mobile E2E::$stage failed with exit $status"
     tail -n 60 "$log_file" | while IFS= read -r line; do
       echo "::error title=$stage diagnostic::$line"
@@ -109,6 +112,7 @@ run_stage() {
     fi
   fi
   rm -f "$log_file"
+  set -e
   return "$status"
 }
 
