@@ -127,10 +127,8 @@ run_stage() {
     host_state="$(ps -eo pid,stat,%cpu,%mem,rss,comm 2>/dev/null | grep -E 'emulator|qemu|adb' | head -n 12)"
     echo "::error title=Android host processes::${host_state:-no emulator or adb process matched}"
     echo "::error title=Mobile E2E::$stage failed with exit $status"
-    tail -n 60 "$log_file" | while IFS= read -r line; do
-      echo "::error title=$stage diagnostic::$line"
-    done
     if [[ "$stage" == maestro-* ]]; then
+      echo "::error title=Maestro diagnostics::Collecting emulator traces for $stage."
       debug_dir="$RUNNER_TEMP/maestro-debug-${stage#maestro-}"
       while IFS= read -r -d '' file; do
         echo "::error title=Maestro artifact::$(basename "$file") ($(wc -c <"$file") bytes)"
@@ -171,6 +169,9 @@ run_stage() {
       else
         echo '::error title=Emulator diagnostic::adb is unavailable in the E2E script environment.'
       fi
+      tail -n 20 "$log_file" | while IFS= read -r line; do
+        echo "::error title=$stage diagnostic::$line"
+      done
     fi
   fi
   rm -f "$log_file"
