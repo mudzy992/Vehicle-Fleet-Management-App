@@ -237,7 +237,7 @@ jobs:
           timeout 15s adb logcat -d -t 500 2>/dev/null \
             | grep -E 'ReactNativeJS|AndroidRuntime|ActivityTaskManager|FATAL EXCEPTION|Expo|ReactNative' \
             | tail -n 10 \
-            | sed -E -e 's/admin@vfm\\.local|vozac@vfm\\.local/[MASKED EMAIL]/g' \
+            | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local/[MASKED EMAIL]/g' \
                 -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
             | while IFS= read -r line; do echo "::error title=Android runtime diagnostic::$line"; done || true
           echo '::endgroup::'
