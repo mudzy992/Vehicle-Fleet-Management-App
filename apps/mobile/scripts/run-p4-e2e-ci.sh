@@ -138,6 +138,16 @@ run_stage() {
             ;;
         esac
       done < <(find "$debug_dir" -maxdepth 8 -type f -print0 2>/dev/null || true)
+      for trace_file in "$debug_dir/android-host-watch.log" "$debug_dir/android-system-errors.log"; do
+        if [[ -f "$trace_file" ]]; then
+          echo "::error title=Android trace captured::$(basename "$trace_file") ($(wc -c <"$trace_file") bytes)"
+          tail -n 24 "$trace_file" | cut -c1-500 | while IFS= read -r line; do
+            echo "::error title=Android trace detail::$line"
+          done
+        else
+          echo "::error title=Android trace missing::$(basename "$trace_file")"
+        fi
+      done
       if command -v adb >/dev/null 2>&1; then
         adb devices -l | while IFS= read -r line; do echo "::error title=Emulator device::$line"; done
         adb shell dumpsys activity activities 2>/dev/null \
