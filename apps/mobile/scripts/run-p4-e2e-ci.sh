@@ -78,24 +78,32 @@ run_stage() {
   shift
   local log_file="$RUNNER_TEMP/mobile-e2e-$stage.log"
   local file
-  echo "Starting E2E stage: $stage"
-  "$@" >"$log_file" 2>&1 &
-  local command_pid=$!
+  local debug_dir=""
   local monitor_pid=""
   local logcat_pid=""
+  echo "Starting E2E stage: $stage"
   if [[ "$stage" == maestro-* ]]; then
-    local debug_dir="$RUNNER_TEMP/maestro-debug-${stage#maestro-}"
+    debug_dir="$RUNNER_TEMP/maestro-debug-${stage#maestro-}"
     mkdir -p "$debug_dir"
+    {
+      printf '\n--- pre-Maestro %s ---\n' "$(date -Is)"
+      timeout 3s adb devices -l 2>&1 || true
+      ps -C qemu-system-x86_64 -o pid,stat,%cpu,%mem,rss,comm --no-headers 2>/dev/null || true
+    } >"$debug_dir/android-host-watch.log"
     timeout 40m adb logcat -b main -b system -b crash -v threadtime \
       -s AndroidRuntime:E ActivityManager:E InputDispatcher:W \
       >"$debug_dir/android-system-errors.log" 2>&1 &
     logcat_pid=$!
+  fi
+  "$@" >"$log_file" 2>&1 &
+  local command_pid=$!
+  if [[ "$stage" == maestro-* ]]; then
     (
       while kill -0 "$command_pid" 2>/dev/null; do
+        sleep 5
         printf '\n--- %s ---\n' "$(date -Is)"
         timeout 3s adb devices -l 2>&1 || true
         ps -C qemu-system-x86_64 -o pid,stat,%cpu,%mem,rss,comm --no-headers 2>/dev/null || true
-        sleep 5
       done
     ) >>"$debug_dir/android-host-watch.log" 2>&1 &
     monitor_pid=$!
@@ -123,12 +131,13 @@ run_stage() {
       echo "::error title=$stage diagnostic::$line"
     done
     if [[ "$stage" == maestro-* ]]; then
-      local debug_dir="$RUNNER_TEMP/maestro-debug-${stage#maestro-}"
+      debug_dir="$RUNNER_TEMP/maestro-debug-${stage#maestro-}"
       while IFS= read -r -d '' file; do
         echo "::error title=Maestro artifact::$(basename "$file") ($(wc -c <"$file") bytes)"
         case "$file" in
           *.log|*.json|*.yaml|*.txt|*.xml|*.html|*.md)
-            sed -i \
+            sed -i -E \
+              -e 's/admin@vfm[.]local|vozac@vfm[.]local/[MASKED EMAIL]/g' \
               -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" \
               -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
               "$file"
