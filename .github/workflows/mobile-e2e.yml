@@ -196,16 +196,20 @@ jobs:
           debug_dir="$RUNNER_TEMP/maestro-debug-admin"
           mkdir -p "$debug_dir"
           echo '::group::Android emulator state'
-          adb devices -l
-          adb shell dumpsys activity activities 2>/dev/null | grep -E 'mResumedActivity|topResumedActivity|mFocusedActivity' | tail -n 10
-          adb exec-out screencap -p > "$debug_dir/failure-screen.png"
-          adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1
-          adb shell cat /sdcard/window.xml > "$RUNNER_TEMP/mobile-e2e-window.xml"
+          timeout 10s adb devices -l || true
+          timeout 10s adb shell dumpsys activity activities 2>/dev/null | grep -E 'mResumedActivity|topResumedActivity|mFocusedActivity' | tail -n 10 || true
+          timeout 15s adb exec-out screencap -p > "$debug_dir/failure-screen.png" || rm -f "$debug_dir/failure-screen.png"
+          timeout 15s adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+          timeout 10s adb shell cat /sdcard/window.xml > "$RUNNER_TEMP/mobile-e2e-window.xml" || true
           python3 - "$RUNNER_TEMP/mobile-e2e-window.xml" "$debug_dir/window-sanitized.xml" <<'PY'
           import sys
           import xml.etree.ElementTree as ET
           source, destination = sys.argv[1:]
-          root = ET.parse(source).getroot()
+          try:
+              root = ET.parse(source).getroot()
+          except (OSError, ET.ParseError) as error:
+              print(f'UI hierarchy unavailable: {error}')
+              raise SystemExit(0)
           nodes = []
           for node in root.iter('node'):
               text = node.attrib.get('text', '')
@@ -226,10 +230,10 @@ jobs:
           print('UI hierarchy (sensitive values masked):')
           print('\n'.join(nodes[:120]))
           PY
-          adb logcat -d -t 500 2>/dev/null \
+          timeout 15s adb logcat -d -t 500 2>/dev/null \
             | grep -E 'ReactNativeJS|AndroidRuntime|ActivityTaskManager|FATAL EXCEPTION|Expo|ReactNative' \
             | tail -n 80 \
-            | sed -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g"
+            | sed -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" || true
           echo '::endgroup::'
           rm -f "$RUNNER_TEMP/mobile-e2e-window.xml"
       - name: Sačuvaj očišćene Maestro dijagnostike
