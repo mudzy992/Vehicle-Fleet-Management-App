@@ -1439,40 +1439,40 @@ export class TasksService {
     const access = await this.resolveAccess(actorInput);
     this.assertClaimPermission(access);
 
-    return this.prisma.$transaction(async (tx) => {
-      await this.assertActiveClaimant(tx, access.actor.id);
-      let latestVersion = 0;
+    await this.assertActiveClaimant(this.prisma, access.actor.id);
+    let latestVersion = 0;
 
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        const current = await this.loadDetail(tx, id);
-        latestVersion = current.version;
-        const before = this.serializeDetail(current);
-        this.assertClaimable(current, access);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const current = await this.loadDetail(this.prisma, id);
+      latestVersion = current.version;
+      const before = this.serializeDetail(current);
+      this.assertClaimable(current, access);
 
-        const form = await this.loadSnapshotForm(tx, current.formSchemaVersionId);
-        const requirements = await tx.taskCompletionRequirement.findMany({
-          where: {
-            taskTypeId: current.taskTypeId,
-            stage: { in: ['ON_CREATE', 'ON_CLAIM'] },
-          },
-          select: { fieldKey: true, required: true, stage: true, minPhotos: true },
-        });
-        const formData = await this.validateDraftFormData({
-          form,
-          values: { ...plainRecord(current.formData), ...input.formData },
-          isNew: false,
-          requirements,
-          stages: ['ON_CREATE', 'ON_CLAIM'],
-        });
+      const form = await this.loadSnapshotForm(this.prisma, current.formSchemaVersionId);
+      const requirements = await this.prisma.taskCompletionRequirement.findMany({
+        where: {
+          taskTypeId: current.taskTypeId,
+          stage: { in: ['ON_CREATE', 'ON_CLAIM'] },
+        },
+        select: { fieldKey: true, required: true, stage: true, minPhotos: true },
+      });
+      const formData = await this.validateDraftFormData({
+        form,
+        values: { ...plainRecord(current.formData), ...input.formData },
+        isNew: false,
+        requirements,
+        stages: ['ON_CREATE', 'ON_CLAIM'],
+      });
 
-        const now = new Date();
-        const data: Prisma.TaskUncheckedUpdateManyInput = {
-          status: 'IN_PROGRESS',
-          assigneeUserId: access.actor.id,
-          claimedAt: now,
-          formData: formData as Prisma.InputJsonObject,
-          version: { increment: 1 },
-        };
+      const now = new Date();
+      const data: Prisma.TaskUncheckedUpdateManyInput = {
+        status: 'IN_PROGRESS',
+        assigneeUserId: access.actor.id,
+        claimedAt: now,
+        formData: formData as Prisma.InputJsonObject,
+        version: { increment: 1 },
+      };
+      const result = await this.prisma.$transaction(async (tx) => {
         const changed = await tx.task.updateMany({
           where: {
             id,
@@ -1494,19 +1494,7 @@ export class TasksService {
           },
           data,
         });
-
-        if (changed.count !== 1) {
-          const fresh = await this.loadDetail(tx, id);
-          latestVersion = fresh.version;
-          this.assertClaimable(fresh, access);
-          if (fresh.version !== current.version && attempt < 2) continue;
-          throw new VfmException(
-            'VERSION_CONFLICT',
-            'Zadatak je u međuvremenu izmijenjen. Ponovo ga učitajte i pokušajte preuzeti.',
-            undefined,
-            { currentVersion: fresh.version },
-          );
-        }
+        if (changed.count !== 1) return null;
 
         await this.ensureClaimAssignment(tx, id, access.actor.id, now);
         await tx.taskEvent.create({
@@ -1556,15 +1544,27 @@ export class TasksService {
             claimedAt: serialized.claimedAt,
           },
         };
-      }
+      });
+      if (result) return result;
 
+      const fresh = await this.loadDetail(this.prisma, id);
+      latestVersion = fresh.version;
+      this.assertClaimable(fresh, access);
+      if (fresh.version !== current.version && attempt < 2) continue;
       throw new VfmException(
         'VERSION_CONFLICT',
         'Zadatak je u međuvremenu izmijenjen. Ponovo ga učitajte i pokušajte preuzeti.',
         undefined,
-        { currentVersion: latestVersion },
+        { currentVersion: fresh.version },
       );
-    });
+    }
+
+    throw new VfmException(
+      'VERSION_CONFLICT',
+      'Zadatak je u međuvremenu izmijenjen. Ponovo ga učitajte i pokušajte preuzeti.',
+      undefined,
+      { currentVersion: latestVersion },
+    );
   }
 
   /**
@@ -1973,7 +1973,7 @@ export class TasksService {
     );
   }
 
-  private async assertActiveClaimant(tx: Tx, actorId: string): Promise<void> {
+  private async assertActiveClaimant(tx: Client, actorId: string): Promise<void> {
     const user = await tx.user.findFirst({
       where: { id: actorId, deletedAt: null },
       select: { status: true },
@@ -2426,7 +2426,7 @@ export class TasksService {
     };
   }
 
-  private async loadSnapshotForm(tx: Tx, versionId: string): Promise<ResolvedTaskForm> {
+  private async loadSnapshotForm(tx: Client, versionId: string): Promise<ResolvedTaskForm> {
     const version = await tx.formSchemaVersion.findFirst({
       where: { id: versionId },
       select: {
