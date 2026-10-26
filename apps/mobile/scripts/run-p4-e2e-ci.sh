@@ -35,6 +35,7 @@ run_stage() {
   local stage="$1"
   shift
   local log_file="$RUNNER_TEMP/mobile-e2e-$stage.log"
+  local file
   echo "Starting E2E stage: $stage"
   "$@" >"$log_file" 2>&1 &
   local command_pid=$!
@@ -46,9 +47,31 @@ run_stage() {
   wait "$tail_pid" 2>/dev/null || true
   if (( status != 0 )); then
     echo "::error title=Mobile E2E::$stage failed with exit $status"
-    tail -n 40 "$log_file" | while IFS= read -r line; do
+    tail -n 60 "$log_file" | while IFS= read -r line; do
       echo "::error title=$stage diagnostic::$line"
     done
+    if [[ "$stage" == maestro-* ]]; then
+      local debug_dir="$RUNNER_TEMP/maestro-debug-${stage#maestro-}"
+      while IFS= read -r -d '' file; do
+        echo "::error title=Maestro artifact::$(basename "$file") ($(wc -c <"$file") bytes)"
+        case "$file" in
+          *.log|*.json|*.yaml|*.txt|*.xml|*.html|*.md)
+            sed -i \
+              -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" \
+              -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
+              "$file"
+            tail -n 80 "$file" | cut -c1-1000 | while IFS= read -r line; do
+              echo "::error title=Maestro artifact detail::$line"
+            done
+            ;;
+        esac
+      done < <(find "$debug_dir" -maxdepth 8 -type f -print0 2>/dev/null || true)
+      adb logcat -d -t 1000 2>/dev/null \
+        | grep -E 'ReactNativeJS|AndroidRuntime|Expo|FATAL EXCEPTION' \
+        | tail -n 80 \
+        | sed -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
+        | while IFS= read -r line; do echo "::error title=Android app diagnostic::$line"; done || true
+    fi
   fi
   rm -f "$log_file"
   return "$status"
