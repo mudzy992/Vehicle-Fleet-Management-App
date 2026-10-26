@@ -9,7 +9,8 @@ sanitize_maestro_debug() {
   while IFS= read -r -d '' file; do
     case "$file" in
       *.log|*.json|*.yaml|*.txt)
-        sed -i \
+        sed -i -E \
+          -e 's/admin@vfm[.]local|vozac@vfm[.]local/[MASKED EMAIL]/g' \
           -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" \
           -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
           "$file"
@@ -66,12 +67,36 @@ run_stage() {
   echo "Starting E2E stage: $stage"
   "$@" >"$log_file" 2>&1 &
   local command_pid=$!
+  local monitor_pid=""
+  local logcat_pid=""
+  if [[ "$stage" == maestro-* ]]; then
+    local debug_dir="$RUNNER_TEMP/maestro-debug-${stage#maestro-}"
+    mkdir -p "$debug_dir"
+    timeout 40m adb logcat -b main -b system -b crash -v threadtime \
+      -s AndroidRuntime:E ActivityManager:E InputDispatcher:W \
+      >"$debug_dir/android-system-errors.log" 2>&1 &
+    logcat_pid=$!
+    (
+      while kill -0 "$command_pid" 2>/dev/null; do
+        printf '\n--- %s ---\n' "$(date -Is)"
+        timeout 3s adb devices -l 2>&1 || true
+        ps -C qemu-system-x86_64 -o pid,stat,%cpu,%mem,rss,comm --no-headers 2>/dev/null || true
+        sleep 5
+      done
+    ) >>"$debug_dir/android-host-watch.log" 2>&1 &
+    monitor_pid=$!
+  fi
   tail -n 0 -f "$log_file" &
   local tail_pid=$!
   local status=0
   wait "$command_pid" || status=$?
   kill "$tail_pid" >/dev/null 2>&1 || true
   wait "$tail_pid" 2>/dev/null || true
+  for monitor_pid in "$logcat_pid" "$monitor_pid"; do
+    [[ -n "$monitor_pid" ]] || continue
+    kill "$monitor_pid" >/dev/null 2>&1 || true
+    wait "$monitor_pid" 2>/dev/null || true
+  done
   if (( status != 0 )); then
     set +e
     echo '::error title=Android diagnostics::Failure handler reached before emulator teardown.'
