@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '@/features/auth/auth-provider';
 import { toUserMessage } from '@/lib/api';
 import { colors } from '@/lib/theme';
@@ -28,7 +28,8 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.brand}><Text style={styles.mark}>VP</Text><View><Text style={styles.brandTitle}>Vozni park</Text><Text style={styles.brandSubtitle}>Mobilni portal</Text></View></View>
       <View style={styles.card}>
         <Text style={styles.heading}>Prijava</Text>
@@ -43,12 +44,14 @@ export default function LoginScreen() {
         </Pressable>
         <Text style={styles.notice}>Pristup mobilnoj aplikaciji provjerava server. Super Admin nalozi koriste web portal.</Text>
       </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, justifyContent: 'center', paddingHorizontal: 22, gap: 28 },
+  page: { flex: 1 },
+  content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 22, paddingVertical: 24, gap: 28 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12, alignSelf: 'center' },
   mark: { width: 52, height: 52, borderRadius: 16, backgroundColor: colors.primary, color: '#fff', fontSize: 20, fontWeight: '800', textAlign: 'center', textAlignVertical: 'center', overflow: 'hidden' },
   brandTitle: { color: colors.ink, fontSize: 22, fontWeight: '800' }, brandSubtitle: { color: colors.muted, fontSize: 14, marginTop: 2 },
