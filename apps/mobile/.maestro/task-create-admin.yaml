@@ -14,9 +14,6 @@ appId: ba.ba101.voznipark
     id: "login-email"
 - inputText: ${TEST_ADMIN_EMAIL}
 - assertVisible: ${TEST_ADMIN_EMAIL}
-- scrollUntilVisible:
-    element:
-      id: "login-password"
 - tapOn:
     id: "login-password"
 - inputText: ${TEST_ADMIN_PASSWORD}
