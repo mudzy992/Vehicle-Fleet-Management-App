@@ -75,6 +75,10 @@ run_stage() {
   if (( status != 0 )); then
     set +e
     echo '::error title=Android diagnostics::Failure handler reached before emulator teardown.'
+    adb_state="$(timeout 8s adb devices -l 2>&1)"
+    echo "::error title=ADB state before teardown::${adb_state:-adb returned no output}"
+    host_state="$(ps -eo pid,stat,%cpu,%mem,rss,comm 2>/dev/null | grep -E 'emulator|qemu|adb' | head -n 12)"
+    echo "::error title=Android host processes::${host_state:-no emulator or adb process matched}"
     echo "::error title=Mobile E2E::$stage failed with exit $status"
     tail -n 60 "$log_file" | while IFS= read -r line; do
       echo "::error title=$stage diagnostic::$line"
