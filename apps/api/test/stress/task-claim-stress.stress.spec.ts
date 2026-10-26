@@ -109,10 +109,22 @@ describe.skipIf(!isIsolatedCiDatabase)('Faza 5 — P6 stress atomskog claim-a', 
     const rejected = outcomes.filter((result) => result.status === 'rejected');
     expect(succeeded).toHaveLength(1);
     expect(rejected).toHaveLength(contenderCount - 1);
+    const rejectionKinds = rejected.reduce<Record<string, number>>((counts, result) => {
+      const reason = result.status === 'rejected' ? result.reason : undefined;
+      const kind =
+        typeof reason?.code === 'string'
+          ? reason.code
+          : typeof reason?.name === 'string'
+            ? reason.name
+            : typeof reason;
+      counts[kind] = (counts[kind] ?? 0) + 1;
+      return counts;
+    }, {});
     expect(
       rejected.every(
         (result) => result.status === 'rejected' && result.reason?.code === 'TASK_ALREADY_CLAIMED',
       ),
+      `P6 rejected-call kinds: ${JSON.stringify(rejectionKinds)}`,
     ).toBe(true);
 
     const [task, events, outbox, assignees] = await Promise.all([
