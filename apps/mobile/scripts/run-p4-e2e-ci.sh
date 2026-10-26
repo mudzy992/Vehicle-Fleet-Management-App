@@ -35,6 +35,11 @@ sanitize_maestro_debug() {
         | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local/[MASKED EMAIL]/g' \
             -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
         | while IFS= read -r line; do echo "::error title=Android runtime (in-script)::$line"; done || true
+      {
+        echo "host_memory: $(free -h 2>/dev/null | tail -n 1 || true)"
+        ps -eo pid,stat,%cpu,%mem,rss,comm 2>/dev/null | grep -E 'emulator|qemu|adb' | head -n 12 || true
+        dmesg --ctime 2>/dev/null | grep -Ei 'out of memory|oom-kill|killed process.*(emulator|qemu)' | tail -n 8 || true
+      } | while IFS= read -r line; do echo "::error title=Android host diagnostic::$line"; done
       echo '::endgroup::'
     else
       echo '::error title=Android state captured before emulator teardown::adb or timeout is not available.'
