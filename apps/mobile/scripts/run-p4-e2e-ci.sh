@@ -18,6 +18,27 @@ sanitize_maestro_debug() {
   done < <(find "$RUNNER_TEMP" -maxdepth 8 -type f -path '*/maestro-debug-*/*' -print0 2>/dev/null || true)
   if (( exit_status != 0 )); then
     printf 'Maestro diagnostic text files: %s\n' "${diagnostics[*]:-none}"
+    if command -v adb >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
+      echo '::group::Android state captured before emulator teardown'
+      timeout 8s adb devices -l \
+        | while IFS= read -r line; do echo "::error title=Android device (in-script)::$line"; done || true
+      timeout 8s adb shell uiautomator dump /sdcard/p4-window.xml >/dev/null 2>&1 || true
+      timeout 8s adb shell cat /sdcard/p4-window.xml 2>/dev/null \
+        | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local/[MASKED EMAIL]/g' \
+            -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
+        | grep -E 'login-email|login-password|E-mail|Lozinka|focused=|Prijava' \
+        | head -n 15 \
+        | while IFS= read -r line; do echo "::error title=Android UI node::$line"; done || true
+      timeout 10s adb logcat -d -t 400 2>/dev/null \
+        | grep -E 'ReactNativeJS|AndroidRuntime|ActivityTaskManager|FATAL EXCEPTION|Expo|ReactNative' \
+        | tail -n 10 \
+        | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local/[MASKED EMAIL]/g' \
+            -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
+        | while IFS= read -r line; do echo "::error title=Android runtime (in-script)::$line"; done || true
+      echo '::endgroup::'
+    else
+      echo '::error title=Android state captured before emulator teardown::adb or timeout is not available.'
+    fi
     for file in "${diagnostics[@]}"; do
       [[ -f "$file" ]] || continue
       echo "::group::Sanitized Maestro diagnostic: $(basename "$file")"
