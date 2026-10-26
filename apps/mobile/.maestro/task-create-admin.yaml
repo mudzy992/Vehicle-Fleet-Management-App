@@ -14,8 +14,7 @@ appId: ba.ba101.voznipark
     id: "login-email"
 - inputText: ${TEST_ADMIN_EMAIL}
 - assertVisible: ${TEST_ADMIN_EMAIL}
-- tapOn:
-    id: "login-password"
+- pressKey: Enter
 - inputText: ${TEST_ADMIN_PASSWORD}
 - pressKey: Enter
 - assertNotVisible: "Prijava"

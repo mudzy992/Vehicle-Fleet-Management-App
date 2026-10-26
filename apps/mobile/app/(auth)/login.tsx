@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '@/features/auth/auth-provider';
@@ -12,6 +12,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const passwordInputRef = useRef<TextInput | null>(null);
 
   const submit = async () => {
     if (submitting) return;
@@ -35,9 +36,9 @@ export default function LoginScreen() {
         <Text style={styles.heading}>Prijava</Text>
         <Text style={styles.helper}>Prijavite se službenim korisničkim nalogom.</Text>
         <Text style={styles.label}>E-mail</Text>
-        <TextInput testID="login-email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" textContentType="emailAddress" accessibilityLabel="E-mail" style={styles.input} returnKeyType="next" />
+        <TextInput testID="login-email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" textContentType="emailAddress" accessibilityLabel="E-mail" style={styles.input} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => passwordInputRef.current?.focus()} />
         <Text style={styles.label}>Lozinka</Text>
-        <TextInput testID="login-password" value={password} onChangeText={setPassword} autoCapitalize="none" autoComplete="current-password" secureTextEntry textContentType="password" accessibilityLabel="Lozinka" style={styles.input} onSubmitEditing={() => void submit()} returnKeyType="go" />
+        <TextInput ref={passwordInputRef} testID="login-password" value={password} onChangeText={setPassword} autoCapitalize="none" autoComplete="current-password" secureTextEntry textContentType="password" accessibilityLabel="Lozinka" style={styles.input} onSubmitEditing={() => void submit()} returnKeyType="go" />
         {(localError ?? error) ? <Text accessibilityRole="alert" style={styles.error}>{localError ?? error}</Text> : null}
         <Pressable testID="login-submit" accessibilityRole="button" accessibilityState={{ disabled: submitting }} onPress={() => void submit()} disabled={submitting || !email || !password} style={({ pressed }) => [styles.button, (pressed || submitting) && styles.buttonPressed, (!email || !password) && styles.buttonDisabled]}>
           <Text style={styles.buttonText}>{submitting ? 'Prijavljujem…' : 'Prijavi se'}</Text>
