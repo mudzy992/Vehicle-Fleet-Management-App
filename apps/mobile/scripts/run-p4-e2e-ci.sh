@@ -20,6 +20,20 @@ sanitize_maestro_debug() {
   done < <(find "$RUNNER_TEMP" -maxdepth 8 -type f -path '*/maestro-debug-*/*' -print0 2>/dev/null || true)
   if (( exit_status != 0 )); then
     printf 'Maestro diagnostic text files: %s\n' "${diagnostics[*]:-none}"
+    for file in "${diagnostics[@]}"; do
+      case "$(basename "$file")" in
+        android-host-watch.log)
+          tail -n 20 "$file" | cut -c1-500 | while IFS= read -r line; do
+            echo "::error title=Android host watch::$line"
+          done
+          ;;
+        android-system-errors.log)
+          tail -n 40 "$file" | cut -c1-500 | while IFS= read -r line; do
+            echo "::error title=Android system error::$line"
+          done
+          ;;
+      esac
+    done
     if command -v adb >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
       echo '::group::Android state captured before emulator teardown'
       timeout 8s adb devices -l \
