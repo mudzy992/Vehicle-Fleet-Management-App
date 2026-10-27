@@ -324,7 +324,7 @@ export default function CreateTaskScreen() {
         <View style={styles.actions}>
           {step > 1 ? <ActionButton label="Nazad" secondary disabled={submitting || uploadingField !== null} onPress={() => setStep((current) => (current - 1) as 1 | 2 | 3)} /> : null}
           {step === 1 ? <ActionButton testID="task-create-next-step-1" label="Nastavi" disabled={!selectedType || (selectedType.requiresVehicle && !vehicleId)} onPress={() => { setError(null); setStep(2); }} /> : null}
-          {step === 2 ? <ActionButton testID="task-create-next-step-2" label="Nastavi na obrazac" disabled={!activeForm || !activeForm.mobileCompatible || formLoading || (selectedType?.requiresVehicle === true && !vehicleId)} onPress={continueFromDetails} /> : null}
+          {step === 2 ? <ActionButton testID="task-create-next-step-2" label="Nastavi na obrazac" disabled={!activeForm || !activeForm.mobileCompatible || (selectedType?.requiresVehicle === true && !vehicleId)} onPress={continueFromDetails} /> : null}
           {step === 3 ? <ActionButton testID="task-create-submit" label={submitting ? 'Kreiram…' : 'Kreiraj zadatak'} disabled={!model || submitting || uploadingField !== null} onPress={() => void submit()} /> : null}
         </View>
       </ScrollView>
