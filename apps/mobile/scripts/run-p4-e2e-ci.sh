@@ -130,6 +130,12 @@ run_stage() {
     if [[ "$stage" == maestro-* ]]; then
       echo "::error title=Maestro diagnostics::Collecting emulator traces for $stage."
       debug_dir="$RUNNER_TEMP/maestro-debug-${stage#maestro-}"
+      if [[ -f "$debug_dir/android-host-watch.log" ]]; then
+        host_trace="$(tail -n 16 "$debug_dir/android-host-watch.log" | tr '\n' '|' | cut -c1-3000)"
+        echo "::error title=Android timeline::$host_trace"
+      fi
+      host_memory="$(free -m 2>/dev/null | awk '/^Mem:/ {printf \"total=%sMB used=%sMB available=%sMB\", $2, $3, $7}')"
+      echo "::error title=Android host memory::${host_memory:-unavailable}"
       while IFS= read -r -d '' file; do
         echo "::error title=Maestro artifact::$(basename "$file") ($(wc -c <"$file") bytes)"
         case "$file" in
@@ -155,10 +161,6 @@ run_stage() {
           echo "::error title=Android trace missing::$(basename "$trace_file")"
         fi
       done
-      if [[ -f "$debug_dir/android-host-watch.log" ]]; then
-        host_trace="$(tail -n 16 "$debug_dir/android-host-watch.log" | tr '\n' '|' | cut -c1-3000)"
-        echo "::error title=Android timeline::$host_trace"
-      fi
       if command -v adb >/dev/null 2>&1; then
         adb devices -l | while IFS= read -r line; do echo "::error title=Emulator device::$line"; done
         adb shell dumpsys activity activities 2>/dev/null \
