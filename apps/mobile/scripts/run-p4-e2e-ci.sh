@@ -128,13 +128,16 @@ run_stage() {
     echo "::error title=Android host processes::${host_state:-no emulator or adb process matched}"
     echo "::error title=Mobile E2E::$stage failed with exit $status"
     if [[ "$stage" == maestro-* ]]; then
+      maestro_tail="$(tail -n 24 "$log_file" | tr '\n' '|' | cut -c1-3500)"
+      echo "::error title=Maestro final output::$maestro_tail"
+
       echo "::error title=Maestro diagnostics::Collecting emulator traces for $stage."
       debug_dir="$RUNNER_TEMP/maestro-debug-${stage#maestro-}"
       if [[ -f "$debug_dir/android-host-watch.log" ]]; then
         host_trace="$(tail -n 16 "$debug_dir/android-host-watch.log" | tr '\n' '|' | cut -c1-3000)"
         echo "::error title=Android timeline::$host_trace"
       fi
-      host_memory="$(free -m 2>/dev/null | awk '/^Mem:/ {printf \"total=%sMB used=%sMB available=%sMB\", $2, $3, $7}')"
+      host_memory="$(awk '/^MemTotal:/ {total=$2} /^MemAvailable:/ {available=$2} END {if (total) printf \"total=%dMB available=%dMB\", total/1024, available/1024}' /proc/meminfo 2>/dev/null)"
       echo "::error title=Android host memory::${host_memory:-unavailable}"
       while IFS= read -r -d '' file; do
         echo "::error title=Maestro artifact::$(basename "$file") ($(wc -c <"$file") bytes)"
