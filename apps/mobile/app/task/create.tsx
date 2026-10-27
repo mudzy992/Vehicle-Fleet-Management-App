@@ -107,6 +107,13 @@ export default function CreateTaskScreen() {
   }, [taskTypeId]);
 
   const selectedType = taskTypes.find((item) => item.id === taskTypeId) ?? null;
+  const step2BlockReason = !activeForm
+    ? 'form'
+    : !activeForm.mobileCompatible
+      ? 'compatibility'
+      : selectedType?.requiresVehicle === true && !vehicleId
+        ? 'vehicle'
+        : null;
   const parsed = useMemo(() => activeForm ? parseDefinition(activeForm.definition) : null, [activeForm]);
   const model = useMemo<RenderModel | null>(() => {
     if (!activeForm || !parsed?.ok) return null;
@@ -271,7 +278,9 @@ export default function CreateTaskScreen() {
             {activeForm ? <Text testID="task-create-active-form" style={styles.muted}>{activeForm.name} · v{activeForm.version}</Text> : null}
             {formLoading ? <Text testID="task-create-form-loading" style={styles.muted}>Učitavanje obrasca…</Text> : null}
             {activeForm?.mobileCompatible ? <Text testID="task-create-form-ready" style={styles.muted}>Obrazac je spreman za mobilno kreiranje.</Text> : null}
+            {step2BlockReason === 'vehicle' ? <Text testID="task-create-step2-blocked-vehicle" style={styles.error}>Odaberite vozilo prije nastavka.</Text> : null}
             {activeForm && !activeForm.mobileCompatible ? <Text testID="task-create-form-incompatible" style={styles.error}>Objavljena forma nije označena kao kompatibilna s mobilnom aplikacijom.</Text> : null}
+            {!step2BlockReason ? <Text testID="task-create-step2-ready" style={styles.muted}>Obrazac i vozilo su spremni.</Text> : null}
             <Text style={styles.label}>Naslov (opciono)</Text>
             <TextInput testID="task-create-title" accessibilityLabel="Naslov zadatka" value={title} onChangeText={setTitle} placeholder="Automatski se predlaže iz vrste i vozila" maxLength={160} style={styles.input} />
             <Text style={styles.label}>Opis (opciono)</Text>
@@ -326,7 +335,7 @@ export default function CreateTaskScreen() {
         <View style={styles.actions}>
           {step > 1 ? <ActionButton label="Nazad" secondary disabled={submitting || uploadingField !== null} onPress={() => setStep((current) => (current - 1) as 1 | 2 | 3)} /> : null}
           {step === 1 ? <ActionButton testID="task-create-next-step-1" label="Nastavi" disabled={!selectedType || (selectedType.requiresVehicle && !vehicleId)} onPress={() => { setError(null); setStep(2); }} /> : null}
-          {step === 2 ? <ActionButton testID="task-create-next-step-2" label="Nastavi na obrazac" disabled={!activeForm || !activeForm.mobileCompatible || (selectedType?.requiresVehicle === true && !vehicleId)} onPress={continueFromDetails} /> : null}
+          {step === 2 ? <ActionButton testID="task-create-next-step-2" label="Nastavi na obrazac" disabled={step2BlockReason !== null} onPress={continueFromDetails} /> : null}
           {step === 3 ? <ActionButton testID="task-create-submit" label={submitting ? 'Kreiram…' : 'Kreiraj zadatak'} disabled={!model || submitting || uploadingField !== null} onPress={() => void submit()} /> : null}
         </View>
       </ScrollView>

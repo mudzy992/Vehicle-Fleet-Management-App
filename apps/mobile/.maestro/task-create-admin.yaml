@@ -53,6 +53,13 @@ appId: ba.ba101.voznipark
       id: "task-create-form-ready"
     direction: DOWN
     timeout: 30000
+- assertNotVisible:
+    id: "task-create-step2-blocked-vehicle"
+- scrollUntilVisible:
+    element:
+      id: "task-create-step2-ready"
+    direction: DOWN
+    timeout: 30000
 - scrollUntilVisible:
     element:
       id: "task-create-title"
