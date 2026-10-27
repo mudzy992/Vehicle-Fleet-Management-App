@@ -69,8 +69,10 @@ appId: ba.ba101.voznipark
     id: "task-create-title"
 - inputText: "P4-E2E-${TEST_RUN_ID}"
 - hideKeyboard
-- assertVisible:
-    id: "task-create-next-step-2"
+- extendedWaitUntil:
+    visible:
+      id: "task-create-next-step-2"
+    timeout: 15000
 - tapOn:
     id: "task-create-next-step-2"
 - scrollUntilVisible:
