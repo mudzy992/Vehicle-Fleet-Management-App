@@ -81,6 +81,7 @@ export default function CreateTaskScreen() {
   }, [user?.id]);
 
   const selectType = (item: MobileTaskType) => {
+    if (item.id === taskTypeId) return;
     setTaskTypeId(item.id);
     setPriority(item.defaultPriority);
     setAssignMode(item.defaultAssignMode === 'BROADCAST' ? 'BROADCAST' : item.defaultAssignMode === 'ASSIGN_DIRECT' && canAssignDirect ? 'ASSIGN_DIRECT' : 'OPEN_CLAIM');
