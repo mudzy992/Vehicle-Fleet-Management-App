@@ -70,6 +70,10 @@ appId: ba.ba101.voznipark
 - inputText: "P4-E2E-${TEST_RUN_ID}"
 - hideKeyboard
 - assertVisible:
+    id: "task-create-action-footer"
+- assertVisible:
+    id: "task-create-footer-ready"
+- assertVisible:
     id: "task-create-next-step-2"
 - tapOn:
     id: "task-create-next-step-2"

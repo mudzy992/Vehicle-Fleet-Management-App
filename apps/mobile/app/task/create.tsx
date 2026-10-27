@@ -333,7 +333,8 @@ export default function CreateTaskScreen() {
 
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       </ScrollView>
-      <View style={styles.actionFooter}>
+      <View testID="task-create-action-footer" style={styles.actionFooter}>
+        {step === 2 && !step2BlockReason ? <Text testID="task-create-footer-ready" style={styles.muted}>Obrazac i vozilo su spremni.</Text> : null}
         <View style={styles.actions}>
           {step > 1 ? <ActionButton label="Nazad" secondary disabled={submitting || uploadingField !== null} onPress={() => setStep((current) => (current - 1) as 1 | 2 | 3)} /> : null}
           {step === 1 ? <ActionButton testID="task-create-next-step-1" label="Nastavi" disabled={!selectedType || (selectedType.requiresVehicle && !vehicleId)} onPress={() => { setError(null); setStep(2); }} /> : null}
