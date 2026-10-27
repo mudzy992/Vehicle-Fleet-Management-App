@@ -36,16 +36,36 @@ appId: ba.ba101.voznipark
     timeout: 30000
 - tapOn:
     id: "task-create-vehicle-vfm-001"
+- scrollUntilVisible:
+    element:
+      id: "task-create-next-step-1"
+    direction: DOWN
+    timeout: 30000
 - tapOn:
     id: "task-create-next-step-1"
 - tapOn:
     id: "task-create-title"
 - inputText: "P4-E2E-${TEST_RUN_ID}"
 - hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "task-create-next-step-2"
+    direction: DOWN
+    timeout: 30000
 - tapOn:
     id: "task-create-next-step-2"
+- scrollUntilVisible:
+    element:
+      text: "Vrsta pranja"
+    direction: DOWN
+    timeout: 30000
 - assertVisible: "Vrsta pranja"
 - tapOn: "Unutrašnje"
+- scrollUntilVisible:
+    element:
+      id: "task-create-submit"
+    direction: DOWN
+    timeout: 30000
 - tapOn:
     id: "task-create-submit"
 - assertVisible: "P4-E2E-${TEST_RUN_ID}"
