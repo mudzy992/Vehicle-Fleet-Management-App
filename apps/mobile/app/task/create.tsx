@@ -252,24 +252,17 @@ export default function CreateTaskScreen() {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: 'Novi zadatak' }} />
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.page}
-        keyboardShouldPersistTaps="handled"
-        stickyHeaderIndices={step === 2 ? [2] : []}
-      >
+      {step === 2 ? (
+        <View style={styles.stepActionBar}>
+          <ActionButton testID="task-create-next-step-2" label="Nastavi na obrazac" disabled={step2BlockReason !== null} onPress={continueFromDetails} />
+        </View>
+      ) : null}
+      <ScrollView style={styles.flex} contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <View style={styles.heading}>
           <Text style={styles.title}>Novi zadatak</Text>
           <Text style={styles.muted}>Korak {step} od 3</Text>
         </View>
         <View style={styles.progress}><View style={[styles.progressFill, { width: `${(step / 3) * 100}%` }]} /></View>
-        {step === 2 ? (
-          <View style={styles.stickyAction}>
-            <View style={styles.actions}>
-              <ActionButton testID="task-create-next-step-2" label="Nastavi na obrazac" disabled={step2BlockReason !== null} onPress={continueFromDetails} />
-            </View>
-          </View>
-        ) : null}
 
         {step === 1 ? (
           <View style={styles.card}>
@@ -385,7 +378,7 @@ const styles = StyleSheet.create({
   choiceLabelActive: { color: colors.primaryDark },
   choiceDetail: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   section: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 12 },
-  stickyAction: { backgroundColor: colors.surface, zIndex: 10, elevation: 6, paddingVertical: 6 },
+  stepActionBar: { paddingHorizontal: 18, paddingVertical: 8, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, zIndex: 10, elevation: 6 },
   actionFooter: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 10, elevation: 8, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 18, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
   actions: { flexDirection: 'row', gap: 10 },
   action: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: 14 },
