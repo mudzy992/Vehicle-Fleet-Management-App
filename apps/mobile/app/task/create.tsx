@@ -252,7 +252,7 @@ export default function CreateTaskScreen() {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: 'Novi zadatak' }} />
-      <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.flex} contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <View style={styles.heading}>
           <Text style={styles.title}>Novi zadatak</Text>
           <Text style={styles.muted}>Korak {step} od 3</Text>
