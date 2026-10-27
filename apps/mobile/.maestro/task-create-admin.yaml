@@ -43,6 +43,10 @@ appId: ba.ba101.voznipark
     timeout: 30000
 - tapOn:
     id: "task-create-next-step-1"
+- extendedWaitUntil:
+    visible:
+      id: "task-create-active-form"
+    timeout: 30000
 - scrollUntilVisible:
     element:
       id: "task-create-title"
