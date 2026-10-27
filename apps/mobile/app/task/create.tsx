@@ -250,7 +250,7 @@ export default function CreateTaskScreen() {
   if (taskTypes.length === 0) return <View style={styles.center}><Text accessibilityRole="alert" style={styles.error}>{error ?? 'Nema aktivnih vrsta zadataka ili nemate dozvolu za pregled.'}</Text></View>;
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Stack.Screen options={{ title: 'Novi zadatak' }} />
       <ScrollView style={styles.flex} contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <View style={styles.heading}>
@@ -355,7 +355,7 @@ function ActionButton({ label, onPress, disabled = false, secondary = false, tes
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  page: { padding: 18, gap: 14, paddingBottom: 32 },
+  page: { padding: 18, gap: 14, paddingBottom: 140 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
   heading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: colors.ink, fontSize: 22, fontWeight: '800' },
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
   choiceLabelActive: { color: colors.primaryDark },
   choiceDetail: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   section: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 12 },
-  actionFooter: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 18, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+  actionFooter: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 10, elevation: 8, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 18, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
   actions: { flexDirection: 'row', gap: 10 },
   action: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: 14 },
   actionSecondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
