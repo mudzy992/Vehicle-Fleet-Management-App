@@ -99,10 +99,18 @@ run_stage() {
   local command_pid=$!
   if [[ "$stage" == maestro-* ]]; then
     (
+      last_reconnect=0
       while kill -0 "$command_pid" 2>/dev/null; do
         sleep 5
         printf '\n--- %s ---\n' "$(date -Is)"
-        timeout 3s adb devices -l 2>&1 || true
+        device_state="$(timeout 3s adb devices -l 2>&1 || true)"
+        printf '%s\n' "$device_state"
+        now="$(date +%s)"
+        if grep -Eq '^emulator-[0-9]+[[:space:]]+offline([[:space:]]|$)' <<<"$device_state" && (( now - last_reconnect >= 30 )); then
+          echo "Detected offline emulator; requesting adb reconnect offline."
+          timeout 5s adb reconnect offline 2>&1 || true
+          last_reconnect="$now"
+        fi
         ps -C qemu-system-x86_64 -o pid,stat,%cpu,%mem,rss,comm --no-headers 2>/dev/null || true
       done
     ) >>"$debug_dir/android-host-watch.log" 2>&1 &
