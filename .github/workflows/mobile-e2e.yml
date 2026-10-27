@@ -196,7 +196,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
-          target: google_apis
+          target: google_atd
           arch: x86_64
           profile: pixel_2
           emulator-boot-timeout: 600
