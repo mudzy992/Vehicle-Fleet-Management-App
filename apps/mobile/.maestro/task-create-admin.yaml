@@ -29,6 +29,11 @@ appId: ba.ba101.voznipark
 - assertVisible: "Novi zadatak"
 - tapOn:
     id: "task-create-type-wash"
+- scrollUntilVisible:
+    element:
+      id: "task-create-vehicle-vfm-001"
+    direction: DOWN
+    timeout: 30000
 - tapOn:
     id: "task-create-vehicle-vfm-001"
 - tapOn:
