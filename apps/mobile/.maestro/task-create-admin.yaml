@@ -43,6 +43,11 @@ appId: ba.ba101.voznipark
     timeout: 30000
 - tapOn:
     id: "task-create-next-step-1"
+- scrollUntilVisible:
+    element:
+      id: "task-create-title"
+    direction: UP
+    timeout: 30000
 - tapOn:
     id: "task-create-title"
 - inputText: "P4-E2E-${TEST_RUN_ID}"
@@ -57,7 +62,7 @@ appId: ba.ba101.voznipark
 - scrollUntilVisible:
     element:
       text: "Vrsta pranja"
-    direction: DOWN
+    direction: UP
     timeout: 30000
 - assertVisible: "Vrsta pranja"
 - tapOn: "Unutrašnje"
