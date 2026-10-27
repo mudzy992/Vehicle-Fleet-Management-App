@@ -250,7 +250,7 @@ export default function CreateTaskScreen() {
   if (taskTypes.length === 0) return <View style={styles.center}><Text accessibilityRole="alert" style={styles.error}>{error ?? 'Nema aktivnih vrsta zadataka ili nemate dozvolu za pregled.'}</Text></View>;
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: 'Novi zadatak' }} />
       <ScrollView style={styles.flex} contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <View style={styles.heading}>
