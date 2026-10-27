@@ -50,6 +50,11 @@ appId: ba.ba101.voznipark
     timeout: 30000
 - scrollUntilVisible:
     element:
+      id: "task-create-form-ready"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
       id: "task-create-title"
     direction: UP
     timeout: 30000

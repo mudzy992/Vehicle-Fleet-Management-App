@@ -269,7 +269,9 @@ export default function CreateTaskScreen() {
             <Text style={styles.sectionTitle}>2. Detalji</Text>
             <Text style={styles.muted}>{selectedType?.name}{selectedType?.requiresVehicle && vehicleId ? ` · ${vehicles.find((item) => item.id === vehicleId)?.internalNo ?? ''}` : ''}</Text>
             {activeForm ? <Text testID="task-create-active-form" style={styles.muted}>{activeForm.name} · v{activeForm.version}</Text> : null}
-            {activeForm && !activeForm.mobileCompatible ? <Text style={styles.error}>Objavljena forma nije označena kao kompatibilna s mobilnom aplikacijom.</Text> : null}
+            {formLoading ? <Text testID="task-create-form-loading" style={styles.muted}>Učitavanje obrasca…</Text> : null}
+            {activeForm?.mobileCompatible ? <Text testID="task-create-form-ready" style={styles.muted}>Obrazac je spreman za mobilno kreiranje.</Text> : null}
+            {activeForm && !activeForm.mobileCompatible ? <Text testID="task-create-form-incompatible" style={styles.error}>Objavljena forma nije označena kao kompatibilna s mobilnom aplikacijom.</Text> : null}
             <Text style={styles.label}>Naslov (opciono)</Text>
             <TextInput testID="task-create-title" accessibilityLabel="Naslov zadatka" value={title} onChangeText={setTitle} placeholder="Automatski se predlaže iz vrste i vozila" maxLength={160} style={styles.input} />
             <Text style={styles.label}>Opis (opciono)</Text>
