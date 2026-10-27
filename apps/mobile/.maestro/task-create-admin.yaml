@@ -69,12 +69,12 @@ appId: ba.ba101.voznipark
     id: "task-create-title"
 - inputText: "P4-E2E-${TEST_RUN_ID}"
 - hideKeyboard
-- scrollUntilVisible:
-    element:
-      text: "Nastavi na obrazac"
-    direction: DOWN
-    timeout: 30000
-- tapOn: "Nastavi na obrazac"
+- assertVisible:
+    id: "task-create-step2-ready"
+- assertVisible:
+    id: "task-create-next-step-2"
+- tapOn:
+    id: "task-create-next-step-2"
 - scrollUntilVisible:
     element:
       text: "Vrsta pranja"
