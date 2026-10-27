@@ -332,13 +332,15 @@ export default function CreateTaskScreen() {
         ) : null}
 
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+      </ScrollView>
+      <View style={styles.actionFooter}>
         <View style={styles.actions}>
           {step > 1 ? <ActionButton label="Nazad" secondary disabled={submitting || uploadingField !== null} onPress={() => setStep((current) => (current - 1) as 1 | 2 | 3)} /> : null}
           {step === 1 ? <ActionButton testID="task-create-next-step-1" label="Nastavi" disabled={!selectedType || (selectedType.requiresVehicle && !vehicleId)} onPress={() => { setError(null); setStep(2); }} /> : null}
           {step === 2 ? <ActionButton testID="task-create-next-step-2" label="Nastavi na obrazac" disabled={step2BlockReason !== null} onPress={continueFromDetails} /> : null}
           {step === 3 ? <ActionButton testID="task-create-submit" label={submitting ? 'Kreiram…' : 'Kreiraj zadatak'} disabled={!model || submitting || uploadingField !== null} onPress={() => void submit()} /> : null}
         </View>
-      </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -372,6 +374,7 @@ const styles = StyleSheet.create({
   choiceLabelActive: { color: colors.primaryDark },
   choiceDetail: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   section: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 12 },
+  actionFooter: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 18, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
   actions: { flexDirection: 'row', gap: 10 },
   action: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: 14 },
   actionSecondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
