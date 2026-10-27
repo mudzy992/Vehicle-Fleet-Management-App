@@ -64,11 +64,10 @@ appId: ba.ba101.voznipark
 - hideKeyboard
 - scrollUntilVisible:
     element:
-      id: "task-create-next-step-2"
+      text: "Nastavi na obrazac"
     direction: DOWN
     timeout: 30000
-- tapOn:
-    id: "task-create-next-step-2"
+- tapOn: "Nastavi na obrazac"
 - scrollUntilVisible:
     element:
       text: "Vrsta pranja"

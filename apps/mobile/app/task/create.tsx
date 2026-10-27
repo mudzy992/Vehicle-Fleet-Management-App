@@ -339,7 +339,7 @@ function Choice({ active, label, detail, onPress, selectionRole = 'radio', testI
 }
 
 function ActionButton({ label, onPress, disabled = false, secondary = false, testID }: { label: string; onPress(): void; disabled?: boolean; secondary?: boolean; testID?: string }) {
-  return <Pressable testID={testID} accessibilityRole="button" onPress={onPress} disabled={disabled} style={[styles.action, secondary && styles.actionSecondary, disabled && styles.disabled]}><Text style={[styles.actionText, secondary && styles.actionTextSecondary]}>{label}</Text></Pressable>;
+  return <Pressable testID={testID} accessibilityLabel={label} accessibilityRole="button" accessibilityState={{ disabled }} onPress={onPress} disabled={disabled} style={[styles.action, secondary && styles.actionSecondary, disabled && styles.disabled]}><Text style={[styles.actionText, secondary && styles.actionTextSecondary]}>{label}</Text></Pressable>;
 }
 
 const styles = StyleSheet.create({
