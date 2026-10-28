@@ -24,7 +24,12 @@ async function expectNoA11yViolations(page: Page) {
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();
   expect(
-    results.violations.map(({ id, impact, help, nodes }) => ({ id, impact, help, nodes: nodes.length })),
+    results.violations.map(({ id, impact, help, nodes }) => ({
+      id,
+      impact,
+      help,
+      nodes: nodes.map(({ target, html, failureSummary }) => ({ target, html, failureSummary })),
+    })),
   ).toEqual([]);
 }
 
