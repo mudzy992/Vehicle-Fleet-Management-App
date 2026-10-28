@@ -121,6 +121,23 @@ test('successful login returns to the requested internal route and keeps tokens 
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
 });
 
+test('vehicle register mounts for an authorized user and mobile navigation opens', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['vehicle:view'] }) }),
+  );
+  await page.goto('/prijava?next=%2Fvozila');
+  await submitLogin(page);
+  await expect(page).toHaveURL(/\/vozila$/);
+  await expect(page.getByRole('heading', { name: 'Vozila' })).toBeVisible();
+  await expect(page.getByText('Registar je prazan')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+  await page.getByRole('button', { name: 'Otvori navigaciju' }).click();
+  await expect(page.locator('[data-testid="sidebar"]')).toHaveClass(/is-open/);
+  await expect(page.locator('[data-testid="sidebar"]').getByRole('link', { name: /Vozila/ })).toBeVisible();
+});
+
 test('external-looking next path is rejected in favor of the dashboard', async ({ page }) => {
   await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse() }));
   await page.goto('/prijava?next=%2F%2Fevil.example');
