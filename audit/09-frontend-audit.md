@@ -9,7 +9,7 @@
 - Mobilne sjene više ne ponavljaju crnu vrijednost na ekranima prijave i zadataka: koriste `colors.shadow`.
 - Boja rezervnog prikaza native color pickera za vrstu zadatka čita CSS `--neutral`; prilagođena boja vrste zadatka ostaje korisnički/domain podatak, ne hardkodovani UI token.
 - Dodan `scripts/check-design-tokens.mjs` i `pnpm design-tokens:check`. Skripta poredi 19 parova web/mobile, provjerava 11 kombinacija WCAG AA kontrasta, `theme-color` i skenira TS/TSX UI za sirove hex boje. CI je poziva u `quality` poslu.
-- Dodano je 35. Vitest provjera tokena za browser chrome. Postavljen je Playwright config i deset API-mock scenarija za autentikaciju, redirect, neispravne i uspješne prijave, odjavu, pravo pristupa vozilima, responsive login, mobile drawer keyboard/fokus/Escape i guardove budućih `/obavijesti` i `/izvjestaji` kostura. Dodan je i `@axe-core/playwright` WCAG 2.1 A/AA scan za responsive login, autorizovanu listu vozila i otvoreni mobile drawer. Prvi browser scan otkrio je jednu grešku `color-contrast` na vozilima; konkretan DOM target sada se uključuje u assertion radi dijagnoze, pa se finding ne zatvara dok novi CI ne potvrdi popravak. Playwright CI koristi Chromium i determinističke API mocks; ne povezuje se s backendom, bazom niti produkcijom.
+- Dodano je 35. Vitest provjera tokena za browser chrome. Postavljen je Playwright config i deset API-mock scenarija za autentikaciju, redirect, neispravne i uspješne prijave, odjavu, pravo pristupa vozilima, responsive login, mobile drawer keyboard/fokus/Escape i guardove budućih `/obavijesti` i `/izvjestaji` kostura. Dodan je i `@axe-core/playwright` WCAG 2.1 A/AA scan za responsive login, autorizovanu listu vozila i otvoreni mobile drawer. Prvi browser scan otkrio je jednu grešku `color-contrast` na vozilima. Uklonjeno je nepotrebno snižavanje opacity za navigacijski meta-tekst; naknadni CI axe scan login-a, liste vozila i otvorenog drawer-a prolazi bez WCAG 2.1 A/AA prekršaja. Playwright CI koristi Chromium i determinističke API mocks; ne povezuje se s backendom, bazom niti produkcijom.
 - Lokalna validacija: `design-tokens:check` PASS; web build PASS; Vitest **26 fajlova / 253 testa PASS**; web lint i typecheck PASS. `playwright test --list` učitava svih **10** scenarija.
 
 ## Web redizajn — faza 1 (temelji, 28.10.2026)
@@ -22,7 +22,7 @@ Pokrenut je odvojeni web-redizajn; mobilni UI nije mijenjan. Prvi prolaz uvodi c
 2. **Temeljni tokovi — u toku:** login je redizajniran i CI browser suite historijski prolazi na osnovnom commitu; dashboard je osvježen. Redizajn login-a čeka novi CI runtime rezultat. Preostaje provjera svih vizuelnih stanja (pending, greška, prazno, uspjeh), permission varijanti i browser prikaza.
 3. **Operativni moduli — djelimično u toku:** uveden zajednički page-heading/layout pristup za liste vozila, vozača, zadataka, formi, guma i rokova. Nije kompletna ekran-po-ekran provjera; detalji, CRUD, responsive tabele, bulk akcije, empty/error i konfliktni API odgovori ostaju.
 4. **Administracija i konfiguracija — na čekanju:** forme, tipovi zadataka, korisnici/uloge, profil, audit i zdravlje; buduće `/obavijesti` i `/izvjestaji` ostaju skeletoni.
-5. **Kvalitet i release acceptance — djelimično:** axe WCAG 2.1 A/AA provjere pokrivaju login, vozila i mobile drawer; vozila imaju jednu otvorenu color-contrast grešku za dijagnozu. Keyboard/focus/escape i responsive smoke su u Playwrightu. Širiti na module, popraviti povremeni logout URL timing u browser testu i izvršiti zabilježen vizuelni browser pregled. Lint/typecheck/unit/build/CI ostaju gateovi; testovi izolovani od produkcije.
+5. **Kvalitet i release acceptance — djelimično:** axe WCAG 2.1 A/AA provjere pokrivaju login, vozila i mobile drawer; uzorkovani login/vehicle/drawer axe scan prolazi; keyboard/focus/escape i responsive smoke prolaze u Playwrightu. Logout povremeno zadržava siguran `next` parametar, što je sada eksplicitno dozvoljeno testom. Širiti axe i browser scenarije na module, zatim izvršiti zabilježen vizuelni browser pregled. Lint/typecheck/unit/build/CI ostaju gateovi; testovi izolovani od produkcije.
 
 **„Gotovo” se označava tek kad** svi aktivni web moduli imaju evidentiran pregled; nema poznatih ozbiljnih UI/accessibility/responsive nedostataka; token check, lint, typecheck, testovi, produkcijski build i CI prolaze; Playwright runtime prođe; browser vizuelni smoke je dokumentovan. Pojedinačni backend ili mobilni nalazi ne zatvaraju se ovim kriterijem. Mobilna aplikacija je van ovog opsega.
 
@@ -30,7 +30,7 @@ Pokrenut je odvojeni web-redizajn; mobilni UI nije mijenjan. Prvi prolaz uvodi c
 
 ## Browser-run ograničenje
 
-Playwright browser **nije pokrenut lokalno u ovom sandboxu**: lokalno preuzimanje Chromiuma nije uspjelo (`ECONNRESET`). GitHub Actions je izvršio mocked browser scenarije (10 testova; mobile navigation scenario prolazi), ali zabilježio je povremenu logout URL race/assertion nestabilnost; najnoviji run mora proći bez flaky testa. CI browser pass ne zamjenjuje screenshot/vizuelni pregled niti fizički uređaj UAT. Lokalni Vite preview/HTTP 200 i `playwright --list` sami nisu browser-runtime dokaz.
+Playwright browser **nije pokrenut lokalno u ovom sandboxu**: lokalno preuzimanje Chromiuma nije uspjelo (`ECONNRESET`). GitHub Actions je izvršio svih 10 mocked browser scenarija; axe WCAG 2.1 A/AA provjere prolaze za login, autorizovanu listu vozila i otvoreni drawer. CI browser pass ne zamjenjuje screenshot/vizuelni pregled niti fizički uređaj UAT. Lokalni Vite preview/HTTP 200 i `playwright --list` sami nisu browser-runtime dokaz.
 
 ## Inventar modula i pokrivenost
 
@@ -60,13 +60,13 @@ App-shell, nav, guards, router permissions, API client i design tokens dodatno i
 
 ## Evidencija statusa / ne zatvarati unaprijed
 
-| Nalaz                      | Trenutna odluka                                                                                                                      |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| A-01 E2E infrastruktura    | PARTIAL: CI Playwright runtime je izvršen (10 mocked scenarija), ali logout flake i vizuelni/uređajni acceptance ostaju              |
-| A-03 bundle/runtime        | PARTIAL: build/lint/unit prolaze; browser console/navigation i vizuelni smoke nisu izvršeni                                          |
-| A-05 tema                  | PARTIAL: token test prolazi; axe je prijavio jednu WCAG color-contrast grešku u vozilima; ručni browser/Android pregled nije izvršen |
-| A-08 permission scope      | PARTIAL: raniji fokus testovi potvrđeni; ovaj frontend pregled ne obuhvata pun backend cross-module scope sweep                      |
-| A-13 logout/session revoke | PARTIAL: mocked logout scenario izvršen; povremeni URL flake i backend revoke dokaz nisu zatvoreni                                   |
-| Preostali audit statusi    | Ostaju nepromijenjeni iz `audit/08-status-registar.md`; ne mogu se zatvoriti ovim frontend prolazom                                  |
+| Nalaz                      | Trenutna odluka                                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| A-01 E2E infrastruktura    | PARTIAL: svih 10 CI Playwright scenarija prolaze; lokalni Chromium nije dostupan; vizuelni/uređajni acceptance ostaju |
+| A-03 bundle/runtime        | PARTIAL: build/lint/unit prolaze; browser console/navigation i vizuelni smoke nisu izvršeni                           |
+| A-05 tema                  | PARTIAL: token test i axe na login/vozila/drawer prolaze; vizuelni browser/Android pregled šireg UI-ja nije izvršen   |
+| A-08 permission scope      | PARTIAL: raniji fokus testovi potvrđeni; ovaj frontend pregled ne obuhvata pun backend cross-module scope sweep       |
+| A-13 logout/session revoke | PARTIAL: mocked logout scenario prolazi; backend revoke dokaz nije obuhvaćen mock testom                              |
+| Preostali audit statusi    | Ostaju nepromijenjeni iz `audit/08-status-registar.md`; ne mogu se zatvoriti ovim frontend prolazom                   |
 
 **Zaključak:** prijavljene konkretne token nekonzistentnosti su ispravljene i automatizovana provjera prolazi. Modul-po-modul frontend audit je napravio eksplicitan coverage inventar, ali nije završen: navedeni testovi za module bez direktne pokrivenosti, Playwright runtime, browser vizuelna provjera, Android uređaj i nefrontend nalazi ostaju potvrđeno otvoreni.
