@@ -109,7 +109,7 @@ export function TasksPage() {
         </div>
         {hasPermission('task:create') && (
           <Link
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-fg)] hover:opacity-90"
             to="/zadaci/novi"
           >
             Novi zadatak
@@ -127,7 +127,7 @@ export function TasksPage() {
             className={[
               'min-h-10 rounded-md border px-4 text-sm font-medium transition-colors',
               tab === value
-                ? 'border-[var(--primary)] bg-[var(--primary)] text-white'
+                ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-fg)]'
                 : 'border-[var(--border)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--surface-hover)]',
             ].join(' ')}
             onClick={() => {

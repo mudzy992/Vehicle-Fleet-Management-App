@@ -109,8 +109,8 @@ const styles = StyleSheet.create({
   internalNo: { color: colors.primary, fontSize: 13, fontWeight: '800' },
   title: { color: colors.ink, fontSize: 23, fontWeight: '800' },
   plate: { color: colors.muted, fontSize: 15 },
-  status: { alignSelf: 'flex-start', color: colors.muted, fontSize: 12, fontWeight: '800', backgroundColor: '#EFF2F5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 99, overflow: 'hidden' },
-  statusActive: { color: colors.primaryDark, backgroundColor: '#E8F3F0' },
+  status: { alignSelf: 'flex-start', color: colors.muted, fontSize: 12, fontWeight: '800', backgroundColor: colors.neutralSoft, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 99, overflow: 'hidden' },
+  statusActive: { color: colors.primary, backgroundColor: colors.primarySoft },
   card: { backgroundColor: colors.surface, borderRadius: 16, borderColor: colors.border, borderWidth: 1, padding: 16, gap: 13 },
   sectionTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   info: { gap: 3 },
@@ -119,5 +119,5 @@ const styles = StyleSheet.create({
   notes: { color: colors.ink, fontSize: 14, lineHeight: 21 },
   error: { color: colors.danger, textAlign: 'center', lineHeight: 21 },
   retry: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11 },
-  retryText: { color: '#fff', fontWeight: '700' },
+  retryText: { color: colors.primaryFg, fontWeight: '700' },
 });

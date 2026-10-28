@@ -65,7 +65,7 @@ export default function ChangePasswordScreen() {
             <TextInput value={confirmation} onChangeText={setConfirmation} secureTextEntry autoCapitalize="none" autoComplete="new-password" textContentType="newPassword" accessibilityLabel="Potvrda nove lozinke" style={styles.input} onSubmitEditing={() => void submit()} returnKeyType="go" />
             {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
             <Pressable accessibilityRole="button" onPress={() => void submit()} disabled={submitting || !currentPassword || !newPassword || !confirmation} style={({ pressed }) => [styles.button, (pressed || submitting) && styles.pressed, (!currentPassword || !newPassword || !confirmation) && styles.disabled]}>
-              {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Promijeni lozinku</Text>}
+              {submitting ? <ActivityIndicator color={colors.primaryFg} /> : <Text style={styles.buttonText}>Promijeni lozinku</Text>}
             </Pressable>
           </>
         )}
@@ -77,14 +77,14 @@ export default function ChangePasswordScreen() {
 const styles = StyleSheet.create({
   page: { flex: 1, justifyContent: 'center', paddingHorizontal: 22 },
   card: { backgroundColor: colors.surface, borderRadius: 20, padding: 22, gap: 12, borderWidth: 1, borderColor: colors.border },
-  mark: { alignSelf: 'center', width: 48, height: 48, overflow: 'hidden', borderRadius: 15, backgroundColor: colors.primary, color: '#fff', fontSize: 19, fontWeight: '800', textAlign: 'center', textAlignVertical: 'center' },
+  mark: { alignSelf: 'center', width: 48, height: 48, overflow: 'hidden', borderRadius: 15, backgroundColor: colors.primary, color: colors.primaryFg, fontSize: 19, fontWeight: '800', textAlign: 'center', textAlignVertical: 'center' },
   title: { color: colors.ink, fontSize: 22, fontWeight: '800', textAlign: 'center' },
   help: { color: colors.muted, fontSize: 14, lineHeight: 21, textAlign: 'center', marginBottom: 4 },
   label: { color: colors.ink, fontSize: 14, fontWeight: '700', marginTop: 3 },
-  input: { minHeight: 50, borderColor: colors.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, color: colors.ink, fontSize: 16, backgroundColor: '#fff' },
+  input: { minHeight: 50, borderColor: colors.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, color: colors.ink, fontSize: 16, backgroundColor: colors.surface },
   error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
   button: { minHeight: 52, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  buttonText: { color: colors.primaryFg, fontSize: 15, fontWeight: '800' },
   pressed: { opacity: 0.84 },
   disabled: { opacity: 0.55 },
 });

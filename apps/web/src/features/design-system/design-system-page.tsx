@@ -38,13 +38,13 @@ export function DesignSystemPage() {
       <header>
         <h2 className="text-lg font-semibold tracking-tight">Dizajn sistem</h2>
         <p className="mt-1 text-sm text-[var(--fg-muted)]">
-          Tokeni i komponente iz <code className="font-mono text-xs">docs/06-UX_UI_DIZAJN.md</code> §5.
-          Boje se mijenjaju isključivo u <code className="font-mono text-xs">styles/globals.css</code>.
+          Zajednički grafitno-lime tokeni za web i mobilnu aplikaciju; kontrast i usklađenost provjerava web test.
+          Web tokeni su u <code className="font-mono text-xs">styles/globals.css</code>, native mapiranje u <code className="font-mono text-xs">apps/mobile/src/lib/theme.ts</code>.
         </p>
       </header>
 
       <Card>
-        <CardHeader title="Boje (dizajn tokeni)" description="Svjetla i tamna tema dijele iste varijable." />
+        <CardHeader title="Boje (dizajn tokeni)" description="Grafitna + lime; tamna tema je zajednički default weba i mobilne aplikacije." />
         <CardContent>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {COLOR_TOKENS.map((token) => (

@@ -13,101 +13,69 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
- * 1) Tokeni — svjetla tema (default)
+ * 1) Zajednički VFM tokeni — grafitna podloga + lime akcent (default)
  * ------------------------------------------------------------------------- */
 :root {
-  --primary: #2563eb;
-  --primary-soft: #dbeafe;
-  --primary-fg: #ffffff;
+  --primary: #c6f75a;
+  --primary-soft: #2a3a1b;
+  --primary-fg: #11170c;
 
-  --bg: #f8fafc;
-  --surface: #ffffff;
-  --surface-muted: #f1f5f9;
-  --border: #e2e8f0;
-  --hover: #f1f5f9;
+  --bg: #0b0f0c;
+  --surface: #121814;
+  --surface-muted: #1a221b;
+  --border: #2b382d;
+  --hover: #202a22;
 
-  --fg: #0f172a;
-  --fg-muted: #64748b;
+  --fg: #f0f4ef;
+  --fg-muted: #a5b1a5;
 
-  --success: #16a34a;
-  --success-soft: #dcfce7;
-  --info: #0ea5e9;
-  --info-soft: #e0f2fe;
-  --warning: #d97706;
-  --warning-soft: #fef3c7;
-  --danger: #dc2626;
-  --danger-soft: #fee2e2;
-  --neutral: #64748b;
-  --neutral-soft: #e2e8f0;
+  --success: #4ade80;
+  --success-soft: #142d1e;
+  --info: #60a5fa;
+  --info-soft: #17283b;
+  --warning: #fbbf24;
+  --warning-soft: #332a14;
+  --danger: #fb7185;
+  --danger-soft: #35191e;
+  --neutral: #a5b1a5;
+  --neutral-soft: #252e27;
 
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
 
-  --shadow-sm: 0 1px 2px rgb(15 23 42 / 6%);
-  --shadow-md: 0 4px 12px rgb(15 23 42 / 8%);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-md: 0 4px 14px rgb(0 0 0 / 45%);
 
   --font-sans:
-    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
 }
 
-/* ---------------------------------------------------------------------------
- * 2) Tokeni — tamna tema (docs/06 §5.1)
- * ------------------------------------------------------------------------- */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --primary: #60a5fa;
-    --primary-soft: #1e293b;
-    --primary-fg: #0b1220;
-
-    --bg: #0b1220;
-    --surface: #111a2e;
-    --surface-muted: #0f1729;
-    --border: #24304a;
-    --hover: #17233b;
-
-    --fg: #e6edf7;
-    --fg-muted: #94a3b8;
-
-    --success: #22c55e;
-    --success-soft: #12291d;
-    --info: #38bdf8;
-    --info-soft: #0d2436;
-    --warning: #f59e0b;
-    --warning-soft: #2d2210;
-    --danger: #f87171;
-    --danger-soft: #2f1618;
-    --neutral: #94a3b8;
-    --neutral-soft: #1e293b;
-
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
-    --shadow-md: 0 4px 14px rgb(0 0 0 / 45%);
-  }
-}
-
-[data-theme='dark'] {
-  --primary: #60a5fa;
-  --primary-soft: #1e293b;
-  --primary-fg: #0b1220;
-  --bg: #0b1220;
-  --surface: #111a2e;
-  --surface-muted: #0f1729;
-  --border: #24304a;
-  --hover: #17233b;
-  --fg: #e6edf7;
-  --fg-muted: #94a3b8;
-  --success: #22c55e;
-  --success-soft: #12291d;
-  --info: #38bdf8;
-  --info-soft: #0d2436;
-  --warning: #f59e0b;
-  --warning-soft: #2d2210;
-  --danger: #f87171;
-  --danger-soft: #2f1618;
-  --neutral: #94a3b8;
-  --neutral-soft: #1e293b;
+/* Dostupna svijetla varijanta; koristi se samo uz eksplicitan data-theme. */
+[data-theme='light'] {
+  --primary: #597b16;
+  --primary-soft: #e7f4ce;
+  --primary-fg: #ffffff;
+  --bg: #f5f7f2;
+  --surface: #ffffff;
+  --surface-muted: #edf1e9;
+  --border: #d6dfd0;
+  --hover: #e9efe4;
+  --fg: #172016;
+  --fg-muted: #5d6b5a;
+  --success: #16794a;
+  --success-soft: #dff2e5;
+  --info: #1d65a6;
+  --info-soft: #dfedf9;
+  --warning: #8a5d00;
+  --warning-soft: #fff1c2;
+  --danger: #b4233e;
+  --danger-soft: #fce4e8;
+  --neutral: #5d6b5a;
+  --neutral-soft: #e5eae1;
+  --shadow-sm: 0 1px 2px rgb(15 23 18 / 6%);
+  --shadow-md: 0 4px 12px rgb(15 23 18 / 8%);
 }
 
 /* ---------------------------------------------------------------------------

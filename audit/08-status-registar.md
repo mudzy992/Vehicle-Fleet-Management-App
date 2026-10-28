@@ -2,13 +2,13 @@
 
 Ovaj registar dopunjava tehnički audit. Statusi se ažuriraju uz test ili referencu na promjenu.
 
-| ID | Stavka | Status na 22.10.2026 | Dokaz / sljedeći korak |
+| ID | Stavka | Status na 28.10.2026 | Dokaz / sljedeći korak |
 |---|---|---|---|
 | A-01 | E2E infrastruktura ne postoji | PARTIAL / IN PROGRESS | Mobile Maestro black-box CI runner i P4 acceptance prolaze u izolovanom runu **40712125218**; web browser E2E i device UAT ostaju otvoreni |
 | A-02 | Prisma native engine download ograničen u sandboxu | CI VERIFIED / LOCAL ENV LIMIT | Sandbox workaround nije dokaz native download; CI generiše Prisma client i primjenjuje migracije u izolovanoj disposable PostgreSQL bazi (run **40712125166**) |
 | A-03 | Web bundle 901 kB + Node crypto warning | PARTIAL / BUILD VERIFIED | Runtime imports prebačeni na `@vfm/form-engine/definition`; lazy route chunks uklonili `node:crypto` warning i 500 kB warning (glavni entry 28.18 kB; najveći odvojeni `zod` chunk 486.49 kB). Web build/lint i 182 testa prolaze; browser-console i real-navigation smoke ostaju otvoreni |
 | A-04 | ZIP demo je samo vizuelna referenca | CLOSED (scope decision) | Prenijeti samo design cues; zadržati postojeći backend/auth |
-| A-05 | Web/mobile tema nisu usklađene | OPEN | Design tokens + design system foundation |
+| A-05 | Web/mobile tema nisu usklađene | PARTIAL / TOKENS ALIGNED | Korisnik je izabrao grafitno-lime; web dark-default i native koriste iste vrijednosti, parity + WCAG AA kontrast test dodat. Browser/device vizuelni smoke ostaje otvoren |
 | A-06 | Pet lokalnih mobile EAS diffs | PROTECTED / not staged | Sačuvani/netaknuti; ne uključivati slučajno u Faza 1 patch |
 | A-07 | API integration suite nedostaje | CI VERIFIED / LOCAL DB NOT RUN | API integration/stress i P15 persistence smoke prolaze nad izolovanim CI PostgreSQL/Redis servisima (run **40712125166**); lokalno/prod DB nije ciljana |
 | A-08 | Scope/permission audit po svim modulima | PARTIAL / IN PROGRESS | Faza 1 user/role/permission/audit scope i User PII popravljeni; prije Faze 3 provjeriti `driver:view_pii` scope u `drivers.service.ts`; `vehicle:view:ALL` ostaje validan |

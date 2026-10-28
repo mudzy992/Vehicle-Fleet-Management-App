@@ -19,4 +19,4 @@ export default function IndexScreen() {
   );
 }
 
-const styles = StyleSheet.create({ center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 }, title: { color: colors.ink, fontSize: 22, fontWeight: '700' }, text: { color: colors.muted, fontSize: 16, textAlign: 'center' }, button: { backgroundColor: colors.primary, color: '#fff', fontWeight: '700', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, overflow: 'hidden' }, link: { color: colors.primary, padding: 12 } });
+const styles = StyleSheet.create({ center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 }, title: { color: colors.ink, fontSize: 22, fontWeight: '700' }, text: { color: colors.muted, fontSize: 16, textAlign: 'center' }, button: { backgroundColor: colors.primary, color: colors.primaryFg, fontWeight: '700', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, overflow: 'hidden' }, link: { color: colors.primary, padding: 12 } });

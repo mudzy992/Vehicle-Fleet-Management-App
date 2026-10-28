@@ -75,7 +75,7 @@ export function LoginPage() {
         <div className="mb-6 flex items-center gap-2">
           <span
             aria-hidden="true"
-            className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--primary)] text-sm font-bold text-white"
+            className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--primary)] text-sm font-bold text-[var(--primary-fg)]"
           >
             VP
           </span>

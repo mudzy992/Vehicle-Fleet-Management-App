@@ -209,23 +209,28 @@ prikazuju samo ako korisnik ima barem jedno pravo u njima). Sidebar je sklopiv (
 
 ## 5. Dizajn sistem
 
-### 5.1 Boje (CSS varijable, light/dark)
+### 5.1 Boje (zajednički grafitno-lime tokeni)
 
-| Token | Light | Dark | Upotreba |
-|---|---|---|---|
-| `--primary` | `#2563EB` | `#60A5FA` | Glavne akcije, linkovi, fokus |
-| `--primary-fg` | `#FFFFFF` | `#0B1220` | Tekst na primary |
-| `--bg` | `#F8FAFC` | `#0B1220` | Pozadina aplikacije |
-| `--surface` | `#FFFFFF` | `#111A2E` | Kartice, paneli |
-| `--surface-2` | `#F1F5F9` | `#182338` | Hover, tabele header |
-| `--border` | `#E2E8F0` | `#24304A` | Obrubi |
-| `--fg` | `#0F172A` | `#E6EDF7` | Primarni tekst |
-| `--fg-muted` | `#64748B` | `#94A3B8` | Sekundarni tekst |
-| `--success` | `#16A34A` | `#4ADE80` | Završeno, važeće, „Aktivno" |
-| `--info` | `#0EA5E9` | `#38BDF8` | U toku, informativno |
-| `--warning` | `#D97706` | `#FBBF24` | Rok ≤ 7 dana, upozorenje |
-| `--danger` | `#DC2626` | `#F87171` | Isteklo, greška, destrukcija |
-| `--neutral` | `#64748B` | `#94A3B8` | Otkazano, arhivirano |
+Tamna grafitna tema je default na webu i mobilnoj aplikaciji. `data-theme="light"` ostaje eksplicitna web-only opcija; ne mijenja native tokene. Lime se koristi za primarnu akciju/fokus i nikad se ne kombinuje s bijelim tekstom na dugmetu.
+
+| Token | Vrijednost (shared dark) | Upotreba |
+|---|---|---|
+| `--primary` | `#C6F75A` | Glavne akcije, linkovi, fokus |
+| `--primary-soft` | `#2A3A1B` | Aktivna selekcija i blaga primarna površina |
+| `--primary-fg` | `#11170C` | Tekst/ikona na lime primarnoj akciji |
+| `--bg` | `#0B0F0C` | Pozadina aplikacije |
+| `--surface` | `#121814` | Kartice, paneli, unos |
+| `--surface-muted` | `#1A221B` | Sekundarna/povišena površina |
+| `--border` | `#2B382D` | Obrubi i separatori |
+| `--fg` | `#F0F4EF` | Primarni tekst |
+| `--fg-muted` | `#A5B1A5` | Sekundarni tekst |
+| `--success` / `--success-soft` | `#4ADE80` / `#142D1E` | Završeno, važeće, „Aktivno" |
+| `--info` / `--info-soft` | `#60A5FA` / `#17283B` | U toku, informativno |
+| `--warning` / `--warning-soft` | `#FBBF24` / `#332A14` | Rok ≤ 7 dana, upozorenje |
+| `--danger` / `--danger-soft` | `#FB7185` / `#35191E` | Isteklo, greška, destrukcija |
+| `--neutral` / `--neutral-soft` | `#A5B1A5` / `#252E27` | Otkazano, arhivirano |
+
+Tokeni su mapirani u `apps/web/src/styles/globals.css` i `apps/mobile/src/lib/theme.ts`; parity test čuva iste hex vrijednosti i provjerava ključne parove kontrasta prema WCAG AA (4.5:1).
 
 **Semantika rokova (ključno za domenu):**
 

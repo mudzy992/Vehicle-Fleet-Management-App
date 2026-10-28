@@ -26,7 +26,7 @@ const VARIANT_CLASSES: Readonly<Record<ButtonVariant, string>> = {
   secondary:
     'border border-[var(--border)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--hover)] disabled:opacity-50',
   ghost: 'text-[var(--fg-muted)] hover:bg-[var(--hover)] hover:text-[var(--fg)] disabled:opacity-50',
-  danger: 'bg-[var(--danger)] text-white hover:opacity-90 disabled:opacity-50',
+  danger: 'bg-[var(--danger)] text-[var(--primary-fg)] hover:opacity-90 disabled:opacity-50',
 } as const;
 
 const SIZE_CLASSES: Readonly<Record<ButtonSize, string>> = {

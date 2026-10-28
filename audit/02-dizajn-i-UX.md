@@ -12,7 +12,7 @@ Zato se preuzima samo vizuelni pravac i produktne ideje koje korisnik odobri. Ro
 
 ## 2. Potvrđene UX razlike i rizici
 
-1. **Web/mobile vizuelni drift:** `apps/mobile/src/lib/theme.ts` je zeleno-bijel, dok ZIP koristi tamnu podlogu s lime akcentima. Web dizajn-sistem već postoji; prije velikog redizajna treba napraviti token mapping umjesto lokalnog override-a po ekranu.
+1. **Web/mobile vizuelni drift (A-05):** početno web tokeni su bili plavo/slate (uz OS light/dark), a native zeleno-bijeli. Dana 28.10.2026. korisnik je izabrao zajedničku grafitnu podlogu s lime akcentom. Implementiran je isti dark-default palette mapping u `apps/web/src/styles/globals.css` i `apps/mobile/src/lib/theme.ts`; test provjerava paritet i kontrast. Browser i native vizuelna provjera još nisu izvršeni. ZIP je samo inspiracija, ne izvor sadržaja ni aplikacijske strukture.
 2. **Native nije web u malom:** safe-area, status bar, touch target, tastatura, offline, gesture/back, permission prompts i kamera/QR traže zasebne RN komponente i interakcije.
 3. **Task tok mora biti akcijski:** vozač treba odmah vidjeti zadatak, vozilo, lokaciju/opis, rok, checkliste i primarnu radnju; detalji sekundarni. Administratorski ekran treba dati pregled i brze filtere, ali ne sakriti permission/API validaciju.
 4. **Statusi nisu samo boja:** svaki status mora imati tekst/ikonu, accessibility label i kontrast; ne oslanjati se samo na lime/amber/red.

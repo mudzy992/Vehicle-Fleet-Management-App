@@ -36,7 +36,7 @@ export function AppShell() {
         <div className="flex h-14 items-center gap-2 border-b border-[var(--border)] px-4">
           <span
             aria-hidden="true"
-            className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--primary)] text-xs font-bold text-white"
+            className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--primary)] text-xs font-bold text-[var(--primary-fg)]"
           >
             VP
           </span>
