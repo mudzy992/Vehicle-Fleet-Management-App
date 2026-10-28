@@ -7,13 +7,16 @@ const runtimeErrors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
   const errors: string[] = [];
   runtimeErrors.set(page, errors);
-  page.on('pageerror', (error) => errors.push(error.stack ?? error.message));
+  page.on('pageerror', (error) => errors.push(error.stack || error.message || String(error)));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(`[console] ${message.text()}`);
+  });
 });
 
 async function assertAppMounted(page: Page) {
   await page.waitForTimeout(250);
   const errors = runtimeErrors.get(page) ?? [];
-  if (errors.length > 0) throw new Error(`Browser runtime error(s):\\n${errors.join('\\n')}`);
+  if (errors.length > 0) throw new Error(`Browser runtime error(s): ${JSON.stringify(errors)}`);
   const rootHtml = await page.locator('#root').innerHTML();
   if (!rootHtml.trim()) throw new Error('React root stayed empty after page load.');
 }
