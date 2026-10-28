@@ -89,6 +89,19 @@ test('protected deep link redirects to login and preserves a safe internal desti
   await expect(page.getByText('Prijava u web aplikaciju')).toBeVisible();
 });
 
+test('responsive login keeps the form reachable on a narrow viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  await page.goto('/prijava');
+  await assertAppMounted(page);
+  await expect(page.getByRole('heading', { name: 'Prijavite se' })).toBeVisible();
+  await expect(page.locator('.vfm-login-story')).toBeHidden();
+  await expect(page.locator('.vfm-login-mobile-brand')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expect(page.getByLabel('E-mail')).toBeVisible();
+  await expect(page.getByLabel('Lozinka')).toBeVisible();
+});
+
 test('login failure is communicated without exposing credential-specific detail', async ({ page }) => {
   await mockApi(page);
   await page.goto('/prijava');
