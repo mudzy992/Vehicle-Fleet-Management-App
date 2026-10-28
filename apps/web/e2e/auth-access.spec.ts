@@ -161,6 +161,20 @@ test('vehicle register mounts for an authorized user and mobile navigation opens
   await expect(page.getByRole('button', { name: 'Otvori navigaciju' })).toBeFocused();
 });
 
+test('driver registry renders an accessible empty state on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['driver:view'] }) }),
+  );
+  await page.goto('/prijava?next=%2Fvozaci');
+  await submitLogin(page);
+  await expect(page).toHaveURL(/\/vozaci$/);
+  await expect(page.getByRole('heading', { name: 'Vozači' })).toBeVisible();
+  await expect(page.getByText('Registar je prazan')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('external-looking next path is rejected in favor of the dashboard', async ({ page }) => {
   await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse() }));
   await page.goto('/prijava?next=%2F%2Fevil.example');
