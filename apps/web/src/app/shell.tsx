@@ -88,7 +88,7 @@ export function AppShell() {
           <div className="vfm-breadcrumb">
             <span className="vfm-breadcrumb-root">Vozni park</span>
             <span aria-hidden="true">/</span>
-            <h1>{pageTitle(location.pathname)}</h1>
+            <span className="vfm-breadcrumb-title">{pageTitle(location.pathname)}</span>
           </div>
           <div className="vfm-topbar-meta">
             <span className="vfm-status-dot" /> Sistem spreman

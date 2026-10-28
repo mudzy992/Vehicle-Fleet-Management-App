@@ -16,6 +16,16 @@
 
 Pokrenut je odvojeni web-redizajn; mobilni UI nije mijenjan. Prvi prolaz uvodi centralne skale za spacing, tipografiju, radius, depth, motion, širinu navigacije/sadržaja i visinu kontrola; osvježava shell (sidebar, active state, header, user block, footer i responsive drawer), zajedničke button/card/table/stat primitive i dashboard hijerarhiju. Dodano je 34 provjere prisustva foundation tokena uz postojeće kolor/kontrast provjere. Lokalni web lint, typecheck, build, design-token guard i suite (25 fajlova / 251 test) prolaze.
 
+### Plan rada i kriteriji za završetak web-redizajna
+
+1. **Dizajn sistem i shell — temelji završeni; širina primjene otvorena:** semantičke skale, responsive shell, primitive i token guard su implementirani; provjeriti preostale ekrane da koriste skale dosljedno.
+2. **Temeljni tokovi — u toku:** login je redizajniran lokalno; dashboard je osvježen u ranijoj fazi. Preostaje provjera svih vizuelnih stanja (pending, greška, prazno, uspjeh), permission varijanti i browser prikaza.
+3. **Operativni moduli — na čekanju:** vozila, vozači, zadaci, evidencije, gume, servisi i podsjetnici; liste, detalji, kreiranje/uređivanje, filteri, tabele, bulk akcije i konfliktni API odgovori.
+4. **Administracija i konfiguracija — na čekanju:** forme, tipovi zadataka, korisnici/uloge, profil, audit i zdravlje; buduće `/obavijesti` i `/izvjestaji` ostaju skeletoni.
+5. **Kvalitet i release acceptance — na čekanju:** axe/keyboard/focus/contrast i responsive viewport testovi, Playwright kroz glavne tokove, pregled browsera, bez regresije lint/typecheck/unit/build/CI. Testovi izolovani od produkcije.
+
+**„Gotovo” se označava tek kad** svi aktivni web moduli imaju evidentiran pregled; nema poznatih ozbiljnih UI/accessibility/responsive nedostataka; token check, lint, typecheck, testovi, produkcijski build i CI prolaze; Playwright runtime prođe; browser vizuelni smoke je dokumentovan. Pojedinačni backend ili mobilni nalazi ne zatvaraju se ovim kriterijem. Mobilna aplikacija je van ovog opsega.
+
 **Ovo nije završetak potpunog redizajna.** Ne zatvara vizuelni acceptance niti potvrđuje da su svi ekrani i forme prebačeni na jedinstvene primitive. Preostaje modul-po-modul pregled i dorada auth/login, liste/detalji, forme, empty/loading/error, tabelarni responsive prikaz, pristupačnost/keyboard, tipografska i spacing konzistentnost, i Playwright vizuelni/runtime smoke. Browser/device pregled ostaje otvoren. Zadržati namjerno prazne `/obavijesti` i `/izvjestaji` kosture i postojeće permission guardove.
 
 ## Browser-run ograničenje

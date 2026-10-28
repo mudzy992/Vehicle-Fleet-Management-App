@@ -660,3 +660,220 @@ button:active:not(:disabled) {
 .vfm-dashboard ul > li:last-child {
   border-bottom: 0;
 }
+
+/* Sign-in experience: editorial split layout with compact small-screen form. */
+.vfm-login-shell {
+  display: grid;
+  min-height: 100svh;
+  grid-template-columns: minmax(0, 1.05fr) minmax(25rem, 0.95fr);
+  background: var(--bg);
+  color: var(--fg);
+}
+.vfm-login-story {
+  position: relative;
+  display: flex;
+  min-height: 100svh;
+  flex-direction: column;
+  overflow: hidden;
+  padding: clamp(2rem, 5vw, 5rem);
+  border-right: 1px solid var(--border);
+  background:
+    radial-gradient(ellipse at 70% 65%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 48%),
+    linear-gradient(150deg, color-mix(in srgb, var(--surface) 86%, var(--primary)), var(--bg) 72%);
+}
+.vfm-login-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.vfm-login-story-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 38rem;
+  margin: auto 0 1.5rem;
+}
+.vfm-login-story-copy h2 {
+  margin: 1rem 0;
+  font-size: clamp(2.4rem, 4.6vw, 4.8rem);
+  font-weight: 720;
+  line-height: 1.03;
+  letter-spacing: -0.065em;
+}
+.vfm-login-story-copy h2 span {
+  color: var(--primary);
+}
+.vfm-login-story-copy > p:last-child {
+  max-width: 30rem;
+  color: var(--fg-muted);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.vfm-login-visual {
+  position: relative;
+  height: clamp(10rem, 23vw, 20rem);
+  max-width: 34rem;
+  margin: 0 auto 1rem;
+  aspect-ratio: 1.7;
+  width: 100%;
+}
+.vfm-orbit {
+  position: absolute;
+  inset: 8% 15%;
+  border: 1px solid color-mix(in srgb, var(--primary) 19%, var(--border));
+  border-radius: 50%;
+  transform: rotate(-20deg);
+}
+.vfm-orbit-two {
+  inset: 20% 4%;
+  transform: rotate(22deg);
+  border-color: color-mix(in srgb, var(--primary) 11%, var(--border));
+}
+.vfm-visual-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: 5rem;
+  height: 5rem;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border));
+  border-radius: 1.5rem;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  color: var(--primary);
+  font-size: 1.25rem;
+  font-weight: 800;
+  box-shadow: 0 0 5rem color-mix(in srgb, var(--primary) 14%, transparent);
+  transform: translate(-50%, -50%) rotate(-8deg);
+}
+.vfm-visual-core i {
+  position: absolute;
+  top: -1rem;
+  right: -0.7rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--success);
+}
+.vfm-visual-line {
+  position: absolute;
+  right: 10%;
+  bottom: 12%;
+  left: 10%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--primary) 28%, transparent),
+    transparent
+  );
+}
+.vfm-login-footnote {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.7rem;
+}
+.vfm-login-panel {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding: clamp(1.5rem, 5vw, 5rem);
+}
+.vfm-login-form-wrap {
+  width: min(100%, 27rem);
+}
+.vfm-login-mobile-brand {
+  display: none;
+}
+.vfm-login-title {
+  margin: 0.45rem 0 0.35rem;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+.vfm-login-subtitle {
+  margin: 0 0 1.75rem;
+  color: var(--fg-muted);
+  font-size: 0.9rem;
+}
+.vfm-login-card {
+  padding: 1.5rem;
+}
+.vfm-login-submit {
+  display: flex;
+  min-height: 3rem;
+  justify-content: space-between;
+  padding-inline: 1rem;
+}
+.vfm-login-help {
+  margin: 1rem 0 0;
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+.vfm-login-security {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 2rem 0 0;
+  color: var(--fg-muted);
+  font-size: 0.68rem;
+}
+.vfm-login-security span {
+  color: var(--success);
+  font-size: 0.55rem;
+}
+@media (max-width: 800px) {
+  .vfm-login-shell {
+    display: block;
+  }
+  .vfm-login-story {
+    display: none;
+  }
+  .vfm-login-panel {
+    min-height: 100svh;
+    padding: 1.25rem;
+  }
+  .vfm-login-mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 2.75rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+  .vfm-login-form-wrap > .vfm-eyebrow {
+    font-size: 0.62rem;
+  }
+}
+.vfm-login-context {
+  margin: 0 0 0.65rem;
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+}
+.vfm-content h1 {
+  font-size: clamp(1.5rem, 2.2vw, 2rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.045em;
+}
+.vfm-content h2 {
+  line-height: 1.3;
+}
+.vfm-content label {
+  line-height: 1.35;
+}
+.vfm-content input[type='checkbox'],
+.vfm-content input[type='radio'] {
+  accent-color: var(--primary);
+}
+.vfm-content input[type='checkbox'],
+.vfm-content input[type='radio'] {
+  width: 1rem;
+  height: 1rem;
+}

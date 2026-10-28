@@ -70,71 +70,109 @@ export function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[var(--bg)] px-4 py-10 text-[var(--fg)]">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center gap-2">
-          <span
-            aria-hidden="true"
-            className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--primary)] text-sm font-bold text-[var(--primary-fg)]"
-          >
-            VP
+    <main className="vfm-login-shell">
+      <section className="vfm-login-story" aria-label="Informacije o sistemu">
+        <div className="vfm-login-brand">
+          <span className="vfm-brand-mark" aria-hidden="true">
+            V
           </span>
-          <div>
-            <h1 className="text-base font-semibold leading-tight">{APP_NAME}</h1>
-            <p className="text-xs text-[var(--fg-muted)]">Prijava u web aplikaciju</p>
-          </div>
+          <span>{APP_NAME}</span>
         </div>
-
-        <Card>
-          <form className="space-y-4" onSubmit={(event) => void onSubmit(event)} noValidate>
-            <div className="space-y-1.5">
-              <label htmlFor="email" className="block text-xs font-medium text-[var(--fg-muted)]">
-                E-mail
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="username"
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm outline-none focus:border-[var(--primary)]"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label htmlFor="password" className="block text-xs font-medium text-[var(--fg-muted)]">
-                Lozinka
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm outline-none focus:border-[var(--primary)]"
-              />
-            </div>
-
-            {error ? (
-              <p role="alert" className="rounded-md border border-[var(--danger)] px-2.5 py-2 text-xs text-[var(--danger)]">
-                {error}
-              </p>
-            ) : null}
-
-            <Button type="submit" variant="primary" loading={pending} disabled={pending} className="w-full">
-              Prijavi se
-            </Button>
-          </form>
-        </Card>
-
-        <p className="mt-4 text-center text-[11px] text-[var(--fg-muted)]">
-          Zaboravljena lozinka? Administrator vam izdaje jednokratni token za reset.
-        </p>
-      </div>
+        <div className="vfm-login-story-copy">
+          <p className="vfm-eyebrow">FLEET OPERATIONS PLATFORM</p>
+          <h2>
+            Vaš vozni park.
+            <br />
+            <span>Pod potpunom kontrolom.</span>
+          </h2>
+          <p>Jedno mjesto za vozila, timove, zadatke i rokove — uz jasnu sliku svakodnevnog poslovanja.</p>
+        </div>
+        <div className="vfm-login-visual" aria-hidden="true">
+          <div className="vfm-orbit vfm-orbit-one" />
+          <div className="vfm-orbit vfm-orbit-two" />
+          <div className="vfm-visual-core">
+            <span>VP</span>
+            <i />
+          </div>
+          <div className="vfm-visual-line" />
+        </div>
+        <p className="vfm-login-footnote">Siguran pristup za ovlaštene korisnike · bs-BA</p>
+      </section>
+      <section className="vfm-login-panel" aria-labelledby="login-title">
+        <div className="vfm-login-form-wrap">
+          <div className="vfm-login-mobile-brand">
+            <span className="vfm-brand-mark" aria-hidden="true">
+              V
+            </span>
+            <span>{APP_NAME}</span>
+          </div>
+          <p className="vfm-login-context">Prijava u web aplikaciju</p>
+          <p className="vfm-eyebrow">DOBRO DOŠLI NAZAD</p>
+          <h1 id="login-title" className="vfm-login-title">
+            Prijavite se
+          </h1>
+          <p className="vfm-login-subtitle">Unesite svoje podatke za pristup radnom prostoru.</p>
+          <Card className="vfm-login-card">
+            <form className="space-y-5" onSubmit={(event) => void onSubmit(event)} noValidate>
+              <div className="space-y-2">
+                <label htmlFor="email" className="block text-sm font-medium text-[var(--fg)]">
+                  E-mail
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="username"
+                  required
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="ime@organizacija.ba"
+                  className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm outline-none focus:border-[var(--primary)]"
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="password" className="block text-sm font-medium text-[var(--fg)]">
+                  Lozinka
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Unesite lozinku"
+                  className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm outline-none focus:border-[var(--primary)]"
+                />
+              </div>
+              {error ? (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] px-3 py-2.5 text-sm text-[var(--danger)]"
+                >
+                  {error}
+                </p>
+              ) : null}
+              <Button
+                type="submit"
+                variant="primary"
+                loading={pending}
+                disabled={pending}
+                className="vfm-login-submit w-full"
+              >
+                Prijavi se <span aria-hidden="true">→</span>
+              </Button>
+            </form>
+          </Card>
+          <p className="vfm-login-help">
+            Zaboravljena lozinka? Obratite se administratoru za jednokratni token za reset.
+          </p>
+          <p className="vfm-login-security">
+            <span aria-hidden="true">●</span> Zaštićena sesija · Podaci se prenose sigurno
+          </p>
+        </div>
+      </section>
     </main>
   );
 }
