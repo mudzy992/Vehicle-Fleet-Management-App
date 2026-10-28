@@ -1,7 +1,7 @@
 /** Zahtjevi završetka po vrsti zadatka — atomska PUT zamjena cijelog skupa. */
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { inputFields, parseDefinition } from '@vfm/form-engine';
+import { inputFields, parseDefinition } from '@vfm/form-engine/definition';
 import { ATTACHMENT_STAGES, statusLabel } from '@vfm/shared';
 import type {
   FormSchemaSummary,

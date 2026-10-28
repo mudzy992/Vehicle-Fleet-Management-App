@@ -7,7 +7,7 @@
  * polja i progres. Nikakva poslovna logika ne živi u komponenti.
  */
 import { useMemo, useState } from 'react';
-import type { FormDefinition } from '@vfm/form-engine';
+import type { FormDefinition } from '@vfm/form-engine/definition';
 import type { RenderModel } from '@vfm/form-renderer';
 import { buildRenderModel } from '@vfm/form-renderer';
 import { EmptyState } from '../../components/ui/index.js';

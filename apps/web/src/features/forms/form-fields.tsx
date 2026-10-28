@@ -11,7 +11,7 @@
  * unosi kroz statične kontrole i šalje kao strukturirani dio API-ja.
  */
 import { useQueries } from '@tanstack/react-query';
-import type { FormDefinition } from '@vfm/form-engine';
+import type { FormDefinition } from '@vfm/form-engine/definition';
 import type { RenderField, RenderModel } from '@vfm/form-renderer';
 import { formatFieldValue } from '@vfm/form-renderer';
 import type { RenderOption } from '@vfm/form-renderer';

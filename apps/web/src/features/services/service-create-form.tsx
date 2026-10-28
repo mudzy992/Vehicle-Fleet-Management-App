@@ -1,7 +1,7 @@
 /** Unos servisa koristi aktivnu objavljenu formu; verzija se šalje serveru. */
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { parseDefinition } from '@vfm/form-engine';
+import { parseDefinition } from '@vfm/form-engine/definition';
 import { buildRenderModel } from '@vfm/form-renderer';
 import type { ActiveFormSchema } from '@vfm/shared/schemas';
 import { Button } from '../../components/ui/index.js';

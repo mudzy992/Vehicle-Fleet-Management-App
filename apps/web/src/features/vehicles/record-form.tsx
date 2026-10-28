@@ -13,7 +13,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { ActiveFormSchema } from '@vfm/shared/schemas';
-import { parseDefinition } from '@vfm/form-engine';
+import { parseDefinition } from '@vfm/form-engine/definition';
 import type { RenderModel } from '@vfm/form-renderer';
 import { buildRenderModel } from '@vfm/form-renderer';
 import { Button, Card, CardContent, CardHeader } from '../../components/ui/index.js';

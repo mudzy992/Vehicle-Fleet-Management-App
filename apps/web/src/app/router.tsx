@@ -8,35 +8,139 @@
  * Od Faze 1: `loader`/`action` po ruti + guard za permisije (server je
  * autoritet — UI samo sakriva akcije radi iskustva).
  */
+import { lazy, Suspense, type ComponentType } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router';
 import type { RouteObject } from 'react-router';
 import { AnonymousOnly, RequireAuth, RequirePermission } from './guards.js';
 import { AppShell } from './shell.js';
 import { PlaceholderPage } from '../features/placeholder-page.js';
-import { DesignSystemPage } from '../features/design-system/design-system-page.js';
-import { HealthPage } from '../features/system/health-page.js';
-import { LoginPage } from '../features/auth/login-page.js';
-import { UsersPage } from '../features/users/users-page.js';
-import { MatrixPage } from '../features/roles/matrix-page.js';
-import { AuditLogPage } from '../features/audit/audit-log-page.js';
-import { ProfilePage } from '../features/profile/profile-page.js';
-import { FormsPage } from '../features/forms/forms-page.js';
-import { VehiclesPage } from '../features/vehicles/vehicles-page.js';
-import { VehicleCreatePage } from '../features/vehicles/vehicle-create-page.js';
-import { VehicleEditPage } from '../features/vehicles/vehicle-edit-page.js';
-import { DashboardPage } from '../features/dashboard/dashboard-page.js';
-import { DriversPage } from '../features/drivers/drivers-page.js';
-import { RemindersPage } from '../features/reminders/reminders-page.js';
-import { RecordsListPage } from '../features/records/records-list-page.js';
-import { DriverCreatePage } from '../features/drivers/driver-create-page.js';
-import { DriverDetailPage } from '../features/drivers/driver-detail-page.js';
-import { VehicleDetailPage } from '../features/vehicles/vehicle-detail-page.js';
-import { TireSetsPage } from '../features/tires/tire-sets-page.js';
-import { TaskTypesPage } from '../features/task-types/task-types-page.js';
-import { TasksPage } from '../features/tasks/tasks-page.js';
-import { TaskDetailPage } from '../features/tasks/task-detail-page.js';
-import { TaskCreatePage } from '../features/tasks/task-create-page.js';
 import { NAV_ITEMS } from './nav.js';
+
+function lazyPage(load: () => Promise<{ default: ComponentType }>) {
+  const Page = lazy(load);
+  return function LazyPage() {
+    return (
+      <Suspense
+        fallback={
+          <div className="p-6 text-sm text-[var(--fg-muted)]" role="status">
+            Učitavanje stranice…
+          </div>
+        }
+      >
+        <Page />
+      </Suspense>
+    );
+  };
+}
+
+const DesignSystemPage = lazyPage(() =>
+  import('../features/design-system/design-system-page.js').then((module) => ({
+    default: module.DesignSystemPage,
+  })),
+);
+
+const HealthPage = lazyPage(() =>
+  import('../features/system/health-page.js').then((module) => ({ default: module.HealthPage })),
+);
+
+const LoginPage = lazyPage(() =>
+  import('../features/auth/login-page.js').then((module) => ({ default: module.LoginPage })),
+);
+
+const UsersPage = lazyPage(() =>
+  import('../features/users/users-page.js').then((module) => ({ default: module.UsersPage })),
+);
+
+const MatrixPage = lazyPage(() =>
+  import('../features/roles/matrix-page.js').then((module) => ({ default: module.MatrixPage })),
+);
+
+const AuditLogPage = lazyPage(() =>
+  import('../features/audit/audit-log-page.js').then((module) => ({ default: module.AuditLogPage })),
+);
+
+const ProfilePage = lazyPage(() =>
+  import('../features/profile/profile-page.js').then((module) => ({ default: module.ProfilePage })),
+);
+
+const FormsPage = lazyPage(() =>
+  import('../features/forms/forms-page.js').then((module) => ({ default: module.FormsPage })),
+);
+
+const VehiclesPage = lazyPage(() =>
+  import('../features/vehicles/vehicles-page.js').then((module) => ({ default: module.VehiclesPage })),
+);
+
+const VehicleCreatePage = lazyPage(() =>
+  import('../features/vehicles/vehicle-create-page.js').then((module) => ({
+    default: module.VehicleCreatePage,
+  })),
+);
+
+const VehicleEditPage = lazyPage(() =>
+  import('../features/vehicles/vehicle-edit-page.js').then((module) => ({ default: module.VehicleEditPage })),
+);
+
+const DashboardPage = lazyPage(() =>
+  import('../features/dashboard/dashboard-page.js').then((module) => ({ default: module.DashboardPage })),
+);
+
+const DriversPage = lazyPage(() =>
+  import('../features/drivers/drivers-page.js').then((module) => ({ default: module.DriversPage })),
+);
+
+const RemindersPage = lazyPage(() =>
+  import('../features/reminders/reminders-page.js').then((module) => ({ default: module.RemindersPage })),
+);
+
+const DriverCreatePage = lazyPage(() =>
+  import('../features/drivers/driver-create-page.js').then((module) => ({
+    default: module.DriverCreatePage,
+  })),
+);
+
+const DriverDetailPage = lazyPage(() =>
+  import('../features/drivers/driver-detail-page.js').then((module) => ({
+    default: module.DriverDetailPage,
+  })),
+);
+
+const VehicleDetailPage = lazyPage(() =>
+  import('../features/vehicles/vehicle-detail-page.js').then((module) => ({
+    default: module.VehicleDetailPage,
+  })),
+);
+
+const TireSetsPage = lazyPage(() =>
+  import('../features/tires/tire-sets-page.js').then((module) => ({ default: module.TireSetsPage })),
+);
+
+const TaskTypesPage = lazyPage(() =>
+  import('../features/task-types/task-types-page.js').then((module) => ({ default: module.TaskTypesPage })),
+);
+
+const TasksPage = lazyPage(() =>
+  import('../features/tasks/tasks-page.js').then((module) => ({ default: module.TasksPage })),
+);
+
+const TaskDetailPage = lazyPage(() =>
+  import('../features/tasks/task-detail-page.js').then((module) => ({ default: module.TaskDetailPage })),
+);
+
+const TaskCreatePage = lazyPage(() =>
+  import('../features/tasks/task-create-page.js').then((module) => ({ default: module.TaskCreatePage })),
+);
+
+const RegistrationRecordsPage = lazyPage(() =>
+  import('../features/records/records-list-page.js').then(({ RecordsListPage }) => ({
+    default: () => <RecordsListPage kind="REGISTRATION" />,
+  })),
+);
+const InsuranceRecordsPage = lazyPage(() =>
+  import('../features/records/records-list-page.js').then(({ RecordsListPage }) => ({
+    default: () => <RecordsListPage kind="INSURANCE" />,
+  })),
+);
 
 export const appRoutes = [
   {
@@ -105,7 +209,7 @@ export const appRoutes = [
         path: 'registracije',
         element: (
           <RequirePermission permission="registration:view">
-            <RecordsListPage kind="REGISTRATION" />
+            <RegistrationRecordsPage />
           </RequirePermission>
         ),
       },
@@ -114,7 +218,7 @@ export const appRoutes = [
         path: 'osiguranja',
         element: (
           <RequirePermission permission="insurance:view">
-            <RecordsListPage kind="INSURANCE" />
+            <InsuranceRecordsPage />
           </RequirePermission>
         ),
       },

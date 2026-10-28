@@ -11,7 +11,7 @@ import type {
   UserListResponse,
   VehicleListResponse,
 } from '@vfm/shared/schemas';
-import { parseDefinition } from '@vfm/form-engine';
+import { parseDefinition } from '@vfm/form-engine/definition';
 import type { RenderModel } from '@vfm/form-renderer';
 import { buildRenderModel } from '@vfm/form-renderer';
 import { Button, Card, CardContent, CardHeader, EmptyState, Field, inputClassName } from '../../components/ui/index.js';

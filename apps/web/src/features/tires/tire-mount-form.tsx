@@ -1,7 +1,7 @@
 /** Montaža ili zamjena kompleta kroz aktivnu objavljenu TIRE_INSTALLATION formu. */
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { parseDefinition } from '@vfm/form-engine';
+import { parseDefinition } from '@vfm/form-engine/definition';
 import { buildRenderModel } from '@vfm/form-renderer';
 import { TIRE_DISMOUNT_REASONS, formatDate, statusLabel, type TirePosition } from '@vfm/shared';
 import type {

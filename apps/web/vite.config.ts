@@ -41,6 +41,7 @@ export default defineConfig(({ mode }) => {
           // Rollup 5 (Vite 8) traži funkciju umjesto objektnog oblika.
           manualChunks(id: string): string | undefined {
             if (!id.includes('node_modules')) return undefined;
+            if (id.includes('/node_modules/zod/')) return 'zod';
             if (id.includes('@vfm/shared')) return 'shared';
             if (id.includes('@tanstack/react-query')) return 'query';
             if (id.includes('react-router')) return 'router';

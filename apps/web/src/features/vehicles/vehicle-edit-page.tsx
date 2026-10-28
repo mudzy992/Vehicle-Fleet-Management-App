@@ -14,7 +14,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { FormVersionDetail, VehicleDetail } from '@vfm/shared/schemas';
-import { parseDefinition } from '@vfm/form-engine';
+import { parseDefinition } from '@vfm/form-engine/definition';
 import type { RenderModel } from '@vfm/form-renderer';
 import { buildRenderModel } from '@vfm/form-renderer';
 import {

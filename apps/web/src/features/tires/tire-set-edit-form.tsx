@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import { parseDefinition } from '@vfm/form-engine';
+import { parseDefinition } from '@vfm/form-engine/definition';
 import { buildRenderModel } from '@vfm/form-renderer';
 import { statusLabel } from '@vfm/shared';
 import type { FormVersionDetail, TireSetDetail } from '@vfm/shared/schemas';

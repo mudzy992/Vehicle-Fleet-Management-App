@@ -44,6 +44,14 @@ PATH="/tmp/vfm-pnpm-bin:$PATH" PRISMA_SCHEMA_ENGINE_BINARY=/bin/true corepack pn
 
 Prvi puni gate nakon audit izmjena završio je s jednom greškom u zastarjelom očekivanju `migrate-diagnostics.spec.ts` — očekivana lista nije sadržavala novu migraciju 4. Očekivanje i test naziv su ažurirani; taj fajl je prošao **22/22**, a zatim je ponovljena puna gate uspješno završila **25/25** i API **916/916**.
 
+## Dopuna — 28.10.2026.
+
+- CI run **40712125166** na commit-u `175b096` prolazi: Prisma client generation/migracije nad disposable CI bazom, API unit/integration/stress, P15 persistence test na izolovanom Compose projektu, lint/typecheck, build, security scan i Docker.
+- Mobile E2E run **40712125218** na istom commit-u prolazi kompletan P4 acceptance: Maestro admin tok kreira zadatak, potvrđuje obrazac i naslov, pa nakon povratka na listu vidi novokreirani zadatak; Maestro korisnik bez `task:create` nema kontrolu kreiranja; API negativne provjere prolaze. Emulator i PostgreSQL/Redis su disposable CI resursi; produkcija nije korištena.
+- P4 raniji neuspjesi razdvojeni su: build runner je jednom dobio oštećen NDK ZIP (retry korak sada instalira tačno pinovani NDK uz ograničene pokušaje); potom su test otkrili da Maestro traži required label bez sufiksa `*` i da lista zadataka nije osvježena pri povratku s detalja. Dodan je stabilan `task-form-field-${field.key}` selector i `useFocusEffect` osvježavanje; konačni run iznad prolazi.
+- A-03 web bundle audit: web runtime importi promijenjeni su s package root na browser-safe `@vfm/form-engine/definition`; route stranice su lazy-loaded, a Zod je u zasebnom vendor chunku. `pnpm --filter @vfm/web build` više ne prijavljuje `node:crypto` externalization niti chunk >500 kB; entry chunk je 28.18 kB, najveći `zod` chunk 486.49 kB. Web lint prolazi, Vitest 24/24 fajla i 182/182 testa prolaze. Browser-console i ručni navigacijski smoke nisu još izvršeni, pa A-03 ostaje djelimično otvoren.
+- Ovo ne zatvara Web Playwright E2E, Android fizički uređaj UAT, ili GPS/privacy acceptance.
+
 ## Otvorene provjere prije release-a
 
 1. Pokrenuti `scripts/db-verify/apply_migrations.py` i `behavior_tests.py` na **izoliranoj** PostgreSQL 16 verifier bazi, uključujući idempotentnost migracije 4 i parallel Super Admin removal test. Verifier je destruktivan; ne ciljati produkciju.
