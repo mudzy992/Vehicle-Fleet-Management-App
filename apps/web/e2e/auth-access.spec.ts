@@ -120,7 +120,7 @@ test('permission guard blocks a regular user from the vehicle module', async ({ 
   await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse() }));
   await page.goto('/prijava?next=%2Fvozila');
   await submitLogin(page);
-  await expect(page.getByRole('heading', { name: 'Nemate pristup' })).toBeVisible();
+  await expect(page.getByText('Nemate pristup', { exact: true })).toBeVisible();
   expect(page.url()).toContain('/vozila');
 });
 
@@ -132,7 +132,7 @@ for (const [path, permission] of [
     await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse() }));
     await page.goto(`/prijava?next=${encodeURIComponent(path)}`);
     await submitLogin(page);
-    await expect(page.getByRole('heading', { name: 'Nemate pristup' })).toBeVisible();
+    await expect(page.getByText('Nemate pristup', { exact: true })).toBeVisible();
     await expect(page.getByText(new RegExp(permission))).toBeVisible();
   });
 }
