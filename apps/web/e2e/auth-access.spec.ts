@@ -2,6 +2,21 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 
 const userId = '11111111-1111-4111-8111-111111111111';
 const roleId = '22222222-2222-4222-8222-222222222222';
+const runtimeErrors = new WeakMap<Page, string[]>();
+
+test.beforeEach(({ page }) => {
+  const errors: string[] = [];
+  runtimeErrors.set(page, errors);
+  page.on('pageerror', (error) => errors.push(error.stack ?? error.message));
+});
+
+async function assertAppMounted(page: Page) {
+  await page.waitForTimeout(250);
+  const errors = runtimeErrors.get(page) ?? [];
+  if (errors.length > 0) throw new Error(`Browser runtime error(s):\\n${errors.join('\\n')}`);
+  const rootHtml = await page.locator('#root').innerHTML();
+  if (!rootHtml.trim()) throw new Error('React root stayed empty after page load.');
+}
 
 function authResponse(
   options: { permissions?: string[]; isSuperAdmin?: boolean; mustChangePassword?: boolean } = {},
@@ -60,6 +75,7 @@ async function mockApi(
 }
 
 async function submitLogin(page: Page) {
+  await assertAppMounted(page);
   await page.getByLabel('E-mail').fill('audit@example.test');
   await page.getByLabel('Lozinka').fill('not-a-real-secret');
   await page.getByRole('button', { name: 'Prijavi se' }).click();
@@ -68,6 +84,7 @@ async function submitLogin(page: Page) {
 test('protected deep link redirects to login and preserves a safe internal destination', async ({ page }) => {
   await mockApi(page);
   await page.goto('/zadaci');
+  await assertAppMounted(page);
   await expect(page).toHaveURL(/\/prijava\?next=%2Fzadaci$/);
   await expect(page.getByText('Prijava u web aplikaciju')).toBeVisible();
 });
