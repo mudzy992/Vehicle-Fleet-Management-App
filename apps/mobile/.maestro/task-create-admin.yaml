@@ -75,10 +75,11 @@ appId: ba.ba101.voznipark
 - assertVisible: "3. Obrazac"
 - scrollUntilVisible:
     element:
-      text: "Vrsta pranja"
+      id: "task-form-field-washType"
     direction: UP
     timeout: 30000
-- assertVisible: "Vrsta pranja"
+- assertVisible:
+    id: "task-form-field-washType"
 - tapOn: "Unutrašnje"
 - scrollUntilVisible:
     element:

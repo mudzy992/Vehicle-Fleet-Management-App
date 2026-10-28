@@ -307,7 +307,7 @@ export function FieldControl({ field, value, disabled, onChange, onCamera, onGal
   const selected = multiple ? stringArray(value) : [];
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{field.label}{field.required ? ' *' : ''}</Text>
+      <Text testID={`task-form-field-${field.key}`} style={styles.label}>{field.label}{field.required ? ' *' : ''}</Text>
       {field.helpText ? <Text style={styles.help}>{field.helpText}</Text> : null}
       {field.widget === 'BOOLEAN' ? (
         <Switch value={value === true} onValueChange={onChange} disabled={disabled} trackColor={{ true: colors.primary }} />
