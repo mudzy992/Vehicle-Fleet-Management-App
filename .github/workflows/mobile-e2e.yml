@@ -173,6 +173,34 @@ jobs:
         env:
           P4_E2E_API_URL: http://127.0.0.1:3000/api/v1
         run: node apps/mobile/scripts/verify-p4-auth.mjs
+      - name: Instaliraj Android NDK uz retry na oštećen download
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk_version=27.1.12297006
+          sdkmanager="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$sdkmanager" ]]; then
+            sdkmanager="$(command -v sdkmanager || true)"
+          fi
+          if [[ -z "$sdkmanager" || ! -x "$sdkmanager" ]]; then
+            echo "sdkmanager nije pronađen na Android runneru." >&2
+            exit 1
+          fi
+          for attempt in 1 2 3; do
+            set +e
+            yes | "$sdkmanager" --install "ndk;$ndk_version"
+            status=${PIPESTATUS[1]}
+            set -e
+            if (( status == 0 )) && [[ -f "${ANDROID_HOME:-${ANDROID_SDK_ROOT:?}}/ndk/$ndk_version/source.properties" ]]; then
+              echo "NDK $ndk_version je instaliran."
+              exit 0
+            fi
+            echo "NDK download/install pokušaj $attempt/3 nije uspio; čistim samo privremeni SDK download i NDK $ndk_version."
+            rm -rf -- "${ANDROID_HOME:-${ANDROID_SDK_ROOT:?}}/temp" "${ANDROID_HOME:-${ANDROID_SDK_ROOT:?}}/ndk/$ndk_version"
+            if (( attempt < 3 )); then sleep $((attempt * 10)); fi
+          done
+          echo "Nije moguće instalirati NDK $ndk_version nakon tri pokušaja." >&2
+          exit 1
       - name: Izgradi Android APK prije pokretanja emulatora
         working-directory: apps/mobile
         env:
