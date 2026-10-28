@@ -64,13 +64,7 @@ export function NoAccessPage({ permission }: { permission?: string }) {
 }
 
 /** Prikazuje djecu samo ako korisnik ima pravo; inače ekran bez prava. */
-export function RequirePermission({
-  permission,
-  children,
-}: {
-  permission: string;
-  children: ReactNode;
-}) {
+export function RequirePermission({ permission, children }: { permission: string; children: ReactNode }) {
   const { status, hasPermission } = useSession();
 
   if (status === 'loading') {
@@ -89,8 +83,8 @@ export function AnonymousOnly({ children }: { children: ReactNode }) {
     return <FullPageMessage title="Učitavanje…" description="Provjeravam sesiju." />;
   }
 
-  if (status === 'authenticated') return <Navigate to="/nadzorna-tabla" replace />;
-
+  // LoginPage owns the post-login `next` redirect. Redirecting here as soon as
+  // the login mutation sets session state would race it and lose that path.
   return <>{children}</>;
 }
 
