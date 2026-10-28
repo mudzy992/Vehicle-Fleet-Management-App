@@ -925,3 +925,22 @@ button:active:not(:disabled) {
     gap: 1.1rem;
   }
 }
+.vfm-token-row {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+.vfm-token-row strong {
+  color: var(--fg);
+  font-size: 0.74rem;
+}
+.vfm-token-row code {
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}

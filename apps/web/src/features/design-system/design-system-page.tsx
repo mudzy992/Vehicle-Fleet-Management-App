@@ -4,11 +4,32 @@
  * Služi kao referenca za sve ekrane (docs/06-UX_UI_DIZAJN.md §5) i kao
  * vizuelni test: ako se tokeni promijene, ovo je prvo mjesto gdje se vidi.
  */
-import { Badge, Button, Card, CardContent, CardHeader, Stat, StatusBadge } from '../../components/ui/index.js';
-import { formatMoney, formatOdometer, formatDateTime, humanizeRemaining, deadlineLevel, daysUntil } from '@vfm/shared';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  Stat,
+  StatusBadge,
+} from '../../components/ui/index.js';
+import {
+  formatMoney,
+  formatOdometer,
+  formatDateTime,
+  humanizeRemaining,
+  deadlineLevel,
+  daysUntil,
+} from '@vfm/shared';
 import type { SemanticLevel } from '@vfm/shared';
 
 const COLOR_TOKENS: readonly { name: string; variable: string; soft?: string }[] = [
+  { name: 'background', variable: 'var(--bg)' },
+  { name: 'surface', variable: 'var(--surface)' },
+  { name: 'surface-muted', variable: 'var(--surface-muted)' },
+  { name: 'border', variable: 'var(--border)' },
+  { name: 'foreground', variable: 'var(--fg)' },
+  { name: 'foreground-muted', variable: 'var(--fg-muted)' },
   { name: 'primary', variable: 'var(--primary)', soft: 'var(--primary-soft)' },
   { name: 'success', variable: 'var(--success)', soft: 'var(--success-soft)' },
   { name: 'info', variable: 'var(--info)', soft: 'var(--info-soft)' },
@@ -18,6 +39,22 @@ const COLOR_TOKENS: readonly { name: string; variable: string; soft?: string }[]
 ];
 
 const SEMANTIC_LEVELS: readonly SemanticLevel[] = ['success', 'info', 'warning', 'danger', 'neutral'];
+
+const FOUNDATION_TOKENS = [
+  [
+    'Spacing',
+    '--space-1 · --space-2 · --space-3 · --space-4 · --space-6 · --space-8 · --space-12 · --space-16',
+  ],
+  ['Typography', '--text-xs · --text-sm · --text-base · --text-lg · --text-xl · --text-2xl · --text-3xl'],
+  ['Line height', '--leading-tight · --leading-normal · --leading-relaxed'],
+  [
+    'Radius',
+    '--radius-xs · --radius-sm · --radius-md · --radius-lg · --radius-xl · --radius-2xl · --radius-pill',
+  ],
+  ['Elevation', '--shadow-sm · --shadow-md · --shadow-card · --shadow-popover'],
+  ['Interaction', '--focus-ring · --motion-fast · --motion-normal · --motion-slow'],
+  ['Layout', '--sidebar-width · --content-max · --control-height'],
+] as const;
 
 const TASK_STATUS_SAMPLES = ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const;
 const RECORD_STATUS_SAMPLES = ['ACTIVE', 'EXPIRED', 'DRAFT', 'CANCELLED'] as const;
@@ -34,24 +71,46 @@ const DEADLINE_SAMPLES: readonly { label: string; date: string }[] = [
 
 export function DesignSystemPage() {
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="vfm-module-page mx-auto max-w-5xl">
       <header>
-        <h2 className="text-lg font-semibold tracking-tight">Dizajn sistem</h2>
+        <h1 className="vfm-module-title">Dizajn sistem</h1>
         <p className="mt-1 text-sm text-[var(--fg-muted)]">
-          Zajednički grafitno-lime tokeni za web i mobilnu aplikaciju; kontrast i usklađenost provjerava web test.
-          Web tokeni su u <code className="font-mono text-xs">styles/globals.css</code>, native mapiranje u <code className="font-mono text-xs">apps/mobile/src/lib/theme.ts</code>.
+          Zajednički grafitno-lime tokeni za web i mobilnu aplikaciju; kontrast i usklađenost provjerava web
+          test. Web tokeni su u <code className="font-mono text-xs">styles/globals.css</code>, native
+          mapiranje u <code className="font-mono text-xs">apps/mobile/src/lib/theme.ts</code>.
         </p>
       </header>
 
       <Card>
-        <CardHeader title="Boje (dizajn tokeni)" description="Grafitna + lime; tamna tema je zajednički default weba i mobilne aplikacije." />
+        <CardHeader
+          title="Sistemske skale"
+          description="Jedinstven ritam za sve web module; vrijednosti su definisane u globals.css."
+        />
+        <CardContent className="grid gap-3 sm:grid-cols-2">
+          {FOUNDATION_TOKENS.map(([label, tokens]) => (
+            <div key={label} className="vfm-token-row">
+              <strong>{label}</strong>
+              <code>{tokens}</code>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Boje (dizajn tokeni)"
+          description="Grafitna + lime; tamna tema je zajednički default weba i mobilne aplikacije."
+        />
         <CardContent>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {COLOR_TOKENS.map((token) => (
               <div key={token.name} className="space-y-1.5">
                 <div className="h-12 rounded-md" style={{ backgroundColor: token.variable }} />
                 {token.soft ? (
-                  <div className="h-6 rounded-md border border-[var(--border)]" style={{ backgroundColor: token.soft }} />
+                  <div
+                    className="h-6 rounded-md border border-[var(--border)]"
+                    style={{ backgroundColor: token.soft }}
+                  />
                 ) : null}
                 <p className="font-mono text-[11px] text-[var(--fg-muted)]">--{token.name}</p>
               </div>
@@ -78,9 +137,15 @@ export function DesignSystemPage() {
           <Button variant="secondary">Sekundarno</Button>
           <Button variant="ghost">Ghost</Button>
           <Button variant="danger">Obriši</Button>
-          <Button variant="primary" size="sm">Malo</Button>
-          <Button variant="primary" loading>Učitavanje</Button>
-          <Button variant="primary" disabled>Onemogućeno</Button>
+          <Button variant="primary" size="sm">
+            Malo
+          </Button>
+          <Button variant="primary" loading>
+            Učitavanje
+          </Button>
+          <Button variant="primary" disabled>
+            Onemogućeno
+          </Button>
         </CardContent>
       </Card>
 
@@ -153,7 +218,10 @@ export function DesignSystemPage() {
       </div>
 
       <Card>
-        <CardHeader title="Formati vrijednosti" description="Novac u feninzima, prikaz u KM; UTC u bazi, Sarajevo u prikazu." />
+        <CardHeader
+          title="Formati vrijednosti"
+          description="Novac u feninzima, prikaz u KM; UTC u bazi, Sarajevo u prikazu."
+        />
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <FormatRow label="Iznos" value={formatMoney(123456)} />
           <FormatRow label="Iznos (0)" value={formatMoney(0)} />
