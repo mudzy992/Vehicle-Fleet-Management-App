@@ -134,8 +134,13 @@ test('vehicle register mounts for an authorized user and mobile navigation opens
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
   await page.getByRole('button', { name: 'Otvori navigaciju' }).click();
-  await expect(page.locator('[data-testid="sidebar"]')).toHaveClass(/is-open/);
-  await expect(page.locator('[data-testid="sidebar"]').getByRole('link', { name: /Vozila/ })).toBeVisible();
+  const sidebar = page.locator('[data-testid="sidebar"]');
+  await expect(sidebar).toHaveClass(/is-open/);
+  await expect(sidebar.getByRole('link', { name: /Vozila/ })).toBeVisible();
+  await expect(sidebar.getByRole('link').first()).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(sidebar).not.toHaveClass(/is-open/);
+  await expect(page.getByRole('button', { name: 'Otvori navigaciju' })).toBeFocused();
 });
 
 test('external-looking next path is rejected in favor of the dashboard', async ({ page }) => {

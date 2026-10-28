@@ -1,5 +1,5 @@
 /** Main responsive application frame: navigation, context bar and route content. */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { APP_NAME } from '@vfm/shared';
 import { Button } from '../components/ui/index.js';
@@ -11,6 +11,9 @@ export function AppShell() {
   const navigate = useNavigate();
   const { user, logout } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const wasSidebarOpen = useRef(false);
   const items = visibleNavItems(user?.permissions, user?.isSuperAdmin ?? false);
   const displayName = user?.displayName ?? `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim();
 
@@ -19,9 +22,54 @@ export function AppShell() {
     navigate('/prijava', { replace: true });
   }
 
+  useEffect(() => {
+    if (!sidebarOpen) {
+      if (wasSidebarOpen.current) menuButtonRef.current?.focus();
+      wasSidebarOpen.current = false;
+      return;
+    }
+
+    wasSidebarOpen.current = true;
+    const sidebar = sidebarRef.current;
+    const focusable = () =>
+      Array.from(sidebar?.querySelectorAll<HTMLElement>('a[href], button:not(:disabled)') ?? []);
+    focusable()[0]?.focus();
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSidebarOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const elements = focusable();
+      if (!elements.length) return;
+      const first = elements[0]!;
+      const last = elements[elements.length - 1]!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [sidebarOpen]);
+
   return (
     <div className="vfm-shell">
-      <aside className={`vfm-sidebar${sidebarOpen ? ' is-open' : ''}`} data-testid="sidebar">
+      <aside
+        ref={sidebarRef}
+        id="vfm-sidebar"
+        className={`vfm-sidebar${sidebarOpen ? ' is-open' : ''}`}
+        role={sidebarOpen ? 'dialog' : undefined}
+        aria-label="Navigacija aplikacije"
+        aria-modal={sidebarOpen || undefined}
+        data-testid="sidebar"
+      >
         <div className="vfm-brand">
           <span className="vfm-brand-mark" aria-hidden="true">
             V
@@ -77,8 +125,10 @@ export function AppShell() {
       <div className="vfm-main">
         <header className="vfm-topbar">
           <button
+            ref={menuButtonRef}
             type="button"
             aria-label="Otvori navigaciju"
+            aria-controls="vfm-sidebar"
             aria-expanded={sidebarOpen}
             onClick={() => setSidebarOpen(true)}
             className="vfm-menu-button"
