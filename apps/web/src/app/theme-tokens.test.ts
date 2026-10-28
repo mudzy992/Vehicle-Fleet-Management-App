@@ -7,9 +7,30 @@ const mobileThemeSource = readFileSync(resolve(process.cwd(), '../mobile/src/lib
 const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
 const webRoot = css.match(/:root\s*\{([^}]+)\}/)?.[1];
 const mobileRoot = mobileThemeSource.match(/export const colors = \{([^}]+)\}/)?.[1];
+const tailwindTheme = css.match(/@theme inline\s*\{([^}]+)\}/)?.[1];
 
-if (!webRoot || !mobileRoot) {
-  throw new Error('Nisu pronađeni osnovni tokeni u web CSS-u i mobilnoj temi.');
+if (!webRoot || !mobileRoot || !tailwindTheme) {
+  throw new Error('Nisu pronađeni osnovni web/mobile tokeni ili Tailwind aliasi.');
+}
+
+const tailwindTokenAliases = [
+  ['--spacing', 'var(--space-1)'],
+  ...(['xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl'] as const).map(
+    (size): readonly [string, string] => [`--text-${size}`, `var(--text-${size})`],
+  ),
+  ...(['tight', 'normal', 'relaxed'] as const).map(
+    (name): readonly [string, string] => [`--leading-${name}`, `var(--leading-${name})`],
+  ),
+  ...(['xs', 'sm', 'md', 'lg', 'xl', '2xl', 'pill'] as const).map(
+    (size): readonly [string, string] => [`--radius-${size}`, `var(--radius-${size})`],
+  ),
+  ...(['sm', 'md', 'card', 'popover'] as const).map(
+    (name): readonly [string, string] => [`--shadow-${name}`, `var(--shadow-${name})`],
+  ),
+] as const;
+
+function tailwindTokenValue(token: string): string | undefined {
+  return tailwindTheme!.match(new RegExp(`^\\s*${token}:\\s*([^;]+);`, 'm'))?.[1]?.trim();
 }
 
 const tokenPairs = [
@@ -62,6 +83,10 @@ function contrast(foreground: string, background: string): number {
 describe('Web/mobile design tokens', () => {
   it.each(tokenPairs)('%s matches between platforms', (mobileName, webName) => {
     expect(mobileColor(mobileName).toLowerCase()).toBe(webColor(webName).toLowerCase());
+  });
+
+  it.each(tailwindTokenAliases)('%s maps Tailwind utilities to %s', (token, expected) => {
+    expect(tailwindTokenValue(token)).toBe(expected);
   });
 
   it('keeps the shared graphite-and-lime palette as the web default', () => {

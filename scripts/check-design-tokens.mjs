@@ -16,9 +16,28 @@ const html = await read('apps/web/index.html');
 const mobile = await read('apps/mobile/src/lib/theme.ts');
 const cssRoot = css.match(/:root\s*\{([^}]+)\}/)?.[1];
 const mobileRoot = mobile.match(/export const colors = \{([^}]+)\}/)?.[1];
+const tailwindTheme = css.match(/@theme inline\s*\{([^}]+)\}/)?.[1];
 const failures = [];
 
-if (!cssRoot || !mobileRoot) throw new Error('Nisu pronađeni korijenski tokeni web/mobile teme.');
+if (!cssRoot || !mobileRoot || !tailwindTheme) {
+  throw new Error('Nisu pronađeni korijenski tokeni web/mobile teme ili Tailwind alias blok.');
+}
+
+const requiredThemeAliases = [
+  ['--spacing', 'var(--space-1)'],
+  ...['xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl'].map((size) => [`--text-${size}`, `var(--text-${size})`]),
+  ...['tight', 'normal', 'relaxed'].map((name) => [`--leading-${name}`, `var(--leading-${name})`]),
+  ...['xs', 'sm', 'md', 'lg', 'xl', '2xl', 'pill'].map((size) => [
+    `--radius-${size}`,
+    `var(--radius-${size})`,
+  ]),
+  ...['sm', 'md', 'card', 'popover'].map((name) => [`--shadow-${name}`, `var(--shadow-${name})`]),
+];
+for (const [token, expected] of requiredThemeAliases) {
+  const actual = tailwindTheme.match(new RegExp(`^\\s*${token}\\s*:\\s*([^;]+);`, 'm'))?.[1]?.trim();
+  if (actual !== expected)
+    failures.push(`Tailwind alias ${token} mora biti ${expected} (trenutno ${actual ?? 'nedostaje'}).`);
+}
 
 const pairs = [
   ['primary', '--primary'],
@@ -117,6 +136,6 @@ if (failures.length) {
   process.exitCode = 1;
 } else {
   console.log(
-    `✅ Design-token audit passed: ${pairs.length} cross-platform pairs, ${contrastPairs.length} WCAG AA pairs, browser chrome, and raw-color scan.`,
+    `✅ Design-token audit passed: ${pairs.length} cross-platform pairs, ${contrastPairs.length} WCAG AA pairs, ${requiredThemeAliases.length} Tailwind scale aliases, browser chrome, and raw-color scan.`,
   );
 }

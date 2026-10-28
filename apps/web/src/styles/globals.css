@@ -103,12 +103,32 @@
   --color-neutral: var(--neutral);
   --color-neutral-soft: var(--neutral-soft);
 
+  /* Tailwind utilities resolve to the semantic scales above, not private defaults. */
+  --spacing: var(--space-1);
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --text-2xl: var(--text-2xl);
+  --text-3xl: var(--text-3xl);
+  --leading-tight: var(--leading-tight);
+  --leading-normal: var(--leading-normal);
+  --leading-relaxed: var(--leading-relaxed);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
 
+  --radius-xs: var(--radius-xs);
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-pill: var(--radius-pill);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-card: var(--shadow-card);
+  --shadow-popover: var(--shadow-popover);
 }
 
 /* ---------------------------------------------------------------------------
