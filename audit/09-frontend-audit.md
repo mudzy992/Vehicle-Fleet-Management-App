@@ -9,7 +9,7 @@
 - Mobilne sjene više ne ponavljaju crnu vrijednost na ekranima prijave i zadataka: koriste `colors.shadow`.
 - Boja rezervnog prikaza native color pickera za vrstu zadatka čita CSS `--neutral`; prilagođena boja vrste zadatka ostaje korisnički/domain podatak, ne hardkodovani UI token.
 - Dodan `scripts/check-design-tokens.mjs` i `pnpm design-tokens:check`. Skripta poredi 19 parova web/mobile, provjerava 11 kombinacija WCAG AA kontrasta, `theme-color` i skenira TS/TSX UI za sirove hex boje. CI je poziva u `quality` poslu.
-- Dodano je 35. Vitest provjera tokena za browser chrome. Postavljen je Playwright config i deset API-mock scenarija za autentikaciju, redirect, neispravne i uspješne prijave, odjavu, pravo pristupa vozilima, responsive login, mobile drawer keyboard/fokus/Escape i guardove budućih `/obavijesti` i `/izvjestaji` kostura. Playwright CI posao koristi Chromium i samo determinističke browser mocks; ne povezuje se s backendom, bazom niti produkcijom.
+- Dodano je 35. Vitest provjera tokena za browser chrome. Postavljen je Playwright config i deset API-mock scenarija za autentikaciju, redirect, neispravne i uspješne prijave, odjavu, pravo pristupa vozilima, responsive login, mobile drawer keyboard/fokus/Escape i guardove budućih `/obavijesti` i `/izvjestaji` kostura. Dodan je i `@axe-core/playwright` WCAG 2.1 A/AA scan za responsive login, autorizovanu listu vozila i otvoreni mobile drawer. Playwright CI koristi Chromium i determinističke API mocks; ne povezuje se s backendom, bazom niti produkcijom.
 - Lokalna validacija: `design-tokens:check` PASS; web build PASS; Vitest **26 fajlova / 253 testa PASS**; web lint i typecheck PASS. `playwright test --list` učitava svih **10** scenarija.
 
 ## Web redizajn — faza 1 (temelji, 28.10.2026)
@@ -22,7 +22,7 @@ Pokrenut je odvojeni web-redizajn; mobilni UI nije mijenjan. Prvi prolaz uvodi c
 2. **Temeljni tokovi — u toku:** login je redizajniran i CI browser suite historijski prolazi na osnovnom commitu; dashboard je osvježen. Redizajn login-a čeka novi CI runtime rezultat. Preostaje provjera svih vizuelnih stanja (pending, greška, prazno, uspjeh), permission varijanti i browser prikaza.
 3. **Operativni moduli — djelimično u toku:** uveden zajednički page-heading/layout pristup za liste vozila, vozača, zadataka, formi, guma i rokova. Nije kompletna ekran-po-ekran provjera; detalji, CRUD, responsive tabele, bulk akcije, empty/error i konfliktni API odgovori ostaju.
 4. **Administracija i konfiguracija — na čekanju:** forme, tipovi zadataka, korisnici/uloge, profil, audit i zdravlje; buduće `/obavijesti` i `/izvjestaji` ostaju skeletoni.
-5. **Kvalitet i release acceptance — na čekanju:** axe/keyboard/focus/contrast i responsive viewport testovi, Playwright kroz glavne tokove, pregled browsera, bez regresije lint/typecheck/unit/build/CI. Testovi izolovani od produkcije.
+5. **Kvalitet i release acceptance — djelimično:** axe WCAG 2.1 A/AA provjere sada pokrivaju login, vozila i mobile drawer; keyboard/focus/escape i responsive smoke su u Playwrightu. Širiti na module, popraviti povremeni logout URL timing u browser testu i izvršiti zabilježen vizuelni browser pregled. Lint/typecheck/unit/build/CI ostaju gateovi; testovi izolovani od produkcije.
 
 **„Gotovo” se označava tek kad** svi aktivni web moduli imaju evidentiran pregled; nema poznatih ozbiljnih UI/accessibility/responsive nedostataka; token check, lint, typecheck, testovi, produkcijski build i CI prolaze; Playwright runtime prođe; browser vizuelni smoke je dokumentovan. Pojedinačni backend ili mobilni nalazi ne zatvaraju se ovim kriterijem. Mobilna aplikacija je van ovog opsega.
 
@@ -30,43 +30,43 @@ Pokrenut je odvojeni web-redizajn; mobilni UI nije mijenjan. Prvi prolaz uvodi c
 
 ## Browser-run ograničenje
 
-Playwright browser **nije pokrenut u ovom sandboxu**: `playwright install chromium` nije uspio jer browser preuzimanje sa `cdn.playwright.dev` nije dostupno u mrežnim pravilima okruženja (ECONNRESET). To nije prolaz E2E testa. CI posao je konfigurisan da instalira Chromium i izvrši testove; A-01/A-13 ostaju otvoreni dok se taj job stvarno ne izvrši uspješno. Lokalni Vite preview/HTTP 200 i `playwright --list` nisu browser-runtime dokaz.
+Playwright browser **nije pokrenut lokalno u ovom sandboxu**: lokalno preuzimanje Chromiuma nije uspjelo (`ECONNRESET`). GitHub Actions je izvršio mocked browser scenarije (10 testova; mobile navigation scenario prolazi), ali zabilježio je povremenu logout URL race/assertion nestabilnost; najnoviji run mora proći bez flaky testa. CI browser pass ne zamjenjuje screenshot/vizuelni pregled niti fizički uređaj UAT. Lokalni Vite preview/HTTP 200 i `playwright --list` sami nisu browser-runtime dokaz.
 
 ## Inventar modula i pokrivenost
 
 Kategorije: **model/unit** = deterministička funkcionalnost; **component** = UI komponenta/screen u Vitest-u; **browser** = Playwright runtime. „Nema direktnog testa“ je nalaz pokrivenosti, ne dokaz greške.
 
-| Modul                     | Trenutni dokaz                                                                                                 | Status / naredni korak                                                                                       |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `auth`                    | Session unit/component testovi (5); novi Playwright login, redirect, logout testovi definisani, nisu pokrenuti | PARTIAL — browser CI rezultat potreban; proširiti slučajeve isteka sesije, rate-limit i `mustChangePassword` |
-| `audit`                   | Nema direktnog feature testa u web suite-u                                                                     | OPEN — dodati list/detail stanja, filtere, prazne/greška stanja i dozvole                                    |
-| `dashboard`               | Nema direktnog screen testa; dashboard permission/queries postoje                                              | OPEN — testirati dozvoljene/odbijene widgete, prazne i greška odgovore                                       |
-| `drivers`                 | Model unit testovi (8); nema direktnog screen testa                                                            | PARTIAL — testirati PII redakciju i OWN/ALL/ID grant prikaz, list/detail/form                                |
-| `forms`                   | Model, preview i field component testovi (32 ukupno)                                                           | PARTIAL — dodati browser tok kreiranja/validacije/publish; testirati keyboard/accessibility                  |
-| `profile`                 | Nema direktnog feature testa                                                                                   | OPEN — testirati profil, promjenu lozinke i `mustChangePassword` tok                                         |
-| `records`                 | Model testovi za vehicle records (16); nema direktnog records-list screen testa                                | PARTIAL — testirati registracije/osiguranja, datume, filtere, empty/error                                    |
-| `reminders`               | Nema direktnog feature testa                                                                                   | OPEN — testirati status akcije, due-date i permission scenarije                                              |
-| `roles`                   | Matrix unit testovi (6); route permission unit testovi                                                         | PARTIAL — browser scenario upravljanja pravima i read-only ponašanja                                         |
-| `services`                | Edit/delete/items model/component testovi (13)                                                                 | PARTIAL — browser CRUD, konkurentna izmjena i greške API-ja                                                  |
-| `system`                  | Nema direktnog health-page testa                                                                               | OPEN — health loading/error/success prikaz i ograničeni pristup                                              |
-| `task-types`              | Model testovi (10); dinamički izbor boje provjeren buildom/token skenerom                                      | PARTIAL — form/page CRUD, konfigurabilne boje i keyboard test                                                |
-| `tasks`                   | Model + create/detail/list/status component testovi (5)                                                        | PARTIAL — browser create/claim/status/comment i server-conflict tokovi                                       |
-| `tires`                   | Set/install model testovi (16)                                                                                 | PARTIAL — screen tokovi, validity i konkurentni update                                                       |
-| `users`                   | Nema direktnog feature testa                                                                                   | OPEN — browser admin CRUD, role/status guardovi                                                              |
-| `vehicles`                | Model + records model testovi (30); nema direktnog list/detail screen testa                                    | PARTIAL — browser CRUD, version conflict, filter/scope prikaz                                                |
-| `notifications`/`reports` | Namjerni budući kosturi; permission guards postoje. Dva Playwright scenarija definisana, još nisu pokrenuta    | SCOPE PRESERVED — ne implementirati funkcionalnost; zatvoriti guard test tek nakon browser CI PASS           |
+| Modul                     | Trenutni dokaz                                                                                              | Status / naredni korak                                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `auth`                    | Session unit/component testovi (5); 10 Playwright mocked scenarija; logout URL race povremeno flaky         | PARTIAL — popraviti logout flake; proširiti slučajeve isteka sesije, rate-limit i `mustChangePassword` |
+| `audit`                   | Nema direktnog feature testa u web suite-u                                                                  | OPEN — dodati list/detail stanja, filtere, prazne/greška stanja i dozvole                              |
+| `dashboard`               | Nema direktnog screen testa; dashboard permission/queries postoje                                           | OPEN — testirati dozvoljene/odbijene widgete, prazne i greška odgovore                                 |
+| `drivers`                 | Model unit testovi (8); nema direktnog screen testa                                                         | PARTIAL — testirati PII redakciju i OWN/ALL/ID grant prikaz, list/detail/form                          |
+| `forms`                   | Model, preview i field component testovi (32 ukupno)                                                        | PARTIAL — dodati browser tok kreiranja/validacije/publish; testirati keyboard/accessibility            |
+| `profile`                 | Nema direktnog feature testa                                                                                | OPEN — testirati profil, promjenu lozinke i `mustChangePassword` tok                                   |
+| `records`                 | Model testovi za vehicle records (16); nema direktnog records-list screen testa                             | PARTIAL — testirati registracije/osiguranja, datume, filtere, empty/error                              |
+| `reminders`               | Nema direktnog feature testa                                                                                | OPEN — testirati status akcije, due-date i permission scenarije                                        |
+| `roles`                   | Matrix unit testovi (6); route permission unit testovi                                                      | PARTIAL — browser scenario upravljanja pravima i read-only ponašanja                                   |
+| `services`                | Edit/delete/items model/component testovi (13)                                                              | PARTIAL — browser CRUD, konkurentna izmjena i greške API-ja                                            |
+| `system`                  | Nema direktnog health-page testa                                                                            | OPEN — health loading/error/success prikaz i ograničeni pristup                                        |
+| `task-types`              | Model testovi (10); dinamički izbor boje provjeren buildom/token skenerom                                   | PARTIAL — form/page CRUD, konfigurabilne boje i keyboard test                                          |
+| `tasks`                   | Model + create/detail/list/status component testovi (5)                                                     | PARTIAL — browser create/claim/status/comment i server-conflict tokovi                                 |
+| `tires`                   | Set/install model testovi (16)                                                                              | PARTIAL — screen tokovi, validity i konkurentni update                                                 |
+| `users`                   | Nema direktnog feature testa                                                                                | OPEN — browser admin CRUD, role/status guardovi                                                        |
+| `vehicles`                | Model + records model testovi (30); nema direktnog list/detail screen testa                                 | PARTIAL — browser CRUD, version conflict, filter/scope prikaz                                          |
+| `notifications`/`reports` | Namjerni budući kosturi; permission guards postoje. Dva Playwright scenarija definisana, još nisu pokrenuta | SCOPE PRESERVED — ne implementirati funkcionalnost; zatvoriti guard test tek nakon browser CI PASS     |
 
 App-shell, nav, guards, router permissions, API client i design tokens dodatno imaju direktne unit/component suite-ove. Testovi ne dokazuju vizuelnu ispravnost, fizički uređaj, backend autorizaciju niti produkcijsku sigurnost.
 
 ## Evidencija statusa / ne zatvarati unaprijed
 
-| Nalaz                      | Trenutna odluka                                                                                                                                             |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A-01 E2E infrastruktura    | PARTIAL: web Playwright harness + CI job dodani; lokalni browser nedostupan; čekati GitHub Actions runtime rezultat i fizički uređaj UAT gdje je relevantno |
-| A-03 bundle/runtime        | PARTIAL: build/lint/unit prolaze; browser console/navigation i vizuelni smoke nisu izvršeni                                                                 |
-| A-05 tema                  | PARTIAL: automatizovana token/kontrast provjera prolazi; browser i fizički Android vizuelni pregled nisu izvršeni                                           |
-| A-08 permission scope      | PARTIAL: raniji fokus testovi potvrđeni; ovaj frontend pregled ne obuhvata pun backend cross-module scope sweep                                             |
-| A-13 logout/session revoke | E2E OPEN: scenario postoji, ali nije runtime izvršen                                                                                                        |
-| Preostali audit statusi    | Ostaju nepromijenjeni iz `audit/08-status-registar.md`; ne mogu se zatvoriti ovim frontend prolazom                                                         |
+| Nalaz                      | Trenutna odluka                                                                                                         |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| A-01 E2E infrastruktura    | PARTIAL: CI Playwright runtime je izvršen (10 mocked scenarija), ali logout flake i vizuelni/uređajni acceptance ostaju |
+| A-03 bundle/runtime        | PARTIAL: build/lint/unit prolaze; browser console/navigation i vizuelni smoke nisu izvršeni                             |
+| A-05 tema                  | PARTIAL: automatizovana token/kontrast provjera prolazi; browser i fizički Android vizuelni pregled nisu izvršeni       |
+| A-08 permission scope      | PARTIAL: raniji fokus testovi potvrđeni; ovaj frontend pregled ne obuhvata pun backend cross-module scope sweep         |
+| A-13 logout/session revoke | PARTIAL: mocked logout scenario izvršen; povremeni URL flake i backend revoke dokaz nisu zatvoreni                      |
+| Preostali audit statusi    | Ostaju nepromijenjeni iz `audit/08-status-registar.md`; ne mogu se zatvoriti ovim frontend prolazom                     |
 
 **Zaključak:** prijavljene konkretne token nekonzistentnosti su ispravljene i automatizovana provjera prolazi. Modul-po-modul frontend audit je napravio eksplicitan coverage inventar, ali nije završen: navedeni testovi za module bez direktne pokrivenosti, Playwright runtime, browser vizuelna provjera, Android uređaj i nefrontend nalazi ostaju potvrđeno otvoreni.

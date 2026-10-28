@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type Route } from '@playwright/test';
 
 const userId = '11111111-1111-4111-8111-111111111111';
@@ -16,6 +17,15 @@ async function assertAppMounted(page: Page) {
   if (errors.length > 0) throw new Error(`Browser runtime error(s): ${JSON.stringify(errors)}`);
   const rootHtml = await page.locator('#root').innerHTML();
   if (!rootHtml.trim()) throw new Error('React root stayed empty after page load.');
+}
+
+async function expectNoA11yViolations(page: Page) {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(
+    results.violations.map(({ id, impact, help, nodes }) => ({ id, impact, help, nodes: nodes.length })),
+  ).toEqual([]);
 }
 
 function authResponse(
@@ -100,6 +110,7 @@ test('responsive login keeps the form reachable on a narrow viewport', async ({ 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await expect(page.getByLabel('E-mail')).toBeVisible();
   await expect(page.getByLabel('Lozinka')).toBeVisible();
+  await expectNoA11yViolations(page);
 });
 
 test('login failure is communicated without exposing credential-specific detail', async ({ page }) => {
@@ -107,7 +118,7 @@ test('login failure is communicated without exposing credential-specific detail'
   await page.goto('/prijava');
   await submitLogin(page);
   await expect(page.getByText('Pogrešan e-mail ili lozinka.')).toBeVisible();
-  await expect(page).toHaveURL(/\/prijava$/);
+  await expect(page).toHaveURL(/\/prijava(?:\?next=%2Fdizajn-sistem)?$/);
 });
 
 test('successful login returns to the requested internal route and keeps tokens out of browser storage', async ({
@@ -132,11 +143,13 @@ test('vehicle register mounts for an authorized user and mobile navigation opens
   await expect(page.getByRole('heading', { name: 'Vozila' })).toBeVisible();
   await expect(page.getByText('Registar je prazan')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
 
   await page.getByRole('button', { name: 'Otvori navigaciju' }).click();
   const sidebar = page.locator('[data-testid="sidebar"]');
   await expect(sidebar).toHaveClass(/is-open/);
   await expect(sidebar.getByRole('link', { name: /Vozila/ })).toBeVisible();
+  await expectNoA11yViolations(page);
   await expect(sidebar.getByRole('link').first()).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(sidebar).not.toHaveClass(/is-open/);
@@ -182,7 +195,7 @@ test('logout clears the in-memory session and returns to login', async ({ page }
   await page.goto('/prijava?next=%2Fdizajn-sistem');
   await submitLogin(page);
   await page.getByRole('button', { name: 'Odjava' }).click();
-  await expect(page).toHaveURL(/\/prijava$/);
+  await expect(page).toHaveURL(/\/prijava(?:\?next=%2Fdizajn-sistem)?$/);
   await expect(page.getByText('Prijava u web aplikaciju')).toBeVisible();
   expect(logoutRequested).toBe(true);
 });
