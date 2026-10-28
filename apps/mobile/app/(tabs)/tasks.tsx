@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/features/auth/auth-provider';
 import { mobileApi, toUserMessage, type TaskSummary } from '@/lib/api';
 import { colors } from '@/lib/theme';
@@ -48,7 +48,7 @@ export default function TasksScreen() {
     }
   }, [mode]);
 
-  useEffect(() => { void load(); }, [load]);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const title = mode === 'MINE' ? 'Moji zadaci' : 'Slobodni zadaci';
   const emptyTitle = mode === 'MINE' ? 'Nemate zadataka za prikaz' : 'Nema slobodnih zadataka';
