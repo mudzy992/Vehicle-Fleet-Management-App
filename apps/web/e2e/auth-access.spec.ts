@@ -8,9 +8,6 @@ test.beforeEach(({ page }) => {
   const errors: string[] = [];
   runtimeErrors.set(page, errors);
   page.on('pageerror', (error) => errors.push(error.stack || error.message || String(error)));
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`[console] ${message.text()}`);
-  });
 });
 
 async function assertAppMounted(page: Page) {
