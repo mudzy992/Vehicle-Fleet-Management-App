@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
+
+const webDirectory = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   testDir: './e2e',
@@ -14,6 +17,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
+    cwd: webDirectory,
     command: 'pnpm dev',
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
