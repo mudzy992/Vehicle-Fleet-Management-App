@@ -19,7 +19,7 @@ export function EmptyState({ title, description, action, icon }: EmptyStateProps
           {icon}
         </span>
       ) : null}
-      <p className="text-sm font-medium text-[var(--fg)]">{title}</p>
+      <h3 className="vfm-empty-title">{title}</h3>
       {description ? <p className="max-w-md text-xs text-[var(--fg-muted)]">{description}</p> : null}
       {action ? <div className="mt-2">{action}</div> : null}
     </div>

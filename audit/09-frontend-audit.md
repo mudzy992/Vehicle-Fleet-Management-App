@@ -10,7 +10,7 @@
 - Boja rezervnog prikaza native color pickera za vrstu zadatka čita CSS `--neutral`; prilagođena boja vrste zadatka ostaje korisnički/domain podatak, ne hardkodovani UI token.
 - Dodan `scripts/check-design-tokens.mjs` i `pnpm design-tokens:check`. Skripta poredi 19 parova web/mobile, provjerava 11 kombinacija WCAG AA kontrasta, `theme-color` i skenira TS/TSX UI za sirove hex boje. CI je poziva u `quality` poslu.
 - Dodano je 35. Vitest provjera tokena za browser chrome. Postavljen je Playwright config i deset API-mock scenarija za autentikaciju, redirect, neispravne i uspješne prijave, odjavu, pravo pristupa vozilima, responsive login, mobile drawer keyboard/fokus/Escape i guardove budućih `/obavijesti` i `/izvjestaji` kostura. Playwright CI posao koristi Chromium i samo determinističke browser mocks; ne povezuje se s backendom, bazom niti produkcijom.
-- Lokalna validacija: `design-tokens:check` PASS; web build PASS; Vitest **25 fajlova / 251 test PASS**; web lint i typecheck PASS. `playwright test --list` učitava svih **10** scenarija.
+- Lokalna validacija: `design-tokens:check` PASS; web build PASS; Vitest **26 fajlova / 253 testa PASS**; web lint i typecheck PASS. `playwright test --list` učitava svih **10** scenarija.
 
 ## Web redizajn — faza 1 (temelji, 28.10.2026)
 
