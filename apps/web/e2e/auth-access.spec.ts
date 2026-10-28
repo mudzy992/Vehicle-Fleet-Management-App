@@ -84,7 +84,7 @@ async function mockApi(
     } else if (pathname.endsWith('/auth/logout')) {
       await route.fulfill({ status: 200, json: { data: null, meta: {} } });
     } else if (
-      ['/vehicles', '/drivers', '/registrations', '/insurances', '/reminders'].some((path) =>
+      ['/vehicles', '/drivers', '/registrations', '/insurances', '/reminders', '/tasks'].some((path) =>
         pathname.endsWith(path),
       )
     ) {
@@ -126,6 +126,20 @@ test('dashboard renders mocked empty collections without accessibility violation
   await submitLogin(page);
   await expect(page.getByRole('heading', { name: 'Nadzorna tabla' })).toBeVisible();
   await expect(page.getByText('Nema rokova').first()).toBeVisible();
+  await expectNoA11yViolations(page);
+});
+
+test('task list handles empty collections accessibly on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['task:view', 'task:claim'] }) }),
+  );
+  await page.goto('/prijava?next=%2Fzadaci');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Zadaci' })).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'Prikaz zadataka' })).toBeVisible();
+  await expect(page.getByText('Nema zadataka za prikaz')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await expectNoA11yViolations(page);
 });
 
