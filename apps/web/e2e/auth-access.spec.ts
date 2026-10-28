@@ -83,6 +83,15 @@ async function mockApi(
       await login(route);
     } else if (pathname.endsWith('/auth/logout')) {
       await route.fulfill({ status: 200, json: { data: null, meta: {} } });
+    } else if (
+      ['/vehicles', '/drivers', '/registrations', '/insurances', '/reminders'].some((path) =>
+        pathname.endsWith(path),
+      )
+    ) {
+      await route.fulfill({
+        status: 200,
+        json: { data: { items: [], total: 0, totalPages: 0, page: 1, pageSize: 50 }, meta: {} },
+      });
     } else {
       await route.fulfill({ status: 200, json: { data: {}, meta: {} } });
     }
@@ -102,6 +111,22 @@ test('protected deep link redirects to login and preserves a safe internal desti
   await assertAppMounted(page);
   await expect(page).toHaveURL(/\/prijava\?next=%2Fzadaci$/);
   await expect(page.getByText('Prijava u web aplikaciju')).toBeVisible();
+});
+
+test('dashboard renders mocked empty collections without accessibility violations', async ({ page }) => {
+  await mockApi(page, (route) =>
+    route.fulfill({
+      status: 200,
+      json: authResponse({
+        permissions: ['vehicle:view', 'driver:view', 'registration:view', 'insurance:view', 'reminder:view'],
+      }),
+    }),
+  );
+  await page.goto('/prijava?next=%2Fnadzorna-tabla');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Nadzorna tabla' })).toBeVisible();
+  await expect(page.getByText('Nema rokova').first()).toBeVisible();
+  await expectNoA11yViolations(page);
 });
 
 test('responsive login keeps the form reachable on a narrow viewport', async ({ page }) => {
