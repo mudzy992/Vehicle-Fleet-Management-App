@@ -30,16 +30,13 @@ const VARIANT_CLASSES: Readonly<Record<ButtonVariant, string>> = {
 } as const;
 
 const SIZE_CLASSES: Readonly<Record<ButtonSize, string>> = {
-  sm: 'h-7 px-2.5 text-xs gap-1.5',
-  md: 'h-9 px-3.5 text-sm gap-2',
+  sm: 'min-h-8 px-3 text-xs gap-1.5',
+  md: 'min-h-10 px-4 text-sm gap-2',
 } as const;
 
-export function buttonClassName(
-  variant: ButtonVariant = 'secondary',
-  size: ButtonSize = 'md',
-): string {
+export function buttonClassName(variant: ButtonVariant = 'secondary', size: ButtonSize = 'md'): string {
   return [
-    'inline-flex items-center justify-center rounded-md font-medium transition-colors',
+    'inline-flex items-center justify-center rounded-lg font-semibold transition-colors',
     'focus-visible:outline-2 focus-visible:outline-[var(--primary)]',
     'disabled:cursor-not-allowed',
     VARIANT_CLASSES[variant],
@@ -67,7 +64,10 @@ export function Button({
       {...rest}
     >
       {loading ? (
-        <span aria-hidden="true" className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        <span
+          aria-hidden="true"
+          className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+        />
       ) : (
         icon
       )}

@@ -9,7 +9,7 @@ import type { ReactNode } from 'react';
 export function Table({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={['overflow-x-auto', className ?? ''].filter(Boolean).join(' ')}>
-      <table className="w-full border-collapse text-left text-sm">{children}</table>
+      <table className="vfm-table w-full border-collapse text-left text-sm">{children}</table>
     </div>
   );
 }
@@ -27,7 +27,9 @@ export function TBody({ children }: { children: ReactNode }) {
 }
 
 export function TR({ children, className }: { children: ReactNode; className?: string }) {
-  return <tr className={['hover:bg-[var(--hover)]', className ?? ''].filter(Boolean).join(' ')}>{children}</tr>;
+  return (
+    <tr className={['hover:bg-[var(--hover)]', className ?? ''].filter(Boolean).join(' ')}>{children}</tr>
+  );
 }
 
 export function TH({ children, align = 'left' }: { children: ReactNode; align?: 'left' | 'right' }) {

@@ -71,6 +71,45 @@ describe('Web/mobile design tokens', () => {
     expect(mobileColor('primary').toLowerCase()).toBe('#c6f75a');
   });
 
+  it.each([
+    '--space-1',
+    '--space-2',
+    '--space-3',
+    '--space-4',
+    '--space-6',
+    '--space-8',
+    '--space-12',
+    '--space-16',
+    '--text-xs',
+    '--text-sm',
+    '--text-base',
+    '--text-lg',
+    '--text-xl',
+    '--text-2xl',
+    '--text-3xl',
+    '--leading-tight',
+    '--leading-normal',
+    '--leading-relaxed',
+    '--radius-xs',
+    '--radius-sm',
+    '--radius-md',
+    '--radius-lg',
+    '--radius-xl',
+    '--radius-2xl',
+    '--radius-pill',
+    '--shadow-card',
+    '--shadow-popover',
+    '--focus-ring',
+    '--motion-fast',
+    '--motion-normal',
+    '--motion-slow',
+    '--sidebar-width',
+    '--content-max',
+    '--control-height',
+  ])('defines the web foundation token %s', (token) => {
+    expect(css).toMatch(new RegExp(`${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:`));
+  });
+
   it('matches browser chrome to the shared dark background token', () => {
     const themeColor = html.match(
       /<meta\s+name=["']theme-color["']\s+content=["'](#[0-9a-fA-F]{6})["']/i,

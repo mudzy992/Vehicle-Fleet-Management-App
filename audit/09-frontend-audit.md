@@ -12,6 +12,12 @@
 - Dodano je 35. Vitest provjera tokena za browser chrome. Postavljen je Playwright config i osam API-mock scenarija za autentikaciju, redirect, neispravne i uspješne prijave, odjavu, pravo pristupa vozilima i guardove budućih `/obavijesti` i `/izvjestaji` kostura. Playwright CI posao koristi Chromium i samo determinističke browser mocks; ne povezuje se s backendom, bazom niti produkcijom.
 - Lokalna validacija: `design-tokens:check` PASS; web build PASS; Vitest **25 fajlova / 217 testova PASS**; web lint i typecheck PASS. `playwright test --list` učitava svih **8** scenarija.
 
+## Web redizajn — faza 1 (temelji, 28.10.2026)
+
+Pokrenut je odvojeni web-redizajn; mobilni UI nije mijenjan. Prvi prolaz uvodi centralne skale za spacing, tipografiju, radius, depth, motion, širinu navigacije/sadržaja i visinu kontrola; osvježava shell (sidebar, active state, header, user block, footer i responsive drawer), zajedničke button/card/table/stat primitive i dashboard hijerarhiju. Dodano je 34 provjere prisustva foundation tokena uz postojeće kolor/kontrast provjere. Lokalni web lint, typecheck, build, design-token guard i suite (25 fajlova / 251 test) prolaze.
+
+**Ovo nije završetak potpunog redizajna.** Ne zatvara vizuelni acceptance niti potvrđuje da su svi ekrani i forme prebačeni na jedinstvene primitive. Preostaje modul-po-modul pregled i dorada auth/login, liste/detalji, forme, empty/loading/error, tabelarni responsive prikaz, pristupačnost/keyboard, tipografska i spacing konzistentnost, i Playwright vizuelni/runtime smoke. Browser/device pregled ostaje otvoren. Zadržati namjerno prazne `/obavijesti` i `/izvjestaji` kosture i postojeće permission guardove.
+
 ## Browser-run ograničenje
 
 Playwright browser **nije pokrenut u ovom sandboxu**: `playwright install chromium` nije uspio jer browser preuzimanje sa `cdn.playwright.dev` nije dostupno u mrežnim pravilima okruženja (ECONNRESET). To nije prolaz E2E testa. CI posao je konfigurisan da instalira Chromium i izvrši testove; A-01/A-13 ostaju otvoreni dok se taj job stvarno ne izvrši uspješno. Lokalni Vite preview/HTTP 200 i `playwright --list` nisu browser-runtime dokaz.

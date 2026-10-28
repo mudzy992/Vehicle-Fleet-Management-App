@@ -17,7 +17,7 @@ export function Card({ children, className, flush = false }: CardProps) {
   return (
     <section
       className={[
-        'rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)]',
+        'vfm-card rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)]',
         flush ? '' : 'p-4',
         className ?? '',
       ]
@@ -41,10 +41,8 @@ export function CardHeader({
   return (
     <header className="mb-3 flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h2 className="truncate text-sm font-semibold text-[var(--fg)]">{title}</h2>
-        {description ? (
-          <p className="mt-0.5 text-xs text-[var(--fg-muted)]">{description}</p>
-        ) : null}
+        <h2 className="truncate text-base font-semibold tracking-tight text-[var(--fg)]">{title}</h2>
+        {description ? <p className="mt-0.5 text-xs text-[var(--fg-muted)]">{description}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
     </header>

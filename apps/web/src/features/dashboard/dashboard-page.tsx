@@ -128,9 +128,10 @@ export function DashboardPage() {
     reminders.error) as ApiError | null;
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">Nadzorna tabla</h1>
+    <div className="vfm-dashboard space-y-6">
+      <div className="vfm-page-intro">
+        <p className="vfm-eyebrow">PREGLED VOZNOG PARKA</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Nadzorna tabla</h1>
         <p className="text-sm text-[var(--fg-muted)]">
           Ključni brojevi i rokovi u narednih {WINDOW_DAYS} dana ({formatDate(today)}).
         </p>

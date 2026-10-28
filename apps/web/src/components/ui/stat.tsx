@@ -26,10 +26,12 @@ const VALUE_COLORS: Readonly<Record<SemanticLevel, string>> = {
 
 export function Stat({ label, value, hint, level = 'default' }: StatProps) {
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
-      <p className="text-xs text-[var(--fg-muted)]">{label}</p>
-      <p className={['tabular mt-1 text-2xl font-semibold', VALUE_COLORS[level]].join(' ')}>{value}</p>
-      {hint ? <p className="mt-1 text-[11px] text-[var(--fg-muted)]">{hint}</p> : null}
+    <div className="vfm-stat rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-sm)]">
+      <p className="vfm-stat-label text-xs text-[var(--fg-muted)]">{label}</p>
+      <p className={['tabular vfm-stat-value mt-2 text-3xl font-semibold', VALUE_COLORS[level]].join(' ')}>
+        {value}
+      </p>
+      {hint ? <p className="vfm-stat-hint mt-2 text-[11px] text-[var(--fg-muted)]">{hint}</p> : null}
     </div>
   );
 }
