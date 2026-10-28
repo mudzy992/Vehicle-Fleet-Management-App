@@ -99,10 +99,10 @@ export function TasksPage() {
   const totalPages = tasksQuery.data?.totalPages ?? 0;
 
   return (
-    <main className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <main className="vfm-module-page">
+      <header className="vfm-module-heading">
         <div>
-          <h1 className="text-xl font-semibold">Zadaci</h1>
+          <h1 className="vfm-module-title">Zadaci</h1>
           <p className="mt-1 text-sm text-[var(--fg-muted)]">
             {tasksQuery.isPending ? 'Učitavanje…' : taskCountLabel(tasksQuery.data)}
           </p>

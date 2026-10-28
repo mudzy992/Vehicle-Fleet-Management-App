@@ -877,3 +877,51 @@ button:active:not(:disabled) {
   width: 1rem;
   height: 1rem;
 }
+.vfm-module-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+}
+.vfm-module-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.vfm-module-heading > div:first-child {
+  min-width: 0;
+}
+.vfm-module-title {
+  margin: 0;
+  color: var(--fg);
+  font-size: clamp(1.5rem, 2vw, 1.9rem);
+  font-weight: 720;
+  line-height: 1.12;
+  letter-spacing: -0.05em;
+}
+.vfm-module-heading p {
+  margin-top: 0.4rem;
+  color: var(--fg-muted);
+  font-size: 0.82rem;
+}
+.vfm-module-page [role='tablist'] {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+}
+@media (max-width: 640px) {
+  .vfm-module-heading {
+    align-items: stretch;
+  }
+  .vfm-module-heading > div:last-child {
+    width: 100%;
+  }
+  .vfm-module-heading > div:last-child > a,
+  .vfm-module-heading > a {
+    justify-content: center;
+  }
+  .vfm-module-page {
+    gap: 1.1rem;
+  }
+}

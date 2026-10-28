@@ -19,8 +19,8 @@ Pokrenut je odvojeni web-redizajn; mobilni UI nije mijenjan. Prvi prolaz uvodi c
 ### Plan rada i kriteriji za završetak web-redizajna
 
 1. **Dizajn sistem i shell — temelji završeni; širina primjene otvorena:** semantičke skale, responsive shell, primitive i token guard su implementirani; provjeriti preostale ekrane da koriste skale dosljedno.
-2. **Temeljni tokovi — u toku:** login je redizajniran lokalno; dashboard je osvježen u ranijoj fazi. Preostaje provjera svih vizuelnih stanja (pending, greška, prazno, uspjeh), permission varijanti i browser prikaza.
-3. **Operativni moduli — na čekanju:** vozila, vozači, zadaci, evidencije, gume, servisi i podsjetnici; liste, detalji, kreiranje/uređivanje, filteri, tabele, bulk akcije i konfliktni API odgovori.
+2. **Temeljni tokovi — u toku:** login je redizajniran i CI browser suite historijski prolazi na osnovnom commitu; dashboard je osvježen. Redizajn login-a čeka novi CI runtime rezultat. Preostaje provjera svih vizuelnih stanja (pending, greška, prazno, uspjeh), permission varijanti i browser prikaza.
+3. **Operativni moduli — djelimično u toku:** uveden zajednički page-heading/layout pristup za liste vozila, vozača, zadataka, formi, guma i rokova. Nije kompletna ekran-po-ekran provjera; detalji, CRUD, responsive tabele, bulk akcije, empty/error i konfliktni API odgovori ostaju.
 4. **Administracija i konfiguracija — na čekanju:** forme, tipovi zadataka, korisnici/uloge, profil, audit i zdravlje; buduće `/obavijesti` i `/izvjestaji` ostaju skeletoni.
 5. **Kvalitet i release acceptance — na čekanju:** axe/keyboard/focus/contrast i responsive viewport testovi, Playwright kroz glavne tokove, pregled browsera, bez regresije lint/typecheck/unit/build/CI. Testovi izolovani od produkcije.
 

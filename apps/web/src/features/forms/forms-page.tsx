@@ -255,10 +255,10 @@ export function FormsPage() {
     removeDraft.isPending;
 
   return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-2">
+    <div className="vfm-module-page">
+      <header className="vfm-module-heading">
         <div>
-          <h1 className="text-lg font-semibold">Forme</h1>
+          <h1 className="vfm-module-title">Forme</h1>
           <p className="text-xs text-[var(--fg-muted)]">
             Verzije su nepromjenjive nakon objave; nova izmjena je nova verzija.
           </p>

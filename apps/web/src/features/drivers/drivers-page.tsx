@@ -86,10 +86,10 @@ export function DriversPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="vfm-module-page">
+      <div className="vfm-module-heading">
         <div>
-          <h1 className="text-xl font-semibold">Vozači</h1>
+          <h1 className="vfm-module-title">Vozači</h1>
           <p className="text-sm text-[var(--fg-muted)]">
             {isPending ? 'Učitavanje…' : `${total} vozača u registru`}
           </p>
