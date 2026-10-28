@@ -118,6 +118,14 @@ test('responsive login keeps the form reachable on a narrow viewport', async ({ 
   await expectNoA11yViolations(page);
 });
 
+test('design system showcase passes axe WCAG checks', async ({ page }) => {
+  await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse() }));
+  await page.goto('/prijava?next=%2Fdizajn-sistem');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Dizajn sistem' })).toBeVisible();
+  await expectNoA11yViolations(page);
+});
+
 test('login failure is communicated without exposing credential-specific detail', async ({ page }) => {
   await mockApi(page);
   await page.goto('/prijava');
