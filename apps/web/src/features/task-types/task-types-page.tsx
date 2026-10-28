@@ -101,10 +101,10 @@ export function TaskTypesPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="vfm-module-page">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Vrste zadataka</h1>
+          <h1 className="vfm-module-title">Vrste zadataka</h1>
           <p className="text-sm text-[var(--fg-muted)]">
             {list.isPending ? 'Učitavanje…' : `${list.data?.total ?? 0} vrsta u konfiguraciji`}
           </p>

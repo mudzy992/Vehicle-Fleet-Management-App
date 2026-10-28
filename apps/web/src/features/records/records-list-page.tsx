@@ -117,9 +117,9 @@ export function RecordsListPage({ kind }: { kind: RecordsListKind }) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="vfm-module-page">
       <div>
-        <h1 className="text-xl font-semibold">{title}</h1>
+        <h1 className="vfm-module-title">{title}</h1>
         <p className="text-sm text-[var(--fg-muted)]">
           {list.isPending ? 'Učitavanje…' : `${total} zapisa`} · periodi se ne preklapaju (409 PERIOD_OVERLAP)
         </p>

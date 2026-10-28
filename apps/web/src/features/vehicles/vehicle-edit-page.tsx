@@ -176,12 +176,12 @@ function VehicleEditForm({
   });
 
   return (
-    <div className="space-y-4">
+    <div className="vfm-module-page">
       <div>
         <Link className="text-xs text-[var(--fg-muted)] hover:underline" to={`/vozila/${vehicle.id}`}>
           ← {vehicle.internalNo}
         </Link>
-        <h1 className="text-xl font-semibold">Izmjena vozila</h1>
+        <h1 className="vfm-module-title">Izmjena vozila</h1>
         <p className="text-sm text-[var(--fg-muted)]">
           Verzija forme v{version.version} · verzija zapisa {vehicle.version}
         </p>

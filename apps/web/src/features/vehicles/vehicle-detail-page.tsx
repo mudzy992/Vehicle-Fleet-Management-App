@@ -129,13 +129,13 @@ export function VehicleDetailPage() {
   const archived = vehicle.status === 'ARCHIVED';
 
   return (
-    <div className="space-y-4">
+    <div className="vfm-module-page">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link className="text-xs text-[var(--fg-muted)] hover:underline" to="/vozila">
             ← Vozila
           </Link>
-          <h1 className="text-xl font-semibold">
+          <h1 className="vfm-module-title">
             {vehicle.internalNo} · {vehicle.make} {vehicle.model}
           </h1>
           <p className="text-sm text-[var(--fg-muted)]">

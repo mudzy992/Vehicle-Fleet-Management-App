@@ -97,7 +97,7 @@ export function ProfilePage() {
   const submitError = changePassword.error instanceof ApiError ? changePassword.error : null;
 
   return (
-    <div className="space-y-4">
+    <div className="vfm-module-page">
       {forced ? (
         <Card>
           <p className="text-sm font-medium text-[var(--warning,var(--fg))]">Potrebna je promjena lozinke</p>

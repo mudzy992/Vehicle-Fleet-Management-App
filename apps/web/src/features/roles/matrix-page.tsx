@@ -105,7 +105,7 @@ export function MatrixPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="vfm-module-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium">Matrica prava ({query.data.modules.reduce((total, group) => total + group.permissions.length, 0)} permisija)</p>

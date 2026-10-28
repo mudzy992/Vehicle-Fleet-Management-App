@@ -194,10 +194,10 @@ export function TaskCreatePage() {
   };
 
   return (
-    <main className="mx-auto max-w-3xl space-y-4">
+    <main className="vfm-module-page mx-auto max-w-3xl">
       <header className="space-y-1">
         <Link className="text-sm text-[var(--primary)] underline" to="/zadaci">← Zadaci</Link>
-        <h1 className="text-xl font-semibold">Novi zadatak</h1>
+        <h1 className="vfm-module-title">Novi zadatak</h1>
         <p className="text-sm text-[var(--fg-muted)]">Korak {step} od 3</p>
       </header>
       <div className="flex gap-2" aria-label="Napredak">

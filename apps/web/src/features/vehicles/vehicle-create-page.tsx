@@ -96,13 +96,13 @@ export function VehicleCreatePage() {
   const blocked = form.isPending || !parsed?.ok || !model;
 
   return (
-    <div className="space-y-4">
+    <div className="vfm-module-page">
       <div className="flex items-start justify-between gap-3">
         <div>
           <Link className="text-xs text-[var(--fg-muted)] hover:underline" to="/vozila">
             ← Vozila
           </Link>
-          <h1 className="text-xl font-semibold">Novo vozilo</h1>
+          <h1 className="vfm-module-title">Novo vozilo</h1>
         </div>
       </div>
 

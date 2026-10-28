@@ -125,12 +125,12 @@ export function DriverCreatePage() {
   const blocked = form.isPending || !parsed?.ok || !model;
 
   return (
-    <div className="space-y-4">
+    <div className="vfm-module-page">
       <div>
         <Link className="text-xs text-[var(--fg-muted)] hover:underline" to="/vozaci">
           ← Vozači
         </Link>
-        <h1 className="text-xl font-semibold">Novi vozač</h1>
+        <h1 className="vfm-module-title">Novi vozač</h1>
       </div>
 
       {form.error instanceof ApiError && (

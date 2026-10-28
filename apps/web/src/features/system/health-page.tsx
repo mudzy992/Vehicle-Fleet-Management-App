@@ -55,10 +55,10 @@ export function HealthPage() {
   const readyOk = state.ready?.status === 200 && state.ready.body?.status === 'ok';
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="vfm-module-page mx-auto max-w-3xl">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Zdravlje sistema</h2>
+          <h1 className="vfm-module-title">Zdravlje sistema</h1>
           <p className="mt-1 text-sm text-[var(--fg-muted)]">
             Probe koje koriste Docker i Coolify: <code className="font-mono text-xs">/health/live</code>,{' '}
             <code className="font-mono text-xs">/health/ready</code>,{' '}

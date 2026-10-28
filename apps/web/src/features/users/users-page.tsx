@@ -120,7 +120,7 @@ export function UsersPage() {
   const error = query.error instanceof ApiError ? query.error : null;
 
   return (
-    <div className="space-y-4">
+    <div className="vfm-module-page">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Pretraga" htmlFor="users-search">

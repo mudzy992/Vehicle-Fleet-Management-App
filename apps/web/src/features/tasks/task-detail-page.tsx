@@ -123,11 +123,12 @@ export function TaskDetailPage() {
   if (!task) return null;
   const mayClaim = hasPermission('task:claim') && task.status === 'OPEN';
   const mayComplete =
-    (hasPermission('task:complete') || hasPermission('task:complete_override')) && task.status === 'IN_PROGRESS';
+    (hasPermission('task:complete') || hasPermission('task:complete_override')) &&
+    task.status === 'IN_PROGRESS';
   const mayComment = hasPermission('task:comment');
 
   return (
-    <main className="space-y-4">
+    <main className="vfm-module-page">
       <header className="space-y-2">
         <Link className="text-sm text-[var(--primary)] underline" to="/zadaci">
           ← Zadaci
@@ -135,7 +136,7 @@ export function TaskDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs text-[var(--fg-muted)]">{task.code}</p>
-            <h1 className="text-xl font-semibold">{task.title}</h1>
+            <h1 className="vfm-module-title">{task.title}</h1>
           </div>
           <div className="flex flex-wrap gap-2">
             <StatusBadge value={task.status} domain="taskStatus" />

@@ -72,7 +72,7 @@ export function AuditLogPage() {
   const error = query.error instanceof ApiError ? query.error : null;
 
   return (
-    <div className="space-y-4">
+    <div className="vfm-module-page">
       <div className="flex flex-wrap items-end gap-2">
         <Field label="Akcija" htmlFor="audit-action">
           <select
