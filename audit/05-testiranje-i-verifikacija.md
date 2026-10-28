@@ -54,6 +54,13 @@ Prvi puni gate nakon audit izmjena završio je s jednom greškom u zastarjelom o
 - A-05 tema: po korisnikovom izboru primijenjena je zajednička grafitna podloga/lime akcent u web i native tokenima; Expo je podešen na tamni interfejs, a primarne kontrole koriste tamni tekst na lime radi kontrasta. Web suite sada sadrži 34 dodatne parity/kontrast provjere; ukupno 25 fajlova i 216 testova prolazi. Web build/lint prolaze; `apps/mobile` typecheck i Android JS export prolaze; GitHub CI **40733993924** prolazi, uključujući sigurnosnu provjeru, testove i web/Docker build. Kontrast provjeren automatski: primary foreground/lime 14.63:1, foreground/background 17.37:1, muted/background 8.67:1, warning/status soft 8.49:1, danger/status soft 5.96:1. Mobile E2E **40733993923** prolazi nakon izmjene teme, uključujući P4 Maestro regresiju; to nije vizuelni acceptance. Lokalni preview vraća HTTP 200 i očekivane CSS tokene. Browser render i fizički Android smoke nisu izvršeni; A-05 ostaje djelimično otvoren.
 - Ovo ne zatvara Web Playwright E2E, Android fizički uređaj UAT, ili GPS/privacy acceptance.
 
+## Frontend audit dopuna — 28.10.2026.
+
+- `node scripts/check-design-tokens.mjs`: PASS — 19 web/mobile token parova, 11 WCAG AA parova, browser `theme-color` i sirove UI hex vrijednosti. CI `quality` job sada izvršava isti guard.
+- Web Vitest suite nakon dopune: **25 fajlova / 217 testova PASS**; web lint, typecheck i `pnpm --filter @vfm/web... build` PASS.
+- `playwright test --list`: 8 scenarija učitano. Runtime nije pokrenut: lokalni Chromium download sa `cdn.playwright.dev` nije uspio zbog mrežnih pravila (ECONNRESET). CI Playwright job je konfigurisan, ali nema rezultat u ovom prolazu; ne računati kao E2E PASS.
+- Inventar modula i otvorene test rupe: `audit/09-frontend-audit.md`. `/obavijesti` i `/izvjestaji` ostaju kosturi; dodani su samo permission-guard scenariji.
+
 ## Otvorene provjere prije release-a
 
 1. Pokrenuti `scripts/db-verify/apply_migrations.py` i `behavior_tests.py` na **izoliranoj** PostgreSQL 16 verifier bazi, uključujući idempotentnost migracije 4 i parallel Super Admin removal test. Verifier je destruktivan; ne ciljati produkciju.

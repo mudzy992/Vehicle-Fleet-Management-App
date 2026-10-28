@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12, alignSelf: 'center' },
   mark: { width: 52, height: 52, borderRadius: 16, backgroundColor: colors.primary, color: colors.primaryFg, fontSize: 20, fontWeight: '800', textAlign: 'center', textAlignVertical: 'center', overflow: 'hidden' },
   brandTitle: { color: colors.ink, fontSize: 22, fontWeight: '800' }, brandSubtitle: { color: colors.muted, fontSize: 14, marginTop: 2 },
-  card: { backgroundColor: colors.surface, borderRadius: 20, padding: 22, gap: 12, shadowColor: '#000000', shadowOpacity: 0.08, shadowRadius: 18, elevation: 3 },
+  card: { backgroundColor: colors.surface, borderRadius: 20, padding: 22, gap: 12, shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 18, elevation: 3 },
   heading: { color: colors.ink, fontSize: 24, fontWeight: '800' }, helper: { color: colors.muted, fontSize: 14, marginBottom: 8 },
   label: { color: colors.ink, fontSize: 14, fontWeight: '700', marginTop: 4 },
   input: { minHeight: 50, borderColor: colors.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, color: colors.ink, fontSize: 16 },

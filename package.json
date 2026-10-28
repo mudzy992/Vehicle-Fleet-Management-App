@@ -15,6 +15,7 @@
     "dev": "turbo run dev",
     "env:check": "node scripts/env-sync-check.mjs",
     "env:check:strict": "node scripts/env-sync-check.mjs --strict",
+    "design-tokens:check": "node scripts/check-design-tokens.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml,css}\"",
     "lint": "turbo run lint",

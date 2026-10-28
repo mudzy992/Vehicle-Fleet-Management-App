@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const css = readFileSync(resolve(process.cwd(), 'src/styles/globals.css'), 'utf8');
 const mobileThemeSource = readFileSync(resolve(process.cwd(), '../mobile/src/lib/theme.ts'), 'utf8');
+const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
 const webRoot = css.match(/:root\s*\{([^}]+)\}/)?.[1];
 const mobileRoot = mobileThemeSource.match(/export const colors = \{([^}]+)\}/)?.[1];
 
@@ -68,6 +69,13 @@ describe('Web/mobile design tokens', () => {
     expect(webColor('--primary').toLowerCase()).toBe('#c6f75a');
     expect(mobileColor('background').toLowerCase()).toBe('#0b0f0c');
     expect(mobileColor('primary').toLowerCase()).toBe('#c6f75a');
+  });
+
+  it('matches browser chrome to the shared dark background token', () => {
+    const themeColor = html.match(
+      /<meta\s+name=["']theme-color["']\s+content=["'](#[0-9a-fA-F]{6})["']/i,
+    )?.[1];
+    expect(themeColor?.toLowerCase()).toBe(webColor('--bg').toLowerCase());
   });
 
   it.each([

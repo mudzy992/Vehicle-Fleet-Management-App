@@ -4,11 +4,11 @@ Ovaj registar dopunjava tehnički audit. Statusi se ažuriraju uz test ili refer
 
 | ID | Stavka | Status na 28.10.2026 | Dokaz / sljedeći korak |
 |---|---|---|---|
-| A-01 | E2E infrastruktura ne postoji | PARTIAL / IN PROGRESS | Mobile Maestro black-box CI runner i P4 acceptance prolaze u izolovanom runu **40712125218**; web browser E2E i device UAT ostaju otvoreni |
+| A-01 | E2E infrastruktura ne postoji | PARTIAL / WEB HARNESS ADDED, RUNTIME OPEN | Mobile Maestro black-box CI runner i P4 acceptance prolaze u izolovanom runu **40712125218**; web Playwright config + 8 mock scenarija + CI posao su dodani, ali nisu runtime pokrenuti u ovom sandboxu (Chromium download blocked); device UAT ostaje otvoren |
 | A-02 | Prisma native engine download ograničen u sandboxu | CI VERIFIED / LOCAL ENV LIMIT | Sandbox workaround nije dokaz native download; CI generiše Prisma client i primjenjuje migracije u izolovanoj disposable PostgreSQL bazi (run **40712125166**) |
 | A-03 | Web bundle 901 kB + Node crypto warning | PARTIAL / BUILD VERIFIED | Runtime imports prebačeni na `@vfm/form-engine/definition`; lazy route chunks uklonili `node:crypto` warning i 500 kB warning (glavni entry 28.18 kB; najveći odvojeni `zod` chunk 486.49 kB). Web build/lint i 182 testa prolaze; browser-console i real-navigation smoke ostaju otvoreni |
 | A-04 | ZIP demo je samo vizuelna referenca | CLOSED (scope decision) | Prenijeti samo design cues; zadržati postojeći backend/auth |
-| A-05 | Web/mobile tema nisu usklađene | PARTIAL / TOKENS CI-VERIFIED | Grafitno-lime tokeni su jednaki; parity + WCAG AA kontrast test prolaze (CI **40733993924**), mobile typecheck/Android export prolaze. Maestro regresija P4 na novom UI prolazi (**40733993923**), ali nije vizuelni acceptance; browser/device smoke ostaje otvoren |
+| A-05 | Web/mobile tema nisu usklađene | PARTIAL / TOKEN FIXES LOCAL VERIFIED | Grafitno-lime tokeni su jednaki; prethodni parity + WCAG AA CI **40733993924** i 35 web token testova (uklj. browser chrome) prolaze lokalno. A-16 theme-color/shadow korekcije čekaju novi CI; mobile typecheck/Android export i Maestro P4 **40733993923** prolaze, ali nisu vizuelni acceptance; browser/device smoke ostaje otvoren |
 | A-06 | Pet lokalnih mobile EAS diffs | PROTECTED / not staged | Sačuvani/netaknuti; ne uključivati slučajno u Faza 1 patch |
 | A-07 | API integration suite nedostaje | CI VERIFIED / LOCAL DB NOT RUN | API integration/stress i P15 persistence smoke prolaze nad izolovanim CI PostgreSQL/Redis servisima (run **40712125166**); lokalno/prod DB nije ciljana |
 | A-08 | Scope/permission audit po svim modulima | PARTIAL / FOCUSED CHECK VERIFIED | `drivers.service.ts` PII pravilo: SUPER_ADMIN, `ALL`, `OWN` samo za vlastiti zapis i `DRIVER_IDS` samo uz eksplicitni ID; `driver:view` scope se provjerava odvojeno. `vehicle:view:ALL` vraća sve vozila. Fokus testovi 43/43 prolaze; full cross-module sweep ostaje otvoren |
@@ -19,6 +19,7 @@ Ovaj registar dopunjava tehnički audit. Statusi se ažuriraju uz test ili refer
 | A-13 | Web logout trenutne sesije nakon server revoke | UNIT VERIFIED / E2E OPEN | API vraća `currentSessionRevoked` i briše cookie; UI lokalno čisti sesiju; browser E2E još nije pokrenut |
 | A-14 | Lockout counter, rate-limit TTL failure, nested audit redaction, global permission version | UNIT VERIFIED | API regresije; full API suite 916/916 |
 | A-15 | Faza 1 puna lokalna kvalitet-kapija | CLOSED (local gate only) | `turbo run lint typecheck test build`: 25/25; API 916/916. Ne zamjenjuje live DB/Redis/E2E. |
+| A-16 | Browser chrome i mobile shadow nisu bili potpuno usklađeni s dizajn tokenima | FIXED / LOCAL VERIFIED; CI PENDING | `theme-color` sada prati `--bg`, mobile shadow koristi `colors.shadow`, color-picker fallback koristi `--neutral`; token guard prolazi 19 web/mobile parova + 11 kontrastnih kombinacija; web suite 217/217. Čekati novi CI run. |
 
 ## Definition of Done za svaki novi nalaz
 

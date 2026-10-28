@@ -22,4 +22,5 @@ export const colors = {
   infoSoft: '#17283B',
   neutral: '#A5B1A5',
   neutralSoft: '#252E27',
+  shadow: '#000000',
 } as const;

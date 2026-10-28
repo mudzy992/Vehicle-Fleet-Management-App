@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   refreshText: { color: colors.primary, fontSize: 27 },
   segmented: { flexDirection: 'row', gap: 8, padding: 4, marginBottom: 12, backgroundColor: colors.surfaceMuted, borderRadius: 13 },
   modeButton: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
-  modeButtonActive: { backgroundColor: colors.surface, shadowColor: '#000000', shadowOpacity: 0.08, shadowRadius: 4, elevation: 1 },
+  modeButtonActive: { backgroundColor: colors.surface, shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 4, elevation: 1 },
   modeText: { color: colors.muted, fontSize: 14, fontWeight: '700' },
   modeTextActive: { color: colors.primary },
   list: { gap: 12, paddingBottom: 20 },

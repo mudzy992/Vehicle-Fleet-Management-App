@@ -154,7 +154,6 @@ function TaskTypeFields({
             <input
               id={`${idPrefix}-color`}
               className={`${inputClassName} font-mono uppercase`}
-              placeholder="#2563EB"
               autoComplete="off"
               {...textProps('colorHex')}
             />
@@ -162,7 +161,11 @@ function TaskTypeFields({
               aria-label="Odaberi boju vrste zadatka"
               type="color"
               className="h-9 w-11 shrink-0 cursor-pointer rounded-md border border-[var(--border)] bg-[var(--surface)] p-1"
-              value={colorValid ? values.colorHex.trim() : '#64748B'}
+              value={
+                colorValid
+                  ? values.colorHex.trim()
+                  : getComputedStyle(document.documentElement).getPropertyValue('--neutral').trim()
+              }
               disabled={disabled}
               onChange={(event) => onChange('colorHex', event.target.value.toUpperCase())}
             />
