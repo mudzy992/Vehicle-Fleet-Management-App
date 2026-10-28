@@ -72,6 +72,7 @@ appId: ba.ba101.voznipark
 - inputText: "P4-E2E-${TEST_RUN_ID}"
 - tapOn:
     id: "task-create-next-step-2"
+- assertVisible: "3. Obrazac"
 - scrollUntilVisible:
     element:
       text: "Vrsta pranja"
