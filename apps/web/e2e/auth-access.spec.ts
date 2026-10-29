@@ -129,6 +129,25 @@ test('dashboard renders mocked empty collections without accessibility violation
   await expectNoA11yViolations(page);
 });
 
+test('system health screen renders successful probes accessibly', async ({ page }) => {
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['system:view_health'] }) }),
+  );
+  await page.route('**/health/live', (route) => route.fulfill({ status: 200, json: { status: 'ok' } }));
+  await page.route('**/health/ready', (route) =>
+    route.fulfill({ status: 200, json: { status: 'ok', info: { database: { status: 'up' } } } }),
+  );
+  await page.route('**/health/startup', (route) =>
+    route.fulfill({ status: 200, json: { status: 'ok', uptimeSeconds: 240 } }),
+  );
+  await page.goto('/prijava?next=%2Fzdravlje');
+  await submitLogin(page);
+  await expect(page).toHaveURL(/\/zdravlje$/);
+  await expect(page.getByRole('heading', { name: 'Zdravlje sistema' })).toBeVisible();
+  await expect(page.getAllByText('ok')).toHaveLength(3);
+  await expectNoA11yViolations(page);
+});
+
 test('task list handles empty collections accessibly on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
