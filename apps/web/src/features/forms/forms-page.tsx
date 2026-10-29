@@ -270,7 +270,9 @@ export function FormsPage() {
         <Card>
           <CardHeader title="Katalog" description={`${formsQuery.data?.length ?? 0} formi`} />
           <CardContent className="space-y-1">
-            {formsQuery.isLoading ? <p className="text-xs text-[var(--fg-muted)]">Učitavanje…</p> : null}
+            {formsQuery.isPending ? (
+              <p role="status" className="text-xs text-[var(--fg-muted)]">Učitavanje…</p>
+            ) : null}
             {formsQuery.isError ? (
               <p role="alert" className="text-xs text-[var(--danger)]">
                 Katalog nije dostupan.
@@ -369,7 +371,7 @@ export function FormsPage() {
             </Card>
           ) : null}
 
-          {selected ? (
+          {selected && versionQuery.data ? (
             <Card>
               <CardHeader
                 title={`Definicija v${selected.version}`}
@@ -531,7 +533,45 @@ export function FormsPage() {
             </Card>
           ) : null}
 
-          {!detail && !formsQuery.isLoading ? (
+          {formId && detailQuery.isPending && !detail ? (
+            <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje detalja forme…</p>
+          ) : null}
+
+          {formId && detailQuery.isError ? (
+            <Card>
+              <CardContent className="space-y-3">
+                <p role="alert" className="text-sm text-[var(--danger)]">
+                  {detailQuery.error instanceof ApiError
+                    ? detailQuery.error.message
+                    : 'Detalj forme nije moguće učitati.'}
+                </p>
+                <Button size="sm" variant="secondary" onClick={() => void detailQuery.refetch()}>
+                  Pokušaj ponovo
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {selected && versionQuery.isPending ? (
+            <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje definicije verzije…</p>
+          ) : null}
+
+          {selected && versionQuery.isError ? (
+            <Card>
+              <CardContent className="space-y-3">
+                <p role="alert" className="text-sm text-[var(--danger)]">
+                  {versionQuery.error instanceof ApiError
+                    ? versionQuery.error.message
+                    : 'Definiciju verzije nije moguće učitati.'}
+                </p>
+                <Button size="sm" variant="secondary" onClick={() => void versionQuery.refetch()}>
+                  Pokušaj ponovo
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {!detail && !formsQuery.isPending && !formsQuery.isError && !detailQuery.isPending && !detailQuery.isError ? (
             <Card>
               <CardContent>
                 <EmptyState title="Odaberi formu iz kataloga" />
