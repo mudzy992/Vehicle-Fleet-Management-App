@@ -69,7 +69,7 @@ export function AuditLogPage() {
 
   const data = query.data;
   const totalPages = data?.totalPages ?? 0;
-  const error = query.error instanceof ApiError ? query.error : null;
+  const error = query.error;
 
   return (
     <div className="vfm-module-page">
@@ -147,8 +147,10 @@ export function AuditLogPage() {
         {query.isLoading ? (
           <p className="p-4 text-sm text-[var(--fg-muted)]">Učitavanje…</p>
         ) : error ? (
-          <p className="p-4 text-sm text-[var(--danger)]">
-            Greška ({error.code}): {error.message}
+          <p className="p-4 text-sm text-[var(--danger)]" role="alert">
+            {error instanceof ApiError
+              ? `Greška (${error.code}): ${error.message}`
+              : 'Greška pri učitavanju audit loga.'}
           </p>
         ) : !data || data.items.length === 0 ? (
           <div className="p-4">
@@ -181,7 +183,13 @@ export function AuditLogPage() {
           Stranica {page} / {Math.max(totalPages, 1)} · ukupno {data?.total ?? 0}
         </span>
         <div className="flex gap-2">
-          <Button type="button" size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
             Prethodna
           </Button>
           <Button
@@ -208,7 +216,9 @@ export function AuditLogPage() {
           {detail.isLoading ? <p className="mt-2 text-xs text-[var(--fg-muted)]">Učitavanje…</p> : null}
           {detail.error ? (
             <p className="mt-2 text-xs text-[var(--danger)]">
-              {detail.error instanceof ApiError ? `${detail.error.message} (${detail.error.code})` : 'Greška.'}
+              {detail.error instanceof ApiError
+                ? `${detail.error.message} (${detail.error.code})`
+                : 'Greška.'}
             </p>
           ) : null}
           {detail.data ? (
@@ -244,7 +254,9 @@ export function AuditLogPage() {
 function AuditRow({ item, onOpen }: { item: AuditLogSummary; onOpen: () => void }) {
   return (
     <TR>
-      <TD className="whitespace-nowrap text-[11px] text-[var(--fg-muted)]">{formatDateTime(item.createdAt)}</TD>
+      <TD className="whitespace-nowrap text-[11px] text-[var(--fg-muted)]">
+        {formatDateTime(item.createdAt)}
+      </TD>
       <TD className="font-mono text-xs">{item.action}</TD>
       <TD>
         <Badge level={severityLevel(item.severity)} dot>
@@ -259,7 +271,9 @@ function AuditRow({ item, onOpen }: { item: AuditLogSummary; onOpen: () => void 
       </TD>
       <TD className="text-xs">
         {item.entityType ?? '—'}
-        {item.entityId ? <span className="ml-1 font-mono text-[10px]">{item.entityId.slice(0, 8)}…</span> : null}
+        {item.entityId ? (
+          <span className="ml-1 font-mono text-[10px]">{item.entityId.slice(0, 8)}…</span>
+        ) : null}
       </TD>
       <TD className="text-[11px] text-[var(--fg-muted)]">{item.changedFields.join(', ') || '—'}</TD>
       <TD align="right">
