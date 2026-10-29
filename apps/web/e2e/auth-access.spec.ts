@@ -869,8 +869,8 @@ test('Super Admin creates a user and reveals the temporary password only once on
   await expect(page.getByLabel('Pretraga')).toBeVisible();
   await page.getByRole('button', { name: 'Novi korisnik' }).click();
   await page.getByLabel('E-mail').fill('amina@example.test');
-  await page.getByLabel('Ime').fill('Amina');
-  await page.getByLabel('Prezime').fill('Kovačević');
+  await page.getByLabel('Ime', { exact: true }).fill('Amina');
+  await page.getByLabel('Prezime', { exact: true }).fill('Kovačević');
   await page.getByLabel('Dispečer').check();
   await page.getByRole('button', { name: 'Kreiraj korisnika' }).click();
   await expect(page.getByText('Privremena lozinka za amina@example.test')).toBeVisible();
