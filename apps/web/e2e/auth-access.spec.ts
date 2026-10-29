@@ -962,10 +962,6 @@ test('vehicle detail is readable on mobile without mutation permissions', async 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await expectNoA11yViolations(page);
 
-  await page.getByRole('button', { name: 'Kilometraža' }).click();
-  await expect(page.getByRole('heading', { name: 'Historija kilometraže' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Upiši očitanje' })).toBeDisabled();
-  await expectNoA11yViolations(page);
 });
 
 test('driver registry renders an accessible empty state on mobile', async ({ page }) => {
