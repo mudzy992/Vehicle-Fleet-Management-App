@@ -2450,6 +2450,49 @@ test('task detail supports mobile comments and preserves task status on a server
   await expectNoA11yViolations(page);
 });
 
+test('task status release returns an in-progress task to the open pool', async ({ page }) => {
+  const taskId = '44444444-4444-4444-8444-444444444444';
+  const task = {
+    id: taskId, code: 'Z-2026-000008', title: 'Pregled kočnica', description: 'Provjeriti kočioni sistem.',
+    vehicleInternalNo: 'V-007', vehicleMake: 'Škoda', vehicleModel: 'Octavia', taskTypeName: 'Redovni pregled',
+    priority: 'NORMAL', status: 'IN_PROGRESS', dueAt: null, createdByName: 'Testni Korisnik', assigneeName: 'Testni Korisnik',
+    formData: {}, formSchemaVersion: 1, version: 4, assignments: [], events: [], commentCount: 0,
+  };
+  let releasePayload: unknown = null;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse({ permissions: ['task:view', 'task:release'] }) }));
+  await page.route('**/api/v1/tasks/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/v1/tasks/${taskId}/release` && route.request().method() === 'POST') {
+      releasePayload = route.request().postDataJSON();
+      task.status = 'OPEN';
+      task.assigneeName = null;
+      task.version = 5;
+      await route.fulfill({ status: 200, json: { data: task, meta: {} } });
+      return;
+    }
+    if (url.pathname === `/api/v1/tasks/${taskId}/comments`) {
+      await route.fulfill({ status: 200, json: { data: { items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 }, meta: {} } });
+      return;
+    }
+    if (url.pathname === `/api/v1/tasks/${taskId}`) {
+      await route.fulfill({ status: 200, json: { data: task, meta: {} } });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } });
+  });
+  await page.goto(`/prijava?next=${encodeURIComponent(`/zadaci/${taskId}`)}`);
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Pregled kočnica' })).toBeVisible();
+  await expect(page.getByText('U toku', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Vrati među slobodne' }).click();
+  await page.getByRole('button', { name: 'Potvrdi: Vrati među slobodne' }).click();
+  await expect(page.getByRole('status')).toContainText('Zadatak je vraćen među slobodne.');
+  await expect(page.getByText('Otvoren', { exact: true })).toBeVisible();
+  expect(releasePayload).toEqual({ version: 4 });
+  await expectNoA11yViolations(page);
+});
+
 test('task detail API failure gives an accessible recovery path instead of a blank detail', async ({ page }) => {
   const taskId = '44444444-4444-4444-8444-444444444444';
   await page.setViewportSize({ width: 390, height: 844 });
