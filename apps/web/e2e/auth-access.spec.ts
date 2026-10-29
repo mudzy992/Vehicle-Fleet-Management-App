@@ -321,6 +321,66 @@ test('insurance records fit a mobile viewport and pass axe checks', async ({ pag
   await expectNoA11yViolations(page);
 });
 
+test('insurance records show populated entries, paginate, and pass axe checks', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['insurance:view'] }) }),
+  );
+  await page.route('**/api/v1/insurances**', async (route) => {
+    const url = new URL(route.request().url());
+    const secondPage = url.searchParams.get('page') === '2';
+    const item = {
+      id: secondPage ? '66666666-6666-4666-8666-666666666666' : '77777777-7777-4777-8777-777777777777',
+      vehicleId: '55555555-5555-4555-8555-555555555555',
+      policyNumber: secondPage ? 'POL-002' : 'POL-001',
+      validFrom: '2026-01-01',
+      validUntil: '2027-01-01',
+      status: 'ACTIVE',
+      premiumAmount: 12500,
+      insuranceCompany: 'Test osiguranje',
+      type: 'Obavezno',
+    };
+    await route.fulfill({
+      status: 200,
+      json: { data: { items: [item], total: 26, totalPages: 2, page: secondPage ? 2 : 1, pageSize: 25 }, meta: {} },
+    });
+  });
+  await page.route('**/api/v1/vehicles**', (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        data: {
+          items: [
+            {
+              id: '55555555-5555-4555-8555-555555555555',
+              internalNo: 'V-01',
+              make: 'Škoda',
+              model: 'Octavia',
+            },
+          ],
+          total: 1,
+          totalPages: 1,
+          page: 1,
+          pageSize: 100,
+        },
+        meta: {},
+      },
+    }),
+  );
+  await page.goto('/prijava?next=%2Fosiguranja');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Osiguranja', exact: true })).toBeVisible();
+  await expect(page.getByText('POL-001')).toBeVisible();
+  await expect(page.getByText('V-01 · Škoda Octavia')).toBeVisible();
+  await expect(page.getByText('125.00 KM')).toBeVisible();
+  await expect(page.getByText('Strana 1 / 2')).toBeVisible();
+  await expectNoA11yViolations(page);
+  await page.getByRole('button', { name: 'Sljedeća' }).click();
+  await expect(page.getByText('POL-002')).toBeVisible();
+  await expect(page.getByText('Strana 2 / 2')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
+});
+
 test('reminders support acknowledge and snooze actions on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
