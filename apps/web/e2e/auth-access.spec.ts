@@ -853,6 +853,56 @@ test('vehicle register mounts for an authorized user and mobile navigation opens
   await expect(page.getByRole('button', { name: 'Otvori navigaciju' })).toBeFocused();
 });
 
+test('vehicle registry renders populated mobile inventory and sends search to the server', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let requestedQuery = '';
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['vehicle:view'] }) }),
+  );
+  await page.route('**/api/v1/vehicles**', async (route) => {
+    const url = new URL(route.request().url());
+    requestedQuery = url.searchParams.get('q') ?? '';
+    const items = requestedQuery ? [] : [{
+      id: '55555555-5555-4555-8555-555555555555',
+      internalNo: 'V-014',
+      make: 'Škoda',
+      model: 'Octavia',
+      year: 2022,
+      plateNumber: 'E12-M-345',
+      fuelType: 'DIESEL',
+      status: 'ACTIVE',
+      odometerKm: 84500,
+      odometerUpdatedAt: '2026-10-28T08:30:00.000Z',
+      registrationExpiresAt: null,
+      insuranceExpiresAt: null,
+      archivedAt: null,
+      version: 1,
+      updatedAt: '2026-10-28T08:30:00.000Z',
+    }];
+    await route.fulfill({
+      status: 200,
+      json: { data: { items, page: 1, pageSize: 25, total: items.length, totalPages: items.length ? 1 : 0 }, meta: {} },
+    });
+  });
+  await page.goto('/prijava?next=%2Fvozila');
+  await submitLogin(page);
+  await expect(page.getByRole('link', { name: 'V-014', exact: true })).toBeVisible();
+  await expect(page.getByText('Škoda Octavia (2022)')).toBeVisible();
+  await expect(page.getByText('84.500')).toBeVisible();
+  const vehicleTable = page.getByRole('region', { name: 'Lista vozila — pomjerite tabelu horizontalno za pregled svih kolona' });
+  await vehicleTable.focus();
+  await expect(vehicleTable).toBeFocused();
+  expect(await vehicleTable.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expect(page.getByRole('link', { name: 'Novo vozilo' })).toHaveCount(0);
+  await expectNoA11yViolations(page);
+
+  await page.getByLabel('Pretraga').fill('NEPOSTOJEĆE');
+  await expect.poll(() => requestedQuery).toBe('NEPOSTOJEĆE');
+  await expect(page.getByText('Nema rezultata za filtere')).toBeVisible();
+  await expectNoA11yViolations(page);
+});
+
 test('driver registry renders an accessible empty state on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
