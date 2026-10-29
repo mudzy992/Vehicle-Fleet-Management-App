@@ -1183,6 +1183,23 @@ test('user administration respects the server-masked identity and search filter'
   await expectNoA11yViolations(page);
 });
 
+test('user list API failure is announced instead of rendering an empty state', async ({ page }) => {
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['user:view'] }) }),
+  );
+  await page.route('**/api/v1/users**', (route) =>
+    route.fulfill({
+      status: 500,
+      json: { error: { code: 'INTERNAL_ERROR', message: 'Privremeni prekid servisa.' } },
+    }),
+  );
+  await page.goto('/prijava?next=%2Fadministracija%2Fkorisnici');
+  await submitLogin(page);
+  await expect(page.getByRole('alert')).toContainText('Privremeni prekid servisa.');
+  await expect(page.getByText('Nema korisnika')).toHaveCount(0);
+  await expectNoA11yViolations(page);
+});
+
 test('Super Admin creates a user and reveals the temporary password only once on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const newUserId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
