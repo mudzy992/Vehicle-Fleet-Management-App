@@ -371,7 +371,7 @@ test('insurance records show populated entries, paginate, and pass axe checks', 
   await submitLogin(page);
   await expect(page.getByRole('heading', { name: 'Osiguranja', exact: true })).toBeVisible();
   await expect(page.getByText('POL-001')).toBeVisible();
-  await expect(page.getByText('V-01 · Škoda Octavia')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'V-01 · Škoda Octavia', exact: true })).toBeVisible();
   await expect(page.getByText('125.00 KM')).toBeVisible();
   await expect(page.getByText('Strana 1 / 2')).toBeVisible();
   await expectNoA11yViolations(page);
