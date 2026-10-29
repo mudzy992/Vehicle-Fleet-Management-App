@@ -1458,6 +1458,65 @@ test('profile stays accessible and fits a narrow viewport', async ({ page }) => 
   await expectNoA11yViolations(page);
 });
 
+test('profile can revoke another device session without leaving the current session on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const revokedSessionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const currentSessionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  let sessionItems = [
+    {
+      id: currentSessionId,
+      clientType: 'WEB',
+      createdAt: '2026-10-29T08:00:00.000Z',
+      expiresAt: '2026-10-30T08:00:00.000Z',
+      lastUsedAt: '2026-10-29T09:00:00.000Z',
+      ipAddress: '192.0.2.10',
+      userAgent: 'Chrome on Linux',
+      deviceInfo: null,
+    },
+    {
+      id: revokedSessionId,
+      clientType: 'MOBILE',
+      createdAt: '2026-10-28T08:00:00.000Z',
+      expiresAt: '2026-11-04T08:00:00.000Z',
+      lastUsedAt: '2026-10-29T07:00:00.000Z',
+      ipAddress: '192.0.2.20',
+      userAgent: null,
+      deviceInfo: { model: 'Pixel 9', osVersion: 'Android 15', appVersion: '3.1.0' },
+    },
+  ];
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['auth:login', 'auth:manage_sessions'] }) }),
+  );
+  await page.route('**/api/v1/auth/sessions**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === 'GET') {
+      await route.fulfill({ status: 200, json: { data: sessionItems, meta: {} } });
+      return;
+    }
+    if (request.method() === 'DELETE' && url.pathname.endsWith(`/${revokedSessionId}`)) {
+      sessionItems = sessionItems.filter((session) => session.id !== revokedSessionId);
+      await route.fulfill({ status: 200, json: { data: { currentSessionRevoked: false }, meta: {} } });
+      return;
+    }
+    await route.fulfill({ status: 405, json: { error: { code: 'METHOD_NOT_ALLOWED', message: 'Not allowed' } } });
+  });
+
+  await page.goto('/prijava?next=%2Fprofil');
+  await submitLogin(page);
+  await expect(page.getByText('Pixel 9 · Android 15 · 3.1.0')).toBeVisible();
+  const sessionsRegion = page.getByRole('region', { name: 'Aktivne sesije — pomjerite tabelu horizontalno za pregled svih kolona' });
+  await sessionsRegion.focus();
+  await expect(sessionsRegion).toBeFocused();
+  expect(await sessionsRegion.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  await expectNoA11yViolations(page);
+  await page.getByRole('row').filter({ hasText: 'Pixel 9' }).getByRole('button', { name: 'Odjavi' }).click();
+  await expect(page.getByText('Pixel 9 · Android 15 · 3.1.0')).toHaveCount(0);
+  await expect(page.getByRole('heading', { level: 1, name: 'Profil' })).toBeVisible();
+  await expect(page.getByText('Aktivne sesije')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
 test('external-looking next path is rejected in favor of the dashboard', async ({ page }) => {
   await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse() }));
   await page.goto('/prijava?next=%2F%2Fevil.example');
