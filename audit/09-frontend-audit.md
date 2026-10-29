@@ -33,7 +33,7 @@ Pokrenut je odvojeni web-redizajn; mobilni UI nije mijenjan. Prvi prolaz uvodi c
 
 ## Browser-run ograničenje
 
-Playwright browser smoke sada ima runtime dokaz u GitHub Actions: CI `40960453383` prolazi sa 61/61 mocked browser testova, uz Chromium i axe. Lokalni Playwright runtime nije izvršen: konfigurirani `webServer` poziva `pnpm dev`, ali lokalni shell nema `pnpm` shim (`pnpm: not found`); lint/typecheck i `playwright --list` prolaze. CI browser pass ne zamjenjuje vizuelni screenshot/UAT pregled niti fizički uređaj. Lokalni Vite preview/HTTP 200 i `playwright --list` sami nisu browser-runtime dokaz.
+Playwright browser smoke sada ima runtime dokaz u GitHub Actions: CI `40960453383` prolazi sa 61/61 mocked browser testova, uz Chromium i axe. Lokalni Playwright runtime nije izvršen: nakon privremenog `pnpm` PATH shima test je došao do pokretanja browsera, ali Chromium executable nije instaliran u sandboxu (`chromium_headless_shell` ne postoji); GitHub Actions instalira svoj Chromium. Lint/typecheck i `playwright --list` prolaze. CI browser pass ne zamjenjuje vizuelni screenshot/UAT pregled niti fizički uređaj. Lokalni Vite preview/HTTP 200 i `playwright --list` sami nisu browser-runtime dokaz.
 
 ## Inventar modula i pokrivenost
 
