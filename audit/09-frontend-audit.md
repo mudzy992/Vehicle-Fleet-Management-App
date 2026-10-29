@@ -10,7 +10,7 @@
 - Boja rezervnog prikaza native color pickera za vrstu zadatka čita CSS `--neutral`; prilagođena boja vrste zadatka ostaje korisnički/domain podatak, ne hardkodovani UI token.
 - Dodan `scripts/check-design-tokens.mjs` i `pnpm design-tokens:check`. Skripta poredi 19 parova web/mobile, provjerava 11 kombinacija WCAG AA kontrasta i 22 Tailwind aliasa za spacing/tipografiju/leading/radius/shadow, `theme-color` i sirove hex boje. CI je poziva u `quality` poslu.
 - Dodano je 35. Vitest provjera tokena za browser chrome. Postavljen je Playwright config i četrnaest API-mock scenarija za autentikaciju, redirect, neispravne i uspješne prijave, odjavu, pravo pristupa vozilima, responsive login, mobile drawer keyboard/fokus/Escape i guardove budućih `/obavijesti` i `/izvjestaji` kostura. Dodan je i `@axe-core/playwright` WCAG 2.1 A/AA scan za responsive login, dashboard, design system, autorizovane liste vozila/vozača/zadataka i otvoreni mobile drawer. Prvi browser scan otkrio je jednu grešku `color-contrast` na vozilima. Uklonjeno je nepotrebno snižavanje opacity za navigacijski meta-tekst; naknadni CI axe scan login-a, liste vozila i otvorenog drawer-a prolazi bez WCAG 2.1 A/AA prekršaja; axe provjere dashboard/design-system/driver-list također prolaze u CI, zajedno s login/vehicle/drawer scanovima. Playwright CI koristi Chromium i determinističke API mocks; ne povezuje se s backendom, bazom niti produkcijom.
-- Lokalna validacija: `design-tokens:check` PASS; web build PASS; Vitest **26 fajlova / 275 testova PASS**; web lint i typecheck PASS. `playwright test --list` učitava svih **14** scenarija; 13 su prošli prethodni CI run, novi task-list scenario čeka potvrdu.
+- Lokalna validacija: `design-tokens:check` PASS; web build PASS; Vitest **27 fajlova / 278 testova PASS**; web lint i typecheck PASS. `playwright test --list` učitava svih **14** scenarija; Playwright CI run `40777560563` za commit `3ccbeca` je prošao; lokalni Chromium nije dostupan.
 
 ## Web redizajn — faza 1 (temelji, 28.10.2026)
 
@@ -30,7 +30,7 @@ Pokrenut je odvojeni web-redizajn; mobilni UI nije mijenjan. Prvi prolaz uvodi c
 
 ## Browser-run ograničenje
 
-Playwright browser **nije pokrenut lokalno u ovom sandboxu**: lokalno preuzimanje Chromiuma nije uspjelo (`ECONNRESET`). GitHub Actions je izvršio svih 13 mocked browser scenarija sa PASS, uključujući login, dashboard, design system, vozila/vozače, mobile drawer i buduće route guardove. Axe WCAG 2.1 A/AA scanovi prolaze na login-u, dashboardu, design systemu, listama vozila/vozača i draweru; task-list scan je dodan i čeka CI. CI browser pass ne zamjenjuje screenshot/vizuelni pregled niti fizički uređaj UAT. Lokalni Vite preview/HTTP 200 i `playwright --list` sami nisu browser-runtime dokaz.
+Playwright browser **nije pokrenut lokalno u ovom sandboxu**: lokalno preuzimanje Chromiuma nije uspjelo (`ECONNRESET`). GitHub Actions Playwright job je prošao u runu `40777560563` za commit `3ccbeca`; `playwright test --list` registruje 14 mocked scenarija, uključujući novi task-list scan. Axe WCAG 2.1 A/AA scanovi prolaze na login-u, dashboardu, design systemu, listama vozila/vozača/zadataka i draweru. CI browser pass ne zamjenjuje screenshot/vizuelni pregled niti fizički uređaj UAT. Lokalni Vite preview/HTTP 200 i `playwright --list` sami nisu browser-runtime dokaz.
 
 ## Inventar modula i pokrivenost
 
@@ -40,7 +40,7 @@ Kategorije: **model/unit** = deterministička funkcionalnost; **component** = UI
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `auth`                    | Session unit/component testovi (5); 14 Playwright mocked scenarija; logout se vraća na prijavu uz eventualni siguran `next` | PARTIAL — dodati slučajeve isteka sesije, rate-limit i `mustChangePassword`; backend revoke nije obuhvaćen mockom |
 | `audit`                   | Nema direktnog feature testa u web suite-u                                                                                  | OPEN — dodati list/detail stanja, filtere, prazne/greška stanja i dozvole                                         |
-| `dashboard`               | Playwright empty-data render + axe; permission/query unit testovi postoje                                                   | PARTIAL — pokriti uspješne podatke, widget scope, loading/error i veće viewport-e                                 |
+| `dashboard`               | Playwright empty-data render + axe; Vitest pending/error/permission testovi (3)                                             | PARTIAL — dodati podatke i datumske widgete te provjeru većih viewport-a                                          |
 | `drivers`                 | Model unit testovi (8); Playwright mobile empty state + axe                                                                 | PARTIAL — testirati PII redakciju, OWN/ALL/ID scope, detail/form i server greške                                  |
 | `forms`                   | Model, preview i field component testovi (32 ukupno)                                                                        | PARTIAL — dodati browser tok kreiranja/validacije/publish; testirati keyboard/accessibility                       |
 | `profile`                 | Nema direktnog feature testa                                                                                                | OPEN — testirati profil, promjenu lozinke i `mustChangePassword` tok                                              |
@@ -60,13 +60,13 @@ App-shell, nav, guards, router permissions, API client i design tokens dodatno i
 
 ## Evidencija statusa / ne zatvarati unaprijed
 
-| Nalaz                      | Trenutna odluka                                                                                                                                                     |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A-01 E2E infrastruktura    | PARTIAL: 13 CI Playwright scenarija prolaze; 14. task-list scan čeka CI; lokalni Chromium i vizuelni/uređajni acceptance ostaju                                     |
-| A-03 bundle/runtime        | PARTIAL: build/lint/unit i 13 mocked browser scenarija prolaze; novi task-list scenario čeka CI; vizuelni smoke i ručni pregled nisu izvršeni                       |
-| A-05 tema                  | PARTIAL: token test i axe na login/dashboard/design-system/vozila/vozači/drawer prolaze; task-list scan čeka CI; širi vizuelni browser/Android pregled nije izvršen |
-| A-08 permission scope      | PARTIAL: raniji fokus testovi potvrđeni; ovaj frontend pregled ne obuhvata pun backend cross-module scope sweep                                                     |
-| A-13 logout/session revoke | PARTIAL: mocked logout scenario prolazi; backend revoke dokaz nije obuhvaćen mock testom                                                                            |
-| Preostali audit statusi    | Ostaju nepromijenjeni iz `audit/08-status-registar.md`; ne mogu se zatvoriti ovim frontend prolazom                                                                 |
+| Nalaz                      | Trenutna odluka                                                                                                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A-01 E2E infrastruktura    | PARTIAL: Playwright CI job `40777560563` prolazi s 14 registrovanih scenarija; lokalni Chromium i vizuelni/uređajni acceptance ostaju                                                                  |
+| A-03 bundle/runtime        | PARTIAL: build/lint/unit i Playwright CI job `40777560563` prolaze; vizuelni smoke i ručni pregled nisu izvršeni                                                                                       |
+| A-05 tema                  | PARTIAL: token test i axe na login/dashboard/design-system/vozila/vozači/drawer prolaze; task-list scan prolazi u Playwright CI jobu `40777560563`; širi vizuelni browser/Android pregled nije izvršen |
+| A-08 permission scope      | PARTIAL: raniji fokus testovi potvrđeni; ovaj frontend pregled ne obuhvata pun backend cross-module scope sweep                                                                                        |
+| A-13 logout/session revoke | PARTIAL: mocked logout scenario prolazi; backend revoke dokaz nije obuhvaćen mock testom                                                                                                               |
+| Preostali audit statusi    | Ostaju nepromijenjeni iz `audit/08-status-registar.md`; ne mogu se zatvoriti ovim frontend prolazom                                                                                                    |
 
 **Zaključak:** prijavljene konkretne token nekonzistentnosti su ispravljene i automatizovana provjera prolazi. Modul-po-modul frontend audit je napravio eksplicitan coverage inventar, ali nije završen: testovi za module bez direktne pokrivenosti, potpuna ruta-po-ruta browser provjera, vizuelni smoke, Android uređaj i nefrontend nalazi ostaju otvoreni.

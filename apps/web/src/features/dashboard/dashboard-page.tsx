@@ -122,10 +122,16 @@ export function DashboardPage() {
     [licenseDeadlines.data, today],
   );
 
-  const error = (vehicles.error ??
-    drivers.error ??
-    expiringRegistrations.error ??
-    reminders.error) as ApiError | null;
+  const error = ([
+    vehicles,
+    drivers,
+    expiringRegistrations,
+    expiringInsurances,
+    expiringLicenses,
+    reminders,
+    vehicleDeadlines,
+    licenseDeadlines,
+  ].find((query) => query.error)?.error ?? null) as ApiError | null;
 
   return (
     <div className="vfm-dashboard space-y-6">
@@ -198,7 +204,15 @@ export function DashboardPage() {
               description={`Registracija i osiguranje u narednih ${WINDOW_DAYS} dana.`}
             />
             <CardContent>
-              {deadlines.length === 0 ? (
+              {vehicleDeadlines.isPending ? (
+                <p className="text-sm text-[var(--fg-muted)]" role="status">
+                  Učitavanje rokova…
+                </p>
+              ) : vehicleDeadlines.error ? (
+                <p className="text-sm text-[var(--danger)]" role="alert">
+                  Rokovi vozila nisu dostupni.
+                </p>
+              ) : deadlines.length === 0 ? (
                 <EmptyState title="Nema rokova" description="Ništa ne ističe u narednih 30 dana." />
               ) : (
                 <ul className="space-y-2 text-sm">
@@ -228,7 +242,15 @@ export function DashboardPage() {
               description={`Vozačke dozvole koje ističu u narednih ${WINDOW_DAYS} dana.`}
             />
             <CardContent>
-              {licenseEntries.length === 0 ? (
+              {licenseDeadlines.isPending ? (
+                <p className="text-sm text-[var(--fg-muted)]" role="status">
+                  Učitavanje rokova…
+                </p>
+              ) : licenseDeadlines.error ? (
+                <p className="text-sm text-[var(--danger)]" role="alert">
+                  Rokovi dozvola nisu dostupni.
+                </p>
+              ) : licenseEntries.length === 0 ? (
                 <EmptyState title="Nema rokova" description="Nijedna dozvola ne ističe u 30 dana." />
               ) : (
                 <ul className="space-y-2 text-sm">
