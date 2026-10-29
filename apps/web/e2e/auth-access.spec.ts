@@ -973,6 +973,104 @@ test('Super Admin reset, force logout, and archive actions work for a user on mo
   await expectNoA11yViolations(page);
 });
 
+test('audit log filters and lazy details are accessible on mobile while security rows stay hidden', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const auditId = '42';
+  let lastListQuery: URLSearchParams | null = null;
+  let detailCalls = 0;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['audit:view'] }) }),
+  );
+  await page.route('**/api/v1/audit-logs**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith(`/audit-logs/${auditId}`)) {
+      detailCalls += 1;
+      await route.fulfill({
+        status: 200,
+        json: {
+          data: {
+            id: auditId,
+            action: 'ROLE_CHANGE',
+            severity: 'WARN',
+            actorId: userId,
+            actorEmail: 'admin@example.test',
+            actorRoles: ['Administrator'],
+            entityType: 'User',
+            entityId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            changedFields: ['roles'],
+            reason: null,
+            requestId: 'e2e-audit-request',
+            ipAddress: null,
+            userAgent: null,
+            clientType: 'WEB',
+            createdAt: '2026-10-29T10:00:00.000Z',
+            before: { role: 'Viewer' },
+            after: { role: 'Dispatcher' },
+            metadata: null,
+          },
+          meta: {},
+        },
+      });
+      return;
+    }
+    lastListQuery = url.searchParams;
+    await route.fulfill({
+      status: 200,
+      json: {
+        data: {
+          items: [{
+            id: auditId,
+            action: 'ROLE_CHANGE',
+            severity: 'WARN',
+            actorId: userId,
+            actorEmail: 'admin@example.test',
+            actorRoles: ['Administrator'],
+            entityType: 'User',
+            entityId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            changedFields: ['roles'],
+            reason: null,
+            requestId: 'e2e-audit-request',
+            ipAddress: null,
+            userAgent: null,
+            clientType: 'WEB',
+            createdAt: '2026-10-29T10:00:00.000Z',
+          }],
+          page: 1,
+          pageSize: 50,
+          total: 1,
+          totalPages: 1,
+          securityHidden: true,
+        },
+        meta: {},
+      },
+    });
+  });
+
+  await page.goto('/prijava?next=%2Faudit-log');
+  await submitLogin(page);
+  await expect(page.getByText('ROLE_CHANGE')).toBeVisible();
+  await expect(page.getByText(/Sigurnosni zapisi/)).toBeVisible();
+  await expect(page.getByText('SECURITY_EVENT')).toHaveCount(0);
+  expect(detailCalls).toBe(0);
+  await page.getByLabel('Akcija').selectOption('ROLE_CHANGE');
+  await page.getByLabel('Ozbiljnost').selectOption('WARN');
+  await expect.poll(() => lastListQuery?.get('action')).toBe('ROLE_CHANGE');
+  await expect.poll(() => lastListQuery?.get('severity')).toBe('WARN');
+
+  const auditRegion = page.getByRole('region', { name: 'Audit zapisi — pomjerite tabelu horizontalno za pregled svih kolona' });
+  await auditRegion.focus();
+  await expect(auditRegion).toBeFocused();
+  expect(await auditRegion.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Detalj' }).click();
+  await expect(page.getByText('Prije', { exact: true })).toBeVisible();
+  await expect(page.getByText('Poslije', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Viewer/)).toBeVisible();
+  await expect(page.getByText(/Dispatcher/)).toBeVisible();
+  await expect.poll(() => detailCalls).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('permission matrix is readable but immutable without the management permission', async ({ page }) => {
   await mockApi(page, (route) =>
     route.fulfill({ status: 200, json: authResponse({ permissions: ['role:view'] }) }),
