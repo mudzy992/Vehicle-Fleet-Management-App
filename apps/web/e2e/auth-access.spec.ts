@@ -921,6 +921,67 @@ test('vehicle registry renders populated mobile inventory and sends search to th
   await expectNoA11yViolations(page);
 });
 
+test('vehicle create maps a server conflict to the field and keeps the rest of the form for retry', async ({ page }) => {
+  const vehicleId = '55555555-5555-4555-8555-555555555555';
+  const formVersionId = '88888888-8888-4888-8888-888888888888';
+  const definition = {
+    $schema: 'vfm-form/1',
+    meta: { title: 'Vozilo', subject: 'VEHICLE' },
+    sections: [{ key: 'napomene', title: 'Napomene', order: 1, fields: [{ key: 'napomena', type: 'TEXT', label: 'Napomena', order: 1 }] }],
+  };
+  let createAttempts = 0;
+  let firstPayload: Record<string, unknown> | null = null;
+  let retryPayload: Record<string, unknown> | null = null;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse({ permissions: ['vehicle:create', 'vehicle:view'] }) }));
+  await page.route('**/api/v1/form-schemas/active?subject=VEHICLE', (route) => route.fulfill({
+    status: 200,
+    json: { data: { formSchemaId: '77777777-7777-4777-8777-777777777777', formSchemaVersionId: formVersionId, version: 2, definition }, meta: {} },
+  }));
+  await page.route('**/api/v1/vehicles', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } });
+      return;
+    }
+    createAttempts += 1;
+    const payload = route.request().postDataJSON() as Record<string, unknown>;
+    if (createAttempts === 1) {
+      firstPayload = payload;
+      await route.fulfill({
+        status: 409,
+        json: { error: { code: 'CONFLICT', message: 'Vozilo s ovim internim brojem već postoji.', details: [{ path: ['internalNo'], message: 'Interni broj je zauzet.' }] } },
+      });
+      return;
+    }
+    retryPayload = payload;
+    await route.fulfill({ status: 201, json: { data: { id: vehicleId }, meta: {} } });
+  });
+  await page.route(`**/api/v1/vehicles/${vehicleId}`, (route) => route.fulfill({ status: 200, json: {
+    data: { id: vehicleId, internalNo: 'V-015', make: 'Škoda', model: 'Octavia', year: 2024, plateNumber: null, fuelType: 'DIESEL', status: 'ACTIVE', odometerKm: 0, odometerUpdatedAt: null, registrationExpiresAt: null, insuranceExpiresAt: null, archivedAt: null, version: 1, updatedAt: '2026-10-29T10:00:00.000Z', vin: null, transmission: null, color: null, bodyType: null, engineCcm: null, enginePowerKw: null, seats: null, ownershipType: 'OWNED', acquisitionDate: null, acquisitionPrice: null, costCenter: null, nextServiceDueDate: null, nextServiceDueKm: null, notes: null, photoAttachmentId: null, formSchemaId: null, formSchemaVersionId: null, formData: {}, createdAt: '2026-10-29T10:00:00.000Z' },
+    meta: {},
+  } }));
+  await page.goto(`/prijava?next=${encodeURIComponent('/vozila/novo')}`);
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Novo vozilo' })).toBeVisible();
+  await page.getByLabel('Interni broj').fill('V-014');
+  await page.getByLabel('Marka').fill('Škoda');
+  await page.getByLabel('Model').fill('Octavia');
+  await page.getByLabel('Napomena').fill('Vozilo za terenski tim.');
+  await page.getByRole('button', { name: 'Sačuvaj vozilo' }).click();
+  await expect(page.getByRole('alert')).toContainText('Vozilo s ovim internim brojem već postoji.');
+  await expect(page.getByLabel('Interni broj')).toHaveValue('V-014');
+  await expect(page.getByLabel('Napomena')).toHaveValue('Vozilo za terenski tim.');
+  await expect(page.getByText('Interni broj je zauzet.')).toBeVisible();
+  await expectNoA11yViolations(page);
+  await page.getByLabel('Interni broj').fill('V-015');
+  await page.getByRole('button', { name: 'Sačuvaj vozilo' }).click();
+  await expect(page).toHaveURL(new RegExp(`/vozila/${vehicleId}$`));
+  expect(createAttempts).toBe(2);
+  expect(firstPayload).toMatchObject({ internalNo: 'V-014', make: 'Škoda', model: 'Octavia', formData: { napomena: 'Vozilo za terenski tim.' }, formSchemaVersionId: formVersionId });
+  expect(retryPayload).toMatchObject({ internalNo: 'V-015', make: 'Škoda', model: 'Octavia', formData: { napomena: 'Vozilo za terenski tim.' }, formSchemaVersionId: formVersionId });
+  await expectNoA11yViolations(page);
+});
+
 test('vehicle detail is readable on mobile without mutation permissions', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const vehicleId = '55555555-5555-4555-8555-555555555555';
