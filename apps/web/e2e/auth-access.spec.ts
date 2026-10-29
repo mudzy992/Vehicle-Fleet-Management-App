@@ -964,6 +964,67 @@ test('vehicle detail is readable on mobile without mutation permissions', async 
 
 });
 
+test('driver detail masks PII and is readable without edit permissions on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const driverId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['driver:view'] }) }),
+  );
+  await page.route('**/api/v1/drivers/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith('/license-categories')) {
+      await route.fulfill({ status: 200, json: { data: { items: [] }, meta: {} } });
+      return;
+    }
+    if (pathname !== `/api/v1/drivers/${driverId}`) {
+      await route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      json: {
+        data: {
+          id: driverId,
+          firstName: 'Aida',
+          lastName: 'Karić',
+          employeeNumber: 'DRV-017',
+          employmentStatus: 'ACTIVE',
+          status: 'ACTIVE',
+          licenseExpiresAt: '2027-12-31',
+          categories: ['B', 'C'],
+          licenseDaysLeft: 428,
+          version: 1,
+          updatedAt: '2026-10-28T12:00:00.000Z',
+          phone: null,
+          email: null,
+          dateOfBirth: null,
+          address: null,
+          licenseNumber: null,
+          licenseIssuedAt: null,
+          licenseIssuingAuthority: null,
+          restrictions: null,
+          notes: null,
+          photoAttachmentId: null,
+          formSchemaId: '77777777-7777-4777-8777-777777777777',
+          formSchemaVersionId: '88888888-8888-4888-8888-888888888888',
+          formData: {},
+          piiRedacted: true,
+          createdAt: '2026-01-01T08:00:00.000Z',
+        },
+        meta: {},
+      },
+    });
+  });
+  await page.goto(`/prijava?next=%2Fvozaci%2F${driverId}`);
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Aida Karić' })).toBeVisible();
+  await expect(page.getByText(/Lični podaci su maskirani/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Arhiviraj' })).toHaveCount(0);
+  await expect(page.getByText('DRV-017')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('driver registry renders an accessible empty state on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
