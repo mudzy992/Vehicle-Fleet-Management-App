@@ -250,6 +250,62 @@ test('task list handles empty collections accessibly on mobile', async ({ page }
   await expectNoA11yViolations(page);
 });
 
+test('task inventory supports mobile claim, tabs, and accessible populated state', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const taskId = '44444444-4444-4444-8444-444444444444';
+  let claimed = false;
+  await page.route('**/api/v1/**', async (route) => {
+    const { pathname } = new URL(route.request().url());
+    if (pathname.endsWith('/auth/refresh')) {
+      await route.fulfill({ status: 401, json: { error: { code: 'UNAUTHORIZED', message: 'No session' } } });
+    } else if (pathname.endsWith('/auth/login')) {
+      await route.fulfill({ status: 200, json: authResponse({ permissions: ['task:view', 'task:claim'] }) });
+    } else if (pathname.endsWith('/auth/logout')) {
+      await route.fulfill({ status: 200, json: { data: null, meta: {} } });
+    } else if (pathname.endsWith(`/tasks/${taskId}/claim`)) {
+      claimed = true;
+      await route.fulfill({
+        status: 200,
+        json: { data: { id: taskId, code: 'Z-2026-000007', status: 'IN_PROGRESS', assigneeName: 'Testni Korisnik' }, meta: {} },
+      });
+    } else if (pathname.endsWith('/tasks/available')) {
+      const items = claimed ? [] : [{
+        id: taskId,
+        code: 'Z-2026-000007',
+        title: 'Pregled kočnica',
+        description: 'Provjeriti kočioni sistem prije polaska.',
+        vehicleInternalNo: 'V-007',
+        vehicleMake: 'Škoda',
+        vehicleModel: 'Octavia',
+        taskTypeName: 'Redovni pregled',
+        priority: 'HIGH',
+        status: 'OPEN',
+        dueAt: '2026-11-01T12:00:00.000Z',
+      }];
+      await route.fulfill({ status: 200, json: { data: { items, page: 1, pageSize: 25, total: items.length, totalPages: items.length ? 1 : 0 }, meta: {} } });
+    } else if (pathname.endsWith('/tasks/mine') || pathname.endsWith('/tasks')) {
+      await route.fulfill({ status: 200, json: { data: { items: [], page: 1, pageSize: 25, total: 0, totalPages: 0 }, meta: {} } });
+    } else {
+      await route.fulfill({ status: 200, json: { data: {}, meta: {} } });
+    }
+  });
+  await page.goto('/prijava?next=%2Fzadaci');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Zadaci' })).toBeVisible();
+  await expect(page.getByText('Pregled kočnica')).toBeVisible();
+  await expect(page.getByText('V-007 · Škoda Octavia')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+
+  await page.getByRole('button', { name: 'Preuzmi' }).click();
+  await expect(page.getByRole('status')).toContainText('Preuzeli ste zadatak Z-2026-000007.');
+  await expect(page.getByText('Nema zadataka za prikaz')).toBeVisible();
+  expect(claimed).toBe(true);
+  await page.getByRole('tab', { name: 'Moji' }).click();
+  await expect(page.getByRole('tab', { name: 'Moji' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('Nema zadataka za prikaz')).toBeVisible();
+});
+
 test('responsive login keeps the form reachable on a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page);
