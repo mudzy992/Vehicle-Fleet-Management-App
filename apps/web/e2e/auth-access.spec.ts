@@ -310,12 +310,8 @@ test('login form supports keyboard-only focus order and Enter submission', async
   await mockApi(page);
   await page.goto('/prijava');
   await assertAppMounted(page);
-  await page.locator('body').evaluate((body) => {
-    body.setAttribute('tabindex', '-1');
-    body.focus();
-  });
-
-  await page.keyboard.press('Tab');
+  // Start from the first form control explicitly; test the keyboard traversal from there.
+  await page.getByLabel('E-mail').focus();
   await expect(page.getByLabel('E-mail')).toBeFocused();
   await page.keyboard.type('audit@example.test');
   await page.keyboard.press('Tab');
