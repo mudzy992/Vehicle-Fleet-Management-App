@@ -41,7 +41,9 @@ describe('HealthPage', () => {
 
     render(<HealthPage />);
 
-    expect(await screen.findByText('API nije dostupan')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toMatch(/Provjeravam API probe/);
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.getByText('API nije dostupan')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Pokušaj ponovo' })).toBeTruthy();
     expect(screen.getAllByText('nepoznato')).toHaveLength(3);
 

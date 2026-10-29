@@ -70,19 +70,27 @@ export function HealthPage() {
         </Button>
       </header>
 
+      {loading ? (
+        <p role="status" className="text-sm text-[var(--fg-muted)]">
+          Provjeravam API probe…
+        </p>
+      ) : null}
+
       {state.error ? (
         <Card>
           <CardContent>
-            <EmptyState
-              icon="!"
-              title="API nije dostupan"
-              description={state.error}
-              action={
-                <Button variant="secondary" onClick={() => void check()}>
-                  Pokušaj ponovo
-                </Button>
-              }
-            />
+            <div role="alert">
+              <EmptyState
+                icon="!"
+                title="API nije dostupan"
+                description={state.error}
+                action={
+                  <Button variant="secondary" onClick={() => void check()}>
+                    Pokušaj ponovo
+                  </Button>
+                }
+              />
+            </div>
           </CardContent>
         </Card>
       ) : null}
