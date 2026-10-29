@@ -307,6 +307,20 @@ test('login failure is communicated without exposing credential-specific detail'
   await expect(page).toHaveURL(/\/prijava(?:\?next=%2Fdizajn-sistem)?$/);
 });
 
+test('insurance records fit a mobile viewport and pass axe checks', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['insurance:view'] }) }),
+  );
+  await page.goto('/prijava?next=%2Fosiguranja');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Osiguranja' })).toBeVisible();
+  await expect(page.getByText('Nema osiguranja')).toBeVisible();
+  await expect(page.getByLabel('Pretraga')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('reminders support acknowledge and snooze actions on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
