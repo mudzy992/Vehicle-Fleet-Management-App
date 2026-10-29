@@ -463,6 +463,7 @@ test('form builder validates JSON, saves a draft, and publishes with a change no
   }
   await page.getByRole('button', { name: /Pregled vozila/ }).click();
   await expect(page.getByRole('heading', { name: 'Pregled vozila' })).toBeVisible();
+  await page.getByRole('button', { name: 'v1', exact: true }).click();
   const editor = page.getByLabel('Definicija (JSON)');
   try {
     await expect(editor).toBeVisible({ timeout: 15_000 });
