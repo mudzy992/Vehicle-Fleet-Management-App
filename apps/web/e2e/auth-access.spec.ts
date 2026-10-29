@@ -833,7 +833,7 @@ test('driver registry shows populated results accessibly and applies server sear
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
   let requestedQuery = '';
-  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
     route.fulfill({ status: 200, json: authResponse({ permissions: ['driver:view'] }) }),
   );
@@ -855,6 +855,11 @@ test('driver registry shows populated results accessibly and applies server sear
   await expect(page.getByRole('link', { name: 'Karić Aida', exact: true })).toBeVisible();
   await expect(page.getByText('DRV-017')).toBeVisible();
   await expect(page.getByRole('cell', { name: 'B, C', exact: true })).toBeVisible();
+  const driverTable = page.getByRole('region', { name: 'Lista vozača — pomjerite tabelu horizontalno za pregled svih kolona' });
+  await driverTable.focus();
+  await expect(driverTable).toBeFocused();
+  expect(await driverTable.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   expect(await page.locator('#root').innerText()).not.toMatch(/aida.*@|\+387|telefon:/iu);
   await expectNoA11yViolations(page);
 
