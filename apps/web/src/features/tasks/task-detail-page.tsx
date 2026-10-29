@@ -158,7 +158,6 @@ export function TaskDetailPage() {
 
       {mayComplete && <TaskCompletionForm key={`${task.id}-${task.version}`} task={task} />}
       <TaskStatusActions
-        key={`${task.id}-actions-${task.version}`}
         task={task}
         canCancel={hasPermission('task:cancel')}
         canRelease={hasPermission('task:release')}

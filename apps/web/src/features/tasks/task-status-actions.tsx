@@ -51,7 +51,9 @@ export function TaskStatusActions({
   if (canCancel && ['OPEN', 'IN_PROGRESS'].includes(task.status)) allowed.push('cancel');
   if (canRelease && task.status === 'IN_PROGRESS') allowed.push('release');
   if (canReopen && ['COMPLETED', 'CANCELLED'].includes(task.status)) allowed.push('reopen');
-  if (allowed.length === 0) return null;
+  // Keep the live success announcement mounted after a transition removes the
+  // available actions (for example, releasing IN_PROGRESS back to OPEN).
+  if (allowed.length === 0 && !message) return null;
 
   return (
     <Card>

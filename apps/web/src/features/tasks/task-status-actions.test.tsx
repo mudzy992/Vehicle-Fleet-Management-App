@@ -47,6 +47,28 @@ describe('TaskStatusActions', () => {
     await waitFor(() => expect(requestBody).toEqual({ version: 7, reason: 'Kvar vozila' }));
   });
 
+  it('zadržava uspješnu statusnu najavu nakon što promjena ukloni dostupne radnje', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: task('OPEN') }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const renderAction = (status: string, version: number) => (
+      <QueryClientProvider client={client}>
+        <TaskStatusActions task={{ ...task(status), version } as TaskDetail} canCancel={false} canRelease={true} canReopen={false} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(renderAction('IN_PROGRESS', 7));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vrati među slobodne' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Potvrdi: Vrati među slobodne' }));
+    expect((await screen.findByRole('status')).textContent).toContain('Zadatak je vraćen među slobodne.');
+
+    rerender(renderAction('OPEN', 8));
+    expect(screen.getByRole('status').textContent).toContain('Zadatak je vraćen među slobodne.');
+    expect(screen.queryByRole('button', { name: 'Vrati među slobodne' })).toBeNull();
+  });
+
   it('prikazuje samo statusno dozvoljene radnje za aktivni status i permisije', () => {
     const { rerender } = renderActions('OPEN', { canRelease: true, canReopen: true });
     expect(screen.queryByRole('button', { name: 'Vrati među slobodne' })).toBeNull();
