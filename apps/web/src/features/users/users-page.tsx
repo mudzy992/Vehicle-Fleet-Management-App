@@ -117,7 +117,13 @@ export function UsersPage() {
   const items = query.data?.items ?? [];
   const totalPages = query.data?.totalPages ?? 0;
 
-  const error = query.error instanceof ApiError ? query.error : null;
+  const queryErrorMessage =
+    query.error instanceof ApiError ? query.error.message : 'Greška pri učitavanju korisnika.';
+  const actionErrors = [
+    [resetPassword.error, 'Greška pri izdavanju tokena za reset lozinke.'],
+    [forceLogout.error, 'Greška pri odjavi korisnika.'],
+    [archiveUser.error, 'Greška pri arhiviranju korisnika.'],
+  ] as const;
 
   return (
     <div className="vfm-module-page">
@@ -191,12 +197,20 @@ export function UsersPage() {
         />
       ) : null}
 
+      {actionErrors.map(([cause, fallback]) =>
+        cause ? (
+          <p key={fallback} role="alert" className="text-sm text-[var(--danger)]">
+            {cause instanceof ApiError ? cause.message : fallback}
+          </p>
+        ) : null,
+      )}
+
       <Card flush>
-        {query.isLoading ? (
-          <p className="p-4 text-sm text-[var(--fg-muted)]">Učitavanje…</p>
-        ) : error ? (
-          <p className="p-4 text-sm text-[var(--danger)]">
-            Greška pri učitavanju ({error.code}): {error.message}
+        {query.isPending ? (
+          <p className="p-4 text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+        ) : query.isError ? (
+          <p className="p-4 text-sm text-[var(--danger)]" role="alert">
+            {queryErrorMessage}
           </p>
         ) : items.length === 0 ? (
           <div className="p-4">
