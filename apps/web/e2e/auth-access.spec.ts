@@ -242,7 +242,7 @@ test('forced password change overrides the requested destination', async ({ page
   );
   await page.goto('/prijava?next=%2Fzdravlje');
   await submitLogin(page);
-  await expect(page).toHaveURL(/\/profil$/);
+  await expect(page).toHaveURL(/\/profil\?promjena=1$/);
   await expect(page.getByText('Potrebna je promjena lozinke')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Promijeni lozinku' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Zdravlje sistema' })).toHaveCount(0);
