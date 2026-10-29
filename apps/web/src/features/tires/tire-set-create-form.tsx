@@ -62,10 +62,12 @@ export function TireSetCreateForm({
     retry: false,
   });
 
+  const parsed = useMemo(
+    () => (form.data ? parseDefinition(form.data.definition) : null),
+    [form.data],
+  );
   const model = useMemo(() => {
-    if (!form.data) return null;
-    const parsed = parseDefinition(form.data.definition);
-    if (!parsed.ok) return null;
+    if (!parsed?.ok || !form.data) return null;
     return buildRenderModel({
       definition: parsed.definition,
       values,
@@ -73,7 +75,7 @@ export function TireSetCreateForm({
       version: form.data.version,
       formSchemaVersionId: form.data.formSchemaVersionId,
     });
-  }, [form.data, today, values]);
+  }, [form.data, parsed, today, values]);
 
   const save = useMutation({
     mutationFn: () => {
@@ -100,11 +102,19 @@ export function TireSetCreateForm({
       }}
     >
       {form.isPending ? (
-        <p className="text-sm text-[var(--fg-muted)]">Učitavanje forme…</p>
-      ) : !model ? (
+        <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje forme…</p>
+      ) : form.isError ? (
         <p role="alert" className="text-sm text-[var(--danger)]">
-          Nema ispravne objavljene forme TIRE_SET. Pokrenite seed ili objavite formu u administraciji.
+          {form.error instanceof ApiError
+            ? `Nema dostupne aktivne forme TIRE_SET: ${form.error.message}`
+            : 'Greška pri učitavanju forme TIRE_SET. Provjerite vezu i pokušajte ponovo.'}
         </p>
+      ) : parsed && !parsed.ok ? (
+        <p role="alert" className="text-sm text-[var(--danger)]">
+          Definicija forme TIRE_SET nije ispravna: {parsed.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}
+        </p>
+      ) : !model ? (
+        <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje forme…</p>
       ) : (
         <>
           <CoreFields

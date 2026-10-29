@@ -44,7 +44,7 @@ export function TireSetEditPanel({
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--fg-muted)]">Učitavanje kompleta…</p>
+          <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje kompleta…</p>
         </CardContent>
       </Card>
     );

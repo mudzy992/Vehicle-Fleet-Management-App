@@ -73,7 +73,7 @@ export function TireSetTiresPanel({ tireSet, onClose }: { tireSet: TireSetView; 
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--fg-muted)]">Učitavanje pojedinačnih guma…</p>
+          <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje pojedinačnih guma…</p>
         </CardContent>
       </Card>
     );
@@ -148,7 +148,7 @@ export function TireSetTiresPanel({ tireSet, onClose }: { tireSet: TireSetView; 
       />
       <CardContent>
         <div className="space-y-4">
-          {success && <p className="text-sm">{success}</p>}
+          {success && <p className="text-sm" role="status">{success}</p>}
 
           {items.length ? (
             <Table>
