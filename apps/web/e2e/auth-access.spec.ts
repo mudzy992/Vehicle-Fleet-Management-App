@@ -2493,6 +2493,57 @@ test('task status release returns an in-progress task to the open pool', async (
   await expectNoA11yViolations(page);
 });
 
+test('task completion submits the form snapshot, comment and odometer then refreshes status', async ({ page }) => {
+  const taskId = '44444444-4444-4444-8444-444444444444';
+  const formId = '77777777-7777-4777-8777-777777777777';
+  const formVersionId = '88888888-8888-4888-8888-888888888888';
+  const definition = {
+    $schema: 'vfm-form/1',
+    meta: { title: 'Kontrola', subject: 'TASK' },
+    sections: [{ key: 'kontrola', title: 'Kontrola', order: 1, fields: [{ key: 'napomena', type: 'TEXT', label: 'Napomena', order: 1 }] }],
+  };
+  const version = { id: formVersionId, formSchemaId: formId, version: 3, status: 'PUBLISHED', definition };
+  const task = {
+    id: taskId, code: 'Z-2026-000009', title: 'Pregled nakon vožnje', description: 'Kontrola završetka',
+    vehicleInternalNo: 'V-007', vehicleMake: 'Škoda', vehicleModel: 'Octavia', taskTypeName: 'Redovni pregled',
+    priority: 'NORMAL', status: 'IN_PROGRESS', dueAt: null, createdByName: 'Testni Korisnik', assigneeName: 'Testni Korisnik',
+    formData: {}, formSchemaId: formId, formSchemaVersionId: formVersionId, formSchemaVersion: 3,
+    version: 6, assignments: [], events: [], commentCount: 0,
+  };
+  let completionPayload: Record<string, unknown> | null = null;
+  await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse({ permissions: ['task:view', 'task:complete'] }) }));
+  await page.route('**/api/v1/form-schemas/**', (route) => route.fulfill({ status: 200, json: { data: version, meta: {} } }));
+  await page.route('**/api/v1/tasks/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/v1/tasks/${taskId}/complete` && route.request().method() === 'POST') {
+      completionPayload = route.request().postDataJSON();
+      task.status = 'COMPLETED';
+      task.version = 7;
+      await route.fulfill({ status: 200, json: { data: task, meta: {} } });
+      return;
+    }
+    if (url.pathname === `/api/v1/tasks/${taskId}/comments`) {
+      await route.fulfill({ status: 200, json: { data: { items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 }, meta: {} } });
+      return;
+    }
+    if (url.pathname === `/api/v1/tasks/${taskId}`) {
+      await route.fulfill({ status: 200, json: { data: task, meta: {} } });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } });
+  });
+  await page.goto(`/prijava?next=${encodeURIComponent(`/zadaci/${taskId}`)}`);
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Pregled nakon vožnje' })).toBeVisible();
+  await page.getByLabel('Napomena').fill('Sve provjereno.');
+  await page.getByLabel('Kilometraža (km), ako je primjenjivo').fill('123456');
+  await page.getByLabel('Komentar uz završetak').fill('Vozilo spremno.');
+  await page.getByRole('button', { name: 'Završi zadatak' }).click();
+  await expect(page.getByText('Završeno', { exact: true })).toBeVisible();
+  expect(completionPayload).toMatchObject({ version: 6, formData: { napomena: 'Sve provjereno.' }, comment: 'Vozilo spremno.', odometerKm: 123456 });
+  await expectNoA11yViolations(page);
+});
+
 test('task detail API failure gives an accessible recovery path instead of a blank detail', async ({ page }) => {
   const taskId = '44444444-4444-4444-8444-444444444444';
   await page.setViewportSize({ width: 390, height: 844 });
