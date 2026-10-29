@@ -968,7 +968,7 @@ test('vehicle create maps a server conflict to the field and keeps the rest of t
   await page.getByLabel('Model').fill('Octavia');
   await page.getByLabel('Napomena').fill('Vozilo za terenski tim.');
   await page.getByRole('button', { name: 'Sačuvaj vozilo' }).click();
-  await expect(page.getByRole('alert')).toContainText('Vozilo s ovim internim brojem već postoji.');
+  await expect(page.getByText('Vozilo s ovim internim brojem već postoji.', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Interni broj')).toHaveValue('V-014');
   await expect(page.getByLabel('Napomena')).toHaveValue('Vozilo za terenski tim.');
   await expect(page.getByText('Interni broj je zauzet.')).toBeVisible();
