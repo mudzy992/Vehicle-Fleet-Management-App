@@ -2199,6 +2199,77 @@ test('user administration route is denied before loading identities without user
   expect(userDataRequests).toBe(0);
 });
 
+test('task detail supports mobile comments and announces the saved result', async ({ page }) => {
+  const taskId = '44444444-4444-4444-8444-444444444444';
+  let savedComment: string | null = null;
+  const task = {
+    id: taskId,
+    code: 'Z-2026-000007',
+    title: 'Pregled kočnica',
+    description: 'Provjeriti kočioni sistem prije polaska.',
+    vehicleInternalNo: 'V-007',
+    vehicleMake: 'Škoda',
+    vehicleModel: 'Octavia',
+    taskTypeName: 'Redovni pregled',
+    priority: 'NORMAL',
+    status: 'OPEN',
+    dueAt: null,
+    createdByName: 'Testni Korisnik',
+    assigneeName: null,
+    formData: {},
+    formSchemaVersion: 1,
+    version: 1,
+    assignments: [],
+    events: [],
+    commentCount: 0,
+  };
+  const comment = {
+    id: '55555555-5555-4555-8555-555555555555',
+    taskId,
+    authorId: userId,
+    authorName: 'Testni Korisnik',
+    body: savedComment ?? '',
+    mentionsUserIds: [],
+    createdAt: '2026-10-29T10:00:00.000Z',
+    updatedAt: '2026-10-29T10:00:00.000Z',
+  };
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['task:view', 'task:comment'] }) }),
+  );
+  await page.route('**/api/v1/tasks/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/v1/tasks/${taskId}/comments` && route.request().method() === 'POST') {
+      savedComment = route.request().postDataJSON().body as string;
+      await route.fulfill({ status: 201, json: { data: { ...comment, body: savedComment }, meta: {} } });
+      return;
+    }
+    if (url.pathname === `/api/v1/tasks/${taskId}/comments`) {
+      await route.fulfill({
+        status: 200,
+        json: { data: { items: savedComment ? [{ ...comment, body: savedComment }] : [], page: 1, pageSize: 20, total: savedComment ? 1 : 0, totalPages: savedComment ? 1 : 0 }, meta: {} },
+      });
+      return;
+    }
+    if (url.pathname === `/api/v1/tasks/${taskId}`) {
+      await route.fulfill({ status: 200, json: { data: task, meta: {} } });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } });
+  });
+  await page.goto(`/prijava?next=${encodeURIComponent(`/zadaci/${taskId}`)}`);
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Pregled kočnica' })).toBeVisible();
+  await expect(page.getByText('V-007 · Škoda · Octavia')).toBeVisible();
+  await page.getByLabel('Novi komentar').fill('Kočnice provjerene, sve je ispravno.');
+  await page.getByRole('button', { name: 'Dodaj komentar' }).click();
+  await expect(page.getByRole('status')).toContainText('Komentar je dodan.');
+  await expect(page.getByText('Kočnice provjerene, sve je ispravno.')).toBeVisible();
+  expect(savedComment).toBe('Kočnice provjerene, sve je ispravno.');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('task detail API failure gives an accessible recovery path instead of a blank detail', async ({ page }) => {
   const taskId = '44444444-4444-4444-8444-444444444444';
   await page.setViewportSize({ width: 390, height: 844 });
