@@ -464,6 +464,15 @@ test('form builder validates JSON, saves a draft, and publishes with a change no
   await page.getByRole('button', { name: /Pregled vozila/ }).click();
   await expect(page.getByRole('heading', { name: 'Pregled vozila' })).toBeVisible();
   const editor = page.getByLabel('Definicija (JSON)');
+  try {
+    await expect(editor).toBeVisible({ timeout: 15_000 });
+  } catch (error) {
+    throw new Error(
+      `Form version editor did not render. Root text: ${JSON.stringify(await page.locator('#root').innerText())}; ` +
+        `console errors: ${JSON.stringify(consoleErrors)}; failed requests: ${JSON.stringify(failedRequests)}`,
+      { cause: error },
+    );
+  }
   await editor.fill('{ neispravan JSON');
   await expect(page.getByRole('alert')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sačuvaj nacrt' })).toBeDisabled();
