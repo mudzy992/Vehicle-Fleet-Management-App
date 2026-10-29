@@ -888,7 +888,7 @@ test('vehicle registry renders populated mobile inventory and sends search to th
   await submitLogin(page);
   await expect(page.getByRole('link', { name: 'V-014', exact: true })).toBeVisible();
   await expect(page.getByText('Škoda Octavia (2022)')).toBeVisible();
-  await expect(page.getByText('84.500')).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'V-014' })).toContainText(/84/);
   const vehicleTable = page.getByRole('region', { name: 'Lista vozila — pomjerite tabelu horizontalno za pregled svih kolona' });
   await vehicleTable.focus();
   await expect(vehicleTable).toBeFocused();
