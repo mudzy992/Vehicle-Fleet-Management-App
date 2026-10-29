@@ -310,11 +310,17 @@ test('login form supports keyboard-only focus order and Enter submission', async
   await mockApi(page);
   await page.goto('/prijava');
   await assertAppMounted(page);
+  await page.locator('body').evaluate((body) => {
+    body.setAttribute('tabindex', '-1');
+    body.focus();
+  });
 
   await page.keyboard.press('Tab');
   await expect(page.getByLabel('E-mail')).toBeFocused();
+  await page.keyboard.type('audit@example.test');
   await page.keyboard.press('Tab');
   await expect(page.getByLabel('Lozinka')).toBeFocused();
+  await page.keyboard.type('not-a-real-secret');
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Prijavi se' })).toBeFocused();
   await page.keyboard.press('Enter');
