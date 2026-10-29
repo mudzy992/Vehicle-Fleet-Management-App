@@ -116,7 +116,9 @@ export function DriversPage() {
       {message && (
         <Card>
           <CardContent>
-            <p className="text-sm">{message}</p>
+            <p className="text-sm" role="status">
+              {message}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -124,7 +126,7 @@ export function DriversPage() {
       {error && (
         <Card>
           <CardContent>
-            <p className="text-sm text-[var(--danger)]">
+            <p className="text-sm text-[var(--danger)]" role="alert">
               {error instanceof ApiError ? error.message : 'Greška pri učitavanju vozača.'}
             </p>
           </CardContent>
@@ -193,7 +195,13 @@ export function DriversPage() {
         <Card>
           <CardHeader title="Dozvole ističu" description="U narednih 30 dana." />
           <CardContent>
-            {deadlines.length === 0 ? (
+            {isPending ? (
+              <p className="text-sm text-[var(--fg-muted)]" role="status">
+                Učitavanje rokova…
+              </p>
+            ) : error ? (
+              <p className="text-sm text-[var(--danger)]">Rokovi dozvola nisu dostupni.</p>
+            ) : deadlines.length === 0 ? (
               <p className="text-sm text-[var(--fg-muted)]">Nema dozvola koje ističu u 30 dana.</p>
             ) : (
               <ul className="space-y-2 text-sm">
@@ -216,7 +224,11 @@ export function DriversPage() {
       <Card>
         <CardContent>
           {isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
+            <p className="text-sm text-[var(--fg-muted)]" role="status">
+              Učitavanje…
+            </p>
+          ) : error ? (
+            <p className="text-sm text-[var(--danger)]">Registar vozača nije dostupan.</p>
           ) : drivers.length === 0 ? (
             <EmptyState
               title={
