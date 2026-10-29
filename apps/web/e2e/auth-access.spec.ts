@@ -242,7 +242,7 @@ test('forced password change overrides the requested destination', async ({ page
   );
   await page.goto('/prijava?next=%2Fzdravlje');
   await submitLogin(page);
-  await expect(page).toHaveURL(/\/profil\?promjena=1$/);
+  await expect(page).toHaveURL(/\/profil$/);
   await expect(page.getByText('Potrebna je promjena lozinke')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Promijeni lozinku' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Zdravlje sistema' })).toHaveCount(0);
@@ -301,6 +301,21 @@ test('driver registry renders an accessible empty state on mobile', async ({ pag
   await expect(page).toHaveURL(/\/vozaci$/);
   await expect(page.getByRole('heading', { name: 'Vozači' })).toBeVisible();
   await expect(page.getByText('Registar je prazan')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
+test('profile stays accessible and fits a narrow viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['auth:login'] }) }),
+  );
+  await page.goto('/prijava?next=%2Fprofil');
+  await submitLogin(page);
+  await expect(page).toHaveURL(/\/profil$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Profil' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Promjena lozinke' })).toBeVisible();
+  await expect(page.getByText('Pregled sesija nije dozvoljen')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await expectNoA11yViolations(page);
 });
