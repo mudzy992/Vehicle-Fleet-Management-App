@@ -2321,6 +2321,7 @@ test('task creation wizard submits the published form snapshot and opens the new
   await page.getByLabel('Opis').fill('Provjera kočnica');
   await page.getByRole('button', { name: 'Nastavi' }).click();
   await expect(page.getByText('Korak 3 od 3')).toBeVisible();
+  await expect(page.getByRole('progressbar', { name: 'Napredak' })).toHaveAttribute('aria-valuenow', '3');
   await page.getByLabel('Napomena').fill('Provjera kočnica');
   await expectNoA11yViolations(page);
   await page.getByRole('button', { name: 'Kreiraj zadatak' }).click();

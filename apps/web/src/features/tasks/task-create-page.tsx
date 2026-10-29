@@ -200,7 +200,15 @@ export function TaskCreatePage() {
         <h1 className="vfm-module-title">Novi zadatak</h1>
         <p className="text-sm text-[var(--fg-muted)]">Korak {step} od 3</p>
       </header>
-      <div className="flex gap-2" aria-label="Napredak">
+      <div
+        className="flex gap-2"
+        role="progressbar"
+        aria-label="Napredak"
+        aria-valuemin={1}
+        aria-valuemax={3}
+        aria-valuenow={step}
+        aria-valuetext={`Korak ${step} od 3`}
+      >
         {[1, 2, 3].map((number) => <span key={number} className={`h-1.5 flex-1 rounded ${number <= step ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'}`} />)}
       </div>
       {message && <p role="alert" className="rounded-md bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">{message}</p>}
