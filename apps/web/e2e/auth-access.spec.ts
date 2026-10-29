@@ -2166,6 +2166,22 @@ test('permission guard blocks a regular user from the vehicle module', async ({ 
   expect(page.url()).toContain('/vozila');
 });
 
+test('user administration route is denied before loading identities without user:view', async ({ page }) => {
+  let userDataRequests = 0;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: [] }) }),
+  );
+  await page.route('**/api/v1/users**', async (route) => {
+    userDataRequests += 1;
+    await route.fulfill({ status: 403, json: { error: { code: 'FORBIDDEN', message: 'Forbidden' } } });
+  });
+  await page.goto('/prijava?next=%2Fadministracija%2Fkorisnici');
+  await submitLogin(page);
+  await expect(page.getByText('Nemate pristup', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Korisnici' })).toHaveCount(0);
+  expect(userDataRequests).toBe(0);
+});
+
 test('role matrix route is denied before loading role data without role:view', async ({ page }) => {
   let roleDataRequests = 0;
   await mockApi(page, (route) =>
