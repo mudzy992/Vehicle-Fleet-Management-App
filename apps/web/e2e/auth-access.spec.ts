@@ -1091,6 +1091,54 @@ test('vehicle edit keeps the immutable published form version and retains edits 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
+test('odometer regression keeps the reading and guides a reasoned correction on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const vehicleId = '55555555-5555-4555-8555-555555555555';
+  let odometerEntries: Array<Record<string, unknown>> = [];
+  let correctionPayload: Record<string, unknown> | null = null;
+  await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse({
+    permissions: ['vehicle:view', 'odometer:create', 'odometer:correct'],
+  }) }));
+  await page.route(`**/api/v1/vehicles/${vehicleId}`, (route) => route.fulfill({ status: 200, json: {
+    data: { id: vehicleId, internalNo: 'V-31', make: 'Toyota', model: 'Corolla', year: 2022, plateNumber: null, fuelType: 'PETROL', status: 'ACTIVE', odometerKm: 84500, odometerUpdatedAt: '2026-10-28T08:30:00.000Z', registrationExpiresAt: null, insuranceExpiresAt: null, archivedAt: null, version: 1, updatedAt: '2026-10-28T08:30:00.000Z', vin: null, transmission: null, color: null, bodyType: null, engineCcm: null, enginePowerKw: null, seats: null, ownershipType: 'OWNED', acquisitionDate: null, acquisitionPrice: null, costCenter: null, nextServiceDueDate: null, nextServiceDueKm: null, notes: null, photoAttachmentId: null, formSchemaId: '77777777-7777-4777-8777-777777777777', formSchemaVersionId: '88888888-8888-4888-8888-888888888888', formData: {}, createdAt: '2022-01-01T00:00:00.000Z' },
+    meta: {},
+  } }));
+  await page.route(`**/api/v1/vehicles/${vehicleId}/odometer**`, async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ status: 200, json: { data: { items: odometerEntries, page: 1, pageSize: 50, total: odometerEntries.length, totalPages: odometerEntries.length ? 1 : 0 }, meta: {} } });
+      return;
+    }
+    if (path.endsWith('/correct')) {
+      correctionPayload = route.request().postDataJSON() as Record<string, unknown>;
+      odometerEntries = [{ id: '66666666-6666-4666-8666-666666666666', valueKm: 84000, readingAt: '2026-10-01T12:00:00.000Z', source: 'MANUAL', isCorrection: true, correctionReason: 'Greška pri prethodnom unosu' }];
+      await route.fulfill({ status: 201, json: { data: odometerEntries[0], meta: {} } });
+      return;
+    }
+    await route.fulfill({ status: 422, json: { error: { code: 'ODOMETER_REGRESSION', message: 'Očitanje je manje od trenutne kilometraže.' } } });
+  });
+  await page.goto(`/prijava?next=${encodeURIComponent(`/vozila/${vehicleId}`)}`);
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'V-31 · Toyota Corolla' })).toBeVisible();
+  await page.getByRole('button', { name: 'Kilometraža' }).click();
+  await page.getByLabel('Kilometraža (km)').fill('84000');
+  await page.getByLabel('Datum očitanja').fill('2026-10-01');
+  await page.getByRole('button', { name: 'Upiši očitanje' }).click();
+  await expect(page.getByRole('alert')).toContainText('potvrdite korekciju i unesite razlog');
+  await expect(page.getByLabel('Kilometraža (km)')).toHaveValue('84000');
+  await expectNoA11yViolations(page);
+  await page.getByLabel('Korekcija (niža vrijednost)').check();
+  await page.getByLabel('Razlog korekcije').fill('Greška pri prethodnom unosu');
+  await page.getByRole('button', { name: 'Upiši očitanje' }).click();
+  await expect(page.getByRole('status')).toContainText('Očitanje je upisano.');
+  await expect(page.getByText('Greška pri prethodnom unosu')).toBeVisible();
+  expect(correctionPayload).toEqual({ valueKm: 84000, source: 'MANUAL', readingAt: '2026-10-01T12:00:00.000Z', correctionReason: 'Greška pri prethodnom unosu' });
+  const odometerRegion = page.getByRole('region', { name: 'Kilometraža vozila — pomjerite tabelu horizontalno za pregled svih kolona' });
+  await expect(odometerRegion).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('vehicle archive conflict is announced without removing the active detail', async ({ page }) => {
   const vehicleId = '55555555-5555-4555-8555-555555555555';
   const vehicle = {
