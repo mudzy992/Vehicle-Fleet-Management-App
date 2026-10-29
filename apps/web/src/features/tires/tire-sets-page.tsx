@@ -109,7 +109,7 @@ export function TireSetsPage() {
       <div className="vfm-module-heading">
         <div>
           <h1 className="vfm-module-title">Kompleti guma</h1>
-          <p className="text-sm text-[var(--fg-muted)]">
+          <p className="text-sm text-[var(--fg-muted)]" role={list.isPending ? 'status' : undefined}>
             {list.isPending ? 'Učitavanje…' : `${list.data?.total ?? 0} kompleta u evidenciji`}
           </p>
         </div>
@@ -133,7 +133,7 @@ export function TireSetsPage() {
       {message && (
         <Card>
           <CardContent>
-            <p className="text-sm">{message}</p>
+            <p className="text-sm" role="status">{message}</p>
           </CardContent>
         </Card>
       )}
@@ -295,8 +295,8 @@ export function TireSetsPage() {
       <Card>
         <CardContent>
           {list.isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
-          ) : !list.data?.items.length ? (
+            <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+          ) : list.isError ? null : !list.data?.items.length ? (
             <EmptyState
               title={filtered ? 'Nema kompleta za odabrane filtere' : 'Evidencija kompleta je prazna'}
               description={
