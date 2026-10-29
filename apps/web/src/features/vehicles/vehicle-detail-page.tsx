@@ -213,7 +213,7 @@ export function VehicleDetailPage() {
           <span
             key={item.label}
             title={`${item.label} — ${item.phase}`}
-            className="cursor-not-allowed rounded-md px-3 py-1.5 text-sm text-[var(--fg-muted)] opacity-60"
+            className="cursor-not-allowed rounded-md px-3 py-1.5 text-sm text-[var(--fg-muted)]"
           >
             {item.label} <span className="text-[10px]">({item.phase})</span>
           </span>
