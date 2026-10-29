@@ -675,6 +675,53 @@ test('driver registry renders an accessible empty state on mobile', async ({ pag
   await expectNoA11yViolations(page);
 });
 
+test('driver registry shows populated results accessibly and applies server search without exposing PII', async ({ page }) => {
+  const driverId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const driver = {
+    id: driverId,
+    firstName: 'Aida',
+    lastName: 'Karić',
+    employeeNumber: 'DRV-017',
+    employmentStatus: 'ACTIVE',
+    status: 'ACTIVE',
+    licenseExpiresAt: null,
+    categories: ['B', 'C'],
+    licenseDaysLeft: null,
+    version: 1,
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  let requestedQuery = '';
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['driver:view'] }) }),
+  );
+  await page.route('**/api/v1/drivers**', async (route) => {
+    const url = new URL(route.request().url());
+    requestedQuery = url.searchParams.get('q') ?? '';
+    const items = requestedQuery ? [] : [driver];
+    await route.fulfill({
+      status: 200,
+      json: {
+        data: { items, page: 1, pageSize: 25, total: items.length, totalPages: items.length ? 1 : 0 },
+        meta: {},
+      },
+    });
+  });
+  await page.goto('/prijava?next=%2Fvozaci');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Vozači' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Karić Aida', exact: true })).toBeVisible();
+  await expect(page.getByText('DRV-017')).toBeVisible();
+  await expect(page.getByText('B, C')).toBeVisible();
+  expect(await page.locator('#root').innerText()).not.toMatch(/aida.*@|\+387|telefon:/iu);
+  await expectNoA11yViolations(page);
+
+  await page.getByLabel('Pretraga').fill('Nepostojeći vozač');
+  await expect(page.getByText('Nema rezultata za filtere')).toBeVisible();
+  await expect.poll(() => requestedQuery).toBe('Nepostojeći vozač');
+  await expectNoA11yViolations(page);
+});
+
 test('profile stays accessible and fits a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
