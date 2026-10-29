@@ -1071,6 +1071,24 @@ test('audit log filters and lazy details are accessible on mobile while security
   await expectNoA11yViolations(page);
 });
 
+test('direct audit-log route denies users without audit:view before fetching records', async ({ page }) => {
+  let auditRequests = 0;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['user:view'] }) }),
+  );
+  await page.route('**/api/v1/audit-logs**', async (route) => {
+    auditRequests += 1;
+    await route.fulfill({ status: 200, json: { data: { items: [] }, meta: {} } });
+  });
+  await page.goto('/prijava?next=%2Faudit-log');
+  await submitLogin(page);
+  await expect(page).toHaveURL(/\/audit-log$/);
+  await expect(page.getByText('Nemate pristup')).toBeVisible();
+  await expect(page.getByText(/potrebno pravo "audit:view"/)).toBeVisible();
+  await expect.poll(() => auditRequests).toBe(0);
+  await expectNoA11yViolations(page);
+});
+
 test('permission matrix is readable but immutable without the management permission', async ({ page }) => {
   await mockApi(page, (route) =>
     route.fulfill({ status: 200, json: authResponse({ permissions: ['role:view'] }) }),
