@@ -866,6 +866,7 @@ test('permission matrix is readable but immutable without the management permiss
 });
 
 test('Super Admin can update a role scope without including the implicit Super Admin role', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const savedPayloads: unknown[] = [];
   const superAdminRoleId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const modules = [{
@@ -893,6 +894,20 @@ test('Super Admin can update a role scope without including the implicit Super A
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     },
+    ...['FLEET_MANAGER', 'MECHANIC', 'VIEWER', 'AUDITOR'].map((code, index) => ({
+      id: `cccccccc-cccc-4ccc-8ccc-${String(index + 1).padStart(12, '0')}`,
+      code,
+      name: code.replaceAll('_', ' '),
+      description: null,
+      isSystem: false,
+      allowedClientTypes: ['WEB'],
+      permissionsVersion: 1,
+      priority: 20 + index,
+      activeUserCount: 1,
+      grantedCount: 0,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })),
     {
       id: superAdminRoleId,
       code: 'SUPER_ADMIN',
@@ -946,6 +961,11 @@ test('Super Admin can update a role scope without including the implicit Super A
   await submitLogin(page);
   await expect(page.getByLabel('Dispečer → vehicle:view')).toHaveValue('ALL');
   await expect(page.getByRole('columnheader', { name: 'Super Admin' })).toHaveCount(0);
+  const matrixRegion = page.getByRole('region', { name: 'Matrica prava — za pregled svih rola pomjerite tabelu horizontalno' });
+  await matrixRegion.focus();
+  await expect(matrixRegion).toBeFocused();
+  expect(await matrixRegion.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.getByLabel('Dispečer → vehicle:view').selectOption('OWN');
   await expect(page.getByText('Nesačuvane izmjene')).toBeVisible();
   await page.getByRole('button', { name: 'Sačuvaj matricu' }).click();

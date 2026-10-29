@@ -6,9 +6,23 @@
  */
 import type { ReactNode } from 'react';
 
-export function Table({ children, className }: { children: ReactNode; className?: string }) {
+export function Table({
+  children,
+  className,
+  scrollLabel,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Label and keyboard focus for tables that must scroll horizontally on narrow screens. */
+  scrollLabel?: string;
+}) {
   return (
-    <div className={['overflow-x-auto', className ?? ''].filter(Boolean).join(' ')}>
+    <div
+      className={['overflow-x-auto', className ?? ''].filter(Boolean).join(' ')}
+      role={scrollLabel ? 'region' : undefined}
+      aria-label={scrollLabel}
+      tabIndex={scrollLabel ? 0 : undefined}
+    >
       <table className="vfm-table w-full border-collapse text-left text-sm">{children}</table>
     </div>
   );

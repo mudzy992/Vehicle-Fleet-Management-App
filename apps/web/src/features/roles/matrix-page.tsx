@@ -163,7 +163,7 @@ export function MatrixPage() {
       ) : null}
 
       <Card flush>
-        <Table>
+        <Table scrollLabel="Matrica prava — za pregled svih rola pomjerite tabelu horizontalno">
           <THead>
             <TR>
               <TH>Permisija</TH>
