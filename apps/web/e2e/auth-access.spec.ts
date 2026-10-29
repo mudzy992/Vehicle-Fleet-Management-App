@@ -129,6 +129,57 @@ test('dashboard renders mocked empty collections without accessibility violation
   await expectNoA11yViolations(page);
 });
 
+test('dashboard shows populated metrics and remains accessible at desktop width', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockApi(page, (route) =>
+    route.fulfill({
+      status: 200,
+      json: authResponse({
+        permissions: [
+          'vehicle:view',
+          'driver:view',
+          'registration:view',
+          'insurance:view',
+          'reminder:view',
+        ],
+      }),
+    }),
+  );
+  await page.route('**/api/v1/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    const expiring = url.searchParams.has('expiringInDays');
+    const totals: Record<string, number> = {
+      '/api/v1/vehicles': expiring ? 0 : 12,
+      '/api/v1/drivers': expiring ? 2 : 8,
+      '/api/v1/registrations': 3,
+      '/api/v1/insurances': 4,
+      '/api/v1/reminders': 2,
+    };
+    const total = totals[url.pathname];
+    if (total === undefined) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      json: { data: { items: [], total, totalPages: total ? 1 : 0, page: 1, pageSize: 50 }, meta: {} },
+    });
+  });
+  await page.goto('/prijava?next=%2Fnadzorna-tabla');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Nadzorna tabla' })).toBeVisible();
+  await expect(page.getByText('12', { exact: true })).toBeVisible();
+  await expect(page.getByText('8', { exact: true })).toBeVisible();
+  await expect(page.getByText('Rokovi vozila')).toBeVisible();
+  await expect(page.getByText('Nema rokova').first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
+  await expectNoA11yViolations(page);
+});
+
 test('system health screen renders successful probes accessibly', async ({ page }) => {
   await mockApi(page, (route) =>
     route.fulfill({ status: 200, json: authResponse({ permissions: ['system:view_health'] }) }),
