@@ -903,6 +903,66 @@ test('vehicle registry renders populated mobile inventory and sends search to th
   await expectNoA11yViolations(page);
 });
 
+test('vehicle detail is readable on mobile without mutation permissions', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const vehicleId = '55555555-5555-4555-8555-555555555555';
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['vehicle:view'] }) }),
+  );
+  await page.route(`**/api/v1/vehicles/${vehicleId}`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        data: {
+          id: vehicleId,
+          internalNo: 'V-014',
+          make: 'Škoda',
+          model: 'Octavia',
+          year: 2022,
+          plateNumber: 'E12-M-345',
+          fuelType: 'DIESEL',
+          status: 'ACTIVE',
+          odometerKm: 84500,
+          odometerUpdatedAt: '2026-10-28T08:30:00.000Z',
+          registrationExpiresAt: null,
+          insuranceExpiresAt: null,
+          archivedAt: null,
+          version: 1,
+          updatedAt: '2026-10-28T08:30:00.000Z',
+          vin: null,
+          transmission: null,
+          color: null,
+          bodyType: null,
+          engineCcm: null,
+          enginePowerKw: null,
+          seats: null,
+          ownershipType: 'OWNED',
+          acquisitionDate: null,
+          acquisitionPrice: null,
+          costCenter: null,
+          nextServiceDueDate: null,
+          nextServiceDueKm: null,
+          notes: null,
+          photoAttachmentId: null,
+          formSchemaId: '77777777-7777-4777-8777-777777777777',
+          formSchemaVersionId: '88888888-8888-4888-8888-888888888888',
+          formData: {},
+          createdAt: '2026-01-01T08:00:00.000Z',
+        },
+        meta: {},
+      },
+    }),
+  );
+  await page.goto(`/prijava?next=%2Fvozila%2F${vehicleId}`);
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'V-014 · Škoda Octavia' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Osnovno' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Uredi' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Arhiviraj' })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('driver registry renders an accessible empty state on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
