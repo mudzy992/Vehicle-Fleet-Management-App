@@ -1043,6 +1043,54 @@ test('vehicle detail is readable on mobile without mutation permissions', async 
 
 });
 
+test('vehicle edit keeps the immutable published form version and retains edits after version conflict', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const vehicleId = '55555555-5555-4555-8555-555555555555';
+  const formId = '77777777-7777-4777-8777-777777777777';
+  const versionId = '88888888-8888-4888-8888-888888888888';
+  const definition = {
+    $schema: 'vfm-form/1',
+    meta: { title: 'Vozilo', subject: 'VEHICLE' },
+    sections: [{ key: 'extra', title: 'Dodatno', order: 1, fields: [{ key: 'fleetNote', type: 'TEXT', label: 'Interna napomena', order: 1 }] }],
+  };
+  let patchPayload: Record<string, unknown> | null = null;
+  let patchUrl = '';
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['vehicle:view', 'vehicle:update', 'form:view'] }) }),
+  );
+  await page.route(`**/api/v1/vehicles/${vehicleId}`, async (route) => {
+    if (route.request().method() === 'PATCH') {
+      patchUrl = new URL(route.request().url()).pathname;
+      patchPayload = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({ status: 409, json: { error: { code: 'VERSION_CONFLICT', message: 'Vozilo je izmijenjeno u međuvremenu.', details: [] } } });
+      return;
+    }
+    await route.fulfill({ status: 200, json: {
+      data: { id: vehicleId, internalNo: 'V-30', make: 'Toyota', model: 'Corolla', year: 2022, plateNumber: null, fuelType: 'DIESEL', status: 'ACTIVE', odometerKm: 20000, odometerUpdatedAt: null, registrationExpiresAt: null, insuranceExpiresAt: null, archivedAt: null, version: 7, updatedAt: '2026-10-29T08:00:00.000Z', vin: null, transmission: null, color: null, bodyType: null, engineCcm: null, enginePowerKw: null, seats: null, ownershipType: 'OWNED', acquisitionDate: null, acquisitionPrice: null, costCenter: null, nextServiceDueDate: null, nextServiceDueKm: null, notes: null, photoAttachmentId: null, formSchemaId: formId, formSchemaVersionId: versionId, formData: { fleetNote: 'Naslijeđena vrijednost' }, createdAt: '2022-01-01T00:00:00.000Z' },
+      meta: {},
+    } });
+  });
+  await page.route(`**/api/v1/form-schemas/${formId}/versions/${versionId}`, (route) => route.fulfill({ status: 200, json: {
+    data: { id: versionId, version: 1, status: 'PUBLISHED', changeNote: 'Početna verzija', contentHash: 'e2e-hash', mobileCompatible: true, publishedAt: '2024-01-01T00:00:00.000Z', publishedById: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', retiredAt: null, createdAt: '2024-01-01T00:00:00.000Z', recordCount: 1, definition },
+    meta: {},
+  } }));
+  await page.goto(`/prijava?next=${encodeURIComponent(`/vozila/${vehicleId}/izmjena`)}`);
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Izmjena vozila' })).toBeVisible();
+  await expect(page.getByText('Verzija forme v1 · verzija zapisa 7')).toBeVisible();
+  await expect(page.getByLabel('Interna napomena')).toHaveValue('Naslijeđena vrijednost');
+  await page.getByLabel('Marka').fill('Honda');
+  await page.getByLabel('Interna napomena').fill('Izmjena koju ne smijemo izgubiti.');
+  await page.getByRole('button', { name: 'Sačuvaj izmjene' }).click();
+  await expect(page.getByRole('alert')).toContainText('Vozilo je izmijenjeno u međuvremenu');
+  await expect(page.getByLabel('Marka')).toHaveValue('Honda');
+  await expect(page.getByLabel('Interna napomena')).toHaveValue('Izmjena koju ne smijemo izgubiti.');
+  expect(patchUrl).toBe(`/api/v1/vehicles/${vehicleId}`);
+  expect(patchPayload).toMatchObject({ version: 7, internalNo: 'V-30', make: 'Honda', model: 'Corolla', formData: { fleetNote: 'Izmjena koju ne smijemo izgubiti.' } });
+  await expectNoA11yViolations(page);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
 test('vehicle archive conflict is announced without removing the active detail', async ({ page }) => {
   const vehicleId = '55555555-5555-4555-8555-555555555555';
   const vehicle = {
