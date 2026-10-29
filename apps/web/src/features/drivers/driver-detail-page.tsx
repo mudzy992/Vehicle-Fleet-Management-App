@@ -44,6 +44,7 @@ export function DriverDetailPage() {
   const { hasPermission } = useSession();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
+  const [messageIsError, setMessageIsError] = useState(false);
   const today = toLocalDateString(new Date());
 
   const detail = useQuery({
@@ -68,7 +69,12 @@ export function DriverDetailPage() {
     mutationFn: () => api.post<null>(`/drivers/${driverId}/archive`, { reason: 'Arhivirano s profila' }),
     onSuccess: async () => {
       setMessage('Vozač je arhiviran.');
+      setMessageIsError(false);
       await invalidate();
+    },
+    onError: (cause) => {
+      setMessage(cause instanceof ApiError ? cause.message : 'Greška pri arhiviranju vozača.');
+      setMessageIsError(true);
     },
   });
 
@@ -76,19 +82,29 @@ export function DriverDetailPage() {
     mutationFn: () => api.post<null>(`/drivers/${driverId}/restore`),
     onSuccess: async () => {
       setMessage('Vozač je vraćen iz arhive.');
+      setMessageIsError(false);
       await invalidate();
+    },
+    onError: (cause) => {
+      setMessage(cause instanceof ApiError ? cause.message : 'Greška pri vraćanju vozača.');
+      setMessageIsError(true);
     },
   });
 
   const driver = detail.data;
 
-  if (detail.isPending) return <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>;
+  if (detail.isPending)
+    return (
+      <p className="text-sm text-[var(--fg-muted)]" role="status">
+        Učitavanje…
+      </p>
+    );
 
   if (detail.error || !driver) {
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--danger)]">
+          <p className="text-sm text-[var(--danger)]" role="alert">
             {detail.error instanceof ApiError ? detail.error.message : 'Vozač nije pronađen.'}
           </p>
           <Link className="mt-2 inline-block text-sm hover:underline" to="/vozaci">
@@ -140,7 +156,11 @@ export function DriverDetailPage() {
         </div>
       </div>
 
-      {message && <p className="text-sm">{message}</p>}
+      {message && (
+        <p className="text-sm" role={messageIsError ? 'alert' : 'status'}>
+          {message}
+        </p>
+      )}
 
       {driver.piiRedacted && (
         <Card>
@@ -202,7 +222,15 @@ export function DriverDetailPage() {
         />
         <CardContent>
           {categories.isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
+            <p className="text-sm text-[var(--fg-muted)]" role="status">
+              Učitavanje…
+            </p>
+          ) : categories.error ? (
+            <p className="text-sm text-[var(--danger)]" role="alert">
+              {categories.error instanceof ApiError
+                ? categories.error.message
+                : 'Greška pri učitavanju kategorija dozvole.'}
+            </p>
           ) : !categories.data?.items.length ? (
             <EmptyState
               title="Nema kategorija"
@@ -353,8 +381,15 @@ function DeleteCategoryButton({
   });
 
   return (
-    <Button variant="ghost" size="sm" loading={remove.isPending} onClick={() => remove.mutate()}>
-      Obriši
-    </Button>
+    <div className="flex flex-col items-end gap-1">
+      <Button variant="ghost" size="sm" loading={remove.isPending} onClick={() => remove.mutate()}>
+        Obriši
+      </Button>
+      {remove.error ? (
+        <span role="alert" className="text-[11px] text-[var(--danger)]">
+          {remove.error instanceof ApiError ? remove.error.message : 'Greška pri brisanju kategorije.'}
+        </span>
+      ) : null}
+    </div>
   );
 }
