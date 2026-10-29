@@ -614,6 +614,10 @@ test('reminders support acknowledge and snooze actions on mobile', async ({ page
   await submitLogin(page);
   await expect(page.getByRole('heading', { name: 'Rokovi' })).toBeVisible();
   await expect(page.getByText(/120.*km/)).toBeVisible();
+  const remindersRegion = page.getByRole('region', { name: 'Podsjetnici — pomjerite tabelu horizontalno za pregled svih kolona' });
+  await remindersRegion.focus();
+  await expect(remindersRegion).toBeFocused();
+  expect(await remindersRegion.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   await expectNoA11yViolations(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.getByRole('button', { name: 'Potvrdi' }).click();
