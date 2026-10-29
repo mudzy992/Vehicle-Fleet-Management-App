@@ -10,7 +10,7 @@ import { FormFields } from '../forms/form-fields.js';
 import { useSession } from '../auth/session.js';
 import { sarajevoToday } from '../forms/forms-preview-values.js';
 
-export function TaskCompletionForm({ task }: { task: TaskDetail }) {
+export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; onCompleted?: () => void }) {
   const queryClient = useQueryClient();
   const { hasPermission } = useSession();
   const canUpload = hasPermission('attachment:upload');
@@ -83,6 +83,7 @@ export function TaskCompletionForm({ task }: { task: TaskDetail }) {
     }),
     onSuccess: async () => {
       setMessage('Zadatak je završen.');
+      onCompleted?.();
       setErrors({});
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['task', task.id] }),

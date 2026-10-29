@@ -156,7 +156,7 @@ export function TaskDetailPage() {
         </p>
       )}
 
-      {mayComplete && <TaskCompletionForm key={`${task.id}-${task.version}`} task={task} />}
+      {mayComplete && <TaskCompletionForm key={`${task.id}-${task.version}`} task={task} onCompleted={() => setMessage('Zadatak je završen.')} />}
       <TaskStatusActions
         task={task}
         canCancel={hasPermission('task:cancel')}

@@ -2552,6 +2552,7 @@ test('task completion submits the form snapshot, comment and odometer then refre
   await expectNoA11yViolations(page);
   await page.getByRole('button', { name: 'Završi zadatak' }).click();
   await expect(page.getByText('Završen', { exact: true })).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('Zadatak je završen.');
   expect(completionAttempts).toBe(2);
   expect(completionPayload).toMatchObject({ version: 6, formData: { napomena: 'Sve provjereno.' }, comment: 'Vozilo spremno.', odometerKm: 123456 });
   await expectNoA11yViolations(page);
