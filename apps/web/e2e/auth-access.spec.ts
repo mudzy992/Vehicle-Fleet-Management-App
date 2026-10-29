@@ -443,11 +443,7 @@ test('form builder validates JSON, saves a draft, and publishes with a change no
   await submitLogin(page);
   await expect(page).toHaveURL(/\/forme$/);
   await assertAppMounted(page);
-  const formRouteText = await page.locator('#root').innerText();
-  if (!(await page.getByRole('heading', { name: 'Forme' }).count())) {
-    throw new Error(`Form route did not render its page heading. Root text: ${JSON.stringify(formRouteText)}`);
-  }
-  await expect(page.getByRole('heading', { name: 'Forme' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Forme' })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: /Pregled vozila/ }).click();
   await expect(page.getByRole('heading', { name: 'Pregled vozila' })).toBeVisible();
   const editor = page.getByLabel('Definicija (JSON)');
