@@ -2379,10 +2379,16 @@ test('task detail supports mobile comments and preserves task status on a server
   };
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
-    route.fulfill({ status: 200, json: authResponse({ permissions: ['task:view', 'task:comment', 'task:cancel'] }) }),
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['task:view', 'task:comment', 'task:cancel', 'task:reopen'] }) }),
   );
   await page.route('**/api/v1/tasks/**', async (route) => {
     const url = new URL(route.request().url());
+    if (url.pathname === `/api/v1/tasks/${taskId}/reopen` && route.request().method() === 'POST') {
+      task.status = 'OPEN';
+      task.version = 3;
+      await route.fulfill({ status: 200, json: { data: task, meta: {} } });
+      return;
+    }
     if (url.pathname === `/api/v1/tasks/${taskId}/cancel` && route.request().method() === 'POST') {
       cancelPayload = route.request().postDataJSON();
       cancelAttempts += 1;
@@ -2436,6 +2442,10 @@ test('task detail supports mobile comments and preserves task status on a server
   await expect(page.getByText('Otkazan', { exact: true })).toBeVisible();
   expect(cancelAttempts).toBe(2);
   expect(cancelPayload).toEqual({ version: 1, reason: 'Potreban je ponovni pregled.' });
+
+  await page.getByRole('button', { name: 'Ponovo otvori' }).click();
+  await page.getByRole('button', { name: 'Potvrdi: Ponovo otvori' }).click();
+  await expect(page.getByText('Otvoren', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await expectNoA11yViolations(page);
 });
