@@ -959,8 +959,9 @@ test('Super Admin can create and edit a task type through the configuration flow
     route.fulfill({ status: 200, json: { data: [], meta: {} } }),
   );
   await page.route('**/api/v1/task-types**', async (route) => {
-    const { method, url } = route.request();
-    const path = new URL(url).pathname;
+    const request = route.request();
+    const method = request.method();
+    const path = new URL(request.url()).pathname;
     if (method === 'GET' && path === '/api/v1/task-types') {
       const row = taskType();
       const items = currentName ? [row] : [];
