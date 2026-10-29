@@ -925,9 +925,18 @@ test('task type configuration remains navigable on a narrow screen with keyboard
   await expectNoA11yViolations(page);
 });
 
-test('Super Admin can create and edit a task type through the configuration flow', async ({ page }) => {
+test('Super Admin can create, edit, and configure completion requirements for a task type', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const taskTypeId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
   let currentName: string | null = null;
+  let requirements: Array<{
+    id: string;
+    taskTypeId: string;
+    fieldKey: string;
+    required: boolean;
+    stage: string;
+    minPhotos: number;
+  }> = [];
   const taskType = () => ({
     id: taskTypeId,
     code: 'FUEL_REFILL',
@@ -948,7 +957,7 @@ test('Super Admin can create and edit a task type through the configuration flow
     formSchemaVersion: null,
     active: true,
     sortOrder: 100,
-    completionRequirementCount: 0,
+    completionRequirementCount: requirements.length,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   });
@@ -986,7 +995,26 @@ test('Super Admin can create and edit a task type through the configuration flow
       const payload = route.request().postDataJSON();
       expect(payload).toEqual({ name: 'Dopuna goriva i aditiva' });
       currentName = 'Dopuna goriva i aditiva';
-      await route.fulfill({ status: 200, json: { data: { ...taskType(), completionRequirements: [] }, meta: {} } });
+      await route.fulfill({ status: 200, json: { data: { ...taskType(), completionRequirements: requirements }, meta: {} } });
+      return;
+    }
+    if (method === 'GET' && path === `/api/v1/task-types/${taskTypeId}/completion-requirements`) {
+      await route.fulfill({ status: 200, json: { data: { taskTypeId, requirements }, meta: {} } });
+      return;
+    }
+    if (method === 'PUT' && path === `/api/v1/task-types/${taskTypeId}/completion-requirements`) {
+      expect(route.request().postDataJSON()).toEqual({
+        requirements: [{ fieldKey: 'photoEvidence', required: true, stage: 'ON_COMPLETE', minPhotos: 0 }],
+      });
+      requirements = [{
+        id: 'abababab-abab-4bab-8bab-abababababab',
+        taskTypeId,
+        fieldKey: 'photoEvidence',
+        required: true,
+        stage: 'ON_COMPLETE',
+        minPhotos: 0,
+      }];
+      await route.fulfill({ status: 200, json: { data: { taskTypeId, requirements }, meta: {} } });
       return;
     }
     await route.fulfill({ status: 500, json: { error: { message: `Unexpected task type request: ${method} ${path}` } } });
@@ -1009,6 +1037,13 @@ test('Super Admin can create and edit a task type through the configuration flow
   await expect(page.getByRole('status')).toContainText('Vrsta zadatka FUEL_REFILL je izmijenjena.');
   await expect(page.getByText('Dopuna goriva i aditiva', { exact: true })).toBeVisible();
   await expectNoA11yViolations(page);
+  await page.getByRole('button', { name: 'Zahtjevi završetka vrste FUEL_REFILL' }).click();
+  await expect(page.getByText('Zahtjevi završetka — FUEL_REFILL')).toBeVisible();
+  await page.getByRole('button', { name: 'Dodaj zahtjev' }).click();
+  await page.getByLabel('Polje forme 1').fill('photoEvidence');
+  await page.getByRole('button', { name: 'Sačuvaj zahtjeve' }).click();
+  await expect(page.getByText('Zahtjevi završetka su sačuvani.')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
 test('Super Admin can update a role scope without including the implicit Super Admin role', async ({ page }) => {
