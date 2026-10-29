@@ -722,6 +722,55 @@ test('driver registry shows populated results accessibly and applies server sear
   await expectNoA11yViolations(page);
 });
 
+test('user administration respects the server-masked identity and search filter', async ({ page }) => {
+  let requestedSearch = '';
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['user:view'] }) }),
+  );
+  await page.route('**/api/v1/users**', async (route) => {
+    const url = new URL(route.request().url());
+    requestedSearch = url.searchParams.get('q') ?? '';
+    const items = requestedSearch
+      ? []
+      : [
+          {
+            id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            email: 'a***@example.test',
+            firstName: 'Lejla',
+            lastName: 'Hadžić',
+            displayName: null,
+            phone: null,
+            status: 'ACTIVE',
+            mustChangePassword: false,
+            roles: [{ id: roleId, code: 'DISPATCHER', name: 'Dispečer' }],
+            lastLoginAt: null,
+            lockedUntil: null,
+            piiRedacted: true,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ];
+    await route.fulfill({
+      status: 200,
+      json: { data: { items, page: 1, pageSize: 20, total: items.length, totalPages: items.length ? 1 : 0 }, meta: {} },
+    });
+  });
+  await page.goto('/prijava?next=%2Fadministracija%2Fkorisnici');
+  await submitLogin(page);
+  await expect(page).toHaveURL(/\/administracija\/korisnici$/);
+  await expect(page.getByLabel('Pretraga')).toBeVisible();
+  await expect(page.getByText('Lejla Hadžić')).toBeVisible();
+  await expect(page.getByText('a***@example.test')).toBeVisible();
+  expect(await page.locator('#root').innerText()).not.toContain('lejla.hadzic@');
+  await expectNoA11yViolations(page);
+
+  await page.getByLabel('Pretraga').fill('Nepoznata osoba');
+  await expect(page.getByText('Nema korisnika')).toBeVisible();
+  await expect.poll(() => requestedSearch).toBe('Nepoznata osoba');
+  await expectNoA11yViolations(page);
+});
+
 test('permission matrix is readable but immutable without the management permission', async ({ page }) => {
   await mockApi(page, (route) =>
     route.fulfill({ status: 200, json: authResponse({ permissions: ['role:view'] }) }),
