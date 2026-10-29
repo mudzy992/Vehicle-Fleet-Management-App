@@ -2203,6 +2203,7 @@ test('task detail supports mobile comments and preserves task status on a server
   const taskId = '44444444-4444-4444-8444-444444444444';
   let savedComment: string | null = null;
   let cancelPayload: unknown = null;
+  let cancelAttempts = 0;
   const task = {
     id: taskId,
     code: 'Z-2026-000007',
@@ -2242,10 +2243,17 @@ test('task detail supports mobile comments and preserves task status on a server
     const url = new URL(route.request().url());
     if (url.pathname === `/api/v1/tasks/${taskId}/cancel` && route.request().method() === 'POST') {
       cancelPayload = route.request().postDataJSON();
-      await route.fulfill({
-        status: 409,
-        json: { error: { code: 'CONFLICT', message: 'Zadatak je izmijenjen u drugoj sesiji.' } },
-      });
+      cancelAttempts += 1;
+      if (cancelAttempts === 1) {
+        await route.fulfill({
+          status: 409,
+          json: { error: { code: 'CONFLICT', message: 'Zadatak je izmijenjen u drugoj sesiji.' } },
+        });
+        return;
+      }
+      task.status = 'CANCELLED';
+      task.version = 2;
+      await route.fulfill({ status: 200, json: { data: task, meta: {} } });
       return;
     }
     if (url.pathname === `/api/v1/tasks/${taskId}/comments` && route.request().method() === 'POST') {
@@ -2282,6 +2290,10 @@ test('task detail supports mobile comments and preserves task status on a server
   await expect(page.getByRole('alert')).toContainText('Zadatak je izmijenjen u drugoj sesiji.');
   expect(cancelPayload).toEqual({ version: 1, reason: 'Potreban je ponovni pregled.' });
   await expect(page.getByLabel('Razlog otkazivanja *')).toHaveValue('Potreban je ponovni pregled.');
+  await page.getByRole('button', { name: 'Potvrdi: Otkaži zadatak' }).click();
+  await expect(page.getByText('Otkazan', { exact: true })).toBeVisible();
+  expect(cancelAttempts).toBe(2);
+  expect(cancelPayload).toEqual({ version: 1, reason: 'Potreban je ponovni pregled.' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await expectNoA11yViolations(page);
 });
