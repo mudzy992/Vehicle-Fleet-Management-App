@@ -306,6 +306,22 @@ test('task inventory supports mobile claim, tabs, and accessible populated state
   await expect(page.getByText('Nema zadataka za prikaz')).toBeVisible();
 });
 
+test('login form supports keyboard-only focus order and Enter submission', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/prijava');
+  await assertAppMounted(page);
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('E-mail')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Lozinka')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Prijavi se' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('alert')).toContainText('Pogrešan e-mail ili lozinka.');
+  await expectNoA11yViolations(page);
+});
+
 test('responsive login keeps the form reachable on a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page);
