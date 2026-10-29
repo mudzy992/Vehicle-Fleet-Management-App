@@ -2484,7 +2484,7 @@ test('task status release returns an in-progress task to the open pool', async (
   await page.goto(`/prijava?next=${encodeURIComponent(`/zadaci/${taskId}`)}`);
   await submitLogin(page);
   await expect(page.getByRole('heading', { name: 'Pregled kočnica' })).toBeVisible();
-  await expect(page.getByText('U toku', { exact: true })).toBeVisible();
+  await expect(page.getByText('U radu', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Vrati među slobodne' }).click();
   await page.getByRole('button', { name: 'Potvrdi: Vrati među slobodne' }).click();
   await expect(page.getByRole('status')).toContainText('Zadatak je vraćen među slobodne.');
