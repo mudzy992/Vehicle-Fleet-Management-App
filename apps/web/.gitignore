@@ -1,0 +1,3 @@
+# Playwright local output
+/test-results/
+/playwright-report/
