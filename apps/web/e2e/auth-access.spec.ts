@@ -440,6 +440,9 @@ test('form builder validates JSON, saves a draft, and publishes with a change no
 
   await page.goto('/prijava?next=%2Fforme');
   await submitLogin(page);
+  await expect(page).toHaveURL(/\/forme$/);
+  await expect(page.getByRole('heading', { name: 'Forme' })).toBeVisible();
+  await page.getByRole('button', { name: /Pregled vozila/ }).click();
   await expect(page.getByRole('heading', { name: 'Pregled vozila' })).toBeVisible();
   const editor = page.getByLabel('Definicija (JSON)');
   await editor.fill('{ neispravan JSON');
