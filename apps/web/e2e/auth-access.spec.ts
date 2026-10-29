@@ -2199,9 +2199,10 @@ test('user administration route is denied before loading identities without user
   expect(userDataRequests).toBe(0);
 });
 
-test('task detail supports mobile comments and announces the saved result', async ({ page }) => {
+test('task detail supports mobile comments and preserves task status on a server conflict', async ({ page }) => {
   const taskId = '44444444-4444-4444-8444-444444444444';
   let savedComment: string | null = null;
+  let cancelPayload: unknown = null;
   const task = {
     id: taskId,
     code: 'Z-2026-000007',
@@ -2235,10 +2236,18 @@ test('task detail supports mobile comments and announces the saved result', asyn
   };
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
-    route.fulfill({ status: 200, json: authResponse({ permissions: ['task:view', 'task:comment'] }) }),
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['task:view', 'task:comment', 'task:cancel'] }) }),
   );
   await page.route('**/api/v1/tasks/**', async (route) => {
     const url = new URL(route.request().url());
+    if (url.pathname === `/api/v1/tasks/${taskId}/cancel` && route.request().method() === 'POST') {
+      cancelPayload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 409,
+        json: { error: { code: 'CONFLICT', message: 'Zadatak je izmijenjen u drugoj sesiji.' } },
+      });
+      return;
+    }
     if (url.pathname === `/api/v1/tasks/${taskId}/comments` && route.request().method() === 'POST') {
       savedComment = route.request().postDataJSON().body as string;
       await route.fulfill({ status: 201, json: { data: { ...comment, body: savedComment }, meta: {} } });
@@ -2266,6 +2275,13 @@ test('task detail supports mobile comments and announces the saved result', asyn
   await expect(page.getByRole('status')).toContainText('Komentar je dodan.');
   await expect(page.getByText('Kočnice provjerene, sve je ispravno.')).toBeVisible();
   expect(savedComment).toBe('Kočnice provjerene, sve je ispravno.');
+
+  await page.getByRole('button', { name: 'Otkaži zadatak' }).click();
+  await page.getByLabel('Razlog otkazivanja *').fill('Potreban je ponovni pregled.');
+  await page.getByRole('button', { name: 'Potvrdi: Otkaži zadatak' }).click();
+  await expect(page.getByRole('alert')).toContainText('Zadatak je izmijenjen u drugoj sesiji.');
+  expect(cancelPayload).toEqual({ version: 1, reason: 'Potreban je ponovni pregled.' });
+  await expect(page.getByLabel('Razlog otkazivanja *')).toHaveValue('Potreban je ponovni pregled.');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await expectNoA11yViolations(page);
 });
