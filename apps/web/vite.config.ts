@@ -16,9 +16,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
-    // Workspace packages are symlinked; prebundle the CommonJS shared barrel
-    // so browser-native ESM receives discoverable named exports in dev/E2E.
-    optimizeDeps: { include: ['@vfm/shared'] },
+    // Workspace packages are symlinked and compile to CommonJS. Prebundle their
+    // barrels so browser-native ESM receives discoverable named exports in dev/E2E.
+    optimizeDeps: {
+      include: ['@vfm/shared', '@vfm/form-engine/definition', '@vfm/form-renderer'],
+    },
     server: {
       host: '0.0.0.0',
       port: Number(process.env.PORT ?? 5173),
