@@ -125,11 +125,17 @@ export function RecordsListPage({ kind }: { kind: RecordsListKind }) {
         </p>
       </div>
 
-      {list.error && (
+      {(list.error || vehicles.error) && (
         <Card>
           <CardContent>
-            <p className="text-sm text-[var(--danger)]">
-              {list.error instanceof ApiError ? list.error.message : 'Greška pri učitavanju.'}
+            <p className="text-sm text-[var(--danger)]" role="alert">
+              {list.error
+                ? list.error instanceof ApiError
+                  ? list.error.message
+                  : 'Greška pri učitavanju evidencije.'
+                : vehicles.error instanceof ApiError
+                  ? vehicles.error.message
+                  : 'Greška pri učitavanju vozila.'}
             </p>
           </CardContent>
         </Card>
@@ -216,7 +222,11 @@ export function RecordsListPage({ kind }: { kind: RecordsListKind }) {
       <Card>
         <CardContent>
           {list.isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
+            <p className="text-sm text-[var(--fg-muted)]" role="status">
+              Učitavanje…
+            </p>
+          ) : list.error ? (
+            <p className="text-sm text-[var(--danger)]">Evidencija nije dostupna.</p>
           ) : rows.length === 0 ? (
             <EmptyState
               title={filtered ? 'Nema rezultata za filtere' : `Nema ${title.toLowerCase()}`}
@@ -244,7 +254,11 @@ export function RecordsListPage({ kind }: { kind: RecordsListKind }) {
                   <TR key={row.id}>
                     <TD>
                       <Link className="hover:underline" to={`/vozila/${row.vehicleId}`}>
-                        {vehicleNames.get(row.vehicleId) ?? 'Nepoznato vozilo'}
+                        {vehicles.isPending
+                          ? 'Učitavanje vozila…'
+                          : vehicles.error
+                            ? 'Vozilo nije učitano'
+                            : (vehicleNames.get(row.vehicleId) ?? 'Nepoznato vozilo')}
                       </Link>
                     </TD>
                     <TD className="font-medium">{row.number}</TD>
