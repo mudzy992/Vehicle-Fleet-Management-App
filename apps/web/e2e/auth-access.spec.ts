@@ -341,6 +341,7 @@ test('form builder validates JSON, saves a draft, and publishes with a change no
     route.fulfill({
       status: 200,
       json: authResponse({
+        isSuperAdmin: true,
         permissions: ['form:view', 'form:update', 'form:manage_schema', 'form:publish_version'],
       }),
     }),
