@@ -1048,7 +1048,7 @@ test('audit log filters and lazy details are accessible on mobile while security
 
   await page.goto('/prijava?next=%2Faudit-log');
   await submitLogin(page);
-  await expect(page.getByText('ROLE_CHANGE')).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'ROLE_CHANGE', exact: true })).toBeVisible();
   await expect(page.getByText(/Sigurnosni zapisi/)).toBeVisible();
   await expect(page.getByText('SECURITY_EVENT')).toHaveCount(0);
   expect(detailCalls).toBe(0);
