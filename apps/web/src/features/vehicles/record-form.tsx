@@ -105,20 +105,39 @@ export function VehicleRecordForm({
 
   const label = kind === 'REGISTRATION' ? 'Nova registracija' : 'Novo osiguranje';
 
-  if (form.error instanceof ApiError) {
+  if (form.isError) {
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--warning)]">
-            Nema aktivne forme „{label}“: {form.error.message} Bez objavljene verzije zapis ne može nastati
-            (P10).
+          <p role="alert" className="text-sm text-[var(--danger)]">
+            {form.error instanceof ApiError
+              ? `Nema aktivne forme „${label}“: ${form.error.message} Bez objavljene verzije zapis ne može nastati (P10).`
+              : `Greška pri učitavanju forme „${label}“. Provjerite vezu i pokušajte ponovo.`}
           </p>
         </CardContent>
       </Card>
     );
   }
 
-  if (!model) return <p className="text-sm text-[var(--fg-muted)]">Učitavanje forme…</p>;
+  if (parsed && !parsed.ok) {
+    return (
+      <Card>
+        <CardContent>
+          <p role="alert" className="text-sm text-[var(--danger)]">
+            Definicija forme „{label}“ nije ispravna: {parsed.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (form.isPending || !model) {
+    return (
+      <p className="text-sm text-[var(--fg-muted)]" role="status">
+        Učitavanje forme…
+      </p>
+    );
+  }
 
   return (
     <Card>
