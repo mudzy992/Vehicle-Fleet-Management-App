@@ -149,19 +149,17 @@ test('system health screen renders successful probes accessibly', async ({ page 
 });
 
 test('system health outage is announced and retry recovers', async ({ page }) => {
-  const attempts = new Map<string, number>();
+  let outage = true;
   await mockApi(page, (route) =>
     route.fulfill({ status: 200, json: authResponse({ permissions: ['system:view_health'] }) }),
   );
   for (const [path, body] of [
     ['/health/live', { status: 'ok' }],
-    ['/health/ready', { status: 'ok' }],
+    ['/health/ready', { status: 'ok', info: { database: { status: 'up' } } }],
     ['/health/startup', { status: 'ok', uptimeSeconds: 240 }],
   ] as const) {
     await page.route(`**${path}`, async (route) => {
-      const attempt = (attempts.get(path) ?? 0) + 1;
-      attempts.set(path, attempt);
-      if (attempt === 1) {
+      if (outage) {
         await route.abort('failed');
         return;
       }
@@ -173,6 +171,7 @@ test('system health outage is announced and retry recovers', async ({ page }) =>
   await expect(page.getByRole('heading', { name: 'Zdravlje sistema' })).toBeVisible();
   await expect(page.getByRole('alert').getByText('API nije dostupan')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Pokušaj ponovo' })).toBeVisible();
+  outage = false;
   await page.getByRole('button', { name: 'Pokušaj ponovo' }).click();
   await expect(page.getByText('ok', { exact: true })).toHaveCount(3);
   await expect(page.getByRole('alert')).toHaveCount(0);
