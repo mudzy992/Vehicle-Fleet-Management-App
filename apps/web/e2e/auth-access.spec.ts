@@ -2199,6 +2199,27 @@ test('user administration route is denied before loading identities without user
   expect(userDataRequests).toBe(0);
 });
 
+test('task detail API failure gives an accessible recovery path instead of a blank detail', async ({ page }) => {
+  const taskId = '44444444-4444-4444-8444-444444444444';
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['task:view'] }) }),
+  );
+  await page.route(`**/api/v1/tasks/${taskId}`, (route) =>
+    route.fulfill({
+      status: 503,
+      json: { error: { code: 'SERVICE_UNAVAILABLE', message: 'Zadatak privremeno nije dostupan.' } },
+    }),
+  );
+  await page.goto(`/prijava?next=${encodeURIComponent(`/zadaci/${taskId}`)}`);
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Zadatak nije dostupan' })).toBeVisible();
+  await expect(page.getByText('Zadatak privremeno nije dostupan.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Nazad na zadatke' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('task detail route is denied before loading task data without task:view', async ({ page }) => {
   const taskId = '44444444-4444-4444-8444-444444444444';
   let taskDataRequests = 0;
