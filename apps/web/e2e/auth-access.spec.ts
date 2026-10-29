@@ -865,6 +865,96 @@ test('permission matrix is readable but immutable without the management permiss
   await expectNoA11yViolations(page);
 });
 
+test('Super Admin can update a role scope without including the implicit Super Admin role', async ({ page }) => {
+  const savedPayloads: unknown[] = [];
+  const superAdminRoleId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const modules = [{
+    module: 'Vozila',
+    permissions: [{
+      code: 'vehicle:view',
+      action: 'view',
+      description: 'Pregled vozila',
+      isSensitive: false,
+      inDatabase: true,
+    }],
+  }];
+  const roles = [
+    {
+      id: roleId,
+      code: 'DISPATCHER',
+      name: 'Dispečer',
+      description: null,
+      isSystem: false,
+      allowedClientTypes: ['WEB'],
+      permissionsVersion: 1,
+      priority: 10,
+      activeUserCount: 2,
+      grantedCount: 1,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: superAdminRoleId,
+      code: 'SUPER_ADMIN',
+      name: 'Super Admin',
+      description: null,
+      isSystem: true,
+      allowedClientTypes: ['WEB'],
+      permissionsVersion: 1,
+      priority: 100,
+      activeUserCount: 1,
+      grantedCount: 0,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ];
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['role:view', 'role:manage_permissions'] }) }),
+  );
+  await page.route('**/api/v1/roles/matrix', async (route) => {
+    if (route.request().method() === 'PUT') {
+      const payload = route.request().postDataJSON();
+      savedPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        json: { data: { affectedRoles: 1, added: 0, removed: 0, scopeChanged: 1, permissionsVersion: { [roleId]: 2 } }, meta: {} },
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      json: {
+        data: {
+          modules,
+          roles,
+          grants: [{
+            roleId,
+            permission: 'vehicle:view',
+            scope: 'ALL',
+            scopeVehicleIds: [],
+            scopeDriverIds: [],
+            conditions: null,
+            grantedAt: null,
+          }],
+          generatedAt: '2026-01-01T00:00:00.000Z',
+        },
+        meta: {},
+      },
+    });
+  });
+  await page.goto('/prijava?next=%2Fadministracija%2Fprava');
+  await submitLogin(page);
+  await expect(page.getByLabel('Dispečer → vehicle:view')).toHaveValue('ALL');
+  await expect(page.getByRole('columnheader', { name: 'Super Admin' })).toHaveCount(0);
+  await page.getByLabel('Dispečer → vehicle:view').selectOption('OWN');
+  await expect(page.getByText('Nesačuvane izmjene')).toBeVisible();
+  await page.getByRole('button', { name: 'Sačuvaj matricu' }).click();
+  await expect(page.getByRole('status')).toContainText('Sačuvano: 1 rola');
+  expect(savedPayloads).toEqual([{ roles: [{ roleId, grants: [{ permission: 'vehicle:view', scope: 'OWN' }] }] }]);
+  expect(JSON.stringify(savedPayloads)).not.toContain(superAdminRoleId);
+  await expectNoA11yViolations(page);
+});
+
 test('profile stays accessible and fits a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
