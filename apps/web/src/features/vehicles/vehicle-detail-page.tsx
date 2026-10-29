@@ -79,6 +79,7 @@ export function VehicleDetailPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>('osnovno');
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionMessageIsError, setActionMessageIsError] = useState(false);
 
   const detail = useQuery({
     queryKey: ['vehicle', vehicleId],
@@ -97,7 +98,12 @@ export function VehicleDetailPage() {
     mutationFn: () => api.post<null>(`/vehicles/${vehicleId}/archive`, { reason: 'Arhivirano s detalja' }),
     onSuccess: async () => {
       setActionMessage('Vozilo je arhivirano.');
+      setActionMessageIsError(false);
       await invalidate();
+    },
+    onError: (cause) => {
+      setActionMessage(cause instanceof ApiError ? cause.message : 'Greška pri arhiviranju vozila.');
+      setActionMessageIsError(true);
     },
   });
 
@@ -105,17 +111,22 @@ export function VehicleDetailPage() {
     mutationFn: () => api.post<null>(`/vehicles/${vehicleId}/restore`),
     onSuccess: async () => {
       setActionMessage('Vozilo je vraćeno iz arhive.');
+      setActionMessageIsError(false);
       await invalidate();
+    },
+    onError: (cause) => {
+      setActionMessage(cause instanceof ApiError ? cause.message : 'Greška pri vraćanju vozila.');
+      setActionMessageIsError(true);
     },
   });
 
-  if (detail.isPending) return <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>;
+  if (detail.isPending) return <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>;
 
   if (detail.error || !vehicle) {
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--danger)]">
+          <p className="text-sm text-[var(--danger)]" role="alert">
             {detail.error instanceof ApiError ? detail.error.message : 'Vozilo nije pronađeno.'}
           </p>
           <Link className="mt-2 inline-block text-sm hover:underline" to="/vozila">
@@ -172,7 +183,11 @@ export function VehicleDetailPage() {
         </div>
       </div>
 
-      {actionMessage && <p className="text-sm">{actionMessage}</p>}
+      {actionMessage && (
+        <p className="text-sm" role={actionMessageIsError ? 'alert' : 'status'}>
+          {actionMessage}
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-1 border-b border-[var(--border)] pb-1">
         {TABS.filter(
@@ -358,7 +373,11 @@ function RegistrationsTab({ vehicleId, onChanged }: { vehicleId: string; onChang
         ))}
 
       {query.isPending ? (
-        <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
+        <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+      ) : query.isError ? (
+        <p className="text-sm text-[var(--danger)]" role="alert">
+          {query.error instanceof ApiError ? query.error.message : 'Greška pri učitavanju registracija.'}
+        </p>
       ) : !query.data?.items.length ? (
         <EmptyState
           title="Nema registracija"
@@ -453,7 +472,11 @@ function InsurancesTab({ vehicleId, onChanged }: { vehicleId: string; onChanged:
         ))}
 
       {query.isPending ? (
-        <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
+        <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+      ) : query.isError ? (
+        <p className="text-sm text-[var(--danger)]" role="alert">
+          {query.error instanceof ApiError ? query.error.message : 'Greška pri učitavanju osiguranja.'}
+        </p>
       ) : !query.data?.items.length ? (
         <EmptyState
           title="Nema osiguranja"
@@ -605,7 +628,7 @@ function OdometerTab({ vehicle, onChanged }: { vehicle: VehicleDetail; onChanged
             >
               Upiši očitanje
             </Button>
-            {message && <p className="text-xs">{message}</p>}
+            {message && <p className="text-xs" role={add.isError ? 'alert' : 'status'}>{message}</p>}
           </div>
         </CardContent>
       </Card>
@@ -617,7 +640,11 @@ function OdometerTab({ vehicle, onChanged }: { vehicle: VehicleDetail; onChanged
         />
         <CardContent>
           {query.isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
+            <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+          ) : query.isError ? (
+            <p className="text-sm text-[var(--danger)]" role="alert">
+              {query.error instanceof ApiError ? query.error.message : 'Greška pri učitavanju očitanja.'}
+            </p>
           ) : !query.data?.items.length ? (
             <EmptyState title="Nema očitanja" />
           ) : (
@@ -658,7 +685,14 @@ function AttachmentsTab({ vehicleId }: { vehicleId: string }) {
       ),
   });
 
-  if (query.isPending) return <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>;
+  if (query.isPending) return <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>;
+  if (query.isError) {
+    return (
+      <p className="text-sm text-[var(--danger)]" role="alert">
+        {query.error instanceof ApiError ? query.error.message : 'Greška pri učitavanju priloga.'}
+      </p>
+    );
+  }
   if (!query.data?.items.length) {
     return (
       <EmptyState
@@ -671,7 +705,7 @@ function AttachmentsTab({ vehicleId }: { vehicleId: string }) {
   return (
     <Card>
       <CardContent>
-        {error && <p className="mb-2 text-xs text-[var(--danger)]">{error}</p>}
+        {error && <p className="mb-2 text-xs text-[var(--danger)]" role="alert">{error}</p>}
         <Table>
           <THead>
             <TR>
