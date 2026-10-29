@@ -133,13 +133,15 @@ export function DriverCreatePage() {
         <h1 className="vfm-module-title">Novi vozač</h1>
       </div>
 
-      {form.error instanceof ApiError && (
+      {form.isError && (
         <Card>
           <CardContent>
-            <EmptyState
-              title="Nema aktivne forme „Vozač“"
-              description={`${form.error.message} Forme se objavljuju u Konfiguracija → Forme; bez objavljene verzije zapis se ne može kreirati (P10).`}
-            />
+            <div role="alert">
+              <EmptyState
+                title={form.error instanceof ApiError ? 'Nema aktivne forme „Vozač“' : 'Greška pri učitavanju forme'}
+                description={`${form.error instanceof ApiError ? form.error.message : 'Provjerite vezu i pokušajte ponovo.'} Forme se objavljuju u Konfiguracija → Forme; bez dostupne verzije zapis se ne može kreirati (P10).`}
+              />
+            </div>
           </CardContent>
         </Card>
       )}
@@ -147,10 +149,12 @@ export function DriverCreatePage() {
       {parsed && !parsed.ok && !form.error && (
         <Card>
           <CardContent>
-            <EmptyState
-              title="Definicija forme nije ispravna"
-              description={parsed.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}
-            />
+            <div role="alert">
+              <EmptyState
+                title="Definicija forme nije ispravna"
+                description={parsed.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}
+              />
+            </div>
           </CardContent>
         </Card>
       )}
@@ -209,7 +213,11 @@ export function DriverCreatePage() {
         </form>
       )}
 
-      {form.isPending && <p className="text-sm text-[var(--fg-muted)]">Učitavanje forme…</p>}
+      {form.isPending && (
+        <p role="status" className="text-sm text-[var(--fg-muted)]">
+          Učitavanje forme…
+        </p>
+      )}
     </div>
   );
 }
