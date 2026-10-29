@@ -386,7 +386,7 @@ function RegistrationsTab({ vehicleId, onChanged }: { vehicleId: string; onChang
       ) : (
         <Card>
           <CardContent>
-            <Table>
+            <Table scrollLabel="Zapisi povezani s vozilom — pomjerite tabelu horizontalno za pregled svih kolona">
               <THead>
                 <TR>
                   <TH>Broj</TH>
@@ -485,7 +485,7 @@ function InsurancesTab({ vehicleId, onChanged }: { vehicleId: string; onChanged:
       ) : (
         <Card>
           <CardContent>
-            <Table>
+            <Table scrollLabel="Registracije vozila — pomjerite tabelu horizontalno za pregled svih kolona">
               <THead>
                 <TR>
                   <TH>Polisa</TH>
@@ -648,7 +648,7 @@ function OdometerTab({ vehicle, onChanged }: { vehicle: VehicleDetail; onChanged
           ) : !query.data?.items.length ? (
             <EmptyState title="Nema očitanja" />
           ) : (
-            <Table>
+            <Table scrollLabel="Osiguranja vozila — pomjerite tabelu horizontalno za pregled svih kolona">
               <THead>
                 <TR>
                   <TH align="right">Km</TH>
@@ -706,7 +706,7 @@ function AttachmentsTab({ vehicleId }: { vehicleId: string }) {
     <Card>
       <CardContent>
         {error && <p className="mb-2 text-xs text-[var(--danger)]" role="alert">{error}</p>}
-        <Table>
+        <Table scrollLabel="Evidencije vozila — pomjerite tabelu horizontalno za pregled svih kolona">
           <THead>
             <TR>
               <TH>Fajl</TH>

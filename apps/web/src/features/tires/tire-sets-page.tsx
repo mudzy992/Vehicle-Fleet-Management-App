@@ -308,7 +308,7 @@ export function TireSetsPage() {
               }
             />
           ) : (
-            <Table>
+            <Table scrollLabel="Skupovi guma — pomjerite tabelu horizontalno za pregled svih kolona">
               <THead>
                 <TR>
                   <TH>Komplet</TH>

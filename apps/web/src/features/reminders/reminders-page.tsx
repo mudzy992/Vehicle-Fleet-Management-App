@@ -202,7 +202,7 @@ export function RemindersPage() {
               description="Skener upisuje podsjetnike iz politika; ako je prazno i poslije skena, provjerite pragove u Postavke → Podsjetnici."
             />
           ) : (
-            <Table>
+            <Table scrollLabel="Podsjetnici — pomjerite tabelu horizontalno za pregled svih kolona">
               <THead>
                 <TR>
                   <TH>Vrsta</TH>

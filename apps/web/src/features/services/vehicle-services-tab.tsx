@@ -125,7 +125,7 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
       {deleteFeedback}
       <Card>
         <CardContent>
-          <Table>
+          <Table scrollLabel="Servisi vozila — pomjerite tabelu horizontalno za pregled svih kolona">
             <THead>
               <TR>
                 <TH>Datum</TH>

@@ -237,7 +237,7 @@ export function RecordsListPage({ kind }: { kind: RecordsListKind }) {
               }
             />
           ) : (
-            <Table>
+            <Table scrollLabel="Evidencije — pomjerite tabelu horizontalno za pregled svih kolona">
               <THead>
                 <TR>
                   <TH>Vozilo</TH>

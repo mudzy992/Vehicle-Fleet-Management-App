@@ -282,7 +282,7 @@ export function ProfilePage() {
             <EmptyState title="Nema aktivnih sesija" />
           </div>
         ) : (
-          <Table>
+          <Table scrollLabel="Aktivne sesije — pomjerite tabelu horizontalno za pregled svih kolona">
             <THead>
               <TR>
                 <TH>Klijent</TH>

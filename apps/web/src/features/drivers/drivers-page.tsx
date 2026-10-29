@@ -241,7 +241,7 @@ export function DriversPage() {
               }
             />
           ) : (
-            <Table>
+            <Table scrollLabel="Lista vozača — pomjerite tabelu horizontalno za pregled svih kolona">
               <THead>
                 <TR>
                   {canArchive && <TH> </TH>}

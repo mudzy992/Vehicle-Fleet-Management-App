@@ -151,7 +151,7 @@ export function TireSetTiresPanel({ tireSet, onClose }: { tireSet: TireSetView; 
           {success && <p className="text-sm" role="status">{success}</p>}
 
           {items.length ? (
-            <Table>
+            <Table scrollLabel="Pojedinačne gume — pomjerite tabelu horizontalno za pregled svih kolona">
               <THead>
                 <TR>
                   <TH>Pozicija / status</TH>

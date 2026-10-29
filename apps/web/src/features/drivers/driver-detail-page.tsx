@@ -237,7 +237,7 @@ export function DriverDetailPage() {
               description="Dodajte kategoriju (B, C, CE…) s rokom važenja."
             />
           ) : (
-            <Table>
+            <Table scrollLabel="Evidencije vozača — pomjerite tabelu horizontalno za pregled svih kolona">
               <THead>
                 <TR>
                   <TH>Kategorija</TH>

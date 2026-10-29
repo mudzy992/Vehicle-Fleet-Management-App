@@ -166,7 +166,7 @@ export function VehicleTiresTab({
         <>
           <Card>
             <CardContent>
-              <Table>
+              <Table scrollLabel="Gume na vozilu — pomjerite tabelu horizontalno za pregled svih kolona">
                 <THead>
                   <TR>
                     <TH>Komplet</TH>

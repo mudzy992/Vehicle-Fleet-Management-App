@@ -157,7 +157,7 @@ export function AuditLogPage() {
             <EmptyState title="Nema zapisa" description="Promijenite filtere ili period." />
           </div>
         ) : (
-          <Table>
+          <Table scrollLabel="Audit zapisi — pomjerite tabelu horizontalno za pregled svih kolona">
             <THead>
               <TR>
                 <TH>Vrijeme</TH>

@@ -217,7 +217,7 @@ export function UsersPage() {
             <EmptyState title="Nema korisnika" description="Promijenite filter ili kreirajte novog korisnika." />
           </div>
         ) : (
-          <Table>
+          <Table scrollLabel="Korisnici — pomjerite tabelu horizontalno za pregled svih kolona">
             <THead>
               <TR>
                 <TH>Korisnik</TH>

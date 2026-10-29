@@ -132,7 +132,7 @@ export function TireSetUsagePanel({ tireSet, onClose }: { tireSet: TireSetView; 
             <>
               <section className="space-y-3">
                 <h3 className="text-sm font-semibold">Po vozilima</h3>
-                <Table>
+                <Table scrollLabel="Historija korištenja skupa guma — pomjerite tabelu horizontalno za pregled svih kolona">
                   <THead>
                     <TR>
                       <TH>Vozilo</TH>
@@ -200,7 +200,7 @@ export function TireSetUsagePanel({ tireSet, onClose }: { tireSet: TireSetView; 
 
               <section className="space-y-3">
                 <h3 className="text-sm font-semibold">Ciklusi montaže</h3>
-                <Table>
+                <Table scrollLabel="Vozila koja koriste skup guma — pomjerite tabelu horizontalno za pregled svih kolona">
                   <THead>
                     <TR>
                       <TH>Vozilo / pozicije</TH>

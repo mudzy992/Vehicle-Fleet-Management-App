@@ -255,7 +255,7 @@ export function VehiclesPage() {
               }
             />
           ) : (
-            <Table>
+            <Table scrollLabel="Lista vozila — pomjerite tabelu horizontalno za pregled svih kolona">
               <THead>
                 <TR>
                   {canArchive && <TH> </TH>}

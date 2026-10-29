@@ -140,7 +140,7 @@ function ItemsEditor({
           {!editing ? (
             <>
               {initial.items.length ? (
-                <Table>
+                <Table scrollLabel="Stavke servisa — pomjerite tabelu horizontalno za pregled svih kolona">
                   <THead>
                     <TR>
                       <TH>Stavka</TH>

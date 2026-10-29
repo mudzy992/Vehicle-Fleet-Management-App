@@ -318,7 +318,7 @@ export function FormsPage() {
                 }
               />
               <CardContent className="p-0">
-                <Table>
+                <Table scrollLabel="Verzije forme — pomjerite tabelu horizontalno za pregled svih kolona">
                   <THead>
                     <TR>
                       <TH>Verzija</TH>
