@@ -221,6 +221,33 @@ test('design system showcase passes axe WCAG checks', async ({ page }) => {
   await expectNoA11yViolations(page);
 });
 
+test('rate-limited login explains the temporary wait', async ({ page }) => {
+  await mockApi(page, (route) =>
+    route.fulfill({
+      status: 429,
+      json: { error: { code: 'RATE_LIMITED', message: 'Too many attempts' } },
+    }),
+  );
+  await page.goto('/prijava');
+  await submitLogin(page);
+  await expect(page.getByRole('alert')).toContainText('Previše pokušaja prijave. Sačekajte pa pokušajte ponovo.');
+});
+
+test('forced password change overrides the requested destination', async ({ page }) => {
+  await mockApi(page, (route) =>
+    route.fulfill({
+      status: 200,
+      json: authResponse({ permissions: ['auth:login'], mustChangePassword: true }),
+    }),
+  );
+  await page.goto('/prijava?next=%2Fzdravlje');
+  await submitLogin(page);
+  await expect(page).toHaveURL(/\/profil\?promjena=1$/);
+  await expect(page.getByText('Potrebna je promjena lozinke')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Promijeni lozinku' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Zdravlje sistema' })).toHaveCount(0);
+});
+
 test('login failure is communicated without exposing credential-specific detail', async ({ page }) => {
   await mockApi(page);
   await page.goto('/prijava');
