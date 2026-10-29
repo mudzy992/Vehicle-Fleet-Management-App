@@ -1688,9 +1688,10 @@ test('Super Admin can create, edit, and configure completion requirements for a 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
-test('Super Admin can update a role scope without including the implicit Super Admin role', async ({ page }) => {
+test('Super Admin can update a role scope and sees a conflict without losing edits', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const savedPayloads: unknown[] = [];
+  let saveAttempts = 0;
   const superAdminRoleId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const modules = [{
     module: 'Vozila',
@@ -1753,6 +1754,14 @@ test('Super Admin can update a role scope without including the implicit Super A
     if (route.request().method() === 'PUT') {
       const payload = route.request().postDataJSON();
       savedPayloads.push(payload);
+      saveAttempts += 1;
+      if (saveAttempts === 2) {
+        await route.fulfill({
+          status: 409,
+          json: { error: { code: 'CONFLICT', message: 'Matrica je u međuvremenu izmijenjena.' } },
+        });
+        return;
+      }
       await route.fulfill({
         status: 200,
         json: { data: { affectedRoles: 1, added: 0, removed: 0, scopeChanged: 1, permissionsVersion: { [roleId]: 2 } }, meta: {} },
@@ -1795,6 +1804,12 @@ test('Super Admin can update a role scope without including the implicit Super A
   await expect(page.getByRole('status')).toContainText('Sačuvano: 1 rola');
   expect(savedPayloads).toEqual([{ roles: [{ roleId, grants: [{ permission: 'vehicle:view', scope: 'OWN' }] }] }]);
   expect(JSON.stringify(savedPayloads)).not.toContain(superAdminRoleId);
+
+  await page.getByLabel('Dispečer → vehicle:view').selectOption('OWN');
+  await page.getByRole('button', { name: 'Sačuvaj matricu' }).click();
+  await expect(page.getByRole('alert')).toContainText('Matrica je u međuvremenu izmijenjena.');
+  await expect(page.getByText('Nesačuvane izmjene')).toBeVisible();
+  await expect(page.getByLabel('Dispečer → vehicle:view')).toHaveValue('OWN');
   await expectNoA11yViolations(page);
 });
 
