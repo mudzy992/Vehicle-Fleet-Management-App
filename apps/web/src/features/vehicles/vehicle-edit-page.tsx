@@ -52,15 +52,23 @@ export function VehicleEditPage() {
   });
 
   if (vehicleQuery.isPending || versionQuery.isPending) {
-    return <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>;
+    return (
+      <p className="text-sm text-[var(--fg-muted)]" role="status">
+        Učitavanje…
+      </p>
+    );
   }
 
   if (vehicleQuery.error || !vehicleQuery.data) {
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--danger)]">
-            {vehicleQuery.error instanceof ApiError ? vehicleQuery.error.message : 'Vozilo nije pronađeno.'}
+          <p className="text-sm text-[var(--danger)]" role="alert">
+            {vehicleQuery.error instanceof ApiError
+              ? vehicleQuery.error.message
+              : vehicleQuery.error
+                ? 'Greška pri učitavanju vozila.'
+                : 'Vozilo nije pronađeno.'}
           </p>
           <Link className="mt-2 inline-block text-sm hover:underline" to="/vozila">
             ← Natrag na listu
@@ -244,7 +252,7 @@ function VehicleEditForm({
           )}
 
           <div className="flex items-center gap-2">
-            <Button type="submit" loading={submit.isPending}>
+            <Button type="submit" loading={submit.isPending} disabled={submit.isPending || vehicle.status === 'ARCHIVED'}>
               Sačuvaj izmjene
             </Button>
             <Link className={buttonClassName('ghost', 'md')} to={`/vozila/${vehicle.id}`}>

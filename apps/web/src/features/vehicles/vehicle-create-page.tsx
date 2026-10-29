@@ -106,13 +106,15 @@ export function VehicleCreatePage() {
         </div>
       </div>
 
-      {form.error instanceof ApiError && (
+      {form.isError && (
         <Card>
           <CardContent>
-            <EmptyState
-              title="Nema aktivne forme „Vozilo“"
-              description={`${form.error.message} Forme se objavljuju u Konfiguracija → Forme; bez objavljene verzije zapis se ne može kreirati (P10).`}
-            />
+            <div role="alert">
+              <EmptyState
+                title={form.error instanceof ApiError ? 'Nema aktivne forme „Vozilo“' : 'Greška pri učitavanju forme'}
+                description={`${form.error instanceof ApiError ? form.error.message : 'Provjerite vezu i pokušajte ponovo.'} Forme se objavljuju u Konfiguracija → Forme; bez dostupne verzije zapis se ne može kreirati (P10).`}
+              />
+            </div>
           </CardContent>
         </Card>
       )}
@@ -183,7 +185,11 @@ export function VehicleCreatePage() {
         </form>
       )}
 
-      {form.isPending && <p className="text-sm text-[var(--fg-muted)]">Učitavanje forme…</p>}
+      {form.isPending && (
+        <p className="text-sm text-[var(--fg-muted)]" role="status">
+          Učitavanje forme…
+        </p>
+      )}
     </div>
   );
 }
