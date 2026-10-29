@@ -2539,7 +2539,7 @@ test('task completion submits the form snapshot, comment and odometer then refre
   await page.getByLabel('Kilometraža (km), ako je primjenjivo').fill('123456');
   await page.getByLabel('Komentar uz završetak').fill('Vozilo spremno.');
   await page.getByRole('button', { name: 'Završi zadatak' }).click();
-  await expect(page.getByText('Završeno', { exact: true })).toBeVisible();
+  await expect(page.getByText('Završen', { exact: true })).toBeVisible();
   expect(completionPayload).toMatchObject({ version: 6, formData: { napomena: 'Sve provjereno.' }, comment: 'Vozilo spremno.', odometerKm: 123456 });
   await expectNoA11yViolations(page);
 });
