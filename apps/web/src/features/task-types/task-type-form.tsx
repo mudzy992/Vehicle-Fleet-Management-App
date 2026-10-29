@@ -385,7 +385,7 @@ export function TaskTypeEditPanel({
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--fg-muted)]">Učitavanje vrste zadatka…</p>
+          <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje vrste zadatka…</p>
         </CardContent>
       </Card>
     );

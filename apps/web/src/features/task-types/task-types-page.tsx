@@ -105,7 +105,7 @@ export function TaskTypesPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="vfm-module-title">Vrste zadataka</h1>
-          <p className="text-sm text-[var(--fg-muted)]">
+            <p className="text-sm text-[var(--fg-muted)]" role={list.isPending ? 'status' : undefined}>
             {list.isPending ? 'Učitavanje…' : `${list.data?.total ?? 0} vrsta u konfiguraciji`}
           </p>
         </div>
@@ -126,7 +126,7 @@ export function TaskTypesPage() {
       {message && (
         <Card>
           <CardContent>
-            <p className="text-sm">{message}</p>
+            <p className="text-sm" role="status">{message}</p>
           </CardContent>
         </Card>
       )}
@@ -291,8 +291,8 @@ export function TaskTypesPage() {
       <Card>
         <CardContent>
           {list.isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
-          ) : !list.data?.items.length ? (
+            <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+          ) : list.isError ? null : !list.data?.items.length ? (
             <EmptyState
               title={filtered ? 'Nema vrsta za odabrane filtere' : 'Nema konfigurisanih vrsta zadataka'}
               description={

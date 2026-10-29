@@ -41,7 +41,7 @@ export function TaskTypeRequirementsPanel({
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--fg-muted)]">Učitavanje zahtjeva završetka…</p>
+          <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje zahtjeva završetka…</p>
         </CardContent>
       </Card>
     );
