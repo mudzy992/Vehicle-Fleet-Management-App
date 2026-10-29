@@ -148,6 +148,44 @@ test('system health screen renders successful probes accessibly', async ({ page 
   await expectNoA11yViolations(page);
 });
 
+test('system health outage is announced and retry recovers', async ({ page }) => {
+  const attempts = new Map<string, number>();
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['system:view_health'] }) }),
+  );
+  for (const [path, body] of [
+    ['/health/live', { status: 'ok' }],
+    ['/health/ready', { status: 'ok' }],
+    ['/health/startup', { status: 'ok', uptimeSeconds: 240 }],
+  ] as const) {
+    await page.route(`**${path}`, async (route) => {
+      const attempt = (attempts.get(path) ?? 0) + 1;
+      attempts.set(path, attempt);
+      if (attempt === 1) {
+        await route.abort('failed');
+        return;
+      }
+      await route.fulfill({ status: 200, json: body });
+    });
+  }
+  await page.goto('/prijava?next=%2Fzdravlje');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Zdravlje sistema' })).toBeVisible();
+  await expect(page.getByRole('alert').getByText('API nije dostupan')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pokušaj ponovo' })).toBeVisible();
+  await page.getByRole('button', { name: 'Pokušaj ponovo' }).click();
+  await expect(page.getByText('ok', { exact: true })).toHaveCount(3);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('health screen permission guard blocks users without health access', async ({ page }) => {
+  await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse() }));
+  await page.goto('/prijava?next=%2Fzdravlje');
+  await submitLogin(page);
+  await expect(page.getByText('Nemate pristup', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Zdravlje sistema' })).toHaveCount(0);
+});
+
 test('task list handles empty collections accessibly on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
