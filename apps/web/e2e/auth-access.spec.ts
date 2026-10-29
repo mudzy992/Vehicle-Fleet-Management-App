@@ -737,6 +737,56 @@ test('reminders support acknowledge and snooze actions on mobile', async ({ page
   await expect(page.getByRole('status')).toContainText('Podsjetnik je odgođen.');
 });
 
+test('reminder filters and pagination update server queries on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let requestedQuery = new URLSearchParams();
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['reminder:view'] }) }),
+  );
+  await page.route('**/api/v1/reminders*', async (route) => {
+    const url = new URL(route.request().url());
+    requestedQuery = url.searchParams;
+    const pageNumber = Number(url.searchParams.get('page') ?? '1');
+    const item = {
+      id: pageNumber === 2 ? '55555555-5555-4555-8555-555555555555' : '44444444-4444-4444-8444-444444444444',
+      kind: 'SERVICE_KM',
+      entityType: 'Vehicle',
+      entityId: '66666666-6666-4666-8666-666666666666',
+      dueDate: null,
+      dueKm: pageNumber === 2 ? 120000 : 100000,
+      thresholdDays: null,
+      thresholdKm: 10000,
+      fireAt: '2026-10-29T08:30:00.000Z',
+      status: 'SCHEDULED',
+      sentAt: null,
+      acknowledgedAt: null,
+      due: true,
+      createdAt: '2026-10-28T08:30:00.000Z',
+    };
+    await route.fulfill({
+      status: 200,
+      json: { data: { items: [item], page: pageNumber, pageSize: 50, total: 100, totalPages: 2 }, meta: {} },
+    });
+  });
+  await page.goto('/prijava?next=%2Frokovi');
+  await submitLogin(page);
+  await expect(page.getByText(/100.*km/)).toBeVisible();
+  const tableRegion = page.getByRole('region', { name: 'Podsjetnici — pomjerite tabelu horizontalno za pregled svih kolona' });
+  await tableRegion.focus();
+  await expect(tableRegion).toBeFocused();
+  expect(await tableRegion.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+
+  await page.getByLabel('Vrsta').selectOption('SERVICE_KM');
+  await expect.poll(() => requestedQuery.get('kind')).toBe('SERVICE_KM');
+  await expect(page.getByText('Strana 1 / 2')).toBeVisible();
+  await page.getByRole('button', { name: 'Sljedeća' }).click();
+  await expect(page.getByText(/120.*km/)).toBeVisible();
+  await expect.poll(() => requestedQuery.get('page')).toBe('2');
+  await expectNoA11yViolations(page);
+});
+
 test('reminders render an accessible empty state on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
