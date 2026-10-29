@@ -1541,7 +1541,7 @@ test('profile logout-all revokes every device and returns to login on mobile', a
   await expect(page.getByRole('heading', { level: 1, name: 'Profil' })).toBeVisible();
   await expectNoA11yViolations(page);
   await page.getByRole('button', { name: 'Odjavi sve uređaje' }).click();
-  await expect(page).toHaveURL(/\/prijava$/);
+  await expect(page).toHaveURL(/\/prijava\?next=%2Fprofil$/);
   await expect(page.getByRole('heading', { name: 'Prijavite se' })).toBeVisible();
   expect(logoutAllCalls).toBe(1);
   expect(logoutCalls).toBe(0);
@@ -1594,7 +1594,7 @@ test('revoking the current profile session clears the client session and returns
   await expect(page.getByText('Chrome on Linux')).toBeVisible();
   await expectNoA11yViolations(page);
   await page.getByRole('row').filter({ hasText: 'Chrome on Linux' }).getByRole('button', { name: 'Odjavi' }).click();
-  await expect(page).toHaveURL(/\/prijava$/);
+  await expect(page).toHaveURL(/\/prijava\?next=%2Fprofil$/);
   await expect(page.getByRole('heading', { name: 'Prijavite se' })).toBeVisible();
   expect(revokedPath).toBe(`/api/v1/auth/sessions/${currentSessionId}`);
   expect(logoutCalls).toBe(0);
