@@ -802,6 +802,90 @@ test('user administration respects the server-masked identity and search filter'
   await expectNoA11yViolations(page);
 });
 
+test('Super Admin creates a user and reveals the temporary password only once on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const newUserId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  let createdUser: Record<string, unknown> | null = null;
+  await mockApi(page, (route) =>
+    route.fulfill({
+      status: 200,
+      json: authResponse({ isSuperAdmin: true, permissions: ['user:view', 'user:create'] }),
+    }),
+  );
+  await page.route('**/api/v1/roles', (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        data: [{ id: roleId, code: 'DISPATCHER', name: 'Dispečer', description: null, isSystem: false }],
+        meta: {},
+      },
+    }),
+  );
+  await page.route('**/api/v1/users**', async (route) => {
+    const request = route.request();
+    if (request.method() === 'POST') {
+      expect(request.postDataJSON()).toEqual({
+        email: 'amina@example.test',
+        firstName: 'Amina',
+        lastName: 'Kovačević',
+        roleIds: [roleId],
+      });
+      createdUser = {
+        id: newUserId,
+        email: 'a***@example.test',
+        firstName: 'Amina',
+        lastName: 'Kovačević',
+        phone: null,
+        status: 'PENDING_PASSWORD_CHANGE',
+        mustChangePassword: true,
+        roles: [{ id: roleId, code: 'DISPATCHER', name: 'Dispečer' }],
+        lastLoginAt: null,
+        lockedUntil: null,
+        piiRedacted: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      };
+      await route.fulfill({
+        status: 201,
+        json: {
+          data: {
+            user: { id: newUserId, email: 'amina@example.test' },
+            temporaryPassword: 'ONE-TIME-SECRET-42',
+            mustChangePassword: true,
+          },
+          meta: {},
+        },
+      });
+      return;
+    }
+    const items = createdUser ? [createdUser] : [];
+    await route.fulfill({
+      status: 200,
+      json: { data: { items, page: 1, pageSize: 20, total: items.length, totalPages: items.length ? 1 : 0 }, meta: {} },
+    });
+  });
+  await page.goto('/prijava?next=%2Fadministracija%2Fkorisnici');
+  await submitLogin(page);
+  await expect(page.getByLabel('Pretraga')).toBeVisible();
+  await page.getByRole('button', { name: 'Novi korisnik' }).click();
+  await page.getByLabel('E-mail').fill('amina@example.test');
+  await page.getByLabel('Ime').fill('Amina');
+  await page.getByLabel('Prezime').fill('Kovačević');
+  await page.getByLabel('Dispečer').check();
+  await page.getByRole('button', { name: 'Kreiraj korisnika' }).click();
+  await expect(page.getByText('Privremena lozinka za amina@example.test')).toBeVisible();
+  await expect(page.getByText('ONE-TIME-SECRET-42', { exact: true })).toBeVisible();
+  await expect(page.getByText('Amina Kovačević')).toBeVisible();
+  const usersRegion = page.getByRole('region', { name: 'Korisnici — pomjerite tabelu horizontalno za pregled svih kolona' });
+  await usersRegion.focus();
+  await expect(usersRegion).toBeFocused();
+  expect(await usersRegion.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.getByRole('button', { name: 'Sakrij' }).click();
+  await expect(page.getByText('ONE-TIME-SECRET-42', { exact: true })).toHaveCount(0);
+  await expectNoA11yViolations(page);
+});
+
 test('permission matrix is readable but immutable without the management permission', async ({ page }) => {
   await mockApi(page, (route) =>
     route.fulfill({ status: 200, json: authResponse({ permissions: ['role:view'] }) }),
