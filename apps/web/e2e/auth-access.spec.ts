@@ -2303,7 +2303,7 @@ test('tire set create keeps its structured and published-form values after confl
   await page.getByRole('button', { name: 'Novi komplet' }).click();
   await expect(page.getByRole('heading', { name: 'Novi komplet guma' })).toBeVisible();
   await page.getByLabel('Kod kompleta').fill('G-Z-020');
-  await page.getByLabel('Sezona').selectOption('WINTER');
+  await page.getByLabel('Sezona *', { exact: true }).selectOption('WINTER');
   await page.getByLabel('Proizvođač').fill('Continental');
   await page.getByLabel('Model').fill('WinterContact');
   await page.getByLabel('Dimenzija').fill('205/55 R16');
