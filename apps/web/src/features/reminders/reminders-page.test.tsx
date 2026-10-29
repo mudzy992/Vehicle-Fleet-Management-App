@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import type { ReminderListResponse } from '@vfm/shared/schemas';
-import { api } from '../../lib/api.js';
+import { ApiError, api } from '../../lib/api.js';
 import { RemindersPage } from './reminders-page.js';
 
 const session = vi.hoisted(() => ({ permissions: [] as string[] }));
@@ -114,5 +114,34 @@ describe('RemindersPage', () => {
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.getByText('Podsjetnici nisu dostupni.')).toBeTruthy();
     expect(screen.queryByText('Nema podsjetnika')).toBeNull();
+  });
+
+  it('sends selected filters and pagination to the server', async () => {
+    const requested: string[] = [];
+    vi.spyOn(api, 'get').mockImplementation(async <T,>(path: string) => {
+      requested.push(path);
+      return { ...REMINDER_LIST, total: 51, totalPages: 2 } as T;
+    });
+
+    renderReminders();
+    expect(await screen.findByText('Vehicle')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Vrsta'), { target: { value: 'SERVICE_KM' } });
+    await waitFor(() => expect(requested.some((path) => path.includes('kind=SERVICE_KM'))).toBe(true));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sljedeća' }));
+    await waitFor(() => expect(requested.some((path) => path.includes('page=2'))).toBe(true));
+  });
+
+  it('announces mutation conflicts instead of success', async () => {
+    session.permissions = ['reminder:acknowledge'];
+    vi.spyOn(api, 'get').mockResolvedValue(REMINDER_LIST);
+    vi.spyOn(api, 'post').mockRejectedValue(new ApiError('CONFLICT', 'Podsjetnik je već obrađen.', 409));
+
+    renderReminders();
+    fireEvent.click(await screen.findByRole('button', { name: 'Potvrdi' }));
+
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.getByText('Podsjetnik je već obrađen.')).toBeTruthy();
+    expect(screen.queryByText('Podsjetnik je potvrđen.')).toBeNull();
   });
 });
