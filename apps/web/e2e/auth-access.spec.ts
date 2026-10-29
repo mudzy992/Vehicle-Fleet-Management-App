@@ -620,6 +620,61 @@ test('insurance records show populated entries, paginate, and pass axe checks', 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
 });
 
+test('populated insurance records remain usable on mobile and send deadline filters to the server', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let expiringInDays: string | null = null;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['insurance:view'] }) }),
+  );
+  await page.route('**/api/v1/insurances**', async (route) => {
+    const url = new URL(route.request().url());
+    expiringInDays = url.searchParams.get('expiringInDays');
+    await route.fulfill({
+      status: 200,
+      json: {
+        data: {
+          items: [{
+            id: '77777777-7777-4777-8777-777777777777',
+            vehicleId: '55555555-5555-4555-8555-555555555555',
+            policyNumber: 'POL-MOBILE-01',
+            validFrom: '2026-01-01',
+            validUntil: '2026-11-10',
+            status: 'ACTIVE',
+            premiumAmount: 12500,
+            insuranceCompany: 'Test osiguranje',
+            type: 'Obavezno',
+          }],
+          total: 1,
+          totalPages: 1,
+          page: 1,
+          pageSize: 25,
+        },
+        meta: {},
+      },
+    });
+  });
+  await page.route('**/api/v1/vehicles**', (route) =>
+    route.fulfill({
+      status: 200,
+      json: { data: { items: [{ id: '55555555-5555-4555-8555-555555555555', internalNo: 'V-01', make: 'Škoda', model: 'Octavia' }], total: 1, totalPages: 1, page: 1, pageSize: 100 }, meta: {} },
+    }),
+  );
+  await page.goto('/prijava?next=%2Fosiguranja');
+  await submitLogin(page);
+  await expect(page.getByText('POL-MOBILE-01')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'V-01 · Škoda Octavia', exact: true })).toBeVisible();
+  const tableRegion = page.getByRole('region', { name: 'Evidencije — pomjerite tabelu horizontalno za pregled svih kolona' });
+  await tableRegion.focus();
+  await expect(tableRegion).toBeFocused();
+  expect(await tableRegion.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+
+  await page.getByLabel('Rok').selectOption('7');
+  await expect.poll(() => expiringInDays).toBe('7');
+  await expect(page.getByText('POL-MOBILE-01')).toBeVisible();
+});
+
 test('reminders support acknowledge and snooze actions on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
