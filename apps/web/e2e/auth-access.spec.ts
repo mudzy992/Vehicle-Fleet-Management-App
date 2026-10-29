@@ -925,6 +925,91 @@ test('task type configuration remains navigable on a narrow screen with keyboard
   await expectNoA11yViolations(page);
 });
 
+test('Super Admin can create and edit a task type through the configuration flow', async ({ page }) => {
+  const taskTypeId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  let currentName: string | null = null;
+  const taskType = () => ({
+    id: taskTypeId,
+    code: 'FUEL_REFILL',
+    name: currentName ?? 'Dopuna goriva',
+    description: 'Opis vrste zadatka',
+    iconName: null,
+    colorHex: '#2E7D32',
+    requiresVehicle: true,
+    requiresOdometer: false,
+    requiresPhotos: false,
+    defaultPriority: 'NORMAL',
+    defaultAssignMode: 'OPEN_CLAIM',
+    allowMultipleClaimants: false,
+    dueOffsetHours: 48,
+    formSchemaId: null,
+    formSchemaKey: null,
+    formSchemaName: null,
+    formSchemaVersion: null,
+    active: true,
+    sortOrder: 100,
+    completionRequirementCount: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['task_type:view', 'task_type:create', 'task_type:update'] }) }),
+  );
+  await page.route('**/api/v1/form-schemas*', (route) =>
+    route.fulfill({ status: 200, json: { data: [], meta: {} } }),
+  );
+  await page.route('**/api/v1/task-types**', async (route) => {
+    const { method, url } = route.request();
+    const path = new URL(url).pathname;
+    if (method === 'GET' && path === '/api/v1/task-types') {
+      const row = taskType();
+      const items = currentName ? [row] : [];
+      await route.fulfill({
+        status: 200,
+        json: { data: { items, page: 1, pageSize: 25, total: items.length, totalPages: items.length ? 1 : 0 }, meta: {} },
+      });
+      return;
+    }
+    if (method === 'POST' && path === '/api/v1/task-types') {
+      const payload = route.request().postDataJSON();
+      expect(payload).toMatchObject({ code: 'FUEL_REFILL', name: 'Dopuna goriva', colorHex: '#2E7D32' });
+      currentName = 'Dopuna goriva';
+      await route.fulfill({ status: 201, json: { data: { ...taskType(), completionRequirements: [] }, meta: {} } });
+      return;
+    }
+    if (method === 'GET' && path === `/api/v1/task-types/${taskTypeId}`) {
+      await route.fulfill({ status: 200, json: { data: { ...taskType(), completionRequirements: [] }, meta: {} } });
+      return;
+    }
+    if (method === 'PATCH' && path === `/api/v1/task-types/${taskTypeId}`) {
+      const payload = route.request().postDataJSON();
+      expect(payload).toEqual({ name: 'Dopuna goriva i aditiva' });
+      currentName = 'Dopuna goriva i aditiva';
+      await route.fulfill({ status: 200, json: { data: { ...taskType(), completionRequirements: [] }, meta: {} } });
+      return;
+    }
+    await route.fulfill({ status: 500, json: { error: { message: `Unexpected task type request: ${method} ${path}` } } });
+  });
+  await page.goto('/prijava?next=%2Fvrste-zadataka');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { level: 1, name: 'Vrste zadataka' })).toBeVisible();
+  await page.getByRole('button', { name: 'Nova vrsta' }).click();
+  await page.getByLabel('Kod vrste').fill('FUEL_REFILL');
+  await page.getByLabel('Naziv vrste').fill('Dopuna goriva');
+  await page.getByLabel('Boja', { exact: true }).fill('#2E7D32');
+  await page.getByRole('button', { name: 'Sačuvaj vrstu' }).click();
+  await expect(page.getByRole('status')).toContainText('Nova vrsta zadatka FUEL_REFILL je sačuvana.');
+  await expect(page.getByText('Dopuna goriva', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Uredi', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Izmjena vrste FUEL_REFILL' })).toBeVisible();
+  await page.getByLabel('Naziv vrste').fill('Dopuna goriva i aditiva');
+  await expect(page.getByLabel('Kod vrste')).toHaveAttribute('readonly', '');
+  await page.getByRole('button', { name: 'Sačuvaj izmjene' }).click();
+  await expect(page.getByRole('status')).toContainText('Vrsta zadatka FUEL_REFILL je izmijenjena.');
+  await expect(page.getByText('Dopuna goriva i aditiva', { exact: true })).toBeVisible();
+  await expectNoA11yViolations(page);
+});
+
 test('Super Admin can update a role scope without including the implicit Super Admin role', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const savedPayloads: unknown[] = [];
