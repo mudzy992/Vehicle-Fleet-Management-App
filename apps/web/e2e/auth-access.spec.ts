@@ -256,6 +256,22 @@ test('login failure is communicated without exposing credential-specific detail'
   await expect(page).toHaveURL(/\/prijava(?:\?next=%2Fdizajn-sistem)?$/);
 });
 
+test('expired authenticated request clears session and returns to login', async ({ page }) => {
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['vehicle:view'] }) }),
+  );
+  await page.route('**/api/v1/vehicles**', (route) =>
+    route.fulfill({
+      status: 401,
+      json: { error: { code: 'UNAUTHENTICATED', message: 'Session expired' } },
+    }),
+  );
+  await page.goto('/prijava?next=%2Fvozila');
+  await submitLogin(page);
+  await expect(page).toHaveURL(/\/prijava\?next=%2Fvozila$/);
+  await expect(page.getByRole('heading', { name: 'Prijavite se' })).toBeVisible();
+});
+
 test('successful login returns to the requested internal route and keeps tokens out of browser storage', async ({
   page,
 }) => {
