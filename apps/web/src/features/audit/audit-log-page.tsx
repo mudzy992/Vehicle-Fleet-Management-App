@@ -144,8 +144,8 @@ export function AuditLogPage() {
       ) : null}
 
       <Card flush>
-        {query.isLoading ? (
-          <p className="p-4 text-sm text-[var(--fg-muted)]">Učitavanje…</p>
+        {query.isPending ? (
+          <p className="p-4 text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
         ) : error ? (
           <p className="p-4 text-sm text-[var(--danger)]" role="alert">
             {error instanceof ApiError
@@ -213,9 +213,11 @@ export function AuditLogPage() {
             </Button>
           </div>
 
-          {detail.isLoading ? <p className="mt-2 text-xs text-[var(--fg-muted)]">Učitavanje…</p> : null}
+          {detail.isPending ? (
+            <p role="status" className="mt-2 text-xs text-[var(--fg-muted)]">Učitavanje…</p>
+          ) : null}
           {detail.error ? (
-            <p className="mt-2 text-xs text-[var(--danger)]">
+            <p role="alert" className="mt-2 text-xs text-[var(--danger)]">
               {detail.error instanceof ApiError
                 ? `${detail.error.message} (${detail.error.code})`
                 : 'Greška.'}

@@ -100,4 +100,17 @@ describe('AuditLogPage', () => {
     expect(screen.getByText('Greška pri učitavanju audit loga.')).toBeTruthy();
     expect(screen.queryByText('Nema zapisa')).toBeNull();
   });
+
+  it('announces a detail request failure accessibly', async () => {
+    vi.spyOn(api, 'get').mockImplementation(async <T,>(path: string) => {
+      if (path === '/audit-logs/42') throw new TypeError('network unavailable');
+      return LIST as T;
+    });
+
+    renderAuditPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Detalj' }));
+
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.getByText('Greška.')).toBeTruthy();
+  });
 });
