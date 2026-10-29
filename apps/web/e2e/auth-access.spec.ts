@@ -2199,6 +2199,23 @@ test('user administration route is denied before loading identities without user
   expect(userDataRequests).toBe(0);
 });
 
+test('task detail route is denied before loading task data without task:view', async ({ page }) => {
+  const taskId = '44444444-4444-4444-8444-444444444444';
+  let taskDataRequests = 0;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: [] }) }),
+  );
+  await page.route('**/api/v1/tasks/**', async (route) => {
+    taskDataRequests += 1;
+    await route.fulfill({ status: 403, json: { error: { code: 'FORBIDDEN', message: 'Forbidden' } } });
+  });
+  await page.goto(`/prijava?next=${encodeURIComponent(`/zadaci/${taskId}`)}`);
+  await submitLogin(page);
+  await expect(page.getByText('Nemate pristup', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Zadatak/ })).toHaveCount(0);
+  expect(taskDataRequests).toBe(0);
+});
+
 test('role matrix route is denied before loading role data without role:view', async ({ page }) => {
   let roleDataRequests = 0;
   await mockApi(page, (route) =>
