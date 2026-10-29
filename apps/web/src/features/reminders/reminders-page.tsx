@@ -125,7 +125,14 @@ export function RemindersPage() {
         )}
       </div>
 
-      {message && <p className="text-sm">{message}</p>}
+      {message && (
+        <p
+          className="text-sm"
+          role={acknowledge.isError || snooze.isError || scan.isError ? 'alert' : 'status'}
+        >
+          {message}
+        </p>
+      )}
 
       <Card>
         <CardHeader title="Filteri" description="Samo ono što je u prozorima politika." />
@@ -174,7 +181,7 @@ export function RemindersPage() {
       {error && (
         <Card>
           <CardContent>
-            <p className="text-sm text-[var(--danger)]">
+            <p className="text-sm text-[var(--danger)]" role="alert">
               {error instanceof ApiError ? error.message : 'Greška pri učitavanju podsjetnika.'}
             </p>
           </CardContent>
@@ -184,7 +191,11 @@ export function RemindersPage() {
       <Card>
         <CardContent>
           {isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
+            <p className="text-sm text-[var(--fg-muted)]" role="status">
+              Učitavanje…
+            </p>
+          ) : error ? (
+            <p className="text-sm text-[var(--danger)]">Podsjetnici nisu dostupni.</p>
           ) : items.length === 0 ? (
             <EmptyState
               title="Nema podsjetnika"
