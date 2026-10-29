@@ -722,6 +722,73 @@ test('driver registry shows populated results accessibly and applies server sear
   await expectNoA11yViolations(page);
 });
 
+test('permission matrix is readable but immutable without the management permission', async ({ page }) => {
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['role:view'] }) }),
+  );
+  await page.route('**/api/v1/roles/matrix', (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        data: {
+          modules: [
+            {
+              module: 'Vozila',
+              permissions: [
+                {
+                  code: 'vehicle:view',
+                  action: 'view',
+                  description: 'Pregled vozila',
+                  isSensitive: false,
+                  inDatabase: true,
+                },
+              ],
+            },
+          ],
+          roles: [
+            {
+              id: roleId,
+              code: 'DISPATCHER',
+              name: 'Dispečer',
+              description: null,
+              isSystem: false,
+              allowedClientTypes: ['WEB'],
+              permissionsVersion: 1,
+              priority: 10,
+              activeUserCount: 2,
+              grantedCount: 1,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          grants: [
+            {
+              roleId,
+              permission: 'vehicle:view',
+              scope: 'ALL',
+              scopeVehicleIds: [],
+              scopeDriverIds: [],
+              conditions: null,
+              grantedAt: null,
+            },
+          ],
+          generatedAt: '2026-01-01T00:00:00.000Z',
+        },
+        meta: {},
+      },
+    }),
+  );
+  await page.goto('/prijava?next=%2Fadministracija%2Fprava');
+  await submitLogin(page);
+  await expect(page).toHaveURL(/\/administracija\/prava$/);
+  await expect(page.getByText('Matrica prava (1 permisija)')).toBeVisible();
+  const scope = page.getByLabel('Dispečer → vehicle:view');
+  await expect(scope).toHaveValue('ALL');
+  await expect(scope).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Sačuvaj matricu' })).toBeDisabled();
+  await expectNoA11yViolations(page);
+});
+
 test('profile stays accessible and fits a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
