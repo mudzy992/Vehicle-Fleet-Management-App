@@ -79,11 +79,16 @@ export function MatrixPage() {
     },
   });
 
-  if (query.isLoading) return <p className="text-sm text-[var(--fg-muted)]">Učitavanje matrice…</p>;
+  if (query.isPending)
+    return (
+      <p className="text-sm text-[var(--fg-muted)]" role="status">
+        Učitavanje matrice…
+      </p>
+    );
   if (query.error) {
     const error = query.error instanceof ApiError ? query.error : null;
     return (
-      <p className="text-sm text-[var(--danger)]">
+      <p className="text-sm text-[var(--danger)]" role="alert">
         Greška ({error?.code ?? 'INTERNAL_ERROR'}): {error?.message ?? 'matrica nije dostupna'}
       </p>
     );
@@ -141,7 +146,7 @@ export function MatrixPage() {
 
       {saved ? (
         <Card>
-          <p className="text-sm font-medium">
+          <p className="text-sm font-medium" role="status">
             Sačuvano: {saved.affectedRoles} rola · +{saved.added} / −{saved.removed} / ~{saved.scopeChanged}
           </p>
           <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
