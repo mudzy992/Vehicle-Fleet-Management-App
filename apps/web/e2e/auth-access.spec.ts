@@ -982,6 +982,46 @@ test('vehicle detail is readable on mobile without mutation permissions', async 
 
 });
 
+test('vehicle archive conflict is announced without removing the active detail', async ({ page }) => {
+  const vehicleId = '55555555-5555-4555-8555-555555555555';
+  const vehicle = {
+    id: vehicleId, internalNo: 'V-014', make: 'Škoda', model: 'Octavia', year: 2022,
+    plateNumber: 'E12-M-345', fuelType: 'DIESEL', status: 'ACTIVE', odometerKm: 84500,
+    odometerUpdatedAt: '2026-10-28T08:30:00.000Z', registrationExpiresAt: null, insuranceExpiresAt: null,
+    archivedAt: null, version: 3, updatedAt: '2026-10-28T08:30:00.000Z', vin: null, transmission: null,
+    color: null, bodyType: null, engineCcm: null, enginePowerKw: null, seats: null, ownershipType: 'OWNED',
+    acquisitionDate: null, acquisitionPrice: null, costCenter: null, nextServiceDueDate: null,
+    nextServiceDueKm: null, notes: null, photoAttachmentId: null,
+    formSchemaId: '77777777-7777-4777-8777-777777777777',
+    formSchemaVersionId: '88888888-8888-4888-8888-888888888888', formData: {}, createdAt: '2026-01-01T08:00:00.000Z',
+  };
+  let archivePayload: unknown = null;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse({ permissions: ['vehicle:view', 'vehicle:archive'] }) }));
+  await page.route('**/api/v1/vehicles/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/v1/vehicles/${vehicleId}/archive` && route.request().method() === 'POST') {
+      archivePayload = route.request().postDataJSON();
+      await route.fulfill({ status: 409, json: { error: { code: 'CONFLICT', message: 'Vozilo je izmijenjeno u drugoj sesiji.' } } });
+      return;
+    }
+    if (url.pathname === `/api/v1/vehicles/${vehicleId}`) {
+      await route.fulfill({ status: 200, json: { data: vehicle, meta: {} } });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } });
+  });
+  await page.goto(`/prijava?next=${encodeURIComponent(`/vozila/${vehicleId}`)}`);
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'V-014 · Škoda Octavia' })).toBeVisible();
+  await page.getByRole('button', { name: 'Arhiviraj' }).click();
+  await expect(page.getByRole('alert')).toContainText('Vozilo je izmijenjeno u drugoj sesiji.');
+  await expect(page.getByText('Aktivno', { exact: true })).toBeVisible();
+  expect(archivePayload).toEqual({ reason: 'Arhivirano s detalja' });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('driver detail masks PII and is readable without edit permissions on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const driverId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
