@@ -314,7 +314,7 @@ test('insurance records fit a mobile viewport and pass axe checks', async ({ pag
   );
   await page.goto('/prijava?next=%2Fosiguranja');
   await submitLogin(page);
-  await expect(page.getByRole('heading', { name: 'Osiguranja' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Osiguranja', exact: true })).toBeVisible();
   await expect(page.getByText('Nema osiguranja')).toBeVisible();
   await expect(page.getByLabel('Pretraga')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
