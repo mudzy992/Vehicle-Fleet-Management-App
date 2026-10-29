@@ -304,7 +304,7 @@ export function TaskTypesPage() {
               }
             />
           ) : (
-            <Table>
+            <Table scrollLabel="Vrste zadataka — za pregled svih kolona pomjerite tabelu horizontalno">
               <THead>
                 <TR>
                   <TH>Vrsta</TH>

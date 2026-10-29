@@ -865,6 +865,62 @@ test('permission matrix is readable but immutable without the management permiss
   await expectNoA11yViolations(page);
 });
 
+test('task type configuration remains navigable on a narrow screen with keyboard-scrollable table', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const taskTypeId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['task_type:view'] }) }),
+  );
+  await page.route('**/api/v1/task-types**', (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        data: {
+          items: [{
+            id: taskTypeId,
+            code: 'OIL_CHANGE',
+            name: 'Zamjena ulja i filtera',
+            description: 'Redovni servis vozila',
+            iconName: null,
+            colorHex: null,
+            requiresVehicle: true,
+            requiresOdometer: true,
+            requiresPhotos: false,
+            defaultPriority: 'NORMAL',
+            defaultAssignMode: 'OPEN_CLAIM',
+            allowMultipleClaimants: false,
+            dueOffsetHours: 48,
+            formSchemaId: null,
+            formSchemaKey: null,
+            formSchemaName: null,
+            formSchemaVersion: null,
+            active: true,
+            sortOrder: 1,
+            completionRequirementCount: 0,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          }],
+          page: 1,
+          pageSize: 25,
+          total: 1,
+          totalPages: 1,
+        },
+        meta: {},
+      },
+    }),
+  );
+  await page.goto('/prijava?next=%2Fvrste-zadataka');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { level: 1, name: 'Vrste zadataka' })).toBeVisible();
+  await expect(page.getByText('Zamjena ulja i filtera')).toBeVisible();
+  const taskTypesRegion = page.getByRole('region', { name: 'Vrste zadataka — za pregled svih kolona pomjerite tabelu horizontalno' });
+  await taskTypesRegion.focus();
+  await expect(taskTypesRegion).toBeFocused();
+  expect(await taskTypesRegion.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('Super Admin can update a role scope without including the implicit Super Admin role', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const savedPayloads: unknown[] = [];
