@@ -256,6 +256,21 @@ test('login failure is communicated without exposing credential-specific detail'
   await expect(page).toHaveURL(/\/prijava(?:\?next=%2Fdizajn-sistem)?$/);
 });
 
+test('reminders render an accessible empty state on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['reminder:view'] }) }),
+  );
+  await page.goto('/prijava?next=%2Frokovi');
+  await submitLogin(page);
+  await expect(page).toHaveURL(/\/rokovi$/);
+  await expect(page.getByRole('heading', { name: 'Rokovi' })).toBeVisible();
+  await expect(page.getByText('Nema podsjetnika')).toBeVisible();
+  await expect(page.getByLabel('Status')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('expired authenticated request clears session and returns to login', async ({ page }) => {
   await mockApi(page, (route) =>
     route.fulfill({ status: 200, json: authResponse({ permissions: ['vehicle:view'] }) }),
