@@ -2206,6 +2206,72 @@ test('vehicle service history is readable and action controls follow permissions
   await expectNoA11yViolations(page);
 });
 
+test('service create preserves the draft after a server conflict and retries on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const vehicleId = '55555555-5555-4555-8555-555555555555';
+  const formVersionId = '88888888-8888-4888-8888-888888888888';
+  const definition = {
+    $schema: 'vfm-form/1',
+    meta: { title: 'Servis', subject: 'SERVICE' },
+    sections: [{ key: 'extra', title: 'Dodatno', order: 1, fields: [{ key: 'kod', type: 'TEXT', label: 'Šifra radionice', order: 1 }] }],
+  };
+  let attempts = 0;
+  let firstPayload: Record<string, unknown> | null = null;
+  let retryPayload: Record<string, unknown> | null = null;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['vehicle:view', 'service:view', 'service:create'] }) }),
+  );
+  await page.route(`**/api/v1/vehicles/${vehicleId}`, (route) => route.fulfill({ status: 200, json: {
+    data: { id: vehicleId, internalNo: 'V-22', make: 'Toyota', model: 'Corolla', year: 2022, plateNumber: 'A22-T-022', fuelType: 'PETROL', status: 'ACTIVE', odometerKm: 65432, odometerUpdatedAt: '2026-10-29T08:00:00.000Z', registrationExpiresAt: null, insuranceExpiresAt: null, archivedAt: null, version: 1, updatedAt: '2026-10-29T08:00:00.000Z', vin: null, transmission: 'AUTOMATIC', color: 'Siva', bodyType: null, engineCcm: 1800, enginePowerKw: 90, seats: 5, ownershipType: 'OWNED', acquisitionDate: '2022-01-01', acquisitionPrice: null, costCenter: null, nextServiceDueDate: null, nextServiceDueKm: null, notes: null, photoAttachmentId: null, formSchemaId: '77777777-7777-4777-8777-777777777777', formSchemaVersionId: formVersionId, formData: {}, createdAt: '2022-01-01T00:00:00.000Z' },
+    meta: {},
+  } }));
+  await page.route('**/api/v1/form-schemas/active?subject=SERVICE', (route) => route.fulfill({
+    status: 200,
+    json: { data: { formSchemaId: '77777777-7777-4777-8777-777777777777', formSchemaVersionId: formVersionId, version: 2, definition }, meta: {} },
+  }));
+  await page.route('**/api/v1/services**', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ status: 200, json: { data: { items: [], page: 1, pageSize: 25, total: 0, totalPages: 0 }, meta: {} } });
+      return;
+    }
+    attempts += 1;
+    const payload = route.request().postDataJSON() as Record<string, unknown>;
+    if (attempts === 1) {
+      firstPayload = payload;
+      await route.fulfill({ status: 409, json: { error: { code: 'CONFLICT', message: 'Ova servisna evidencija je već unesena.' } } });
+      return;
+    }
+    retryPayload = payload;
+    await route.fulfill({ status: 201, json: { data: { id: '66666666-6666-4666-8666-666666666666', ...payload }, meta: {} } });
+  });
+  await page.goto(`/prijava?next=${encodeURIComponent(`/vozila/${vehicleId}`)}`);
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'V-22 · Toyota Corolla' })).toBeVisible();
+  await page.getByRole('button', { name: 'Servisi' }).click();
+  await page.getByRole('button', { name: 'Novi servis' }).click();
+  await expect(page.getByRole('heading', { name: 'Novi servis' })).toBeVisible();
+  await page.getByLabel('Datum servisa').fill('2026-10-20');
+  await page.getByLabel('Vrsta servisa').fill('Redovni servis');
+  await page.getByLabel('Radionica').fill('Auto Centar');
+  await page.getByLabel('Ukupni trošak (KM)').fill('145.75');
+  await page.getByLabel('Kilometraža (km)').fill('65000');
+  await page.getByLabel('Šifra radionice').fill('AC-VIS');
+  await page.getByRole('button', { name: 'Sačuvaj servis' }).click();
+  await expect(page.getByRole('alert')).toContainText('Ova servisna evidencija je već unesena.');
+  await expect(page.getByLabel('Radionica')).toHaveValue('Auto Centar');
+  await expect(page.getByLabel('Šifra radionice')).toHaveValue('AC-VIS');
+  await expectNoA11yViolations(page);
+  await page.getByLabel('Vrsta servisa').fill('Popravka');
+  await page.getByRole('button', { name: 'Sačuvaj servis' }).click();
+  await expect(page.getByRole('heading', { name: 'Novi servis' })).toHaveCount(0);
+  await expect(page.getByText('Nema servisnih evidencija')).toBeVisible();
+  expect(attempts).toBe(2);
+  expect(firstPayload).toMatchObject({ vehicleId, serviceDate: '2026-10-20', serviceType: 'Redovni servis', workshopName: 'Auto Centar', totalCost: 14575, odometerKm: 65000, formData: { kod: 'AC-VIS' }, formSchemaVersionId: formVersionId });
+  expect(retryPayload).toMatchObject({ vehicleId, serviceDate: '2026-10-20', serviceType: 'Popravka', workshopName: 'Auto Centar', totalCost: 14575, odometerKm: 65000, formData: { kod: 'AC-VIS' }, formSchemaVersionId: formVersionId });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('tire set inventory filters and read-only permissions work on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   let lastQuery: URLSearchParams | null = null;
