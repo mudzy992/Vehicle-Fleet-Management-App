@@ -2264,6 +2264,70 @@ test('tire set inventory filters and read-only permissions work on mobile', asyn
   await expectNoA11yViolations(page);
 });
 
+test('tire set create keeps its structured and published-form values after conflict and retries', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const formVersionId = '88888888-8888-4888-8888-888888888888';
+  const definition = {
+    $schema: 'vfm-form/1',
+    meta: { title: 'Komplet guma', subject: 'TIRE_SET' },
+    sections: [{ key: 'extra', title: 'Dodatno', order: 1, fields: [{ key: 'oznaka', type: 'TEXT', label: 'Interna oznaka', order: 1 }] }],
+  };
+  let attempts = 0;
+  let initialPayload: Record<string, unknown> | null = null;
+  let retryPayload: Record<string, unknown> | null = null;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['tire:view', 'tire:create'] }) }),
+  );
+  await page.route('**/api/v1/form-schemas/active?subject=TIRE_SET', (route) => route.fulfill({
+    status: 200,
+    json: { data: { formSchemaId: '77777777-7777-4777-8777-777777777777', formSchemaVersionId: formVersionId, version: 3, definition }, meta: {} },
+  }));
+  await page.route('**/api/v1/tire-sets**', async (route) => {
+    if (route.request().method() === 'POST') {
+      attempts += 1;
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      if (attempts === 1) {
+        initialPayload = payload;
+        await route.fulfill({ status: 409, json: { error: { code: 'CONFLICT', message: 'Kod kompleta već postoji.' } } });
+        return;
+      }
+      retryPayload = payload;
+      await route.fulfill({ status: 201, json: { data: { id: '99999999-9999-4999-8999-999999999999', ...payload }, meta: {} } });
+      return;
+    }
+    await route.fulfill({ status: 200, json: { data: { items: [], page: 1, pageSize: 25, total: 0, totalPages: 0 }, meta: {} } });
+  });
+  await page.goto('/prijava?next=%2Fgume');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Kompleti guma' })).toBeVisible();
+  await page.getByRole('button', { name: 'Novi komplet' }).click();
+  await expect(page.getByRole('heading', { name: 'Novi komplet guma' })).toBeVisible();
+  await page.getByLabel('Kod kompleta').fill('G-Z-020');
+  await page.getByLabel('Sezona').selectOption('WINTER');
+  await page.getByLabel('Proizvođač').fill('Continental');
+  await page.getByLabel('Model').fill('WinterContact');
+  await page.getByLabel('Dimenzija').fill('205/55 R16');
+  await page.getByLabel('Broj guma u kompletu').fill('4');
+  await page.getByLabel('Nabavna cijena kompleta (KM)').fill('620.00');
+  await page.getByLabel('Trenutna lokacija / skladište').fill('Skladište Visoko');
+  await page.getByLabel('Napomena').fill('Sačuvati zimski set.');
+  await page.getByLabel('Interna oznaka').fill('ZIMA-2026');
+  await page.getByRole('button', { name: 'Sačuvaj komplet' }).click();
+  await expect(page.getByRole('alert')).toContainText('Kod kompleta već postoji.');
+  await expect(page.getByLabel('Proizvođač')).toHaveValue('Continental');
+  await expect(page.getByLabel('Napomena')).toHaveValue('Sačuvati zimski set.');
+  await expectNoA11yViolations(page);
+  await page.getByLabel('Kod kompleta').fill('G-Z-021');
+  await page.getByRole('button', { name: 'Sačuvaj komplet' }).click();
+  await expect(page.getByRole('status')).toContainText('Novi komplet je sačuvan.');
+  await expect(page.getByRole('heading', { name: 'Novi komplet guma' })).toHaveCount(0);
+  expect(attempts).toBe(2);
+  expect(initialPayload).toMatchObject({ code: 'G-Z-020', season: 'WINTER', brand: 'Continental', model: 'WinterContact', size: '205/55 R16', tireCount: 4, purchasePrice: 62000, currentLocation: 'Skladište Visoko', notes: 'Sačuvati zimski set.', formData: { oznaka: 'ZIMA-2026' }, formSchemaVersionId: formVersionId });
+  expect(retryPayload).toMatchObject({ code: 'G-Z-021', season: 'WINTER', brand: 'Continental', model: 'WinterContact', size: '205/55 R16', tireCount: 4, purchasePrice: 62000, currentLocation: 'Skladište Visoko', notes: 'Sačuvati zimski set.', formData: { oznaka: 'ZIMA-2026' }, formSchemaVersionId: formVersionId });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('external-looking next path is rejected in favor of the dashboard', async ({ page }) => {
   await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse() }));
   await page.goto('/prijava?next=%2F%2Fevil.example');
