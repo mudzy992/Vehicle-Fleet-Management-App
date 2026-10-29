@@ -144,7 +144,7 @@ test('system health screen renders successful probes accessibly', async ({ page 
   await submitLogin(page);
   await expect(page).toHaveURL(/\/zdravlje$/);
   await expect(page.getByRole('heading', { name: 'Zdravlje sistema' })).toBeVisible();
-  await expect(page.getAllByText('ok')).toHaveLength(3);
+  await expect(page.getByText('ok', { exact: true })).toHaveCount(3);
   await expectNoA11yViolations(page);
 });
 
