@@ -1517,6 +1517,89 @@ test('profile can revoke another device session without leaving the current sess
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
+test('profile logout-all revokes every device and returns to login on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let logoutAllCalls = 0;
+  let logoutCalls = 0;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['auth:login', 'auth:manage_sessions'] }) }),
+  );
+  await page.route('**/api/v1/auth/sessions', (route) =>
+    route.fulfill({ status: 200, json: { data: [], meta: {} } }),
+  );
+  await page.route('**/api/v1/auth/logout-all', async (route) => {
+    logoutAllCalls += 1;
+    await route.fulfill({ status: 200, json: { data: { revokedSessions: 2 }, meta: {} } });
+  });
+  await page.route('**/api/v1/auth/logout', async (route) => {
+    logoutCalls += 1;
+    await route.fulfill({ status: 200, json: { data: null, meta: {} } });
+  });
+
+  await page.goto('/prijava?next=%2Fprofil');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { level: 1, name: 'Profil' })).toBeVisible();
+  await expectNoA11yViolations(page);
+  await page.getByRole('button', { name: 'Odjavi sve uređaje' }).click();
+  await expect(page).toHaveURL(/\/prijava$/);
+  await expect(page.getByRole('heading', { name: 'Prijavite se' })).toBeVisible();
+  expect(logoutAllCalls).toBe(1);
+  expect(logoutCalls).toBe(0);
+});
+
+test('revoking the current profile session clears the client session and returns to login', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const currentSessionId = '33333333-3333-4333-8333-333333333333';
+  let revokedPath = '';
+  let logoutCalls = 0;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['auth:login', 'auth:manage_sessions'] }) }),
+  );
+  await page.route('**/api/v1/auth/sessions**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: {
+          data: [{
+            id: currentSessionId,
+            clientType: 'WEB',
+            createdAt: '2026-10-29T08:00:00.000Z',
+            expiresAt: '2026-10-30T08:00:00.000Z',
+            lastUsedAt: '2026-10-29T09:00:00.000Z',
+            ipAddress: '192.0.2.10',
+            userAgent: 'Chrome on Linux',
+            deviceInfo: null,
+          }],
+          meta: {},
+        },
+      });
+      return;
+    }
+    if (request.method() === 'DELETE') {
+      revokedPath = url.pathname;
+      await route.fulfill({ status: 200, json: { data: { currentSessionRevoked: true }, meta: {} } });
+      return;
+    }
+    await route.fulfill({ status: 405, json: { error: { code: 'METHOD_NOT_ALLOWED', message: 'Not allowed' } } });
+  });
+  await page.route('**/api/v1/auth/logout', async (route) => {
+    logoutCalls += 1;
+    await route.fulfill({ status: 200, json: { data: null, meta: {} } });
+  });
+
+  await page.goto('/prijava?next=%2Fprofil');
+  await submitLogin(page);
+  await expect(page.getByText('Chrome on Linux')).toBeVisible();
+  await expectNoA11yViolations(page);
+  await page.getByRole('row').filter({ hasText: 'Chrome on Linux' }).getByRole('button', { name: 'Odjavi' }).click();
+  await expect(page).toHaveURL(/\/prijava$/);
+  await expect(page.getByRole('heading', { name: 'Prijavite se' })).toBeVisible();
+  expect(revokedPath).toBe(`/api/v1/auth/sessions/${currentSessionId}`);
+  expect(logoutCalls).toBe(0);
+});
+
 test('external-looking next path is rejected in favor of the dashboard', async ({ page }) => {
   await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse() }));
   await page.goto('/prijava?next=%2F%2Fevil.example');
