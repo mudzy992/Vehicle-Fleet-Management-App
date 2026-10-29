@@ -1016,7 +1016,7 @@ test('vehicle archive conflict is announced without removing the active detail',
   await expect(page.getByRole('heading', { name: 'V-014 · Škoda Octavia' })).toBeVisible();
   await page.getByRole('button', { name: 'Arhiviraj' }).click();
   await expect(page.getByRole('alert')).toContainText('Vozilo je izmijenjeno u drugoj sesiji.');
-  await expect(page.getByText('Aktivno', { exact: true })).toBeVisible();
+  await expect(page.getByText('Aktivan', { exact: true })).toBeVisible();
   expect(archivePayload).toEqual({ reason: 'Arhivirano s detalja' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await expectNoA11yViolations(page);
