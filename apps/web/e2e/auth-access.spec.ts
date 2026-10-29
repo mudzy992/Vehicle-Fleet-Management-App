@@ -307,6 +307,157 @@ test('login failure is communicated without exposing credential-specific detail'
   await expect(page).toHaveURL(/\/prijava(?:\?next=%2Fdizajn-sistem)?$/);
 });
 
+test('form builder validates JSON, saves a draft, and publishes with a change note', async ({ page }) => {
+  const formId = '88888888-8888-4888-8888-888888888888';
+  const versionId = '99999999-9999-4999-8999-999999999999';
+  const validDefinition = {
+    $schema: 'vfm-form/1',
+    meta: { title: 'Podaci vozila', subject: 'VEHICLE' },
+    sections: [
+      {
+        key: 'general',
+        title: 'Opšti podaci',
+        order: 1,
+        visibleWhen: null,
+        fields: [{ key: 'reference', type: 'TEXT', label: 'Referenca', order: 1, visibleWhen: null }],
+      },
+    ],
+  };
+  const version = {
+    id: versionId,
+    version: 1,
+    status: 'DRAFT',
+    changeNote: null,
+    contentHash: null,
+    mobileCompatible: true,
+    publishedAt: null,
+    publishedById: null,
+    retiredAt: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    recordCount: 0,
+  };
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockApi(page, (route) =>
+    route.fulfill({
+      status: 200,
+      json: authResponse({
+        permissions: ['form:view', 'form:update', 'form:manage_schema', 'form:publish_version'],
+      }),
+    }),
+  );
+  await page.route('**/api/v1/form-schemas**', async (route) => {
+    const url = new URL(route.request().url());
+    const method = route.request().method();
+    if (url.pathname === '/api/v1/form-schemas' && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: {
+          data: [
+            {
+              id: formId,
+              key: 'vehicle-inspection',
+              name: 'Pregled vozila',
+              subject: 'VEHICLE',
+              taskTypeId: null,
+              description: null,
+              ownerModule: 'vehicles',
+              status: 'DRAFT',
+              currentPublishedVersionId: null,
+              currentPublishedVersion: null,
+              versionCount: 1,
+              updatedAt: '2026-01-01T00:00:00.000Z',
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          meta: {},
+        },
+      });
+      return;
+    }
+    if (url.pathname === `/api/v1/form-schemas/${formId}` && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: {
+          data: {
+            id: formId,
+            key: 'vehicle-inspection',
+            name: 'Pregled vozila',
+            subject: 'VEHICLE',
+            taskTypeId: null,
+            description: null,
+            ownerModule: 'vehicles',
+            status: 'DRAFT',
+            currentPublishedVersionId: null,
+            currentPublishedVersion: null,
+            versionCount: 1,
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            versions: [version],
+          },
+          meta: {},
+        },
+      });
+      return;
+    }
+    if (url.pathname === `/api/v1/form-schemas/${formId}/versions/${versionId}` && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: { data: { ...version, formSchemaId: formId, definition: validDefinition, normalizedName: null }, meta: {} },
+      });
+      return;
+    }
+    if (url.pathname.endsWith('/publish') && method === 'POST') {
+      expect(route.request().postDataJSON()).toEqual({ changeNote: 'Provjera izmjene forme' });
+      await route.fulfill({
+        status: 200,
+        json: {
+          data: {
+            ...version,
+            status: 'PUBLISHED',
+            changeNote: 'Provjera izmjene forme',
+            contentHash: 'test-hash',
+            publishedAt: '2026-01-02T00:00:00.000Z',
+            publishedById: userId,
+            formSchemaId: formId,
+            definition: validDefinition,
+            normalizedName: null,
+          },
+          meta: {},
+        },
+      });
+      return;
+    }
+    if (method === 'PUT' && url.pathname.endsWith(`/versions/${versionId}`)) {
+      expect(route.request().postDataJSON()).toMatchObject({ definition: validDefinition });
+      await route.fulfill({
+        status: 200,
+        json: { data: { ...version, formSchemaId: formId, definition: validDefinition, normalizedName: null }, meta: {} },
+      });
+      return;
+    }
+    await route.fulfill({ status: 500, json: { error: { message: 'Unexpected form API request' } } });
+  });
+
+  await page.goto('/prijava?next=%2Fforme');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Pregled vozila' })).toBeVisible();
+  const editor = page.getByLabel('Definicija (JSON)');
+  await editor.fill('{ neispravan JSON');
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sačuvaj nacrt' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Objavi…' })).toBeDisabled();
+
+  await editor.fill(JSON.stringify(validDefinition, null, 2));
+  await expect(page.getByText('Meta-shema je ispravna. Server ponovo provjerava pri čuvanju i objavi.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sačuvaj nacrt' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Sačuvaj nacrt' }).click();
+  await expect(page.getByRole('status')).toContainText('Nacrt je sačuvan.');
+  await page.getByLabel('Bilješka o promjeni (obavezna, najmanje 5 znakova)').fill('Provjera izmjene forme');
+  await page.getByRole('button', { name: 'Objavi…' }).click();
+  await expect(page.getByRole('status')).toContainText('Verzija je objavljena; prethodna aktivna je povučena.');
+  await expectNoA11yViolations(page);
+});
+
 test('insurance records fit a mobile viewport and pass axe checks', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
