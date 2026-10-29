@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router';
 import type { AuthUser } from '@vfm/shared/schemas';
 import { ApiError, api } from '../../lib/api.js';
 import { ProfilePage } from './profile-page.js';
@@ -50,6 +50,11 @@ const ACTIVE_SESSION = {
   deviceInfo: null,
 };
 
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="current-path">{location.pathname}</output>;
+}
+
 function renderProfile() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -96,6 +101,41 @@ describe('ProfilePage', () => {
 
     expect(await screen.findByText('Opoziv nije dozvoljen.')).toBeTruthy();
     expect(screen.getByRole('alert')).toBeTruthy();
+  });
+
+  it('changes the password, revokes the current session and returns to login', async () => {
+    session.user = USER;
+    session.permissions = ['auth:manage_sessions'];
+    vi.spyOn(api, 'get').mockResolvedValue([] as never);
+    const post = vi.spyOn(api, 'post').mockResolvedValue(undefined as never);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/profil']}>
+        <LocationProbe />
+        <QueryClientProvider client={client}>
+          <ProfilePage />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText('Trenutna lozinka'), { target: { value: 'CurrentPassword!23' } });
+    fireEvent.change(screen.getByLabelText('Nova lozinka'), { target: { value: 'NewSecurePassword!42' } });
+    fireEvent.change(screen.getByLabelText('Potvrda nove lozinke'), {
+      target: { value: 'NewSecurePassword!42' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Promijeni lozinku' }));
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/auth/change-password', {
+        currentPassword: 'CurrentPassword!23',
+        newPassword: 'NewSecurePassword!42',
+      }),
+    );
+    await waitFor(() => expect(session.logout).toHaveBeenCalledWith({ serverAlreadyRevoked: true }));
+    await waitFor(() => expect(screen.getByTestId('current-path').textContent).toBe('/prijava'));
   });
 
   it('highlights forced password change and blocks mismatched confirmation', () => {
