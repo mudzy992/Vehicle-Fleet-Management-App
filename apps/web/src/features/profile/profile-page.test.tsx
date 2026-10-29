@@ -105,6 +105,8 @@ describe('ProfilePage', () => {
 
     renderProfile();
 
+    expect(screen.getByRole('heading', { level: 1, name: 'Profil' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Moj nalog' })).toBeTruthy();
     expect(screen.getByText('Potrebna je promjena lozinke')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Trenutna lozinka'), { target: { value: 'CurrentPassword!23' } });
     fireEvent.change(screen.getByLabelText('Nova lozinka'), { target: { value: 'StrongPassword!23' } });

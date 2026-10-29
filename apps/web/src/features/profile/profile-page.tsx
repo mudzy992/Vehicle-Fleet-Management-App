@@ -100,6 +100,13 @@ export function ProfilePage() {
 
   return (
     <div className="vfm-module-page">
+      <header>
+        <h1 className="vfm-module-title">Profil</h1>
+        <p className="mt-1 text-sm text-[var(--fg-muted)]">
+          Upravljajte podacima naloga, lozinkom i aktivnim sesijama.
+        </p>
+      </header>
+
       {forced ? (
         <Card>
           <p className="text-sm font-medium text-[var(--warning,var(--fg))]">Potrebna je promjena lozinke</p>
@@ -112,7 +119,7 @@ export function ProfilePage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <p className="text-sm font-medium">Moj nalog</p>
+          <h2 className="text-sm font-medium">Moj nalog</h2>
           {user ? (
             <dl className="mt-2 space-y-1 text-sm">
               <div className="flex justify-between gap-2">
@@ -148,7 +155,7 @@ export function ProfilePage() {
         </Card>
 
         <Card>
-          <p className="text-sm font-medium">Promjena lozinke</p>
+          <h2 className="text-sm font-medium">Promjena lozinke</h2>
           <form
             className="mt-2 space-y-3"
             onSubmit={(event) => {
@@ -227,7 +234,7 @@ export function ProfilePage() {
       <Card flush>
         <div className="flex items-center justify-between px-4 py-3">
           <div>
-            <p className="text-sm font-medium">Aktivne sesije</p>
+            <h2 className="text-sm font-medium">Aktivne sesije</h2>
             <p className="text-[11px] text-[var(--fg-muted)]">
               „Odjavi sve“ revokuje sve uređaje i diže <code>tokenVersion</code> — stari tokeni padaju odmah.
             </p>
