@@ -793,6 +793,10 @@ test('user administration respects the server-masked identity and search filter'
   await expect(page.getByLabel('Pretraga')).toBeVisible();
   await expect(page.getByText('Lejla Hadžić')).toBeVisible();
   await expect(page.getByText('a***@example.test')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Novi korisnik' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Reset lozinke' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Odjavi svuda' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Arhiviraj' })).toHaveCount(0);
   expect(await page.locator('#root').innerText()).not.toContain('lejla.hadzic@');
   await expectNoA11yViolations(page);
 
@@ -883,6 +887,89 @@ test('Super Admin creates a user and reveals the temporary password only once on
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.getByRole('button', { name: 'Sakrij' }).click();
   await expect(page.getByText('ONE-TIME-SECRET-42', { exact: true })).toHaveCount(0);
+  await expectNoA11yViolations(page);
+});
+
+test('Super Admin reset, force logout, and archive actions work for a user on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const targetId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  let archived = false;
+  let forceLogoutCalls = 0;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ isSuperAdmin: true, permissions: [
+      'user:view', 'user:reset_password', 'user:force_logout', 'user:archive',
+    ] }) }),
+  );
+  await page.route('**/api/v1/users**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === 'GET') {
+      const items = archived ? [] : [{
+        id: targetId,
+        email: 'driver@example.test',
+        firstName: 'Adnan',
+        lastName: 'Hodžić',
+        displayName: null,
+        phone: null,
+        status: 'ACTIVE',
+        mustChangePassword: false,
+        roles: [{ id: roleId, code: 'DRIVER', name: 'Vozač' }],
+        lastLoginAt: null,
+        lockedUntil: null,
+        piiRedacted: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }];
+      await route.fulfill({
+        status: 200,
+        json: { data: { items, page: 1, pageSize: 20, total: items.length, totalPages: items.length ? 1 : 0 }, meta: {} },
+      });
+      return;
+    }
+    if (url.pathname.endsWith('/reset-password')) {
+      await route.fulfill({
+        status: 200,
+        json: {
+          data: {
+            userId: targetId,
+            email: 'driver@example.test',
+            token: 'RESET-ONCE-TOKEN-73',
+            expiresAt: '2026-10-29T12:00:00.000Z',
+          },
+          meta: {},
+        },
+      });
+      return;
+    }
+    if (url.pathname.endsWith('/force-logout')) {
+      forceLogoutCalls += 1;
+      await route.fulfill({ status: 200, json: { data: { revokedSessions: 3 }, meta: {} } });
+      return;
+    }
+    if (url.pathname.endsWith('/archive')) {
+      archived = true;
+      await route.fulfill({ status: 200, json: { data: null, meta: {} } });
+      return;
+    }
+    await route.fulfill({ status: 405, json: { error: { code: 'METHOD_NOT_ALLOWED', message: 'Not allowed' } } });
+  });
+
+  await page.goto('/prijava?next=%2Fadministracija%2Fkorisnici');
+  await submitLogin(page);
+  await expect(page.getByText('Adnan Hodžić')).toBeVisible();
+  await page.getByRole('button', { name: 'Reset lozinke' }).click();
+  await expect(page.getByText('Jednokratni token za reset lozinke (driver@example.test)')).toBeVisible();
+  await expect(page.getByText('RESET-ONCE-TOKEN-73', { exact: true })).toBeVisible();
+  await expect(page.getByText(/token važi do/)).toBeVisible();
+  await page.getByRole('button', { name: 'Sakrij' }).click();
+  await expect(page.getByText('RESET-ONCE-TOKEN-73', { exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Odjavi svuda' }).click();
+  await expect.poll(() => forceLogoutCalls).toBe(1);
+  await expect(page.getByText('Adnan Hodžić')).toBeVisible();
+  await page.getByRole('button', { name: 'Arhiviraj' }).click();
+  await expect(page.getByText('Nema korisnika')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await expectNoA11yViolations(page);
 });
 
