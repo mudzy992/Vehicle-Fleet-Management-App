@@ -1025,6 +1025,23 @@ test('driver detail masks PII and is readable without edit permissions on mobile
   await expectNoA11yViolations(page);
 });
 
+test('driver detail route is denied before data fetch without driver:view', async ({ page }) => {
+  const driverId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  let detailRequests = 0;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: [] }) }),
+  );
+  await page.route('**/api/v1/drivers/**', async (route) => {
+    detailRequests += 1;
+    await route.fulfill({ status: 403, json: { error: { code: 'FORBIDDEN', message: 'Forbidden' } } });
+  });
+  await page.goto(`/prijava?next=%2Fvozaci%2F${driverId}`);
+  await submitLogin(page);
+  await expect(page.getByText('Nemate pristup', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Aida Karić' })).toHaveCount(0);
+  expect(detailRequests).toBe(0);
+});
+
 test('driver registry renders an accessible empty state on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
