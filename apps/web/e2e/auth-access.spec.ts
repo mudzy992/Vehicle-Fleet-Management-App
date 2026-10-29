@@ -2129,6 +2129,21 @@ test('permission guard blocks a regular user from the vehicle module', async ({ 
   expect(page.url()).toContain('/vozila');
 });
 
+test('role matrix route is denied before loading role data without role:view', async ({ page }) => {
+  let roleDataRequests = 0;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: [] }) }),
+  );
+  await page.route('**/api/v1/roles**', async (route) => {
+    roleDataRequests += 1;
+    await route.fulfill({ status: 403, json: { error: { code: 'FORBIDDEN', message: 'Forbidden' } } });
+  });
+  await page.goto('/prijava?next=%2Fadministracija%2Fprava');
+  await submitLogin(page);
+  await expect(page.getByText('Nemate pristup', { exact: true })).toBeVisible();
+  expect(roleDataRequests).toBe(0);
+});
+
 for (const [path, permission] of [
   ['/obavijesti', 'notification:view'],
   ['/izvjestaji', 'report:view'],
