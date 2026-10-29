@@ -256,6 +256,64 @@ test('login failure is communicated without exposing credential-specific detail'
   await expect(page).toHaveURL(/\/prijava(?:\?next=%2Fdizajn-sistem)?$/);
 });
 
+test('reminders support acknowledge and snooze actions on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) =>
+    route.fulfill({
+      status: 200,
+      json: authResponse({
+        permissions: ['reminder:view', 'reminder:acknowledge', 'reminder:snooze'],
+      }),
+    }),
+  );
+  await page.route('**/api/v1/reminders*', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      json: {
+        data: {
+          items: [
+            {
+              id: '44444444-4444-4444-8444-444444444444',
+              kind: 'SERVICE_KM',
+              entityType: 'Vehicle',
+              entityId: '55555555-5555-4555-8555-555555555555',
+              dueDate: null,
+              dueKm: 120000,
+              thresholdDays: null,
+              thresholdKm: 10000,
+              fireAt: '2026-10-29T08:30:00.000Z',
+              status: 'SCHEDULED',
+              sentAt: null,
+              acknowledgedAt: null,
+              due: true,
+              createdAt: '2026-10-28T08:30:00.000Z',
+            },
+          ],
+          page: 1,
+          pageSize: 50,
+          total: 1,
+          totalPages: 1,
+        },
+        meta: {},
+      },
+    });
+  });
+  await page.goto('/prijava?next=%2Frokovi');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Rokovi' })).toBeVisible();
+  await expect(page.getByText(/120.*km/)).toBeVisible();
+  await expectNoA11yViolations(page);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.getByRole('button', { name: 'Potvrdi' }).click();
+  await expect(page.getByRole('status')).toContainText('Podsjetnik je potvrđen.');
+  await page.getByRole('button', { name: '+7 d' }).click();
+  await expect(page.getByRole('status')).toContainText('Podsjetnik je odgođen.');
+});
+
 test('reminders render an accessible empty state on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, (route) =>
