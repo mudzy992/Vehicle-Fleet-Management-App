@@ -10,7 +10,7 @@
  * - Super Admin na mobilnom je odbijen na serveru (`MOBILE_ACCESS_FORBIDDEN`);
  *   web klijent taj kod ne može dobiti, ali se poruka ipak mapira.
  */
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { APP_NAME } from '@vfm/shared';
 import { Button, Card } from '../../components/ui/index.js';
@@ -49,22 +49,25 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const loginInProgress = useRef(false);
 
   // login() publishes the authenticated state before its promise resolves. Keep
   // the form mounted until its submit handler can honor mustChangePassword.
-  if (status === 'authenticated' && !pending) {
+  if (status === 'authenticated' && !loginInProgress.current) {
     return <Navigate to={nextPath(location.search)} replace />;
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setError(null);
+    loginInProgress.current = true;
     setPending(true);
 
     try {
       const user = await login({ email: email.trim(), password });
       navigate(user.mustChangePassword ? '/profil?promjena=1' : nextPath(location.search), { replace: true });
     } catch (caught) {
+      loginInProgress.current = false;
       setError(messageFor(caught));
     } finally {
       setPending(false);
