@@ -95,6 +95,8 @@ export function ProfilePage() {
 
   const mismatch = confirmPassword.length > 0 && confirmPassword !== newPassword;
   const submitError = changePassword.error instanceof ApiError ? changePassword.error : null;
+  const sessionActionError = revokeAll.error ?? revokeOne.error;
+  const sessionQueryError = sessions.error;
 
   return (
     <div className="vfm-module-page">
@@ -102,7 +104,8 @@ export function ProfilePage() {
         <Card>
           <p className="text-sm font-medium text-[var(--warning,var(--fg))]">Potrebna je promjena lozinke</p>
           <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
-            Nalog je kreiran s privremenom lozinkom (bootstrap ili reset). Postavite novu lozinku da nastavite.
+            Nalog je kreiran s privremenom lozinkom (bootstrap ili reset). Postavite novu lozinku da
+            nastavite.
           </p>
         </Card>
       ) : null}
@@ -181,7 +184,11 @@ export function ProfilePage() {
                 onChange={(event) => setNewPassword(event.target.value)}
               />
             </Field>
-            <Field label="Potvrda nove lozinke" htmlFor="confirm-password" error={mismatch ? 'Lozinke se ne poklapaju.' : null}>
+            <Field
+              label="Potvrda nove lozinke"
+              htmlFor="confirm-password"
+              error={mismatch ? 'Lozinke se ne poklapaju.' : null}
+            >
               <input
                 id="confirm-password"
                 type="password"
@@ -238,12 +245,31 @@ export function ProfilePage() {
           ) : null}
         </div>
 
+        {sessionActionError ? (
+          <p className="px-4 pb-3 text-sm text-[var(--danger)]" role="alert">
+            {sessionActionError instanceof ApiError
+              ? sessionActionError.message
+              : 'Greška pri opozivu sesije.'}
+          </p>
+        ) : null}
+
         {!hasPermission('auth:manage_sessions') ? (
           <div className="px-4 pb-4">
-            <EmptyState title="Pregled sesija nije dozvoljen" description="Traži pravo auth:manage_sessions." />
+            <EmptyState
+              title="Pregled sesija nije dozvoljen"
+              description="Traži pravo auth:manage_sessions."
+            />
           </div>
         ) : sessions.isLoading ? (
-          <p className="px-4 pb-4 text-xs text-[var(--fg-muted)]">Učitavanje…</p>
+          <p className="px-4 pb-4 text-xs text-[var(--fg-muted)]" role="status">
+            Učitavanje…
+          </p>
+        ) : sessionQueryError ? (
+          <p className="px-4 pb-4 text-sm text-[var(--danger)]" role="alert">
+            {sessionQueryError instanceof ApiError
+              ? sessionQueryError.message
+              : 'Greška pri učitavanju sesija.'}
+          </p>
         ) : !sessions.data || sessions.data.length === 0 ? (
           <div className="px-4 pb-4">
             <EmptyState title="Nema aktivnih sesija" />
@@ -266,7 +292,11 @@ export function ProfilePage() {
                   <TD>{session.clientType}</TD>
                   <TD className="text-xs text-[var(--fg-muted)]">
                     {session.deviceInfo
-                      ? [session.deviceInfo.model, session.deviceInfo.osVersion, session.deviceInfo.appVersion]
+                      ? [
+                          session.deviceInfo.model,
+                          session.deviceInfo.osVersion,
+                          session.deviceInfo.appVersion,
+                        ]
                           .filter(Boolean)
                           .join(' · ')
                       : (session.userAgent ?? '—')}
@@ -275,7 +305,14 @@ export function ProfilePage() {
                   <TD className="text-xs">{formatDateTime(session.createdAt)}</TD>
                   <TD className="text-xs">{formatDateTime(session.expiresAt)}</TD>
                   <TD align="right">
-                    <Button type="button" size="sm" variant="ghost" onClick={() => revokeOne.mutate(session.id)}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      loading={revokeOne.isPending && revokeOne.variables === session.id}
+                      disabled={revokeOne.isPending || revokeAll.isPending}
+                      onClick={() => revokeOne.mutate(session.id)}
+                    >
                       Odjavi
                     </Button>
                   </TD>
