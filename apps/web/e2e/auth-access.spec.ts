@@ -2195,6 +2195,151 @@ test('user administration route is denied before loading identities without user
   expect(userDataRequests).toBe(0);
 });
 
+test('task creation wizard submits the published form snapshot and opens the new task', async ({ page }) => {
+  const taskTypeId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const vehicleId = '66666666-6666-4666-8666-666666666666';
+  const formId = '77777777-7777-4777-8777-777777777777';
+  const formVersionId = '88888888-8888-4888-8888-888888888888';
+  const taskId = '99999999-9999-4999-8999-999999999999';
+  const definition = {
+    $schema: 'vfm-form/1',
+    meta: { title: 'Pregled', subject: 'TASK' },
+    sections: [{
+      key: 'notes',
+      title: 'Napomene',
+      order: 1,
+      visibleWhen: null,
+      fields: [{ key: 'inspectionNote', type: 'TEXT', label: 'Napomena', order: 1, visibleWhen: null }],
+    }],
+  };
+  const formVersion = {
+    id: formVersionId,
+    formSchemaId: formId,
+    version: 2,
+    status: 'PUBLISHED',
+    definition,
+    normalizedName: null,
+  };
+  const task = {
+    id: taskId,
+    code: 'Z-2026-000010',
+    title: 'Servis Octavie',
+    description: 'Provjera kočnica',
+    vehicleInternalNo: 'V-010',
+    vehicleMake: 'Škoda',
+    vehicleModel: 'Octavia',
+    taskTypeName: 'Redovni servis',
+    priority: 'HIGH',
+    status: 'OPEN',
+    dueAt: null,
+    createdByName: 'Testni Korisnik',
+    assigneeName: null,
+    formData: { inspectionNote: 'Provjera kočnica' },
+    formSchemaVersion: 2,
+    version: 1,
+    assignments: [],
+    events: [],
+    commentCount: 0,
+  };
+  let createPayload: Record<string, unknown> | null = null;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['task:create', 'task:view'] }) }),
+  );
+  await page.route('**/api/v1/task-types**', (route) =>
+    route.fulfill({
+      status: 200,
+      json: { data: { items: [{
+        id: taskTypeId,
+        code: 'SERVICE',
+        name: 'Redovni servis',
+        description: null,
+        iconName: null,
+        colorHex: null,
+        requiresVehicle: true,
+        requiresOdometer: false,
+        requiresPhotos: false,
+        defaultPriority: 'HIGH',
+        defaultAssignMode: 'OPEN_CLAIM',
+        allowMultipleClaimants: true,
+        dueOffsetHours: 48,
+        formSchemaId: formId,
+        formSchemaKey: 'service',
+        formSchemaName: 'Servis forma',
+        formSchemaVersion: 2,
+        active: true,
+        sortOrder: 1,
+        completionRequirementCount: 0,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }], page: 1, pageSize: 100, total: 1, totalPages: 1 }, meta: {} },
+    }),
+  );
+  await page.route('**/api/v1/vehicles**', (route) =>
+    route.fulfill({
+      status: 200,
+      json: { data: { items: [{ id: vehicleId, internalNo: 'V-010', make: 'Škoda', model: 'Octavia', plateNumber: 'A10-K-010' }], page: 1, pageSize: 100, total: 1, totalPages: 1 }, meta: {} },
+    }),
+  );
+  await page.route('**/api/v1/form-schemas**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith(`/versions/${formVersionId}`)) {
+      await route.fulfill({ status: 200, json: { data: formVersion, meta: {} } });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      json: { data: [{ id: formId, key: 'service', name: 'Servis forma', subject: 'TASK', taskTypeId, status: 'PUBLISHED', currentPublishedVersionId: formVersionId }], meta: {} },
+    });
+  });
+  await page.route('**/api/v1/tasks**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/api/v1/tasks' && route.request().method() === 'POST') {
+      createPayload = route.request().postDataJSON();
+      await route.fulfill({ status: 201, json: { data: task, meta: {} } });
+      return;
+    }
+    if (url.pathname === `/api/v1/tasks/${taskId}/comments`) {
+      await route.fulfill({ status: 200, json: { data: { items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 }, meta: {} } });
+      return;
+    }
+    if (url.pathname === `/api/v1/tasks/${taskId}`) {
+      await route.fulfill({ status: 200, json: { data: task, meta: {} } });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } });
+  });
+
+  await page.goto('/prijava?next=%2Fzadaci%2Fnovi');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Novi zadatak' })).toBeVisible();
+  await page.getByLabel('Vrsta zadatka *').selectOption(taskTypeId);
+  await page.getByLabel('Vozilo *').selectOption(vehicleId);
+  await page.getByRole('button', { name: 'Nastavi' }).click();
+  await expect(page.getByText('Korak 2 od 3')).toBeVisible();
+  await page.getByLabel('Naslov').fill('Servis Octavie');
+  await page.getByLabel('Opis').fill('Provjera kočnica');
+  await page.getByRole('button', { name: 'Nastavi' }).click();
+  await expect(page.getByText('Korak 3 od 3')).toBeVisible();
+  await page.getByLabel('Napomena').fill('Provjera kočnica');
+  await expectNoA11yViolations(page);
+  await page.getByRole('button', { name: 'Kreiraj zadatak' }).click();
+  await expect(page).toHaveURL(new RegExp(`/zadaci/${taskId}$`));
+  await expect(page.getByRole('heading', { name: 'Servis Octavie' })).toBeVisible();
+  expect(createPayload).toMatchObject({
+    taskTypeId,
+    vehicleId,
+    title: 'Servis Octavie',
+    description: 'Provjera kočnica',
+    priority: 'HIGH',
+    assignMode: 'OPEN_CLAIM',
+    observerUserIds: [],
+    formData: { inspectionNote: 'Provjera kočnica' },
+  });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('task detail supports mobile comments and preserves task status on a server conflict', async ({ page }) => {
   const taskId = '44444444-4444-4444-8444-444444444444';
   let savedComment: string | null = null;
