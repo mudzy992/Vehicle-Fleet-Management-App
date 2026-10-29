@@ -2511,12 +2511,18 @@ test('task completion submits the form snapshot, comment and odometer then refre
     version: 6, assignments: [], events: [], commentCount: 0,
   };
   let completionPayload: Record<string, unknown> | null = null;
+  let completionAttempts = 0;
   await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse({ permissions: ['task:view', 'task:complete'] }) }));
   await page.route('**/api/v1/form-schemas/**', (route) => route.fulfill({ status: 200, json: { data: version, meta: {} } }));
   await page.route('**/api/v1/tasks/**', async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === `/api/v1/tasks/${taskId}/complete` && route.request().method() === 'POST') {
       completionPayload = route.request().postDataJSON();
+      completionAttempts += 1;
+      if (completionAttempts === 1) {
+        await route.fulfill({ status: 409, json: { error: { code: 'CONFLICT', message: 'Zadatak je izmijenjen u drugoj sesiji.' } } });
+        return;
+      }
       task.status = 'COMPLETED';
       task.version = 7;
       await route.fulfill({ status: 200, json: { data: task, meta: {} } });
@@ -2539,7 +2545,13 @@ test('task completion submits the form snapshot, comment and odometer then refre
   await page.getByLabel('Kilometraža (km), ako je primjenjivo').fill('123456');
   await page.getByLabel('Komentar uz završetak').fill('Vozilo spremno.');
   await page.getByRole('button', { name: 'Završi zadatak' }).click();
+  await expect(page.getByRole('alert')).toContainText('Zadatak je izmijenjen u drugoj sesiji.');
+  await expect(page.getByLabel('Napomena')).toHaveValue('Sve provjereno.');
+  await expect(page.getByLabel('Kilometraža (km), ako je primjenjivo')).toHaveValue('123456');
+  await expect(page.getByLabel('Komentar uz završetak')).toHaveValue('Vozilo spremno.');
+  await page.getByRole('button', { name: 'Završi zadatak' }).click();
   await expect(page.getByText('Završen', { exact: true })).toBeVisible();
+  expect(completionAttempts).toBe(2);
   expect(completionPayload).toMatchObject({ version: 6, formData: { napomena: 'Sve provjereno.' }, comment: 'Vozilo spremno.', odometerKm: 123456 });
   await expectNoA11yViolations(page);
 });
