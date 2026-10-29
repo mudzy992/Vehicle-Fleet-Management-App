@@ -1600,6 +1600,106 @@ test('revoking the current profile session clears the client session and returns
   expect(logoutCalls).toBe(0);
 });
 
+test('vehicle service history is readable and action controls follow permissions on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const vehicleId = '55555555-5555-4555-8555-555555555555';
+  const serviceId = '66666666-6666-4666-8666-666666666666';
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['vehicle:view', 'service:view'] }) }),
+  );
+  await page.route(`**/api/v1/vehicles/${vehicleId}`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        data: {
+          id: vehicleId,
+          internalNo: 'V-21',
+          make: 'Toyota',
+          model: 'Corolla',
+          year: 2022,
+          plateNumber: 'A21-T-021',
+          fuelType: 'PETROL',
+          status: 'ACTIVE',
+          odometerKm: 65432,
+          odometerUpdatedAt: '2026-10-29T08:00:00.000Z',
+          registrationExpiresAt: '2027-01-01',
+          insuranceExpiresAt: '2027-01-01',
+          archivedAt: null,
+          version: 1,
+          updatedAt: '2026-10-29T08:00:00.000Z',
+          vin: null,
+          transmission: 'AUTOMATIC',
+          color: 'Siva',
+          bodyType: null,
+          engineCcm: 1800,
+          enginePowerKw: 90,
+          seats: 5,
+          ownershipType: 'OWNED',
+          acquisitionDate: '2022-01-01',
+          acquisitionPrice: null,
+          costCenter: null,
+          nextServiceDueDate: null,
+          nextServiceDueKm: null,
+          notes: null,
+          photoAttachmentId: null,
+          formSchemaId: '77777777-7777-4777-8777-777777777777',
+          formSchemaVersionId: '88888888-8888-4888-8888-888888888888',
+          formData: {},
+          createdAt: '2022-01-01T00:00:00.000Z',
+        },
+        meta: {},
+      },
+    }),
+  );
+  await page.route('**/api/v1/services**', (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        data: {
+          items: [{
+            id: serviceId,
+            vehicleId,
+            serviceDate: '2026-10-01',
+            serviceType: 'Redovni servis',
+            workshopName: 'Auto Centar',
+            description: 'Zamjena ulja i filtera',
+            odometerKm: 64000,
+            totalCost: 18450,
+            currency: 'BAM',
+            nextServiceDueDate: '2027-04-01',
+            nextServiceDueKm: 74000,
+            status: 'ACTIVE',
+            formSchemaId: '77777777-7777-4777-8777-777777777777',
+            formSchemaVersionId: '88888888-8888-4888-8888-888888888888',
+            version: 1,
+          }],
+          page: 1,
+          pageSize: 25,
+          total: 1,
+          totalPages: 1,
+        },
+        meta: {},
+      },
+    }),
+  );
+  await page.goto(`/prijava?next=${encodeURIComponent(`/vozila/${vehicleId}`)}`);
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'V-21 · Toyota Corolla' })).toBeVisible();
+  await page.getByRole('button', { name: 'Servisi' }).click();
+  await expect(page.getByText('Redovni servis')).toBeVisible();
+  await expect(page.getByText('Auto Centar')).toBeVisible();
+  await expect(page.getByText('184.50 KM')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Novi servis' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Uredi servis' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Obriši servis/ })).toHaveCount(0);
+  const servicesRegion = page.getByRole('region', { name: 'Servisi vozila — pomjerite tabelu horizontalno za pregled svih kolona' });
+  await servicesRegion.focus();
+  await expect(servicesRegion).toBeFocused();
+  expect(await servicesRegion.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+});
+
 test('external-looking next path is rejected in favor of the dashboard', async ({ page }) => {
   await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse() }));
   await page.goto('/prijava?next=%2F%2Fevil.example');
