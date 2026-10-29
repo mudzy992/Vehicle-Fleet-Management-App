@@ -169,7 +169,7 @@ test('system health outage is announced and retry recovers', async ({ page }) =>
   await page.goto('/prijava?next=%2Fzdravlje');
   await submitLogin(page);
   await expect(page.getByRole('heading', { name: 'Zdravlje sistema' })).toBeVisible();
-  await expect(page.getByRole('alert').getByText('API nije dostupan')).toBeVisible();
+  await expect(page.getByRole('alert').getByRole('heading', { name: 'API nije dostupan' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Pokušaj ponovo' })).toBeVisible();
   outage = false;
   await page.getByRole('button', { name: 'Pokušaj ponovo' }).click();
