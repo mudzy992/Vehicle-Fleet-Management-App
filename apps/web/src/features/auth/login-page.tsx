@@ -50,7 +50,9 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  if (status === 'authenticated') {
+  // login() publishes the authenticated state before its promise resolves. Keep
+  // the form mounted until its submit handler can honor mustChangePassword.
+  if (status === 'authenticated' && !pending) {
     return <Navigate to={nextPath(location.search)} replace />;
   }
 
