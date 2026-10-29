@@ -1700,6 +1700,64 @@ test('vehicle service history is readable and action controls follow permissions
   await expectNoA11yViolations(page);
 });
 
+test('tire set inventory filters and read-only permissions work on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let lastQuery: URLSearchParams | null = null;
+  await mockApi(page, (route) =>
+    route.fulfill({ status: 200, json: authResponse({ permissions: ['tire:view'] }) }),
+  );
+  await page.route('**/api/v1/tire-sets**', async (route) => {
+    const url = new URL(route.request().url());
+    lastQuery = url.searchParams;
+    const items = url.searchParams.get('season') === 'WINTER' ? [] : [{
+      id: '99999999-9999-4999-8999-999999999999',
+      code: 'G-Z-021',
+      brand: 'Continental',
+      model: 'WinterContact',
+      size: '205/55 R16 91V',
+      season: 'SUMMER',
+      tireCount: 4,
+      purchaseDate: '2025-10-01',
+      purchasePrice: 62000,
+      currency: 'BAM',
+      status: 'IN_STOCK',
+      currentLocation: 'Centralno skladište',
+      notes: 'Set za službeno vozilo',
+      mountedVehicleId: null,
+      mountedVehicleInternalNo: null,
+      mountedVehiclePlateNumber: null,
+      version: 1,
+      formSchemaId: null,
+      formSchemaVersionId: null,
+    }];
+    await route.fulfill({
+      status: 200,
+      json: { data: { items, page: 1, pageSize: 25, total: items.length, totalPages: items.length ? 1 : 0 }, meta: {} },
+    });
+  });
+
+  await page.goto('/prijava?next=%2Fgume');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { level: 1, name: 'Kompleti guma' })).toBeVisible();
+  await expect(page.getByText('G-Z-021')).toBeVisible();
+  await expect(page.getByText('Continental WinterContact')).toBeVisible();
+  await expect(page.getByText('Centralno skladište')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Novi komplet' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Uredi', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Obriši komplet G-Z-021' })).toHaveCount(0);
+  const tireSetsRegion = page.getByRole('region', { name: 'Skupovi guma — pomjerite tabelu horizontalno za pregled svih kolona' });
+  await tireSetsRegion.focus();
+  await expect(tireSetsRegion).toBeFocused();
+  expect(await tireSetsRegion.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectNoA11yViolations(page);
+
+  await page.getByLabel('Sezona').selectOption('WINTER');
+  await expect.poll(() => lastQuery?.get('season')).toBe('WINTER');
+  await expect(page.getByText('Nema kompleta za odabrane filtere')).toBeVisible();
+  await expectNoA11yViolations(page);
+});
+
 test('external-looking next path is rejected in favor of the dashboard', async ({ page }) => {
   await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse() }));
   await page.goto('/prijava?next=%2F%2Fevil.example');
