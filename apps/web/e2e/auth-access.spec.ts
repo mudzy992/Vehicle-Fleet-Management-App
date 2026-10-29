@@ -308,6 +308,14 @@ test('login failure is communicated without exposing credential-specific detail'
 });
 
 test('form builder validates JSON, saves a draft, and publishes with a change note', async ({ page }) => {
+  const failedRequests: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on('requestfailed', (request) => {
+    failedRequests.push(`${request.url()} (${request.failure()?.errorText ?? 'unknown'})`);
+  });
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
   const formId = '88888888-8888-4888-8888-888888888888';
   const versionId = '99999999-9999-4999-8999-999999999999';
   const validDefinition = {
@@ -443,7 +451,16 @@ test('form builder validates JSON, saves a draft, and publishes with a change no
   await submitLogin(page);
   await expect(page).toHaveURL(/\/forme$/);
   await assertAppMounted(page);
-  await expect(page.getByRole('heading', { name: 'Forme' })).toBeVisible({ timeout: 15_000 });
+  try {
+    await expect(page.getByRole('heading', { name: 'Forme' })).toBeVisible({ timeout: 15_000 });
+  } catch (error) {
+    throw new Error(
+      `Form builder did not leave its route fallback. Root text: ${JSON.stringify(await page.locator('#root').innerText())}; ` +
+        `runtime errors: ${JSON.stringify(runtimeErrors.get(page) ?? [])}; ` +
+        `console errors: ${JSON.stringify(consoleErrors)}; failed requests: ${JSON.stringify(failedRequests)}`,
+      { cause: error },
+    );
+  }
   await page.getByRole('button', { name: /Pregled vozila/ }).click();
   await expect(page.getByRole('heading', { name: 'Pregled vozila' })).toBeVisible();
   const editor = page.getByLabel('Definicija (JSON)');
@@ -712,7 +729,7 @@ test('driver registry shows populated results accessibly and applies server sear
   await expect(page.getByRole('heading', { name: 'Vozači' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Karić Aida', exact: true })).toBeVisible();
   await expect(page.getByText('DRV-017')).toBeVisible();
-  await expect(page.getByText('B, C')).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'B, C', exact: true })).toBeVisible();
   expect(await page.locator('#root').innerText()).not.toMatch(/aida.*@|\+387|telefon:/iu);
   await expectNoA11yViolations(page);
 
