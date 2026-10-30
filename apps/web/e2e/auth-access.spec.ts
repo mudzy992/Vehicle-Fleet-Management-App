@@ -381,7 +381,7 @@ test('login failure is communicated without exposing credential-specific detail'
   await expect(page).toHaveURL(/\/prijava(?:\?next=%2Fdizajn-sistem)?$/);
 });
 
-test('form builder validates JSON, saves a draft, and publishes with a change note', async ({ page }) => {
+test('visual form builder saves a draft and publishes with a change note', async ({ page }) => {
   const failedRequests: string[] = [];
   const consoleErrors: string[] = [];
   page.on('requestfailed', (request) => {
@@ -405,6 +405,7 @@ test('form builder validates JSON, saves a draft, and publishes with a change no
       },
     ],
   };
+  let savedDefinition = validDefinition;
   const version = {
     id: versionId,
     version: 1,
@@ -485,7 +486,7 @@ test('form builder validates JSON, saves a draft, and publishes with a change no
     if (url.pathname === `/api/v1/form-schemas/${formId}/versions/${versionId}` && method === 'GET') {
       await route.fulfill({
         status: 200,
-        json: { data: { ...version, formSchemaId: formId, definition: validDefinition, normalizedName: null }, meta: {} },
+        json: { data: { ...version, formSchemaId: formId, definition: savedDefinition, normalizedName: null }, meta: {} },
       });
       return;
     }
@@ -502,7 +503,7 @@ test('form builder validates JSON, saves a draft, and publishes with a change no
             publishedAt: '2026-01-02T00:00:00.000Z',
             publishedById: userId,
             formSchemaId: formId,
-            definition: validDefinition,
+            definition: savedDefinition,
             normalizedName: null,
           },
           meta: {},
@@ -511,10 +512,12 @@ test('form builder validates JSON, saves a draft, and publishes with a change no
       return;
     }
     if (method === 'PUT' && url.pathname.endsWith(`/versions/${versionId}`)) {
-      expect(route.request().postDataJSON()).toMatchObject({ definition: validDefinition });
+      const payload = route.request().postDataJSON();
+      expect(payload.definition.meta.title).toBe('Podaci vozila — CI');
+      savedDefinition = payload.definition;
       await route.fulfill({
         status: 200,
-        json: { data: { ...version, formSchemaId: formId, definition: validDefinition, normalizedName: null }, meta: {} },
+        json: { data: { ...version, formSchemaId: formId, definition: savedDefinition, normalizedName: null }, meta: {} },
       });
       return;
     }
@@ -538,23 +541,9 @@ test('form builder validates JSON, saves a draft, and publishes with a change no
   await page.getByRole('button', { name: /Pregled vozila/ }).click();
   await expect(page.getByRole('heading', { name: 'Pregled vozila' })).toBeVisible();
   await page.getByRole('button', { name: 'v1', exact: true }).click();
-  const editor = page.getByLabel('Definicija (JSON)');
-  try {
-    await expect(editor).toBeVisible({ timeout: 15_000 });
-  } catch (error) {
-    throw new Error(
-      `Form version editor did not render. Root text: ${JSON.stringify(await page.locator('#root').innerText())}; ` +
-        `console errors: ${JSON.stringify(consoleErrors)}; failed requests: ${JSON.stringify(failedRequests)}`,
-      { cause: error },
-    );
-  }
-  await editor.fill('{ neispravan JSON');
-  await expect(page.getByRole('alert')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Sačuvaj nacrt' })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Objavi…' })).toBeDisabled();
-
-  await editor.fill(JSON.stringify(validDefinition, null, 2));
-  await expect(page.getByText('Meta-shema je ispravna. Server ponovo provjerava pri čuvanju i objavi.')).toBeVisible();
+  const titleInput = page.getByLabel('Naslov');
+  await expect(titleInput).toBeVisible();
+  await titleInput.fill('Podaci vozila — CI');
   await expect(page.getByRole('button', { name: 'Sačuvaj nacrt' })).toBeEnabled();
   await page.getByRole('button', { name: 'Sačuvaj nacrt' }).click();
   await expect(page.getByRole('status')).toContainText('Nacrt je sačuvan.');
