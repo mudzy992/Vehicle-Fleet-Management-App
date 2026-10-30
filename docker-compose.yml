@@ -235,6 +235,7 @@ services:
       # Montira se DIREKTORIJ, ne fajl: ako fajl ne postoji Docker bi napravio direktorij
       # i container bi pao s "not a directory". Fajl je opcionalan dok je FIREBASE_ENABLED=false.
       - ${FIREBASE_SERVICE_ACCOUNT_HOST_DIR:-/etc/vfm/secrets}:/run/secrets/vfm:ro
+      - /data/coolify/ssl/redis-core/redis-ca.crt:/run/secrets/redis-ca.crt:ro
     networks:
       - default
       - db_net
