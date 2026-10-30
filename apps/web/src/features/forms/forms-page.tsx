@@ -15,7 +15,7 @@
  * - Dozvole: dugmad se prikazuju samo uz permisiju (`form:publish_version`,
  *   `form:manage_schema`, …); server ih ionako provjerava.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseDefinition } from '@vfm/form-engine/definition';
 import { FORM_SUBJECTS } from '@vfm/shared';
@@ -86,6 +86,7 @@ export function FormsPage() {
   const [createKey, setCreateKey] = useState('');
   const [createDescription, setCreateDescription] = useState('');
   const [createSubject, setCreateSubject] = useState<FormSubject>('OTHER');
+  const loadedVersionId = useRef<string | null>(null);
 
   const canCreateForm = hasPermission('form:create');
   const permissions = {
@@ -133,12 +134,16 @@ export function FormsPage() {
   });
 
   useEffect(() => {
-    if (versionQuery.data) {
-      setEditor(JSON.stringify(versionQuery.data.definition, null, 2));
-      setDiff(null);
-      setChangeNote('');
-      setMessage(null);
-    }
+    const loaded = versionQuery.data;
+    if (!loaded || loadedVersionId.current === loaded.id) return;
+    // Samo promjena odabrane verzije resetuje editor i poruku. Refetch nakon
+    // čuvanja nacrta vraća isti ID; ne smije obrisati potvrdu niti prepisati
+    // lokalni editor ponovo učitanim snapshotom.
+    loadedVersionId.current = loaded.id;
+    setEditor(JSON.stringify(loaded.definition, null, 2));
+    setDiff(null);
+    setChangeNote('');
+    setMessage(null);
   }, [versionQuery.data]);
 
   //  Isti parser kao na serveru. Rezultat se drži u dva oblika: `definition`

@@ -35,7 +35,8 @@ const lightBlock = declarationBlock("[data-theme='light']");
 if (!darkBlock || !lightBlock) throw new Error('Nisu pronađeni :root i [data-theme=light] tokeni.');
 const themes = { dark: tokensFrom(darkBlock), light: tokensFrom(lightBlock) };
 const pairs = [
-  ['primary-fg', 'primary', 4.5, 'tekst na primarnom/CTA dugmetu'],
+  ['primary-fg', 'primary', 4.5, 'primarni tekst na pozadini'],
+  ['button-primary-fg', 'button-primary', 4.5, 'tekst na primarnom dugmetu'],
   ['fg', 'bg', 4.5, 'osnovni tekst na pozadini'],
   ['fg', 'surface', 4.5, 'osnovni tekst na kartici'],
   ['fg', 'surface-muted', 4.5, 'osnovni tekst na utišanoj površini'],
@@ -89,25 +90,26 @@ const sharedButton = await readFile(
 );
 const primaryVariant = sharedButton.match(/primary:\s*'([^']+)'/)?.[1] ?? '';
 const ctaStyle = {
-  hasSemanticForeground: primaryVariant.includes('text-primary-fg'),
-  hasSemanticBackground: primaryVariant.includes('bg-primary'),
+  hasSemanticForeground: primaryVariant.includes('text-button-primary-fg'),
+  hasSemanticBackground: primaryVariant.includes('bg-button-primary'),
   usesOpacityHover: primaryVariant.includes('hover:opacity-90'),
   usesSharedPrimitive: ctaClass.length > 0,
 };
 if (!newTaskAnchor) failures.push('Nije pronađen CTA link za /zadaci/novi; pregledati promjenu route-a.');
 if (newTaskAnchor && (!ctaStyle.hasSemanticForeground || !ctaStyle.hasSemanticBackground)) {
-  failures.push('CTA „Novi zadatak” ne koristi oba semantička primary/primary-fg tokena.');
+  failures.push('CTA „Novi zadatak” ne koristi oba semantička button-primary/button-primary-fg tokena.');
 }
 
 if (failures.length) {
   console.error('❌ Frontend contrast audit nije prošao:\n' + failures.map((x) => ` - ${x}`).join('\n'));
   process.exitCode = 1;
 } else {
-  const primaryRows = results.filter((row) => row.foreground === 'primary-fg');
+  const primaryRows = results.filter((row) => row.foreground === 'button-primary-fg');
   console.log(
     `✅ Semantički kontrast: ${results.length} kombinacija u dark/light temi prolazi WCAG AA za obični tekst.`,
   );
-  for (const row of primaryRows) console.log(`   ${row.theme}: tekst CTA/primary ${row.ratio.toFixed(2)}:1`);
+  for (const row of primaryRows)
+    console.log(`   ${row.theme}: tekst primarnog dugmeta ${row.ratio.toFixed(2)}:1`);
   console.log(
     `ℹ️ CTA „Novi zadatak”: tokeni bg/fg ${ctaStyle.hasSemanticBackground && ctaStyle.hasSemanticForeground ? 'ispravni' : 'nepotpuni'}; hover opacity=${ctaStyle.usesOpacityHover}; zajednički Button primitive=${ctaStyle.usesSharedPrimitive}.`,
   );

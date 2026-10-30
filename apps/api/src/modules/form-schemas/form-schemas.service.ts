@@ -196,6 +196,7 @@ export class FormSchemasService {
     const base = { deletedAt: null, subject: query.subject, currentPublishedVersionId: { not: null } };
 
     let row: Awaited<ReturnType<PrismaService['formSchema']['findFirst']>> = null;
+    let validDefinition: FormDefinition | undefined;
     if (query.subject === 'TASK' && query.taskTypeId) {
       // Kanonički prioritet za zadatak je isti kao u vrstama zadataka i pri
       // kreiranju zadatka: eksplicitna zadana forma vrste, zatim objavljena
@@ -225,7 +226,38 @@ export class FormSchemasService {
         row = await this.prisma.formSchema.findFirst({ where: { ...base, taskTypeId: null } });
       }
     } else {
-      row = await this.prisma.formSchema.findFirst({ where: { ...base, taskTypeId: null } });
+      // Legacy seedovi mogu imati objavljenu definiciju iz starog `fields/version`
+      // formata. Biraj najnoviju validnu formu i preskoči takve zapise umjesto
+      // da jedan neispravan duplicate blokira sve forme tog subjekta.
+      const candidates = await this.prisma.formSchema.findMany({
+        where: { ...base, taskTypeId: null },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      });
+      let firstInvalid: (typeof candidates)[number] | undefined;
+      for (const candidate of candidates) {
+        if (!candidate.currentPublishedVersionId) continue;
+        const candidateVersion = await this.prisma.formSchemaVersion.findUnique({
+          where: { id: candidate.currentPublishedVersionId },
+        });
+        if (!candidateVersion) continue;
+        try {
+          validDefinition = this.parseStoredDefinition(candidateVersion);
+          row = candidate;
+          break;
+        } catch (error) {
+          if (!(error instanceof VfmException) || error.code !== 'FORM_VALIDATION_FAILED') throw error;
+          firstInvalid ??= candidate;
+          this.logger.warn({
+            msg: 'Preskočena neispravna legacy forma tokom izbora aktivne forme',
+            formSchemaId: candidate.id,
+            versionId: candidateVersion.id,
+            subject: query.subject,
+          });
+        }
+      }
+      // Ako su sve aktivne definicije neispravne, zadrži prvu da klijent dobije
+      // FORM_VALIDATION_FAILED umjesto da kvar izgleda kao forma koja ne postoji.
+      if (!row && firstInvalid) row = firstInvalid;
     }
 
     if (!row || !row.currentPublishedVersionId) {
@@ -237,7 +269,7 @@ export class FormSchemasService {
     });
     if (!version) throw VfmErrors.notFound('Aktivna verzija forme ne postoji.');
 
-    const definition = this.parseStoredDefinition(version);
+    const definition = validDefinition ?? this.parseStoredDefinition(version);
     return {
       formSchemaId: row.id,
       key: row.key,
@@ -289,6 +321,22 @@ export class FormSchemasService {
     const existing = await this.prisma.formSchema.findUnique({ where: { key: input.key } });
     if (existing) {
       throw VfmErrors.validationError([detail('key', `Forma s ključem "${input.key}" već postoji.`)]);
+    }
+
+    const sameIdentity = await this.prisma.formSchema.findFirst({
+      where: {
+        subject: input.subject,
+        taskTypeId: input.taskTypeId ?? null,
+        deletedAt: null,
+      },
+    });
+    if (sameIdentity) {
+      throw VfmErrors.validationError([
+        detail(
+          'subject',
+          `Za subjekt ${input.subject}${input.taskTypeId ? ' i odabrani tip zadatka' : ''} forma već postoji. Dodajte novu verziju postojećoj formi umjesto nove forme.`,
+        ),
+      ]);
     }
 
     const definition = this.parseInputDefinition(input.definition);

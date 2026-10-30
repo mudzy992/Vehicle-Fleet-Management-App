@@ -200,8 +200,8 @@ class FakeVehiclePrisma {
   };
 
   formSchema = {
-    findFirst: async (args: { where: Record<string, unknown>; orderBy?: unknown }) => {
-      const rows = this.schemas.filter((schema) => {
+    findMany: async (args: { where: Record<string, unknown>; orderBy?: unknown }) => {
+      return this.schemas.filter((schema) => {
         const where = args.where;
         if (where.subject && schema.subject !== where.subject) return false;
         if (where.deletedAt === null && schema.deletedAt !== null) return false;
@@ -214,6 +214,9 @@ class FakeVehiclePrisma {
         }
         return true;
       });
+    },
+    findFirst: async (args: { where: Record<string, unknown>; orderBy?: unknown }) => {
+      const rows = await this.formSchema.findMany(args);
       return rows[0] ?? null;
     },
   };

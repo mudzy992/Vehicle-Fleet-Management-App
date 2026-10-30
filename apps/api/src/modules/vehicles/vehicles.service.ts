@@ -698,15 +698,23 @@ export class VehiclesService {
   }
 
   private async activeVehicleVersion() {
-    const schema = await this.prisma.formSchema.findFirst({
+    const schemas = await this.prisma.formSchema.findMany({
       where: { subject: 'VEHICLE', deletedAt: null, currentPublishedVersionId: { not: null } },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
     });
-    if (!schema?.currentPublishedVersionId) return null;
-    return this.prisma.formSchemaVersion.findUnique({
-      where: { id: schema.currentPublishedVersionId },
-      include: { formSchema: true },
-    });
+    let firstInvalid: Awaited<ReturnType<PrismaService['formSchemaVersion']['findUnique']>> = null;
+    for (const schema of schemas) {
+      if (!schema.currentPublishedVersionId) continue;
+      const version = await this.prisma.formSchemaVersion.findUnique({
+        where: { id: schema.currentPublishedVersionId },
+        include: { formSchema: true },
+      });
+      if (!version) continue;
+      const parsed = parseDefinition(version.definition);
+      if (parsed.ok) return version;
+      firstInvalid ??= version;
+    }
+    return firstInvalid;
   }
 
   private parseStored(definition: unknown): FormDefinition {

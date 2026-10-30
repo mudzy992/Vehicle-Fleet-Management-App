@@ -13,6 +13,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FormValidationResponse } from '@vfm/shared/schemas';
 import { VfmException } from '../../src/common/errors/vfm-error.js';
 import { FormSchemasService } from '../../src/modules/form-schemas/form-schemas.service.js';
+import { SEED_FORMS } from '../../src/tools/seed-forms.js';
 import { matchesIfNoneMatch } from '../../src/modules/form-schemas/form-schemas.controller.js';
 import { FakeFormPrisma, asPrisma } from '../helpers/form-schemas-fake.js';
 
@@ -112,6 +113,12 @@ async function errorOf(action: () => Promise<unknown>): Promise<VfmException> {
   throw new Error('Očekivana je VfmException.');
 }
 
+function freshVehicleDefinition(): Record<string, unknown> {
+  const definition = SEED_FORMS.find((form) => form.key === 'vehicle')?.definition;
+  if (!definition) throw new Error('seed forma `vehicle` nedostaje');
+  return structuredClone(definition);
+}
+
 async function createWashForm(service: FormSchemasService) {
   return (
     await service.create(
@@ -151,6 +158,44 @@ const VALID_VALUES = {
 };
 
 describe('FormSchemasService — kreiranje', () => {
+  it('odbija drugi identitet za isti subject, bez sprečavanja task-type formi', async () => {
+    const { service } = build();
+    const first = await service.create({
+      key: 'vozilo-prvo',
+      name: 'Vozilo',
+      subject: 'VEHICLE',
+      definition: freshVehicleDefinition(),
+    });
+    expect(first.data.subject).toBe('VEHICLE');
+
+    const duplicate = await errorOf(() =>
+      service.create({
+        key: 'vozilo-drugo',
+        name: 'Drugo vozilo',
+        subject: 'VEHICLE',
+        definition: freshVehicleDefinition(),
+      }),
+    );
+    expect(duplicate.code).toBe('VALIDATION_ERROR');
+
+    const typeA = '018f0000-0000-7000-8000-0000000000d1';
+    const typeB = '018f0000-0000-7000-8000-0000000000d2';
+    await service.create({
+      key: 'task-a',
+      name: 'Task A',
+      subject: 'TASK',
+      taskTypeId: typeA,
+      definition: freshWashDefinition(),
+    });
+    await service.create({
+      key: 'task-b',
+      name: 'Task B',
+      subject: 'TASK',
+      taskTypeId: typeB,
+      definition: freshWashDefinition(),
+    });
+  });
+
   it('kreira formu s prvom DRAFT verzijom i stabilnim contentHash', async () => {
     const { service } = build();
     const detail = await createWashForm(service);
@@ -367,6 +412,37 @@ describe('FormSchemasService — objava (P9/P10)', () => {
 });
 
 describe('FormSchemasService — aktivna forma i keširanje', () => {
+  it('preskače legacy VEHICLE definiciju i bira objavljenu verziju validne šeme', async () => {
+    const { prisma, service } = build();
+    const valid = await service.create({
+      key: 'vehicle-current',
+      name: 'Vozilo',
+      subject: 'VEHICLE',
+      definition: freshVehicleDefinition(),
+    });
+    await service.publish(valid.data.id, valid.data.versions[0]!.id, { changeNote: 'Validna forma' }, ACTOR);
+
+    const sourceSchema = [...prisma.schemas.values()][0]!;
+    const sourceVersion = [...prisma.versions.values()][0]!;
+    prisma.schemas.set('legacy-schema', {
+      ...sourceSchema,
+      id: 'legacy-schema',
+      key: 'legacy-vehicle',
+      name: 'Legacy vehicle',
+      currentPublishedVersionId: 'legacy-version',
+      updatedAt: new Date('2026-10-30T12:00:00.000Z'),
+    });
+    prisma.versions.set('legacy-version', {
+      ...sourceVersion,
+      id: 'legacy-version',
+      formSchemaId: 'legacy-schema',
+      definition: { version: 1, fields: [{ name: 'legacy' }] },
+    });
+
+    const active = await service.active({ subject: 'VEHICLE' });
+    expect(active.formSchemaId).toBe(valid.data.id);
+  });
+
   it('bez objavljene verzije nema aktivne forme', async () => {
     const { service } = build();
     await createWashForm(service);

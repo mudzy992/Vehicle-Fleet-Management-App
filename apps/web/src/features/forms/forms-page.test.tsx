@@ -36,6 +36,96 @@ describe('FormsPage', () => {
     expect(screen.queryByText('Odaberi formu iz kataloga')).toBeNull();
   });
 
+  it('keeps the save confirmation after refetching the same draft version', async () => {
+    permissions.add('form:view');
+    permissions.add('form:update');
+    permissions.add('form:manage_schema');
+    const formId = '88888888-8888-4888-8888-888888888888';
+    const versionId = '99999999-9999-4999-8999-999999999999';
+    const definition = {
+      $schema: 'vfm-form/1',
+      meta: { title: 'Podaci vozila', subject: 'VEHICLE' },
+      sections: [
+        {
+          key: 'general',
+          title: 'Opšti podaci',
+          order: 1,
+          fields: [{ key: 'reference', type: 'TEXT', label: 'Referenca', order: 1 }],
+        },
+      ],
+    };
+    const version = {
+      id: versionId,
+      version: 1,
+      status: 'DRAFT',
+      changeNote: null,
+      contentHash: null,
+      mobileCompatible: true,
+      publishedAt: null,
+      publishedById: null,
+      retiredAt: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      recordCount: 0,
+    };
+    vi.spyOn(api, 'get').mockImplementation(async (path) => {
+      if (path === '/form-schemas')
+        return [
+          {
+            id: formId,
+            key: 'vehicle-inspection',
+            name: 'Pregled vozila',
+            subject: 'VEHICLE',
+            taskTypeId: null,
+            description: null,
+            ownerModule: 'vehicles',
+            status: 'DRAFT',
+            currentPublishedVersionId: null,
+            currentPublishedVersion: null,
+            versionCount: 1,
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ] as never;
+      if (path === `/form-schemas/${formId}`)
+        return {
+          id: formId,
+          key: 'vehicle-inspection',
+          name: 'Pregled vozila',
+          subject: 'VEHICLE',
+          taskTypeId: null,
+          description: null,
+          ownerModule: 'vehicles',
+          status: 'DRAFT',
+          currentPublishedVersionId: null,
+          currentPublishedVersion: null,
+          versionCount: 1,
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          versions: [version],
+        } as never;
+      return { ...version, formSchemaId: formId, definition, normalizedName: null } as never;
+    });
+    const put = vi.spyOn(api, 'put').mockImplementation(
+      async (_path, input) =>
+        ({
+          ...version,
+          formSchemaId: formId,
+          definition: (input as { definition: typeof definition }).definition,
+          normalizedName: null,
+        }) as never,
+    );
+
+    renderPage();
+    await screen.findByRole('heading', { name: 'Pregled vozila' });
+    fireEvent.change(await screen.findByLabelText('Naslov'), {
+      target: { value: 'Podaci vozila — test' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sačuvaj nacrt' }));
+
+    expect(await screen.findByText('Nacrt je sačuvan.')).toBeTruthy();
+    expect(put).toHaveBeenCalledOnce();
+  });
+
   it('starts a form draft from visual metadata rather than raw JSON', async () => {
     permissions.add('form:create');
     vi.spyOn(api, 'get').mockImplementation(async (path) =>

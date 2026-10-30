@@ -9,10 +9,12 @@
  * - status mašina ne dozvoljava „preskok" u `ARCHIVED` mimo `/archive`;
  * - arhiviranje i brisanje ne uklanjaju zapis (arhiva/brisanje su meke).
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import type { VehicleDetail } from '@vfm/shared/schemas';
 import { VEHICLE_STATUS_TRANSITIONS, VehiclesService } from '../../src/modules/vehicles/vehicles.service.js';
+vi.mock('../../src/prisma/prisma.service.js', () => ({ PrismaService: class PrismaService {} }));
+
 import {
   FakeVehiclePrisma,
   asPrisma,
@@ -88,6 +90,17 @@ describe('VehiclesService — create', () => {
     expect(outcome.data.version).toBe(0);
     expect(fake.vehicles[0]?.createdById).toBe('actor-1');
     expect(outcome.after?.status).toBe('ACTIVE');
+  });
+
+  it('preskače legacy definiciju i koristi objavljenu VEHICLE formu validne sheme', async () => {
+    const fake = new FakeVehiclePrisma();
+    fake.addForm({ definition: { version: 1, fields: [{ name: 'legacy' }] } });
+    const { versionId } = fake.addForm();
+    const service = new VehiclesService(asPrisma(fake));
+
+    const outcome = await service.create(baseInput() as never);
+
+    expect(outcome.data.formSchemaVersionId).toBe(versionId);
   });
 
   it('bez objavljene VEHICLE forme ne kreira zapis', async () => {

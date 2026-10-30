@@ -101,9 +101,7 @@ export class AllExceptionsFilter {
           error: {
             code: exception.code,
             message: exception.message,
-            ...(exception.details && exception.details.length > 0
-              ? { details: exception.details }
-              : {}),
+            ...(exception.details && exception.details.length > 0 ? { details: exception.details } : {}),
             ...(requestId ? { requestId } : {}),
             ...extra,
           } as ApiErrorBody,
@@ -137,7 +135,9 @@ export class AllExceptionsFilter {
               ? Array.isArray((payload as { message: string[] }).message)
                 ? (payload as { message: string[] }).message.join('; ')
                 : (payload as { message: string }).message
-              : (isErrorCode(code) ? ERROR_CODES[code].messageBs : exception.message);
+              : isErrorCode(code)
+                ? ERROR_CODES[code].messageBs
+                : exception.message;
 
       return {
         status,
@@ -204,10 +204,13 @@ export class AllExceptionsFilter {
     securityRelevant: boolean,
     internalDetail?: unknown,
   ): void {
+    const rawPath = request?.originalUrl ?? request?.url;
     const context = {
       requestId: request?.id,
       method: request?.method,
-      path: request?.originalUrl ?? request?.url,
+      // Errori idu na INFO; izostavi query string kako URL tokeni/filtri ne bi
+      // postali šire vidljivi u produkcijskom log agregatoru.
+      path: rawPath?.split('?')[0],
       status,
     };
 
@@ -232,7 +235,15 @@ export class AllExceptionsFilter {
     }
 
     if (status >= 400) {
-      this.logger.debug({ msg: 'Klijentska greška', ...context, reason: describeError(exception) }, 'ExceptionFilter');
+      // INFO je podrazumijevani produkcijski nivo; DEBUG je često isključen,
+      // pa bi requestId iz klijentskog error envelope-a inače bio nepretraživ.
+      const errorType =
+        exception instanceof VfmException
+          ? exception.code
+          : exception instanceof Error
+            ? exception.name
+            : typeof exception;
+      this.logger.log({ msg: 'Klijentska greška', ...context, errorType }, 'ExceptionFilter');
     }
   }
 }
