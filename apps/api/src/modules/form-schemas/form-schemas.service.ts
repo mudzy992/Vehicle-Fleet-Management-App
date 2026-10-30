@@ -323,13 +323,19 @@ export class FormSchemasService {
       throw VfmErrors.validationError([detail('key', `Forma s ključem "${input.key}" već postoji.`)]);
     }
 
-    const sameIdentity = await this.prisma.formSchema.findFirst({
-      where: {
-        subject: input.subject,
-        taskTypeId: input.taskTypeId ?? null,
-        deletedAt: null,
-      },
-    });
+    // TASK bez taskTypeId je namjerno generički bucket (može imati više formi);
+    // stvarni identitet vrste zadatka je par (TASK, taskTypeId). Ostali subjekti
+    // imaju jedan identitet forme bez obzira na broj njenih verzija.
+    const sameIdentity =
+      input.subject === 'TASK' && !input.taskTypeId
+        ? null
+        : await this.prisma.formSchema.findFirst({
+            where: {
+              subject: input.subject,
+              taskTypeId: input.taskTypeId ?? null,
+              deletedAt: null,
+            },
+          });
     if (sameIdentity) {
       throw VfmErrors.validationError([
         detail(

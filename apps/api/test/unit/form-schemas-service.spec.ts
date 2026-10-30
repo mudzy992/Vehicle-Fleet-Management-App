@@ -178,6 +178,20 @@ describe('FormSchemasService — kreiranje', () => {
     );
     expect(duplicate.code).toBe('VALIDATION_ERROR');
 
+    // TASK forme su višestruke ako nisu vezane za tip; za tip postoji tačno
+    // jedan identitet, a različiti tipovi ostaju nezavisni.
+    await service.create({
+      key: 'task-generic-a',
+      name: 'Task generički A',
+      subject: 'TASK',
+      definition: freshWashDefinition(),
+    });
+    await service.create({
+      key: 'task-generic-b',
+      name: 'Task generički B',
+      subject: 'TASK',
+      definition: freshWashDefinition(),
+    });
     const typeA = '018f0000-0000-7000-8000-0000000000d1';
     const typeB = '018f0000-0000-7000-8000-0000000000d2';
     await service.create({
@@ -194,6 +208,16 @@ describe('FormSchemasService — kreiranje', () => {
       taskTypeId: typeB,
       definition: freshWashDefinition(),
     });
+    const duplicateTaskType = await errorOf(() =>
+      service.create({
+        key: 'task-a-duplicate',
+        name: 'Task A duplicate',
+        subject: 'TASK',
+        taskTypeId: typeA,
+        definition: freshWashDefinition(),
+      }),
+    );
+    expect(duplicateTaskType.code).toBe('VALIDATION_ERROR');
   });
 
   it('kreira formu s prvom DRAFT verzijom i stabilnim contentHash', async () => {
