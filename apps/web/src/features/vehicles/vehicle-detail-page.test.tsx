@@ -50,7 +50,9 @@ vi.mock('../auth/session.js', () => ({
 }));
 
 function renderDetail() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   return render(
     <MemoryRouter initialEntries={[`/vozila/${VEHICLE_ID}`]}>
       <QueryClientProvider client={client}>
@@ -78,6 +80,35 @@ describe('VehicleDetailPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Arhiviraj' }));
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.getByText('Vozilo ima aktivne zadatke.')).toBeTruthy();
+  });
+
+  it('loads vehicle task and history tabs only with vehicle:view_history', async () => {
+    session.permissions = ['vehicle:view_history'];
+    const get = vi.spyOn(api, 'get').mockImplementation(async <T,>(path: string) => {
+      if (path === `/vehicles/${VEHICLE_ID}`) return VEHICLE as T;
+      if (path.startsWith(`/vehicles/${VEHICLE_ID}/tasks`))
+        return { items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 } as T;
+      if (path.startsWith(`/vehicles/${VEHICLE_ID}/history`))
+        return { items: [], page: 1, pageSize: 25, total: 0, totalPages: 0, securityHidden: true } as T;
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    renderDetail();
+    fireEvent.click(await screen.findByRole('button', { name: 'Zadaci' }));
+    expect(await screen.findByText('Nema zadataka za ovo vozilo')).toBeTruthy();
+    expect(get).toHaveBeenCalledWith(`/vehicles/${VEHICLE_ID}/tasks?page=1&pageSize=20`);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Historija' }));
+    expect(await screen.findByText('Nema historijskih promjena')).toBeTruthy();
+    expect(get).toHaveBeenCalledWith(`/vehicles/${VEHICLE_ID}/history?page=1&pageSize=25`);
+  });
+
+  it('does not show history tabs without vehicle:view_history', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue(VEHICLE);
+    renderDetail();
+    await screen.findByRole('heading', { name: /V-001/ });
+    expect(screen.queryByRole('button', { name: 'Zadaci' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Historija' })).toBeNull();
   });
 
   it('does not misrepresent a registration API failure as an empty state', async () => {

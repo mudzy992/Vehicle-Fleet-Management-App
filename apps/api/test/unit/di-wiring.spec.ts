@@ -37,6 +37,7 @@ import { AttachmentsService } from '../../src/modules/attachments/attachments.se
 import { AttachmentsController } from '../../src/modules/attachments/attachments.controller.js';
 import { VehiclesService } from '../../src/modules/vehicles/vehicles.service.js';
 import { VehiclesController } from '../../src/modules/vehicles/vehicles.controller.js';
+import { AuditLogService } from '../../src/modules/audit-logs/audit-log.service.js';
 import { DriversService } from '../../src/modules/drivers/drivers.service.js';
 import { DriversController } from '../../src/modules/drivers/drivers.controller.js';
 import { RegistrationsService } from '../../src/modules/registrations/registrations.service.js';
@@ -92,7 +93,15 @@ describe('DI wiring (Faza 3)', () => {
   it.each(controllers)('%s dobija svoj servis kroz Nest', async (_name, controller, service) => {
     const moduleRef = await Test.createTestingModule({
       controllers: [controller as never],
-      providers: [{ provide: service as never, useValue: {} }],
+      providers: [
+        { provide: service as never, useValue: {} },
+        ...(controller === VehiclesController
+          ? [
+              { provide: TasksService, useValue: {} },
+              { provide: AuditLogService, useValue: {} },
+            ]
+          : []),
+      ],
     }).compile();
 
     expect(moduleRef.get(controller as never)).toBeTruthy();

@@ -13,6 +13,8 @@ import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.fil
 import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
 import { VehiclesController } from '../../src/modules/vehicles/vehicles.controller.js';
 import { VehiclesService } from '../../src/modules/vehicles/vehicles.service.js';
+import { TasksService } from '../../src/modules/tasks/tasks.service.js';
+import { AuditLogService } from '../../src/modules/audit-logs/audit-log.service.js';
 import { PermissionsService } from '../../src/modules/auth/permissions/permissions.service.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 import { asPrisma, baseInput, FakeVehiclePrisma } from '../helpers/vehicles-fake.js';
@@ -72,6 +74,8 @@ function actorFor(scenario: SweepScenario): AuthenticatedUser {
 describe('P14 — vehicle scope HTTP rute', () => {
   let app: INestApplication;
   let baseUrl: string;
+  let taskList: ReturnType<typeof vi.fn>;
+  let historyList: ReturnType<typeof vi.fn>;
 
   beforeAll(async () => {
     const prisma = new FakeVehiclePrisma();
@@ -84,12 +88,43 @@ describe('P14 — vehicle scope HTTP rute', () => {
       snapshot: vi.fn(async () => ({ permissionsVersion: 0 })),
       currentPermissionsVersion: vi.fn(async () => 0),
     };
+    taskList = vi.fn(async () => ({ items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 }));
+    historyList = vi.fn(async () => ({
+      items: [
+        {
+          id: '101',
+          action: 'UPDATE' as const,
+          severity: 'INFO' as const,
+          actorId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          actorEmail: 'private@example.test',
+          actorRoles: [],
+          entityType: 'Vehicle',
+          entityId: VEHICLE_ID,
+          changedFields: ['status'],
+          reason: null,
+          requestId: 'req-test',
+          ipAddress: '192.0.2.1',
+          userAgent: 'private-agent',
+          clientType: 'WEB' as const,
+          createdAt: '2026-10-01T12:00:00.000Z',
+        },
+      ],
+      page: 1,
+      pageSize: 25,
+      total: 1,
+      totalPages: 1,
+      securityHidden: true,
+    }));
+    const tasks = { list: taskList };
+    const auditLogs = { list: historyList };
     const moduleRef = await Test.createTestingModule({
       controllers: [VehiclesController],
       providers: [
         Reflector,
         PermissionsGuard,
         VehiclesService,
+        { provide: TasksService, useValue: tasks },
+        { provide: AuditLogService, useValue: auditLogs },
         { provide: PrismaService, useValue: asPrisma(prisma) },
         { provide: PermissionsService, useValue: permissions },
       ],
@@ -149,6 +184,35 @@ describe('P14 — vehicle scope HTTP rute', () => {
     });
     expect(unassigned.status).toBe(403);
     expect(((await unassigned.json()) as { error: { code: string } }).error.code).toBe('SCOPE_DENIED');
+  });
+
+  it('vehicle:view_history omogućava samo zadatke vozila i vraća filtriranu, redigovanu historiju', async () => {
+    const tasksResponse = await fetch(`${baseUrl}/vehicles/${VEHICLE_ID}/tasks?page=2&pageSize=7`, {
+      headers: { 'x-sweep-role': 'SUPER_ADMIN' },
+    });
+    expect(tasksResponse.status).toBe(200);
+    expect(taskList).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 2, pageSize: 7, vehicleId: VEHICLE_ID }),
+      'p14-super_admin',
+    );
+
+    const historyResponse = await fetch(`${baseUrl}/vehicles/${VEHICLE_ID}/history?page=1&pageSize=9`, {
+      headers: { 'x-sweep-role': 'SUPER_ADMIN' },
+    });
+    expect(historyResponse.status).toBe(200);
+    const historyBody = (await historyResponse.json()) as {
+      items: Array<{ actorEmail: string | null; ipAddress: string | null; userAgent: string | null }>;
+    };
+    expect(historyBody.items[0]).toMatchObject({ actorEmail: null, ipAddress: null, userAgent: null });
+    expect(historyList).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 1, pageSize: 9, entityType: 'Vehicle', entityId: VEHICLE_ID }),
+      expect.objectContaining({ id: 'p14-super_admin' }),
+    );
+
+    const denied = await fetch(`${baseUrl}/vehicles/${VEHICLE_ID}/history`, {
+      headers: { 'x-sweep-role': 'NO_GRANTS' },
+    });
+    expect(denied.status).toBe(403);
   });
 
   it('odometer:view VEHICLE_IDS opseg provjerava vozilo na HTTP ruti kilometraže', async () => {

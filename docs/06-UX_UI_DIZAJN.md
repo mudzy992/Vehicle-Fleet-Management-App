@@ -748,7 +748,7 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 | Ekran | Ruta | Fajl | Napomena |
 |---|---|---|---|
 | Liste formi (W20) + Builder (W21) + verzije/diff (W22) | `/forme` | `features/forms/forms-page.tsx`, `forms-preview.tsx` | jedna ruta, tri panela: katalog → verzije → editor definicije; meta-shema se provjerava u browseru istim kodom kao na serveru (`@vfm/form-engine/definition`); objava/povlačenje traže bilješku ≥ 5 znakova; `PUBLISHED`/`RETIRED` su read-only (server bi vratio `FORM_VERSION_IMMUTABLE`); diff poziva `GET /form-schemas/:id/diff`; tab **Pregled** renderuje formu kroz `@vfm/form-renderer` (`buildRenderModel`) — isti model koji koristi zapis i mobilna, pa pregled nije odvojen „demo" |
-| Migracija zapisa (W23) | — | — | ⏳ odgođeno: u Fazi 2 još nema `FormRecord` zapisa za migraciju; API (`/form-migrations`) je gotov (chunk E) |
+| Migracija zapisa (W23) | — | `features/forms/` (UI nedostaje) | ⏳ preostali web ekran Faze 2: backend `/form-migrations` podržava preview/apply/rollback; FormRecord izvori postoje, ali nema web rute/komponenti |
 
 **Status (Faza 3, implementirano):**
 
@@ -761,7 +761,7 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 | Rokovi (W14) | `/rokovi` | `features/reminders/reminders-page.tsx` | lista zakazanih podsjetnika s filterima `status`/`kind`; potvrda (`reminder:acknowledge`) i odgađanje +7 dana (`reminder:snooze`); „Pokreni skener“ traži `system:run_maintenance` i prikazuje `candidates`/`created` (skener je idempotentan preko `dedupeKey`); `dueDate` može biti `null` (podsjetnik po kilometraži) — tada se prikazuje `fireAt`, a boja roka se ne izmišlja |
 | Vozila — lista (W05) | `/vozila` | `features/vehicles/vehicles-page.tsx` | filteri `q`/`status`/`includeArchived` idu na server, sortiranje (`internalNo`, `odometerKm`, `registrationExpiresAt`, `insuranceExpiresAt`, `updatedAt`), paginacija; „Rokovi" widget iz iste liste (zeleno/žuto/narandžasto/crveno, pragovi 30/7/0 dana); selekcija + arhiviranje (N zahtjeva, prijava djelimičnog uspjeha) |
 | Novo vozilo (W07) | `/vozila/novo` | `features/vehicles/vehicle-create-page.tsx` | strukturirane kolone (interni broj, marka, model, godina, gorivo, VIN) + dinamička `VEHICLE` forma kroz `buildRenderModel`; polja forme koja su već statična se ne dupliraju (`hiddenKeys`); greške servera idu uz tačno polje (`details[].path`, `formData.<key>`); bez objavljene forme ekran kaže zašto zapis ne može nastati (P10) |
-| Vozilo — detalji (W06) | `/vozila/:vehicleId` | `features/vehicles/vehicle-detail-page.tsx` | tabovi **Osnovno**, **Registracije**, **Osiguranje**, **Kilometraža**, **Prilozi**; tabovi Servisi/Gume/Zadaci/Historija su označeni fazom (4/5) umjesto prazni; kilometraža: unos + korekcija s razlogom (`422 ODOMETER_REGRESSION`), historija bez brisanja; prilozi se preuzimaju kroz potpisani URL (`/attachments/:id/url`) jer `<a href>` ne nosi access token iz memorije; tabovi Registracije/Osiguranje imaju unos kroz dinamičke forme `REGISTRATION`/`INSURANCE` (`record-form.tsx`) s podrazumijevanim periodom od godinu dana i porukom za `409 PERIOD_OVERLAP`; red ima **Uredi** (`record-edit-form.tsx`): `PATCH` nosi `version` (`409 VERSION_CONFLICT`), prazna opciona polja se šalju kao `null` da se mogu obrisati, status se mijenja samo kroz dozvoljene prelaze, brisanje je soft-delete uz potvrdu |
+| Vozilo — detalji (W06) | `/vozila/:vehicleId` | `features/vehicles/vehicle-detail-page.tsx`, `vehicle-tasks-tab.tsx`, `vehicle-history-tab.tsx` | tabovi **Osnovno**, **Registracije**, **Osiguranje**, **Kilometraža**, **Prilozi**, **Servisi**, **Gume**, **Zadaci**, **Historija**; zadaci su server-paginirani preko `GET /vehicles/:id/tasks`, a Historija prikazuje paginirane audit promjene osnovnog zapisa preko `GET /vehicles/:id/history`; oba taba zahtijevaju `vehicle:view_history`, a server provjerava scope vozila i rediguje email/IP/UA; kilometraža: unos + korekcija s razlogom; prilozi se preuzimaju kroz potpisani URL; Registracije/Osiguranje imaju dinamičke forme i izmjenu s optimističkom verzijom, dozvoljenim statusima i soft-delete uz potvrdu |
 | Izmjena vozila (W06) | `/vozila/:vehicleId/izmjena` | `features/vehicles/vehicle-edit-page.tsx` | iste strukturirane kolone kao unos (`vehicle-form-config.ts`), ali forma se učitava iz **verzije zapisa** (`formSchemaVersionId`), ne iz aktivne verzije (P10); `PATCH /vehicles/:id` nosi `version`, pa paralelna izmjena daje `409 VERSION_CONFLICT` bez gubljenja unosa; prazna godina/VIN se šalju kao `null` |
 | Vozači — lista (W07) | `/vozaci` | `features/drivers/drivers-page.tsx` | filteri `q`/`status`/`licenseCategory`/`includeArchived` idu na server (whitelist sortiranja: `lastName`, `firstName`, `employeeNumber`, `status`, `licenseExpiresAt`, `updatedAt`, `createdAt`), paginacija; PII se **ne** prikazuje; „Dozvole ističu" widget računa dane iz `licenseExpiresAt` (ne iz serverskog `licenseDaysLeft`), pa se lista i widget slažu; bulk arhiviranje šalje N zahtjeva i prijavljuje djelimičan uspjeh |
 | Vozač — profil (W08) | `/vozaci/:driverId` | `features/drivers/driver-detail-page.tsx` | PII sekcija (telefon, e-mail, adresa, datum rođenja, broj dozvole) označena je kad server vrati `piiRedacted` (nema `driver:view_pii`); rok dozvole i kategorije nisu PII; tab **Kategorije** ima dodavanje i brisanje (kategorija se ne mijenja — briše se i dodaje), uz `PATCH .../license-categories/:id` za datume; arhiviranje/vraćanje traži `driver:archive` |
@@ -778,6 +778,7 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 
 | Ekran | Ruta | Fajl | Napomena |
 |---|---|---|---|
+| Vozilo — Zadaci/Historija (W06) | `/vozila/:vehicleId` | `features/vehicles/vehicle-tasks-tab.tsx`, `vehicle-history-tab.tsx` | Faza 5 zatvorena za ova dva taba: zadaci server-paginirani; historija prikazuje audit promjene vozila; oba skrivena bez `vehicle:view_history`, server provjerava scope. |
 | Lista zadataka (W09) | `/zadaci` | `features/tasks/tasks-page.tsx`, `tasks-model.ts` | segmenti Slobodni/Moji/Svi; server paginacija; claim samo u Slobodni uz `task:claim`, mutation invalidira liste i prikazuje grešku/409 poruku. |
 | Detalj zadatka (W09) | `/zadaci/:taskId` | `features/tasks/task-detail-page.tsx`, `task-completion-form.tsx`, `task-status-actions.tsx` | detalji i snapshot forme, učesnici, historija i komentari; Claim samo na `OPEN` uz `task:claim`; završna forma na `IN_PROGRESS` uz `task:complete` ili `task:complete_override`, učitava nepromjenjivi snapshot i šalje CAS verziju; PHOTO/FILE polja uploaduju se preko `attachment:upload` i šalju kao ID-jevi za transakcijsko vezivanje pri završetku; otkazivanje uz obavezni razlog, release na `IN_PROGRESS` i reopen na `COMPLETED/CANCELLED` prikazuju se samo uz odgovarajuću permisiju/status, koriste CAS i nakon odgovora osvježavaju detalj/liste. |
 | Novi zadatak (W17) | `/zadaci/novi` | `features/tasks/task-create-page.tsx` | trokorak: aktivna vrsta/vozilo, metapodaci/rok/dodjela, snapshotovana TASK forma i potvrda; poštuje `requiresVehicle`, prioritete vrste i efektivnu objavljenu formu; podržava OPEN_CLAIM/BROADCAST/ASSIGN_DIRECT, pozvane i posmatrače uz `user:view`; PHOTO/FILE fajlovi se prvo uploaduju uz `attachment:upload`, a `POST /tasks` ih u istoj transakciji validira i veže sa `ON_CREATE`; nakon kreiranja otvara detalj. |
@@ -786,7 +787,7 @@ Nakon `409`: dijalog s porukom „Zadatak je preuzeo **Emina H.** prije 12 min" 
 Sve zaštićene rute idu kroz `RequireAuth` + `RequirePermission` (`app/guards.tsx`);
 sidebar filtrira stavke prema `/auth/me` (`visibleNavItems`), ali **server ostaje
 autoritet** (P14) — ručni unos URL-a bez prava prikazuje ekran „Nemate pristup"
-i ne pokreće nijedan upit. Ostali ekrani su placeholderi s oznakom faze.
+i ne pokreće nijedan upit. W23 Forms UI ostaje jasno definisan fazni nedostatak; 404 fallback nije fazni ekran.
 
 ### 9.2 Mobilna (11 ekrana)
 
@@ -862,7 +863,7 @@ polja aktivne SERVICE forme kroz form-renderer (bez ponavljanja osnovnih polja).
 Trošak se unosi u KM i šalje kao feninge; opcioni km je cijeli nenegativan broj.
 Greške se prikazuju bez brisanja unosa. Nakon uspjeha se osvježavaju servisne
 liste, vozilo, lista vozila i očitanja. Otkazivanje ne upisuje ništa.
-Stavke računa, izmjena i brisanje servisa još nisu implementirani.
+Stavke računa, potpuna izmjena i brisanje servisa su naknadno implementirani; vidi dopunu Faze 4 ispod.
 
 ### Stavke računa — dopuna Faze 4
 
@@ -874,7 +875,7 @@ količinu do dvije decimale, cijenu u KM, šifru i napomenu. Server računa zbir
 Potvrda prije snimanja jasno kaže da zbir zamjenjuje prethodni ukupni trošak,
 a prazna lista postavlja nulu. Verzijski konflikt ne briše unos; zatvaranje i
 ponovno otvaranje učitava novu verziju. Nakon uspjeha osvježavaju se stavke i
-servisna lista. Izmjena osnovnih podataka servisa još nije implementirana.
+servisna lista. Osnovna izmjena i brisanje servisa implementirani su u dopuni Faze 4 ispod.
 
 ### Prikaz servisnog računa — vizuelna dorada
 

@@ -1,12 +1,12 @@
 import { VehicleTiresTab } from '../tires/vehicle-tires-tab.js';
 import { VehicleServicesTab } from '../services/vehicle-services-tab.js';
+import { VehicleTasksTab } from './vehicle-tasks-tab.js';
+import { VehicleHistoryTab } from './vehicle-history-tab.js';
 /**
  * Detalji vozila (W06, docs/06 §5.5; docs/07 §2.5).
  *
- * Tabovi koji su u Fazi 3 stvarno implementirani: **Osnovno**, **Registracije**,
- * **Osiguranje**, **Kilometraža**, **Prilozi**. Ostali tabovi (Servisi, Gume,
- * Zadaci, Historija) pripadaju Fazi 4/5 i ovdje su označeni kao takvi — bolje
- * vidljivo „nije još" nego prazan tab koji izgleda kao greška.
+ * Detalj vozila okuplja osnovne podatke, evidencije, servis/gume, zadatke i
+ * audit historiju; tabovi s osjetljivijim sadržajem se filtriraju po permisiji.
  *
  * Kilometraža: niža vrijednost je `422 ODOMETER_REGRESSION`; ekran nudi
  * „korekcija" tek kad korisnik ima `odometer:correct` i traži razlog.
@@ -47,7 +47,16 @@ import { VehicleRecordEditForm } from './record-edit-form.js';
 import { useSession } from '../auth/session.js';
 import { deadlineLabel, deadlineTone, toQueryString } from './vehicles-model.js';
 
-type Tab = 'osnovno' | 'registracije' | 'osiguranje' | 'kilometraza' | 'prilozi' | 'servisi' | 'gume';
+type Tab =
+  | 'osnovno'
+  | 'registracije'
+  | 'osiguranje'
+  | 'kilometraza'
+  | 'prilozi'
+  | 'servisi'
+  | 'gume'
+  | 'zadaci'
+  | 'historija';
 
 const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'osnovno', label: 'Osnovno' },
@@ -57,11 +66,8 @@ const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'prilozi', label: 'Prilozi' },
   { id: 'servisi', label: 'Servisi' },
   { id: 'gume', label: 'Gume' },
-];
-
-const PHASE_LATER: ReadonlyArray<{ label: string; phase: string }> = [
-  { label: 'Zadaci', phase: 'Faza 5' },
-  { label: 'Historija', phase: 'Faza 5' },
+  { id: 'zadaci', label: 'Zadaci' },
+  { id: 'historija', label: 'Historija' },
 ];
 
 function formatDate(date: string | null): string {
@@ -198,7 +204,8 @@ export function VehicleDetailPage() {
         {TABS.filter(
           (item) =>
             (item.id !== 'servisi' || hasPermission('service:view')) &&
-            (item.id !== 'gume' || hasPermission('tire:view')),
+            (item.id !== 'gume' || hasPermission('tire:view')) &&
+            ((item.id !== 'zadaci' && item.id !== 'historija') || hasPermission('vehicle:view_history')),
         ).map((item) => (
           <Button
             key={item.id}
@@ -209,15 +216,6 @@ export function VehicleDetailPage() {
           >
             {item.label}
           </Button>
-        ))}
-        {PHASE_LATER.map((item) => (
-          <span
-            key={item.label}
-            title={`${item.label} — ${item.phase}`}
-            className="cursor-not-allowed rounded-md px-3 py-1.5 text-sm text-fg-muted"
-          >
-            {item.label} <span className="text-xs">({item.phase})</span>
-          </span>
         ))}
       </div>
 
@@ -236,6 +234,12 @@ export function VehicleDetailPage() {
       {tab === 'kilometraza' && <OdometerTab vehicle={vehicle} onChanged={invalidate} />}
       {tab === 'servisi' && hasPermission('service:view') && (
         <VehicleServicesTab key={vehicle.id} vehicleId={vehicle.id} />
+      )}
+      {tab === 'zadaci' && hasPermission('vehicle:view_history') && (
+        <VehicleTasksTab key={vehicle.id} vehicleId={vehicle.id} />
+      )}
+      {tab === 'historija' && hasPermission('vehicle:view_history') && (
+        <VehicleHistoryTab key={vehicle.id} vehicleId={vehicle.id} />
       )}
       {tab === 'prilozi' && <AttachmentsTab vehicleId={vehicle.id} />}
     </div>

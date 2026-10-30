@@ -2,21 +2,21 @@
 
 **Datum pregleda:** 30.10.2026.
 **Opseg:** web frontend `apps/web`; mobilni UI i backend funkcionalnosti nisu predmet ovog izvještaja.
-**Status:** automatizovane kapije imaju raniji uspješan CI dokaz; završna vizuelna i ekran-po-ekran potvrda još nije potpuna. Ovaj dokument je plan implementacije i provjere, a ne tvrdnja da je frontend konačno prihvaćen.
+**Status (dopunjeno 30.10.2026.):** zadaci/historija na detaljima vozila implementirani su u ovom prolazu. Funkcionalni status Izvještaja i Obavijesti iz prvog audita bio je zastario; vidi P3. Završni vizuelni pregled i ekran-po-ekran UAT i dalje nisu proglašeni završenim.
 
 ## Sažetak
 
-1. **Izvještaji i obavijesti nisu implementirani kao funkcionalni moduli.** Rute postoje kao placeholderi i imaju `report:view` odnosno `notification:view` guardove. Prema važećoj odluci, ostaju budući fazni kosturi; ovaj audit ih ne pretvara u funkcionalnosti niti uklanja njihove guardove.
-2. **Poznati UI nedostatak — „Novi zadatak“:** link na `/zadaci/novi` u `apps/web/src/features/tasks/tasks-page.tsx` ručno ponavlja osnovne klase umjesto zajedničkog `Button` primitiva. Ima semantičke primary boje, ali odstupa od zajedničkog radiusa/weighta/ponašanja. Korisnik je posebno prijavio da kontrast/izgled dugmeta nije zadovoljavajući. Predloženo je usklađivanje primitiva i provjera u svim interaktivnim stanjima, ne nasumično mijenjanje boja.
-3. **Token kontrast nije isto što i vizuelno prihvatanje:** statička provjera računa 24 semantic foreground/background kombinacije za tamnu i eksplicitnu svijetlu temu. Primarni tekst na dugmetu iznosi tamna **14,63:1**, svijetla **4,92:1** (WCAG AA minimum 4,5:1). Ovo ne pobija korisnikov vizuelni nalaz: skripta ne procjenjuje ukus, percepciju, kompoziciju, efekt opacity/hover na konkretnom ekranu niti produkcijski browser render.
-4. **Rute i osnovni guardovi:** statička matrica provjerava navigacijske stavke, odgovarajuće React Router rute i permission podudaranje, uključujući buduće placeholder rute.
+1. **Izvještaji i obavijesti su funkcionalne web stranice.** Izvještaji imaju katalog, filtere i CSV; obavijesti imaju inbox, read/unread, SSE i korisničke preference. Nedostaju fazni izlazi koji nisu isto što i stranice: asinhroni export Izvještaja i Audit loga (Faza 7) te globalna admin politika tipova/primalaca obavijesti (čeka poslovnu potvrdu).
+2. **„Novi zadatak“ CTA:** koristi `buttonClassName('primary', 'lg')`, a zajednička primarna varijanta direktno postavlja boje iz semantičkih button tokena. Vizuelni acceptance ostaje korisnikov završni pregled.
+3. **Token kontrast nije isto što i vizuelno prihvatanje:** statička provjera računa 26 semantic foreground/background kombinacija za tamnu i eksplicitnu svijetlu temu. Primarni tekst dugmeta iznosi **14,63:1** u obje teme (WCAG AA minimum 4,5:1); skripta ne procjenjuje produkcijski browser render ni hover/focus/disabled slojeve.
+4. **Rute i osnovni guardovi:** statička matrica provjerava navigacijske stavke, odgovarajuće React Router rute i permission podudaranje, uključujući guarded 404 fallback.
 5. **Postojeći automatizovani dokaz:** CI `40965788687` je prošao sve poslove, uključujući Playwright **65/65**, lint/typecheck, unit/integration, security, mobile typecheck/Android export i build/Docker. Ovaj rezultat je regresijski dokaz za tadašnji commit; ne predstavlja screenshot audit svih ekrana, produkcijski UAT, niti dokaz da izvještaji/obavijesti postoje.
 
 ## Obuhvaćene matrice
 
 ### A. Navigacija, ruta i ovlaštenje
 
-Izvorna matrica je `apps/web/src/app/nav.ts` + `apps/web/src/app/router.tsx`. Novi `scripts/check-frontend-route-matrix.mjs` provjerava svaku `NAV_ITEMS` stavku prema ruti i poredi permission string, te posebno potvrđuje da su `/obavijesti` i `/izvjestaji` placeholderi sa guardovima.
+Izvorna matrica je `apps/web/src/app/nav.ts` + `apps/web/src/app/router.tsx`. `scripts/check-frontend-route-matrix.mjs` provjerava svaku `NAV_ITEMS` stavku prema ruti i poredi permission string, te posebno potvrđuje da su `/obavijesti` i `/izvjestaji` implementirane stranice s guardovima.
 
 | Oblast | Ruta/e | Trenutni status | Šta treba potvrditi prije prihvatanja |
 |---|---|---|---|
@@ -25,8 +25,8 @@ Izvorna matrica je `apps/web/src/app/nav.ts` + `apps/web/src/app/router.tsx`. No
 | Vozači | `/vozaci`, `/vozaci/novi`, `/vozaci/:driverId` | Implementirano | Provjeriti PII maskiranje, read-only i permission stanja u svakom viewportu |
 | Konfiguracija | `/forme`, `/vrste-zadataka`, `/administracija/korisnici`, `/administracija/prava` | Implementirano; neki tokovi imaju browser E2E | CRUD/validacija/greške/prava; matrica prava i široke tabele uz tastaturu/zoom |
 | Sistem | `/audit-log`, `/profil`, `/zdravlje`, `/dizajn-sistem` | Implementirano | Ekran-po-ekran vizuelni prolaz, responsive i poruke grešaka; audit security-hidden stanje |
-| Obavijesti | `/obavijesti` | **Placeholder**, `notification:view` guard | Zadržati kostur i guard; funkcionalnost samo nakon promjene faznog scopea/odobrenja |
-| Izvještaji | `/izvjestaji` | **Placeholder**, `report:view` guard | Zadržati kostur i guard; funkcionalnost samo nakon promjene faznog scopea/odobrenja |
+| Obavijesti | `/obavijesti` | Inbox, SSE, read/unread i self-service preferences; `notification:view` guard | Globalna admin politika tipova/primalaca čeka poslovnu potvrdu; vizuelni UAT |
+| Izvještaji | `/izvjestaji` | Katalog, filteri, rezultati i CSV; `report:view` guard | Faza 7 PDF/Excel asinhroni export nedostaje; vizuelni UAT |
 
 ### B. Dizajn tokeni i kontrast
 
@@ -34,15 +34,15 @@ Novi `scripts/check-frontend-contrast.mjs` provjerava za obje teme: primarni CTA
 
 | Stavka | Dokaz / nalaz | Odluka za implementaciju |
 |---|---|---|
-| Primary CTA kontrast (dark/light) | 14,63:1 / 4,92:1; obje vrijednosti prolaze AA za obični tekst | Ne mijenjati token samo na osnovu pretpostavke; pregledati stvarni ekran i hover/focus/disabled slojeve |
-| „Novi zadatak“ | Koristi `--primary` + `--primary-fg`, ali ima zasebne klase i `hover:opacity-90`; ne koristi zajednički `Button` primitive | Uskladiti s istom semantikom/visinom/radiusom/weightom kao druge primarne akcije; dodati ciljanu test provjeru i zatražiti vizuelnu potvrdu |
+| Primary CTA kontrast (dark/light) | 14,63:1 / 14,63:1; obje vrijednosti prolaze AA za obični tekst | Ne mijenjati token samo na osnovu pretpostavke; pregledati stvarni ekran i hover/focus/disabled slojeve |
+| „Novi zadatak“ | Koristi `buttonClassName('primary', 'lg')` i semantičke button tokene | Statičke provjere prolaze; korisnikov vizuelni pregled ostaje release acceptance |
 | Tamna/svijetla tema | Statički token parovi provjereni | Ručno provjeriti kompletan ekran po temi samo ako je svijetla tema izložena korisnicima |
 | Fokus/disabled/hover | Statičke token vrijednosti ne dokazuju stvarni composited contrast ili vidljivost na pozadini | Dodati browser test computed stilova i vizuelni pregled ključnih stanja; osigurati vidljiv focus ring i disabled label |
 | Statusi | Tokeni za success/info/warning/danger provjereni na propisanim soft pozadinama | Na svakom ekraniku provjeriti i tekst/ikonu/status label; ne prenositi značenje samo bojom |
 
 ### C. Pokrivenost funkcionalnih stanja
 
-Prije konačne potvrde proći svaku aktivnu stranicu (bez budućih placeholder funkcija) kroz ovu zajedničku matricu. Postojeći testovi pokrivaju dio kombinacija, ali nijedan pojedinačni uspješan CI run ne dokazuje sve kombinacije ispod.
+Prije konačne potvrde proći svaku aktivnu stranicu kroz ovu zajedničku matricu. Postojeći testovi pokrivaju dio kombinacija, ali nijedan pojedinačni uspješan CI run ne dokazuje sve kombinacije ispod.
 
 | Dimenzija | Minimalni slučajevi | Prihvatni dokaz |
 |---|---|---|
@@ -56,7 +56,7 @@ Prije konačne potvrde proći svaku aktivnu stranicu (bez budućih placeholder f
 
 ## Prioritetni plan implementacije
 
-### P0 — popraviti uočenu primarnu akciju zadataka
+### P0 — primarna akcija zadataka (implementirano; vizuelni acceptance ostaje)
 
 - U `tasks-page.tsx` prebaciti „Novi zadatak“ na zajednički stil/primitive bez mijenjanja routea ili `task:create` uslova.
 - Zadržati kontrastne semantičke tokene; izabrati hover/active/focus/disabled ponašanje koje je usklađeno s ostalim primarnim akcijama.
@@ -77,16 +77,19 @@ Prije konačne potvrde proći svaku aktivnu stranicu (bez budućih placeholder f
 - Dodati viewport smoke za 390/768/1440px, `document.documentElement.scrollWidth`, fokus redoslijed i computed foreground/background za primarne kontrole u normal/hover/focus/disabled stanju.
 - Testovi moraju prijaviti tačan selector, token/boju, ratio, rutu i viewport; flaky screenshot ili nepostojanje lokalnog Chromiuma ne označavati kao PASS.
 
-### P3 — budući moduli samo uz izmjenu scopea
+### P3 — fazni izlazi koji nedostaju u postojećim modulima
 
-- **Izvještaji:** sada nema stvarne report stranice, upita, filtera ni PDF/Excel exporta; ruta je Faza 7 placeholder. Za funkcionalnu implementaciju traži se zasebna odluka o sadržaju/kolonama, izvorima podataka, scope pravilima, formatima izvoza i dozvoli `report:view`.
-- **Obavijesti:** sada nema web inboxa/postavki uživo na ovoj ruti; placeholder je guarded. Za implementaciju traži se odluka o inboxu/SSE, read/unread, postavkama, preferencama, permissionima i FCM granici. Postojeći backend/API ne znači da je frontend funkcija završena.
-- Dok se scope eksplicitno ne promijeni, obje rute ostaju kosturi; ne uklanjati navigaciju/permission guardove i ne dodavati „lažne“ funkcionalne kontrole.
+- **Matrica prava (Faza 3, `VEHICLE_IDS`/`DRIVER_IDS`):** `matrix-page.tsx` nudi samo `—`/`ALL`/`OWN`; `matrix.ts` normalizira ID-scope na `ALL`, pa se ne mogu birati konkretna vozila/vozači i postojeći opseg se može izgubiti pri izmjeni role. To je još otvoren web nedostatak koji je komentar UI-ja i `docs/06` već označio kao Faza 3.
+- **Forme, W23 (Faza 2):** backend `/form-migrations` podržava preview/apply/rollback, ali u `apps/web/src/features/forms/` nema korisničkog toka ni rute. FormRecord izvori sada postoje, pa prvobitni razlog odgađanja više nije dovoljan.
+- **Izvještaji (Faza 7):** web ekran i CSV su implementirani, ali asinhroni PDF/Excel izvoz i worker/signed download tok nisu. CSV sam po sebi ne zatvara DoD Faze 7.
+- **Audit log (Faza 7):** prikaz/filteri/detalji postoje, ali planirani `POST /audit-logs/export` i web izvoz (CSV/XLSX/PDF pipeline) ne postoje.
+- **Obavijesti (Faza 6):** inbox, SSE i self-service preference ekran jesu implementirani. Globalna Super Admin politika tipova/primalaca još nije dogovorena/implementirana i čeka poslovnu potvrdu (vidi `docs/FAZA5_AUDIT.md`).
+- Ostale aktivne web oblasti imaju funkcionalne stranice; placeholder ruta je samo 404 fallback, ne fazni ekran.
 
 ## Nove skripte i komande
 
-- `scripts/check-frontend-route-matrix.mjs` — statički provjerava `NAV_ITEMS` ↔ React Router rute, permission podudaranje i buduće guarded placeholdere.
-- `scripts/check-frontend-contrast.mjs` — provjerava semantic foreground/background AA parove za dark/light temu i posebno izvještava o ručno stilizovanom CTA-u „Novi zadatak“.
+- `scripts/check-frontend-route-matrix.mjs` — statički provjerava `NAV_ITEMS` ↔ React Router rute, permission podudaranje i implementirane stranice Obavijesti/Izvještaji.
+- `scripts/check-frontend-contrast.mjs` — provjerava semantic foreground/background AA parove za dark/light temu i semantičke button tokene CTA-a „Novi zadatak“.
 - `scripts/audit-frontend.mjs` — orkestrator. Podrazumijevano izvršava statičke matrice; `--ci` dodatno pokreće lint, typecheck, Vitest, produkcijski web build i Playwright Chromium/axe runtime.
 
 ```bash
@@ -98,4 +101,4 @@ pnpm audit:frontend:ci    # sve lokalne frontend kapije, uključujući browser r
 
 ## Kriteriji zatvaranja
 
-Frontend se može označiti spremnim za release tek kada: (1) P0 CTA izgled potvrdi korisnik; (2) sve aktivne web rute imaju popunjenu matrice C sa dokazom; (3) route/permission, kontrast, lint, typecheck, unit, production build i Playwright/axe kapije prolaze na aktuelnom commitu; (4) nema otvorenih ozbiljnih vizuelnih, pristupačnih ili responsive nalaza; (5) korisnik potvrdi svoj završni vizuelni pregled. Izvještaji i obavijesti ostaju izvan DoD-a ovog web prolaza dok se fazni scope ne promijeni.
+Frontend se može označiti spremnim za release tek kada: (1) P0 CTA izgled potvrdi korisnik; (2) sve aktivne web rute imaju popunjenu matrice C sa dokazom; (3) route/permission, kontrast, lint, typecheck, unit, production build i Playwright/axe kapije prolaze na aktuelnom commitu; (4) nema otvorenih ozbiljnih vizuelnih, pristupačnih ili responsive nalaza; (5) korisnik potvrdi svoj završni vizuelni pregled. Izvještaji i obavijesti su funkcionalni; PDF/Excel export i globalna admin politika obavijesti ostaju odvojeni fazni nedostaci.

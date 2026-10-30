@@ -43,6 +43,10 @@ import type {
   PaginationQuery,
   VehicleListQuery,
   VehicleListResponse,
+  TaskListQuery,
+  TaskListResponse,
+  AuditLogQuery,
+  AuditLogListResponse,
 } from '@vfm/shared/schemas';
 import {
   archiveVehicleSchema,
@@ -53,16 +57,24 @@ import {
   updateVehicleSchema,
   uuidSchema,
   vehicleListQuerySchema,
+  taskListQuerySchema,
+  auditLogQuerySchema,
 } from '@vfm/shared/schemas';
 import { AuditContext } from '../../common/audit/audit.types.js';
 import { Audit, CurrentUser, RequirePermissions } from '../../common/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import type { AuthenticatedUser, VfmRequest } from '../../common/types/authenticated-user.js';
 import { VehiclesService } from './vehicles.service.js';
+import { TasksService } from '../tasks/tasks.service.js';
+import { AuditLogService } from '../audit-logs/audit-log.service.js';
 
 @Controller('vehicles')
 export class VehiclesController {
-  constructor(private readonly vehicles: VehiclesService) {}
+  constructor(
+    private readonly vehicles: VehiclesService,
+    private readonly tasks: TasksService,
+    private readonly auditLogs: AuditLogService,
+  ) {}
 
   @Get()
   @RequirePermissions('vehicle:view')
@@ -148,6 +160,34 @@ export class VehiclesController {
       .setBefore(outcome.before)
       .setAfter(outcome.after)
       .setResource('Vehicle');
+  }
+
+  // --- Zadaci i historija (docs/07 §2.5) --------------------------------------
+
+  @Get(':id/tasks')
+  @RequirePermissions('vehicle:view_history')
+  async listVehicleTasks(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @Query(new ZodValidationPipe(taskListQuerySchema, 'query')) query: TaskListQuery,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): Promise<TaskListResponse> {
+    await this.vehicles.get(id, actor);
+    return this.tasks.list({ ...query, vehicleId: id }, actor.id);
+  }
+
+  @Get(':id/history')
+  @RequirePermissions('vehicle:view_history')
+  async listVehicleHistory(
+    @Param('id', new ZodValidationPipe(uuidSchema, 'params')) id: string,
+    @Query(new ZodValidationPipe(auditLogQuerySchema, 'query')) query: AuditLogQuery,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): Promise<AuditLogListResponse> {
+    await this.vehicles.get(id, actor);
+    const result = await this.auditLogs.list({ ...query, entityType: 'Vehicle', entityId: id }, actor);
+    return {
+      ...result,
+      items: result.items.map((item) => ({ ...item, actorEmail: null, ipAddress: null, userAgent: null })),
+    };
   }
 
   // --- Kilometraža (docs/07 §2.5) --------------------------------------------
