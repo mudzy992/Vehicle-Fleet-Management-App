@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => {
         '@vfm/shared',
         '@vfm/form-engine/definition',
         '@vfm/form-engine/field-types',
+        '@vfm/form-engine/normalized-removal',
         '@vfm/form-renderer',
       ],
     },

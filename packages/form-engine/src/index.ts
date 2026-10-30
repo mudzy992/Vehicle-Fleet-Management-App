@@ -177,6 +177,7 @@ export type {
   ValidateRecordOptions,
 } from './record-validation.js';
 
+export { hasRemovedNormalizedFields } from './normalized-removal.js';
 export { CHANGE_NOTE_MIN_LENGTH, PUBLISH_ISSUE_CODES, checkPublishable } from './publish-checks.js';
 export type {
   PublishCheckInput,

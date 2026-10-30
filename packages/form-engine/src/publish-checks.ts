@@ -185,17 +185,14 @@ function checkRemovedNormalizedFields(
   issues: PublishIssue[],
 ): void {
   if (!previous || confirm) return;
-
   const current = new Map(
     (definition.normalizedName ?? []).map((mapping) => [mapping.fieldKey, mapping] as const),
   );
-
   for (const [index, mapping] of (previous.normalizedName ?? []).entries()) {
     if (mapping.column === null) continue;
     const next = current.get(mapping.fieldKey);
     const removedField = !flattenFields(definition).some(({ field }) => field.key === mapping.fieldKey);
     const mappingChanged = !next || next.column !== mapping.column || next.transform !== mapping.transform;
-
     if (removedField || mappingChanged) {
       issues.push({
         code: 'NORMALIZED_FIELD_REMOVED',

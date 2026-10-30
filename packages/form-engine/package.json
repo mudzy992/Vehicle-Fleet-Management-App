@@ -44,6 +44,10 @@
       "types": "./dist/definition.schema.d.ts",
       "default": "./dist/definition.schema.js"
     },
+    "./normalized-removal": {
+      "types": "./dist/normalized-removal.d.ts",
+      "default": "./dist/normalized-removal.js"
+    },
     "./conditions": {
       "types": "./dist/conditions.d.ts",
       "default": "./dist/conditions.js"
@@ -65,6 +69,9 @@
     "*": {
       "definition": [
         "./dist/definition.schema.d.ts"
+      ],
+      "normalized-removal": [
+        "./dist/normalized-removal.d.ts"
       ]
     }
   }

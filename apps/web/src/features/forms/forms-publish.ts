@@ -1,10 +1,8 @@
-import { checkPublishable } from '@vfm/form-engine';
 import { parseDefinition } from '@vfm/form-engine/definition';
 import type { FormDefinition } from '@vfm/form-engine/definition';
+import { hasRemovedNormalizedFields } from '@vfm/form-engine/normalized-removal';
 import type { PublishFormVersionInput } from '@vfm/shared/schemas';
 import { ApiError } from '../../lib/api.js';
-
-const DUMMY_NOTE = 'potvrda-uklanjanja';
 
 export function needsNormalizedRemovalConfirm(
   previous: unknown,
@@ -13,11 +11,7 @@ export function needsNormalizedRemovalConfirm(
   if (!previous || !definition) return false;
   const parsedPrevious = parseDefinition(previous);
   if (!parsedPrevious.ok) return false;
-  return checkPublishable({
-    definition,
-    changeNote: DUMMY_NOTE,
-    previousPublished: parsedPrevious.definition,
-  }).issues.some((issue) => issue.code === 'NORMALIZED_FIELD_REMOVED');
+  return hasRemovedNormalizedFields(parsedPrevious.definition, definition);
 }
 
 export function isNormalizedRemovalError(error: unknown): boolean {
