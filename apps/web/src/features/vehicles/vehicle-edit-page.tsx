@@ -53,7 +53,7 @@ export function VehicleEditPage() {
 
   if (vehicleQuery.isPending || versionQuery.isPending) {
     return (
-      <p className="text-sm text-[var(--fg-muted)]" role="status">
+      <p className="text-sm text-fg-muted" role="status">
         Učitavanje…
       </p>
     );
@@ -63,7 +63,7 @@ export function VehicleEditPage() {
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--danger)]" role="alert">
+          <p className="text-sm text-danger" role="alert">
             {vehicleQuery.error instanceof ApiError
               ? vehicleQuery.error.message
               : vehicleQuery.error
@@ -186,11 +186,11 @@ function VehicleEditForm({
   return (
     <div className="vfm-module-page">
       <div>
-        <Link className="text-xs text-[var(--fg-muted)] hover:underline" to={`/vozila/${vehicle.id}`}>
+        <Link className="text-xs text-fg-muted hover:underline" to={`/vozila/${vehicle.id}`}>
           ← {vehicle.internalNo}
         </Link>
         <h1 className="vfm-module-title">Izmjena vozila</h1>
-        <p className="text-sm text-[var(--fg-muted)]">
+        <p className="text-sm text-fg-muted">
           Verzija forme v{version.version} · verzija zapisa {vehicle.version}
         </p>
       </div>
@@ -198,7 +198,7 @@ function VehicleEditForm({
       {vehicle.status === 'ARCHIVED' && (
         <Card>
           <CardContent>
-            <p className="text-sm text-[var(--warning)]">
+            <p className="text-sm text-warning">
               Arhivirano vozilo se ne mijenja — prvo ga vratite iz arhive.
             </p>
           </CardContent>
@@ -246,13 +246,17 @@ function VehicleEditForm({
           </Card>
 
           {message && (
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {message}
             </p>
           )}
 
           <div className="flex items-center gap-2">
-            <Button type="submit" loading={submit.isPending} disabled={submit.isPending || vehicle.status === 'ARCHIVED'}>
+            <Button
+              type="submit"
+              loading={submit.isPending}
+              disabled={submit.isPending || vehicle.status === 'ARCHIVED'}
+            >
               Sačuvaj izmjene
             </Button>
             <Link className={buttonClassName('ghost', 'md')} to={`/vozila/${vehicle.id}`}>

@@ -96,7 +96,7 @@ export function TaskDetailPage() {
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--fg-muted)]">Učitavanje zadatka…</p>
+          <p className="text-sm text-fg-muted">Učitavanje zadatka…</p>
         </CardContent>
       </Card>
     );
@@ -111,7 +111,7 @@ export function TaskDetailPage() {
               taskQuery.error instanceof ApiError ? taskQuery.error.message : 'Greška pri učitavanju zadatka.'
             }
           />
-          <Link className="mt-3 inline-block text-sm text-[var(--primary)] underline" to="/zadaci">
+          <Link className="mt-3 inline-block text-sm text-primary underline" to="/zadaci">
             Nazad na zadatke
           </Link>
         </CardContent>
@@ -130,12 +130,12 @@ export function TaskDetailPage() {
   return (
     <main className="vfm-module-page">
       <header className="space-y-2">
-        <Link className="text-sm text-[var(--primary)] underline" to="/zadaci">
+        <Link className="text-sm text-primary underline" to="/zadaci">
           ← Zadaci
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs text-[var(--fg-muted)]">{task.code}</p>
+            <p className="text-xs text-fg-muted">{task.code}</p>
             <h1 className="vfm-module-title">{task.title}</h1>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -146,17 +146,23 @@ export function TaskDetailPage() {
       </header>
 
       {message && (
-        <p role="status" className="rounded-md bg-[var(--surface)] px-3 py-2 text-sm">
+        <p role="status" className="rounded-md bg-surface px-3 py-2 text-sm">
           {message}
         </p>
       )}
       {claimError && (
-        <p role="alert" className="rounded-md bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">
+        <p role="alert" className="rounded-md bg-[var(--danger-soft)] px-3 py-2 text-sm text-danger">
           {claimError}
         </p>
       )}
 
-      {mayComplete && <TaskCompletionForm key={`${task.id}-${task.version}`} task={task} onCompleted={() => setMessage('Zadatak je završen.')} />}
+      {mayComplete && (
+        <TaskCompletionForm
+          key={`${task.id}-${task.version}`}
+          task={task}
+          onCompleted={() => setMessage('Zadatak je završen.')}
+        />
+      )}
       <TaskStatusActions
         task={task}
         canCancel={hasPermission('task:cancel')}
@@ -183,22 +189,22 @@ export function TaskDetailPage() {
         <CardContent>
           <dl className="grid gap-4 sm:grid-cols-2">
             <div>
-              <dt className="text-xs text-[var(--fg-muted)]">Vozilo</dt>
+              <dt className="text-xs text-fg-muted">Vozilo</dt>
               <dd className="mt-1 text-sm">
                 {[task.vehicleInternalNo, task.vehicleMake, task.vehicleModel].filter(Boolean).join(' · ') ||
                   'Bez vozila'}
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-[var(--fg-muted)]">Rok</dt>
+              <dt className="text-xs text-fg-muted">Rok</dt>
               <dd className="mt-1 text-sm">{dateTime(task.dueAt)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-[var(--fg-muted)]">Kreirao</dt>
+              <dt className="text-xs text-fg-muted">Kreirao</dt>
               <dd className="mt-1 text-sm">{task.createdByName}</dd>
             </div>
             <div>
-              <dt className="text-xs text-[var(--fg-muted)]">Izvršilac</dt>
+              <dt className="text-xs text-fg-muted">Izvršilac</dt>
               <dd className="mt-1 text-sm">{task.assigneeName ?? 'Nije preuzet'}</dd>
             </div>
           </dl>
@@ -213,7 +219,7 @@ export function TaskDetailPage() {
             <dl className="grid gap-3 sm:grid-cols-2">
               {Object.entries(task.formData).map(([key, value]) => (
                 <div key={key} className="min-w-0">
-                  <dt className="text-xs text-[var(--fg-muted)]">{key}</dt>
+                  <dt className="text-xs text-fg-muted">{key}</dt>
                   <dd className="mt-1 break-words text-sm">{valueText(value)}</dd>
                 </div>
               ))}
@@ -226,13 +232,13 @@ export function TaskDetailPage() {
         <CardHeader title="Učesnici" description="Aktivne i ranije dodjele" />
         <CardContent>
           {task.assignments.length === 0 ? (
-            <p className="text-sm text-[var(--fg-muted)]">Nema evidentiranih dodjela.</p>
+            <p className="text-sm text-fg-muted">Nema evidentiranih dodjela.</p>
           ) : (
             <ul className="space-y-2">
               {task.assignments.map((assignment) => (
                 <li
                   key={assignment.id}
-                  className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-2 last:border-0"
+                  className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2 last:border-0"
                 >
                   <span className="text-sm">{assignment.userName}</span>
                   <span className="flex items-center gap-2">
@@ -250,13 +256,13 @@ export function TaskDetailPage() {
         <CardHeader title="Historija" description={`${task.events.length} događaja`} />
         <CardContent>
           {task.events.length === 0 ? (
-            <p className="text-sm text-[var(--fg-muted)]">Nema događaja.</p>
+            <p className="text-sm text-fg-muted">Nema događaja.</p>
           ) : (
             <ol className="space-y-3">
               {task.events.map((event) => (
-                <li key={event.id} className="border-l-2 border-[var(--border)] pl-3">
+                <li key={event.id} className="border-l-2 border-border pl-3">
                   <p className="text-sm font-medium">{statusLabel(event.action, 'taskEvent')}</p>
-                  <p className="mt-0.5 text-xs text-[var(--fg-muted)]">
+                  <p className="mt-0.5 text-xs text-fg-muted">
                     {event.actorName ?? 'Sistem'} · {dateTime(event.at)}
                   </p>
                 </li>
@@ -302,21 +308,21 @@ export function TaskDetailPage() {
             </form>
           )}
           {commentsQuery.isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]">Učitavanje komentara…</p>
+            <p className="text-sm text-fg-muted">Učitavanje komentara…</p>
           ) : commentsQuery.error ? (
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {commentsQuery.error instanceof ApiError
                 ? commentsQuery.error.message
                 : 'Greška pri učitavanju komentara.'}
             </p>
           ) : (commentsQuery.data?.items.length ?? 0) === 0 ? (
-            <p className="text-sm text-[var(--fg-muted)]">Još nema komentara.</p>
+            <p className="text-sm text-fg-muted">Još nema komentara.</p>
           ) : (
             <ul className="space-y-3">
               {commentsQuery.data!.items.map((item) => (
-                <li key={item.id} className="rounded-md bg-[var(--surface-muted)] p-3">
+                <li key={item.id} className="rounded-md bg-surface-muted p-3">
                   <p className="whitespace-pre-wrap text-sm">{item.body}</p>
-                  <p className="mt-2 text-xs text-[var(--fg-muted)]">
+                  <p className="mt-2 text-xs text-fg-muted">
                     {item.authorName} · {dateTime(item.createdAt)}
                   </p>
                 </li>

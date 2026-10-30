@@ -41,7 +41,9 @@ export function TaskTypeRequirementsPanel({
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje zahtjeva završetka…</p>
+          <p className="text-sm text-fg-muted" role="status">
+            Učitavanje zahtjeva završetka…
+          </p>
         </CardContent>
       </Card>
     );
@@ -53,7 +55,7 @@ export function TaskTypeRequirementsPanel({
         <CardHeader title={`Zahtjevi završetka — ${taskType.code}`} />
         <CardContent>
           <div className="space-y-3">
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {requirementsQuery.error instanceof ApiError
                 ? requirementsQuery.error.message
                 : 'Zahtjeve završetka nije moguće učitati.'}
@@ -181,21 +183,21 @@ function TaskTypeRequirementsForm({
           }}
         >
           {effectiveForm && versionQuery.data ? (
-            <p className="text-sm text-[var(--fg-muted)]">
-              Efektivna forma: <span className="font-medium text-[var(--fg)]">{effectiveForm.name}</span> (
+            <p className="text-sm text-fg-muted">
+              Efektivna forma: <span className="font-medium text-fg">{effectiveForm.name}</span> (
               {effectiveForm.key}, v{versionQuery.data.version}). Ključ se bira iz njenih polja za unos.
             </p>
           ) : effectiveFormLoading ? (
-            <p className="text-sm text-[var(--fg-muted)]">Učitavanje efektivne TASK forme…</p>
+            <p className="text-sm text-fg-muted">Učitavanje efektivne TASK forme…</p>
           ) : (
-            <p className="text-sm text-[var(--warning)]">
+            <p className="text-sm text-warning">
               Efektivna objavljena TASK forma nije učitana. Ključ možete unijeti ručno; API ostaje konačna
               provjera.
             </p>
           )}
 
           {!canUpdate && (
-            <p className="text-sm text-[var(--fg-muted)]">
+            <p className="text-sm text-fg-muted">
               Imate pravo pregleda. Za izmjenu zahtjeva potrebna je permisija{' '}
               <span className="font-mono">task_type:update</span>.
             </p>
@@ -203,7 +205,7 @@ function TaskTypeRequirementsForm({
 
           <fieldset disabled={!canUpdate || save.isPending} className="space-y-3">
             {drafts.length === 0 ? (
-              <p className="rounded-md border border-dashed border-[var(--border)] p-3 text-sm text-[var(--fg-muted)]">
+              <p className="rounded-md border border-dashed border-border p-3 text-sm text-fg-muted">
                 Nema posebnih zahtjeva. Završetak će se kasnije provjeravati samo prema pravilima same forme i
                 vrste.
               </p>
@@ -212,8 +214,8 @@ function TaskTypeRequirementsForm({
                 const fieldKnown = fields.some((field) => field.key === draft.fieldKey);
                 const idPrefix = `zahtjev-zavrs-${index}`;
                 return (
-                  <section key={index} className="rounded-md border border-[var(--border)] p-3">
-                    <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_150px_auto] lg:items-end">
+                  <section key={index} className="rounded-md border border-border p-3">
+                    <div className="grid gap-3 vfm-task-requirements-grid lg:items-end">
                       <Field
                         label={`Polje forme ${index + 1}`}
                         htmlFor={`${idPrefix}-field`}
@@ -318,11 +320,11 @@ function TaskTypeRequirementsForm({
           </fieldset>
 
           {message && (
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {message}
             </p>
           )}
-          {success && <p className="text-sm text-[var(--success)]">{success}</p>}
+          {success && <p className="text-sm text-success">{success}</p>}
 
           <div className="flex flex-wrap gap-2">
             {canUpdate && (

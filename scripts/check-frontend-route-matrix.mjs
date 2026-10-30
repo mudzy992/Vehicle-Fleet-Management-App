@@ -63,32 +63,55 @@ for (const item of navItems) {
     );
   }
   if (!item.permission && route.permission) {
-    warnings.push(`${item.to}: ruta ima ${route.permission}, a navigacijska stavka nema permission metapodatak.`);
+    warnings.push(
+      `${item.to}: ruta ima ${route.permission}, a navigacijska stavka nema permission metapodatak.`,
+    );
   }
 }
 
-for (const [url, permission, title] of [
-  ['/obavijesti', 'notification:view', 'Obavijesti'],
-  ['/izvjestaji', 'report:view', 'Izvještaji'],
-]) {
-  const route = routeMap.get(normalizeRoute(url));
-  if (!route) failures.push(`${url}: očekivana ruta nedostaje.`);
-  else {
-    if (route.permission !== permission) failures.push(`${url}: permission guard mora biti ${permission}.`);
-    if (!route.placeholder) failures.push(`${url}: ruta više nije placeholder; provjeri odobreni scope prije funkcionalne implementacije.`);
-    if (!route.source.includes(`title="${title}"`)) failures.push(`${url}: placeholder naslov nije ${title}.`);
-  }
+const notificationsRoute = routeMap.get('obavijesti');
+if (!notificationsRoute) failures.push('/obavijesti: očekivana ruta nedostaje.');
+else {
+  if (notificationsRoute.permission !== 'notification:view')
+    failures.push('/obavijesti: permission guard mora biti notification:view.');
+  if (!notificationsRoute.source.includes('<NotificationsPage />'))
+    failures.push('/obavijesti: ruta treba prikazati implementirani NotificationsPage.');
+}
+const reportsRoute = routeMap.get('izvjestaji');
+if (!reportsRoute) failures.push('/izvjestaji: očekivana ruta nedostaje.');
+else {
+  if (reportsRoute.permission !== 'report:view')
+    failures.push('/izvjestaji: permission guard mora biti report:view.');
+  if (!reportsRoute.placeholder || !reportsRoute.source.includes('title="Izvještaji"'))
+    failures.push('/izvjestaji: mora ostati namjerni permission-guarded placeholder.');
 }
 
 if (failures.length) {
-  console.error('❌ Frontend route/permission matrix nije usklađena:\n' + failures.map((x) => ` - ${x}`).join('\n'));
+  console.error(
+    '❌ Frontend route/permission matrix nije usklađena:\n' + failures.map((x) => ` - ${x}`).join('\n'),
+  );
   process.exitCode = 1;
 } else {
-  console.log(`✅ Route matrix: ${navItems.length} navigacijskih stavki mapirano na rute; permission guardovi su usklađeni.`);
-  console.log('✅ /obavijesti i /izvjestaji ostaju namjerni permission-guarded placeholderi.');
+  console.log(
+    `✅ Route matrix: ${navItems.length} navigacijskih stavki mapirano na rute; permission guardovi su usklađeni.`,
+  );
+  console.log(
+    '✅ /obavijesti je implementiran uz notification:view; /izvjestaji ostaje namjerni report:view placeholder.',
+  );
 }
 for (const warning of warnings) console.warn(`⚠️ ${warning}`);
 
 if (process.argv.includes('--json')) {
-  console.log(JSON.stringify({ navItems, routes: routes.map(({ path, permission, placeholder }) => ({ path, permission, placeholder })), failures, warnings }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        navItems,
+        routes: routes.map(({ path, permission, placeholder }) => ({ path, permission, placeholder })),
+        failures,
+        warnings,
+      },
+      null,
+      2,
+    ),
+  );
 }

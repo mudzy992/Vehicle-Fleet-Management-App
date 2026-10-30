@@ -108,9 +108,7 @@ export function VehiclesPage() {
       <div className="vfm-module-heading">
         <div>
           <h1 className="vfm-module-title">Vozila</h1>
-          <p className="text-sm text-[var(--fg-muted)]">
-            {isPending ? 'Učitavanje…' : `${total} vozila u registru`}
-          </p>
+          <p className="text-sm text-fg-muted">{isPending ? 'Učitavanje…' : `${total} vozila u registru`}</p>
         </div>
         {hasPermission('vehicle:create') && (
           <Link className={buttonClassName('primary', 'sm')} to="/vozila/novo">
@@ -140,14 +138,14 @@ export function VehiclesPage() {
       {error && (
         <Card>
           <CardContent>
-            <p className="text-sm text-[var(--danger)]">
+            <p className="text-sm text-danger">
               {error instanceof ApiError ? error.message : 'Greška pri učitavanju vozila.'}
             </p>
           </CardContent>
         </Card>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+      <div className="grid gap-4 vfm-grid-2-1">
         <Card>
           <CardHeader title="Filteri" description="Server filtrira — lista ostaje tačna i paginirana." />
           <CardContent>
@@ -219,7 +217,7 @@ export function VehiclesPage() {
           <CardHeader title="Rokovi" description="Registracije i osiguranja koja ističu u 30 dana." />
           <CardContent>
             {deadlines.length === 0 ? (
-              <p className="text-sm text-[var(--fg-muted)]">Nema rokova u narednih 30 dana.</p>
+              <p className="text-sm text-fg-muted">Nema rokova u narednih 30 dana.</p>
             ) : (
               <ul className="space-y-2 text-sm">
                 {deadlines.map((entry) => (
@@ -244,7 +242,7 @@ export function VehiclesPage() {
       <Card>
         <CardContent>
           {isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
+            <p className="text-sm text-fg-muted">Učitavanje…</p>
           ) : vehicles.length === 0 ? (
             <EmptyState
               title={isFilteredEmpty(total, filters) ? 'Nema rezultata za filtere' : 'Registar je prazan'}
@@ -323,7 +321,7 @@ export function VehiclesPage() {
 
       {(data?.totalPages ?? 0) > 1 && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-[var(--fg-muted)]">
+          <span className="text-fg-muted">
             Strana {data?.page ?? 1} / {data?.totalPages ?? 1}
           </span>
           <div className="flex gap-2">
@@ -345,7 +343,7 @@ export function VehiclesPage() {
 }
 
 function DeadlineCell({ date, tone }: { date: string | null; tone: DeadlineTone }) {
-  if (!date) return <span className="text-[var(--fg-muted)]">—</span>;
+  if (!date) return <span className="text-fg-muted">—</span>;
   return (
     <Badge level={TONE_LEVEL[tone]} title={date}>
       {deadlineLabel(date)}

@@ -3,8 +3,8 @@
  *
  * Šta ekran radi i zašto tako:
  * - lijevo: katalog formi (subject, status, broj verzija); desno: verzije
- *   odabrane forme i editor **JSON definicije** — v1 Builder-a ne uvodi
- *   drag&drop, ali uvodi sve što je bitno za integritet: meta-shema se provjerava
+ *   odabrane forme i vizuelni form-builder (sekcije, polja, opcije, uslovi,
+ *   mapiranja i pregled) — korisnik ne uređuje sirovi JSON; meta-shema se provjerava
  *   u browseru istim kodom kao na serveru (`@vfm/form-engine/definition`),
  *   objava traži bilješku, a greške servera se prikazuju po polju.
  * - `DRAFT` se uređuje i objavljuje; `PUBLISHED`/`RETIRED` su nepromjenjivi
@@ -18,7 +18,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseDefinition } from '@vfm/form-engine/definition';
+import { FORM_SUBJECTS } from '@vfm/shared';
+import type { FormSubject } from '@vfm/shared';
 import type {
+  CreateFormSchemaInput,
   FormSchemaDetail,
   FormSchemaSummary,
   FormVersionDetail,
@@ -34,6 +37,7 @@ import {
   CardHeader,
   EmptyState,
   Field,
+  Modal,
   Table,
   TBody,
   TD,
@@ -55,8 +59,17 @@ import {
   toParseResult,
 } from './forms-model.js';
 import { FormsPreview } from './forms-preview.js';
+import { FormsDesigner } from './forms-designer.js';
 
-const textareaClassName = `${inputClassName} h-64 font-mono text-xs leading-5`;
+function formKeyFromName(name: string): string {
+  const stem = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '_')
+    .replace(/^_+|_+$/gu, '');
+  return (/^[a-z]/u.test(stem) ? stem : `forma_${stem}`).slice(0, 49).replace(/_+$/u, '') || 'nova_forma';
+}
 
 export function FormsPage() {
   const queryClient = useQueryClient();
@@ -68,7 +81,13 @@ export function FormsPage() {
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [diff, setDiff] = useState<FormVersionDiff | null>(null);
   const [mode, setMode] = useState<'editor' | 'pregled'>('editor');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createKey, setCreateKey] = useState('');
+  const [createDescription, setCreateDescription] = useState('');
+  const [createSubject, setCreateSubject] = useState<FormSubject>('OTHER');
 
+  const canCreateForm = hasPermission('form:create');
   const permissions = {
     canUpdate: hasPermission('form:update'),
     canManageSchema: hasPermission('form:manage_schema'),
@@ -156,6 +175,22 @@ export function FormsPage() {
           : 'Akcija nije uspjela.',
     });
   };
+
+  const createForm = useMutation({
+    mutationFn: (input: CreateFormSchemaInput) => api.post<FormSchemaDetail>('/form-schemas', input),
+    onSuccess: async (created) => {
+      setCreateOpen(false);
+      setFormId(created.id);
+      setVersionId(null);
+      setMessage({
+        kind: 'ok',
+        text: `Kreiran je nacrt forme „${created.name}“. Dodajte polja kroz vizuelni dizajner.`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['form-schemas'] });
+      await queryClient.invalidateQueries({ queryKey: ['form-schemas', created.id] });
+    },
+    onError: failure,
+  });
 
   const saveDraft = useMutation({
     mutationFn: async () => {
@@ -248,6 +283,7 @@ export function FormsPage() {
   });
 
   const busy =
+    createForm.isPending ||
     saveDraft.isPending ||
     createVersion.isPending ||
     publish.isPending ||
@@ -259,22 +295,36 @@ export function FormsPage() {
       <header className="vfm-module-heading">
         <div>
           <h1 className="vfm-module-title">Forme</h1>
-          <p className="text-xs text-[var(--fg-muted)]">
+          <p className="text-xs text-fg-muted">
             Verzije su nepromjenjive nakon objave; nova izmjena je nova verzija.
           </p>
         </div>
-        <Badge level="info">W20–W22 · Faza 2</Badge>
+        {canCreateForm ? (
+          <Button
+            variant="primary"
+            onClick={() => {
+              setCreateName('');
+              setCreateKey('');
+              setCreateDescription('');
+              setCreateOpen(true);
+            }}
+          >
+            Nova forma
+          </Button>
+        ) : null}
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+      <div className="grid gap-4 vfm-form-builder-grid">
         <Card>
           <CardHeader title="Katalog" description={`${formsQuery.data?.length ?? 0} formi`} />
           <CardContent className="space-y-1">
             {formsQuery.isPending ? (
-              <p role="status" className="text-xs text-[var(--fg-muted)]">Učitavanje…</p>
+              <p role="status" className="text-xs text-fg-muted">
+                Učitavanje…
+              </p>
             ) : null}
             {formsQuery.isError ? (
-              <p role="alert" className="text-xs text-[var(--danger)]">
+              <p role="alert" className="text-xs text-danger">
                 Katalog nije dostupan.
               </p>
             ) : null}
@@ -291,12 +341,12 @@ export function FormsPage() {
                 aria-pressed={form.id === formId}
                 className={`w-full rounded-md border px-2.5 py-2 text-left text-xs ${
                   form.id === formId
-                    ? 'border-[var(--primary)] bg-[var(--surface-2)]'
-                    : 'border-[var(--border)] hover:bg-[var(--surface-2)]'
+                    ? 'border-primary bg-surface-muted'
+                    : 'border-border hover:bg-surface-muted'
                 }`}
               >
                 <span className="block font-medium">{form.name}</span>
-                <span className="block text-[11px] text-[var(--fg-muted)]">
+                <span className="block text-xs text-fg-muted">
                   {SUBJECT_LABELS[form.subject]} · {FORM_STATUS_LABELS[form.status]} · {form.versionCount}{' '}
                   {form.versionCount === 1 ? 'verzija' : 'verzije'}
                 </span>
@@ -333,7 +383,7 @@ export function FormsPage() {
                     {detail.versions.map((version) => (
                       <TR
                         key={version.id}
-                        className={version.id === versionId ? 'bg-[var(--surface-2)]' : undefined}
+                        className={version.id === versionId ? 'bg-surface-muted' : undefined}
                       >
                         <TD>
                           <button
@@ -359,7 +409,7 @@ export function FormsPage() {
                         </TD>
                         <TD>{version.changeNote ?? '—'}</TD>
                         <TD>
-                          <code className="text-[11px]">{shortHash(version.contentHash)}</code>
+                          <code className="text-xs">{shortHash(version.contentHash)}</code>
                         </TD>
                         <TD>{formatDateTime(version.publishedAt)}</TD>
                         <TD>{version.recordCount}</TD>
@@ -448,7 +498,7 @@ export function FormsPage() {
                     aria-selected={mode === 'editor'}
                     onClick={() => setMode('editor')}
                   >
-                    Editor
+                    Dizajn
                   </Button>
                   <Button
                     size="sm"
@@ -462,7 +512,7 @@ export function FormsPage() {
                 </div>
 
                 {mode === 'pregled' && definitionResult.ok ? (
-                  <div className="rounded-md border border-[var(--border)] p-3">
+                  <div className="rounded-md border border-border p-3">
                     <FormsPreview
                       definition={definitionResult.definition}
                       version={selected.version}
@@ -472,28 +522,25 @@ export function FormsPage() {
                 ) : null}
 
                 {mode === 'editor' ? (
-                  <Field
-                    label="Definicija (JSON)"
-                    htmlFor="form-definition"
-                    hint={
-                      parsed.ok
-                        ? 'Meta-shema je ispravna. Server ponovo provjerava pri čuvanju i objavi.'
-                        : 'Definicija ima greške — čuvanje i objava su onemogućeni.'
-                    }
-                  >
-                    <textarea
-                      id="form-definition"
-                      className={textareaClassName}
-                      spellCheck={false}
-                      value={editor}
-                      onChange={(event) => setEditor(event.target.value)}
+                  definitionResult.ok ? (
+                    <FormsDesigner
+                      definition={definitionResult.definition}
                       readOnly={!actions.includes('edit')}
+                      onChange={(definition) => setEditor(JSON.stringify(definition, null, 2))}
                     />
-                  </Field>
+                  ) : (
+                    <p
+                      role="alert"
+                      className="rounded-lg border border-danger bg-danger-soft p-3 text-sm text-danger"
+                    >
+                      Definicija nije ispravna za vizuelni prikaz. Izmjena je zaustavljena da se sačuvani
+                      sadržaj ne prepiše.
+                    </p>
+                  )
                 ) : null}
 
                 {!parsed.ok ? (
-                  <ul role="alert" className="space-y-1 rounded-md border border-[var(--danger)] p-2 text-xs">
+                  <ul role="alert" className="space-y-1 rounded-md border border-danger p-2 text-xs">
                     {parsed.issues.map((issue) => (
                       <li key={`${issue.path}-${issue.message}`}>
                         <code>{issue.path}</code> — {issue.message}
@@ -505,23 +552,21 @@ export function FormsPage() {
                 {message ? (
                   <p
                     role={message.kind === 'error' ? 'alert' : 'status'}
-                    className={`text-xs ${
-                      message.kind === 'error' ? 'text-[var(--danger)]' : 'text-[var(--success)]'
-                    }`}
+                    className={`text-xs ${message.kind === 'error' ? 'text-danger' : 'text-success'}`}
                   >
                     {message.text}
                   </p>
                 ) : null}
 
                 {diff ? (
-                  <div className="rounded-md border border-[var(--border)] p-2 text-xs">
+                  <div className="rounded-md border border-border p-2 text-xs">
                     <p className="mb-1 font-medium">
                       Diff v{diff.from.version} → v{diff.to.version}
                     </p>
                     {diff.empty ? (
-                      <p className="text-[var(--fg-muted)]">Nema strukturnih razlika.</p>
+                      <p className="text-fg-muted">Nema strukturnih razlika.</p>
                     ) : (
-                      <ul className="space-y-0.5 font-mono text-[11px]">
+                      <ul className="space-y-0.5 font-mono text-xs">
                         {buildDiffLines(diff).map((line) => (
                           <li key={line}>{line}</li>
                         ))}
@@ -534,13 +579,15 @@ export function FormsPage() {
           ) : null}
 
           {formId && detailQuery.isPending && !detail ? (
-            <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje detalja forme…</p>
+            <p role="status" className="text-sm text-fg-muted">
+              Učitavanje detalja forme…
+            </p>
           ) : null}
 
           {formId && detailQuery.isError ? (
             <Card>
               <CardContent className="space-y-3">
-                <p role="alert" className="text-sm text-[var(--danger)]">
+                <p role="alert" className="text-sm text-danger">
                   {detailQuery.error instanceof ApiError
                     ? detailQuery.error.message
                     : 'Detalj forme nije moguće učitati.'}
@@ -553,13 +600,15 @@ export function FormsPage() {
           ) : null}
 
           {selected && versionQuery.isPending ? (
-            <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje definicije verzije…</p>
+            <p role="status" className="text-sm text-fg-muted">
+              Učitavanje definicije verzije…
+            </p>
           ) : null}
 
           {selected && versionQuery.isError ? (
             <Card>
               <CardContent className="space-y-3">
-                <p role="alert" className="text-sm text-[var(--danger)]">
+                <p role="alert" className="text-sm text-danger">
                   {versionQuery.error instanceof ApiError
                     ? versionQuery.error.message
                     : 'Definiciju verzije nije moguće učitati.'}
@@ -571,7 +620,11 @@ export function FormsPage() {
             </Card>
           ) : null}
 
-          {!detail && !formsQuery.isPending && !formsQuery.isError && !detailQuery.isPending && !detailQuery.isError ? (
+          {!detail &&
+          !formsQuery.isPending &&
+          !formsQuery.isError &&
+          !detailQuery.isPending &&
+          !detailQuery.isError ? (
             <Card>
               <CardContent>
                 <EmptyState title="Odaberi formu iz kataloga" />
@@ -580,6 +633,129 @@ export function FormsPage() {
           ) : null}
         </div>
       </div>
+      <Modal
+        open={createOpen}
+        title="Nova forma"
+        description="Kreirajte nacrt kroz osnovne podatke, zatim dodajte sekcije i polja u vizuelnom dizajneru."
+        onClose={() => setCreateOpen(false)}
+        size="md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setCreateOpen(false)} disabled={createForm.isPending}>
+              Odustani
+            </Button>
+            <Button type="submit" form="create-form-schema" loading={createForm.isPending}>
+              Kreiraj nacrt
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="create-form-schema"
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            createForm.mutate({
+              key: createKey.trim(),
+              name: createName.trim(),
+              subject: createSubject,
+              taskTypeId: null,
+              description: createDescription.trim() || null,
+              ownerModule: null,
+              definition: {
+                $schema: 'vfm-form/1',
+                meta: {
+                  title: createName.trim(),
+                  description: createDescription.trim() || null,
+                  subject: createSubject,
+                  language: 'bs',
+                },
+                layout: { columns: 1, sectionsCollapsible: true, stickySubmit: true },
+                sections: [
+                  {
+                    key: 'osnovno',
+                    title: 'Osnovno',
+                    description: null,
+                    order: 1,
+                    visibleWhen: null,
+                    fields: [
+                      {
+                        key: 'napomena',
+                        type: 'TEXT',
+                        label: 'Napomena',
+                        order: 1,
+                        required: false,
+                        visibleWhen: null,
+                        disabled: false,
+                        visibleOnForm: true,
+                        storeInFormData: true,
+                      },
+                    ],
+                  },
+                ],
+              },
+            });
+          }}
+        >
+          <Field label="Naziv forme" htmlFor="create-form-name">
+            <input
+              id="create-form-name"
+              className={inputClassName}
+              required
+              minLength={3}
+              maxLength={120}
+              value={createName}
+              onChange={(event) => {
+                setCreateName(event.target.value);
+                setCreateKey((current) =>
+                  current === formKeyFromName(createName) || !current
+                    ? formKeyFromName(event.target.value)
+                    : current,
+                );
+              }}
+            />
+          </Field>
+          <Field
+            label="Jedinstveni ključ"
+            htmlFor="create-form-key"
+            hint="Mala slova, brojevi i donja crta; stabilan identifikator."
+          >
+            <input
+              id="create-form-key"
+              className={inputClassName}
+              required
+              minLength={3}
+              maxLength={49}
+              pattern="[a-z][a-z0-9_]{2,48}"
+              value={createKey}
+              onChange={(event) => setCreateKey(event.target.value)}
+            />
+          </Field>
+          <Field label="Predmet forme" htmlFor="create-form-subject">
+            <select
+              id="create-form-subject"
+              className={inputClassName}
+              value={createSubject}
+              onChange={(event) => setCreateSubject(event.target.value as FormSubject)}
+            >
+              {FORM_SUBJECTS.map((subject) => (
+                <option key={subject} value={subject}>
+                  {SUBJECT_LABELS[subject]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Opis" htmlFor="create-form-description">
+            <input
+              id="create-form-description"
+              className={inputClassName}
+              maxLength={500}
+              value={createDescription}
+              onChange={(event) => setCreateDescription(event.target.value)}
+            />
+          </Field>
+        </form>
+      </Modal>
     </div>
   );
 }

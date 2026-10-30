@@ -109,7 +109,7 @@ export function VehicleRecordForm({
     return (
       <Card>
         <CardContent>
-          <p role="alert" className="text-sm text-[var(--danger)]">
+          <p role="alert" className="text-sm text-danger">
             {form.error instanceof ApiError
               ? `Nema aktivne forme „${label}“: ${form.error.message} Bez objavljene verzije zapis ne može nastati (P10).`
               : `Greška pri učitavanju forme „${label}“. Provjerite vezu i pokušajte ponovo.`}
@@ -123,8 +123,9 @@ export function VehicleRecordForm({
     return (
       <Card>
         <CardContent>
-          <p role="alert" className="text-sm text-[var(--danger)]">
-            Definicija forme „{label}“ nije ispravna: {parsed.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}
+          <p role="alert" className="text-sm text-danger">
+            Definicija forme „{label}“ nije ispravna:{' '}
+            {parsed.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}
           </p>
         </CardContent>
       </Card>
@@ -133,7 +134,7 @@ export function VehicleRecordForm({
 
   if (form.isPending || !model) {
     return (
-      <p className="text-sm text-[var(--fg-muted)]" role="status">
+      <p className="text-sm text-fg-muted" role="status">
         Učitavanje forme…
       </p>
     );
@@ -172,16 +173,16 @@ export function VehicleRecordForm({
           />
 
           {overlap && (
-            <div role="alert" className="rounded-md border border-[var(--danger)] p-3">
-              <p className="text-sm font-medium text-[var(--danger)]">Period se preklapa</p>
-              <p className="text-xs text-[var(--fg-muted)]">
+            <div role="alert" className="rounded-md border border-danger p-3">
+              <p className="text-sm font-medium text-danger">Period se preklapa</p>
+              <p className="text-xs text-fg-muted">
                 {overlap} Zatvorite prethodnu evidenciju („Važi do“) prije nego što dodate novu.
               </p>
             </div>
           )}
 
           {message && (
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {message}
             </p>
           )}

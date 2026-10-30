@@ -19,19 +19,19 @@ export interface BadgeProps {
 }
 
 const LEVEL_CLASSES: Readonly<Record<SemanticLevel, string>> = {
-  success: 'bg-[var(--success-soft)] text-[var(--success)]',
-  info: 'bg-[var(--info-soft)] text-[var(--info)]',
-  warning: 'bg-[var(--warning-soft)] text-[var(--warning)]',
-  danger: 'bg-[var(--danger-soft)] text-[var(--danger)]',
-  neutral: 'bg-[var(--neutral-soft)] text-[var(--neutral)]',
-  default: 'bg-[var(--neutral-soft)] text-[var(--fg-muted)]',
+  success: 'bg-[var(--success-soft)] text-success',
+  info: 'bg-[var(--info-soft)] text-info',
+  warning: 'bg-[var(--warning-soft)] text-warning',
+  danger: 'bg-[var(--danger-soft)] text-danger',
+  neutral: 'bg-[var(--neutral-soft)] text-neutral',
+  default: 'bg-[var(--neutral-soft)] text-fg-muted',
 } as const;
 
 const DOT_CLASSES: Readonly<Record<SemanticLevel, string>> = {
-  success: 'bg-[var(--success)]',
+  success: 'bg-success',
   info: 'bg-[var(--info)]',
   warning: 'bg-[var(--warning)]',
-  danger: 'bg-[var(--danger)]',
+  danger: 'bg-danger',
   neutral: 'bg-[var(--neutral)]',
   default: 'bg-[var(--fg-muted)]',
 } as const;
@@ -41,7 +41,7 @@ export function Badge({ level = 'default', children, dot = false, className, tit
     <span
       title={title}
       className={[
-        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap',
+        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap',
         LEVEL_CLASSES[level],
         className ?? '',
       ]

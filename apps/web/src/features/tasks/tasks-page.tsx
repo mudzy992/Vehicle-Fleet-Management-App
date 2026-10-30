@@ -3,7 +3,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { statusLabel } from '@vfm/shared';
 import type { TaskListResponse, TaskView } from '@vfm/shared/schemas';
-import { Badge, Button, Card, CardContent, EmptyState, StatusBadge } from '../../components/ui/index.js';
+import {
+  Badge,
+  Button,
+  buttonClassName,
+  Card,
+  CardContent,
+  EmptyState,
+  StatusBadge,
+} from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
 import { useSession } from '../auth/session.js';
 import { taskCountLabel, taskDateTime, taskListPath, type TaskListTab } from './tasks-model.js';
@@ -30,16 +38,16 @@ function TaskCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Link className="font-semibold text-[var(--primary)] hover:underline" to={`/zadaci/${task.id}`}>
+            <Link className="font-semibold text-primary hover:underline" to={`/zadaci/${task.id}`}>
               {task.title}
             </Link>
             <StatusBadge value={task.status} domain="taskStatus" />
           </div>
-          <p className="mt-1 text-sm text-[var(--fg-muted)]">
+          <p className="mt-1 text-sm text-fg-muted">
             {task.vehicleInternalNo ? `${task.vehicleInternalNo} · ` : ''}
             {[task.vehicleMake, task.vehicleModel].filter(Boolean).join(' ') || task.taskTypeName}
           </p>
-          <p className="mt-1 text-xs text-[var(--fg-muted)]">
+          <p className="mt-1 text-xs text-fg-muted">
             {task.code} · Rok: {taskDateTime(task.dueAt)} · {statusLabel(task.priority, 'taskPriority')}
           </p>
         </div>
@@ -103,15 +111,12 @@ export function TasksPage() {
       <header className="vfm-module-heading">
         <div>
           <h1 className="vfm-module-title">Zadaci</h1>
-          <p className="mt-1 text-sm text-[var(--fg-muted)]">
+          <p className="mt-1 text-sm text-fg-muted">
             {tasksQuery.isPending ? 'Učitavanje…' : taskCountLabel(tasksQuery.data)}
           </p>
         </div>
         {hasPermission('task:create') && (
-          <Link
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-fg)] hover:opacity-90"
-            to="/zadaci/novi"
-          >
+          <Link className={buttonClassName('primary', 'lg')} to="/zadaci/novi">
             Novi zadatak
           </Link>
         )}
@@ -127,8 +132,8 @@ export function TasksPage() {
             className={[
               'min-h-10 rounded-md border px-4 text-sm font-medium transition-colors',
               tab === value
-                ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-fg)]'
-                : 'border-[var(--border)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--surface-hover)]',
+                ? 'border-primary bg-primary text-primary-fg'
+                : 'border-border bg-surface text-fg hover:bg-hover',
             ].join(' ')}
             onClick={() => {
               setTab(value);
@@ -142,7 +147,7 @@ export function TasksPage() {
       </div>
 
       {message && (
-        <p role="status" className="rounded-md bg-[var(--surface)] px-3 py-2 text-sm">
+        <p role="status" className="rounded-md bg-surface px-3 py-2 text-sm">
           {message}
         </p>
       )}
@@ -150,7 +155,7 @@ export function TasksPage() {
       {tasksQuery.error && (
         <Card>
           <CardContent>
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {tasksQuery.error instanceof ApiError
                 ? tasksQuery.error.message
                 : 'Greška pri učitavanju zadataka.'}
@@ -162,7 +167,7 @@ export function TasksPage() {
       {tasksQuery.isPending ? (
         <Card>
           <CardContent>
-            <p className="text-sm text-[var(--fg-muted)]">Učitavanje zadataka…</p>
+            <p className="text-sm text-fg-muted">Učitavanje zadataka…</p>
           </CardContent>
         </Card>
       ) : items.length === 0 ? (
@@ -198,7 +203,7 @@ export function TasksPage() {
           <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
             Prethodna
           </Button>
-          <span className="text-sm text-[var(--fg-muted)]">
+          <span className="text-sm text-fg-muted">
             Stranica {page} od {totalPages}
           </span>
           <Button

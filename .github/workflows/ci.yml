@@ -90,6 +90,12 @@ jobs:
       - run: test -f pnpm-lock.yaml && pnpm install --frozen-lockfile || echo "skip"
       - name: Provjera design-tokena
         run: node scripts/check-design-tokens.mjs
+      - name: Provedi web UI standard (bez one-off stilova)
+        run: node scripts/check-ui-standards.mjs
+      - name: Navigacija, rute i permission matrica
+        run: node scripts/check-frontend-route-matrix.mjs
+      - name: Kontrastna matrica WCAG AA
+        run: node scripts/check-frontend-contrast.mjs
       - name: Lint
         run: if [ -f pnpm-lock.yaml ]; then pnpm -w lint; else echo "preskočeno (faza 0)"; fi
       - name: Typecheck

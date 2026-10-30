@@ -62,10 +62,7 @@ export function TireSetCreateForm({
     retry: false,
   });
 
-  const parsed = useMemo(
-    () => (form.data ? parseDefinition(form.data.definition) : null),
-    [form.data],
-  );
+  const parsed = useMemo(() => (form.data ? parseDefinition(form.data.definition) : null), [form.data]);
   const model = useMemo(() => {
     if (!parsed?.ok || !form.data) return null;
     return buildRenderModel({
@@ -102,19 +99,24 @@ export function TireSetCreateForm({
       }}
     >
       {form.isPending ? (
-        <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje forme…</p>
+        <p role="status" className="text-sm text-fg-muted">
+          Učitavanje forme…
+        </p>
       ) : form.isError ? (
-        <p role="alert" className="text-sm text-[var(--danger)]">
+        <p role="alert" className="text-sm text-danger">
           {form.error instanceof ApiError
             ? `Nema dostupne aktivne forme TIRE_SET: ${form.error.message}`
             : 'Greška pri učitavanju forme TIRE_SET. Provjerite vezu i pokušajte ponovo.'}
         </p>
       ) : parsed && !parsed.ok ? (
-        <p role="alert" className="text-sm text-[var(--danger)]">
-          Definicija forme TIRE_SET nije ispravna: {parsed.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}
+        <p role="alert" className="text-sm text-danger">
+          Definicija forme TIRE_SET nije ispravna:{' '}
+          {parsed.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}
         </p>
       ) : !model ? (
-        <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje forme…</p>
+        <p role="status" className="text-sm text-fg-muted">
+          Učitavanje forme…
+        </p>
       ) : (
         <>
           <CoreFields
@@ -132,14 +134,14 @@ export function TireSetCreateForm({
             idPrefix="komplet-guma-dodatno"
             onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))}
           />
-          <p className="text-xs text-[var(--fg-muted)]">
+          <p className="text-xs text-fg-muted">
             Novi komplet se evidentira kao „Na skladištu“. Montaža na vozilo je zaseban, transakcijski korak.
           </p>
         </>
       )}
 
       {message && (
-        <p role="alert" className="text-sm text-[var(--danger)]">
+        <p role="alert" className="text-sm text-danger">
           {message}
         </p>
       )}

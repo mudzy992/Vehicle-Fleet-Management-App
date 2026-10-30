@@ -113,7 +113,7 @@ export function RemindersPage() {
       <div className="vfm-module-heading">
         <div>
           <h1 className="vfm-module-title">Rokovi</h1>
-          <p className="text-sm text-[var(--fg-muted)]">
+          <p className="text-sm text-fg-muted">
             {isPending ? 'Učitavanje…' : `${data?.total ?? 0} podsjetnika`} · skener radi u 06:00
             (Europe/Sarajevo)
           </p>
@@ -181,7 +181,7 @@ export function RemindersPage() {
       {error && (
         <Card>
           <CardContent>
-            <p className="text-sm text-[var(--danger)]" role="alert">
+            <p className="text-sm text-danger" role="alert">
               {error instanceof ApiError ? error.message : 'Greška pri učitavanju podsjetnika.'}
             </p>
           </CardContent>
@@ -191,11 +191,11 @@ export function RemindersPage() {
       <Card>
         <CardContent>
           {isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]" role="status">
+            <p className="text-sm text-fg-muted" role="status">
               Učitavanje…
             </p>
           ) : error ? (
-            <p className="text-sm text-[var(--danger)]">Podsjetnici nisu dostupni.</p>
+            <p className="text-sm text-danger">Podsjetnici nisu dostupni.</p>
           ) : items.length === 0 ? (
             <EmptyState
               title="Nema podsjetnika"
@@ -226,7 +226,7 @@ export function RemindersPage() {
                         ) : (
                           item.entityType
                         )}
-                        <span className="ml-2 text-xs text-[var(--fg-muted)]">
+                        <span className="ml-2 text-xs text-fg-muted">
                           {item.dueKm === null ? '' : `${item.dueKm.toLocaleString('bs-BA')} km`}
                         </span>
                       </TD>
@@ -239,9 +239,7 @@ export function RemindersPage() {
                             {deadlineLabel(item.dueDate, today)}
                           </Badge>
                         ) : (
-                          <span className="text-xs text-[var(--fg-muted)]">
-                            {formatDateTime(item.fireAt)}
-                          </span>
+                          <span className="text-xs text-fg-muted">{formatDateTime(item.fireAt)}</span>
                         )}
                       </TD>
                       <TD>
@@ -284,7 +282,7 @@ export function RemindersPage() {
 
       {(data?.totalPages ?? 0) > 1 && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-[var(--fg-muted)]">
+          <span className="text-fg-muted">
             Strana {data?.page ?? 1} / {data?.totalPages ?? 1}
           </span>
           <div className="flex gap-2">

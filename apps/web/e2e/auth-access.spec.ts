@@ -2938,11 +2938,78 @@ test('role matrix route is denied before loading role data without role:view', a
   expect(roleDataRequests).toBe(0);
 });
 
+test('notification inbox renders live updates, read action, and channel preferences', async ({ page }) => {
+  const notificationId = '66666666-6666-4666-8666-666666666666';
+  const notification = {
+    id: notificationId,
+    type: 'TASK_CREATED',
+    title: 'Novi zadatak',
+    body: 'Pregled vozila · V-014',
+    data: null,
+    linkToType: 'TASK',
+    linkToId: '77777777-7777-4777-8777-777777777777',
+    priority: 'HIGH',
+    status: 'PENDING',
+    isRead: false,
+    readAt: null,
+    createdAt: '2026-10-30T10:00:00.000Z',
+  };
+  await mockApi(page, (route) =>
+    route.fulfill({
+      status: 200,
+      json: authResponse({
+        permissions: ['notification:view', 'notification:mark_read', 'notification:manage_preferences'],
+      }),
+    }),
+  );
+  await page.route('**/api/v1/notifications**', async (route) => {
+    const { pathname } = new URL(route.request().url());
+    if (pathname.endsWith('/notifications/stream')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: 'id: e2e-1\nevent: unread-count\ndata: {"count":1}\n\n',
+      });
+    } else if (pathname.endsWith('/notifications/unread-count')) {
+      await route.fulfill({ status: 200, json: { data: { count: 1 }, meta: {} } });
+    } else if (pathname.endsWith('/notifications/preferences')) {
+      await route.fulfill({ status: 200, json: { data: { items: [] }, meta: {} } });
+    } else if (pathname.endsWith(`/notifications/${notificationId}/read`)) {
+      await route.fulfill({
+        status: 200,
+        json: {
+          data: { ...notification, isRead: true, status: 'READ', readAt: '2026-10-30T10:01:00.000Z' },
+          meta: {},
+        },
+      });
+    } else if (pathname.endsWith('/notifications/read-all')) {
+      await route.fulfill({ status: 200, json: { data: { count: 1 }, meta: {} } });
+    } else {
+      await route.fulfill({
+        status: 200,
+        json: { data: { items: [notification], page: 1, pageSize: 20, total: 1, totalPages: 1 }, meta: {} },
+      });
+    }
+  });
+
+  await page.goto('/prijava?next=%2Fobavijesti');
+  await submitLogin(page);
+  await expect(page.getByRole('heading', { name: 'Novi zadatak' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Veza uživo:' })).toBeVisible();
+  await page.getByRole('button', { name: 'Označi pročitano' }).click();
+  await expect(page.getByRole('article', { name: /pročitano$/u })).toBeVisible();
+  await page.getByRole('button', { name: 'Postavke' }).click();
+  await expect(page.getByRole('dialog', { name: 'Postavke obavijesti' })).toBeVisible();
+  await expect(page.getByText(/E-mail kanal trenutno nije aktivan/u)).toBeVisible();
+  await expect(page.getByLabel('Push').first()).toBeVisible();
+  await expectNoA11yViolations(page);
+});
+
 for (const [path, permission] of [
   ['/obavijesti', 'notification:view'],
   ['/izvjestaji', 'report:view'],
 ] as const) {
-  test(`future-phase route ${path} stays permission guarded`, async ({ page }) => {
+  test(`protected route ${path} stays permission guarded`, async ({ page }) => {
     await mockApi(page, (route) => route.fulfill({ status: 200, json: authResponse() }));
     await page.goto(`/prijava?next=${encodeURIComponent(path)}`);
     await submitLogin(page);

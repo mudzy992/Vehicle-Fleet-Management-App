@@ -102,15 +102,15 @@ export function ProfilePage() {
     <div className="vfm-module-page">
       <header>
         <h1 className="vfm-module-title">Profil</h1>
-        <p className="mt-1 text-sm text-[var(--fg-muted)]">
+        <p className="mt-1 text-sm text-fg-muted">
           Upravljajte podacima naloga, lozinkom i aktivnim sesijama.
         </p>
       </header>
 
       {forced ? (
         <Card>
-          <p className="text-sm font-medium text-[var(--warning,var(--fg))]">Potrebna je promjena lozinke</p>
-          <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
+          <p className="text-sm font-medium text-warning">Potrebna je promjena lozinke</p>
+          <p className="mt-1 text-xs text-fg-muted">
             Nalog je kreiran s privremenom lozinkom (bootstrap ili reset). Postavite novu lozinku da
             nastavite.
           </p>
@@ -123,17 +123,17 @@ export function ProfilePage() {
           {user ? (
             <dl className="mt-2 space-y-1 text-sm">
               <div className="flex justify-between gap-2">
-                <dt className="text-[var(--fg-muted)]">Ime</dt>
+                <dt className="text-fg-muted">Ime</dt>
                 <dd>
                   {user.firstName} {user.lastName}
                 </dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-[var(--fg-muted)]">E-mail</dt>
+                <dt className="text-fg-muted">E-mail</dt>
                 <dd className="truncate">{user.email}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-[var(--fg-muted)]">Role</dt>
+                <dt className="text-fg-muted">Role</dt>
                 <dd className="flex flex-wrap justify-end gap-1">
                   {user.roles.map((role) => (
                     <Badge key={role.id}>{role.code}</Badge>
@@ -141,11 +141,11 @@ export function ProfilePage() {
                 </dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-[var(--fg-muted)]">Prava</dt>
+                <dt className="text-fg-muted">Prava</dt>
                 <dd>{user.isSuperAdmin ? 'sva (Super Admin)' : `${user.permissions.length} permisija`}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-[var(--fg-muted)]">Zadnja prijava</dt>
+                <dt className="text-fg-muted">Zadnja prijava</dt>
                 <dd className="text-xs">{formatDateTime(user.lastLoginAt)}</dd>
               </div>
             </dl>
@@ -208,7 +208,7 @@ export function ProfilePage() {
             </Field>
 
             {submitError ? (
-              <div role="alert" className="space-y-1 text-[11px] text-[var(--danger)]">
+              <div role="alert" className="space-y-1 text-xs text-danger">
                 <p>
                   {submitError.message} ({submitError.code})
                 </p>
@@ -217,7 +217,7 @@ export function ProfilePage() {
                 ))}
               </div>
             ) : null}
-            {feedback ? <p className="text-[11px] text-[var(--success,var(--fg))]">{feedback}</p> : null}
+            {feedback ? <p className="text-xs text-success">{feedback}</p> : null}
 
             <Button
               type="submit"
@@ -235,7 +235,7 @@ export function ProfilePage() {
         <div className="flex items-center justify-between px-4 py-3">
           <div>
             <h2 className="text-sm font-medium">Aktivne sesije</h2>
-            <p className="text-[11px] text-[var(--fg-muted)]">
+            <p className="text-xs text-fg-muted">
               „Odjavi sve“ revokuje sve uređaje i diže <code>tokenVersion</code> — stari tokeni padaju odmah.
             </p>
           </div>
@@ -253,7 +253,7 @@ export function ProfilePage() {
         </div>
 
         {sessionActionError ? (
-          <p className="px-4 pb-3 text-sm text-[var(--danger)]" role="alert">
+          <p className="px-4 pb-3 text-sm text-danger" role="alert">
             {sessionActionError instanceof ApiError
               ? sessionActionError.message
               : 'Greška pri opozivu sesije.'}
@@ -268,11 +268,11 @@ export function ProfilePage() {
             />
           </div>
         ) : sessions.isLoading ? (
-          <p className="px-4 pb-4 text-xs text-[var(--fg-muted)]" role="status">
+          <p className="px-4 pb-4 text-xs text-fg-muted" role="status">
             Učitavanje…
           </p>
         ) : sessionQueryError ? (
-          <p className="px-4 pb-4 text-sm text-[var(--danger)]" role="alert">
+          <p className="px-4 pb-4 text-sm text-danger" role="alert">
             {sessionQueryError instanceof ApiError
               ? sessionQueryError.message
               : 'Greška pri učitavanju sesija.'}
@@ -297,7 +297,7 @@ export function ProfilePage() {
               {sessions.data.map((session) => (
                 <TR key={session.id}>
                   <TD>{session.clientType}</TD>
-                  <TD className="text-xs text-[var(--fg-muted)]">
+                  <TD className="text-xs text-fg-muted">
                     {session.deviceInfo
                       ? [
                           session.deviceInfo.model,

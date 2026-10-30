@@ -13,6 +13,7 @@ import {
   taskTypeFormValues,
   type TaskTypeFormValues,
 } from './task-types-model.js';
+import { TASK_TYPE_COLOR_OPTIONS, taskTypeColorClass, taskTypeColorHex } from './task-type-colors.js';
 
 function ApiErrorDetails(error: unknown): Record<string, string> {
   if (!(error instanceof ApiError)) return {};
@@ -56,7 +57,9 @@ function TaskTypeFields({
   onChange: (key: keyof TaskTypeFormValues, value: string | boolean) => void;
 }) {
   const currentFormInOptions = forms.some((form) => form.id === values.formSchemaId);
-  const colorValid = /^#[0-9A-Fa-f]{6}$/u.test(values.colorHex.trim());
+  const knownTaskColor = TASK_TYPE_COLOR_OPTIONS.some(
+    (option) => taskTypeColorHex(option.key) === values.colorHex.trim().toUpperCase(),
+  );
   const textProps = (key: keyof TaskTypeFormValues) => ({
     value: String(values[key]),
     disabled,
@@ -147,27 +150,30 @@ function TaskTypeFields({
         <Field
           label="Boja"
           htmlFor={`${idPrefix}-color`}
-          hint="Format #RRGGBB; prazno znači bez boje."
+          hint="Odaberite jednu od boja standardne VFM palete."
           error={errors.colorHex ?? null}
         >
-          <div className="flex gap-2">
-            <input
+          <div className="flex items-center gap-3">
+            <select
               id={`${idPrefix}-color`}
-              className={`${inputClassName} font-mono uppercase`}
-              autoComplete="off"
-              {...textProps('colorHex')}
-            />
-            <input
-              aria-label="Odaberi boju vrste zadatka"
-              type="color"
-              className="h-9 w-11 shrink-0 cursor-pointer rounded-md border border-[var(--border)] bg-[var(--surface)] p-1"
-              value={
-                colorValid
-                  ? values.colorHex.trim()
-                  : getComputedStyle(document.documentElement).getPropertyValue('--neutral').trim()
-              }
+              className={inputClassName}
               disabled={disabled}
-              onChange={(event) => onChange('colorHex', event.target.value.toUpperCase())}
+              value={values.colorHex}
+              onChange={(event) => onChange('colorHex', event.target.value)}
+            >
+              <option value="">Bez boje</option>
+              {!knownTaskColor && values.colorHex ? (
+                <option value={values.colorHex}>{values.colorHex} (postojeća boja)</option>
+              ) : null}
+              {TASK_TYPE_COLOR_OPTIONS.map((option) => (
+                <option key={option.key} value={taskTypeColorHex(option.key)}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <span
+              aria-hidden="true"
+              className={`h-5 w-5 shrink-0 rounded-full border border-border ${taskTypeColorClass(values.colorHex)}`}
             />
           </div>
         </Field>
@@ -194,7 +200,7 @@ function TaskTypeFields({
         />
       </Field>
 
-      <section className="rounded-md border border-[var(--border)] p-3">
+      <section className="rounded-md border border-border p-3">
         <h3 className="mb-3 text-sm font-medium">Zadane postavke zadatka</h3>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Field
@@ -246,38 +252,36 @@ function TaskTypeFields({
         </div>
 
         <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-          <label className="flex items-start gap-2 rounded-md bg-[var(--surface-muted)] p-2.5">
+          <label className="flex items-start gap-2 rounded-md bg-surface-muted p-2.5">
             <input className="mt-0.5" type="checkbox" {...checkProps('requiresVehicle')} />
             <span>
               <span className="font-medium">Zahtijeva vozilo</span>
-              <span className="block text-xs text-[var(--fg-muted)]">
+              <span className="block text-xs text-fg-muted">
                 Zadatak ove vrste mora imati odabrano vozilo.
               </span>
             </span>
           </label>
-          <label className="flex items-start gap-2 rounded-md bg-[var(--surface-muted)] p-2.5">
+          <label className="flex items-start gap-2 rounded-md bg-surface-muted p-2.5">
             <input className="mt-0.5" type="checkbox" {...checkProps('requiresOdometer')} />
             <span>
               <span className="font-medium">Zahtijeva kilometražu</span>
-              <span className="block text-xs text-[var(--fg-muted)]">
-                Moguće samo kad vrsta zahtijeva vozilo.
-              </span>
+              <span className="block text-xs text-fg-muted">Moguće samo kad vrsta zahtijeva vozilo.</span>
             </span>
           </label>
-          <label className="flex items-start gap-2 rounded-md bg-[var(--surface-muted)] p-2.5">
+          <label className="flex items-start gap-2 rounded-md bg-surface-muted p-2.5">
             <input className="mt-0.5" type="checkbox" {...checkProps('requiresPhotos')} />
             <span>
               <span className="font-medium">Zahtijeva fotografije</span>
-              <span className="block text-xs text-[var(--fg-muted)]">
+              <span className="block text-xs text-fg-muted">
                 Globalni uslov vrste; detalji su u zahtjevima završetka.
               </span>
             </span>
           </label>
-          <label className="flex items-start gap-2 rounded-md bg-[var(--surface-muted)] p-2.5">
+          <label className="flex items-start gap-2 rounded-md bg-surface-muted p-2.5">
             <input className="mt-0.5" type="checkbox" {...checkProps('allowMultipleClaimants')} />
             <span>
               <span className="font-medium">Dozvoli više izvršilaca</span>
-              <span className="block text-xs text-[var(--fg-muted)]">
+              <span className="block text-xs text-fg-muted">
                 Poštuje se kad zadaci počnu koristiti preuzimanje.
               </span>
             </span>
@@ -349,7 +353,7 @@ export function TaskTypeCreateForm({
       />
 
       {message && (
-        <p role="alert" className="text-sm text-[var(--danger)]">
+        <p role="alert" className="text-sm text-danger">
           {message}
         </p>
       )}
@@ -385,7 +389,9 @@ export function TaskTypeEditPanel({
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje vrste zadatka…</p>
+          <p className="text-sm text-fg-muted" role="status">
+            Učitavanje vrste zadatka…
+          </p>
         </CardContent>
       </Card>
     );
@@ -397,7 +403,7 @@ export function TaskTypeEditPanel({
         <CardHeader title="Izmjena vrste zadatka" />
         <CardContent>
           <div className="space-y-3">
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {detailQuery.error instanceof ApiError
                 ? detailQuery.error.message
                 : 'Vrstu zadatka nije moguće učitati.'}
@@ -501,7 +507,7 @@ function TaskTypeEditForm({
           />
 
           {message && (
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {message}
             </p>
           )}

@@ -73,7 +73,9 @@ export function TireSetTiresPanel({ tireSet, onClose }: { tireSet: TireSetView; 
     return (
       <Card>
         <CardContent>
-          <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje pojedinačnih guma…</p>
+          <p role="status" className="text-sm text-fg-muted">
+            Učitavanje pojedinačnih guma…
+          </p>
         </CardContent>
       </Card>
     );
@@ -85,7 +87,7 @@ export function TireSetTiresPanel({ tireSet, onClose }: { tireSet: TireSetView; 
         <CardHeader title={`Pojedinačne gume — ${tireSet.code}`} />
         <CardContent>
           <div className="space-y-3">
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {tiresQuery.error instanceof ApiError
                 ? tiresQuery.error.message
                 : 'Pojedinačne gume nije moguće učitati.'}
@@ -148,7 +150,11 @@ export function TireSetTiresPanel({ tireSet, onClose }: { tireSet: TireSetView; 
       />
       <CardContent>
         <div className="space-y-4">
-          {success && <p className="text-sm" role="status">{success}</p>}
+          {success && (
+            <p className="text-sm" role="status">
+              {success}
+            </p>
+          )}
 
           {items.length ? (
             <Table scrollLabel="Pojedinačne gume — pomjerite tabelu horizontalno za pregled svih kolona">
@@ -173,7 +179,7 @@ export function TireSetTiresPanel({ tireSet, onClose }: { tireSet: TireSetView; 
                     </TD>
                     <TD>
                       <p>{tire.serialNumber ?? 'Bez serijskog broja'}</p>
-                      <p className="text-xs text-[var(--fg-muted)]">DOT: {tire.dot ?? '—'}</p>
+                      <p className="text-xs text-fg-muted">DOT: {tire.dot ?? '—'}</p>
                     </TD>
                     <TD>{productionLabel(tire)}</TD>
                     <TD align="right" className="tabular-nums">
@@ -181,7 +187,7 @@ export function TireSetTiresPanel({ tireSet, onClose }: { tireSet: TireSetView; 
                     </TD>
                     <TD>
                       <p>{tire.purchaseDate ? formatDate(tire.purchaseDate) : '—'}</p>
-                      <p className="text-xs text-[var(--fg-muted)]">
+                      <p className="text-xs text-fg-muted">
                         {tire.purchasePrice === null ? '—' : formatMoney(tire.purchasePrice)}
                       </p>
                     </TD>
@@ -202,7 +208,7 @@ export function TireSetTiresPanel({ tireSet, onClose }: { tireSet: TireSetView; 
           )}
 
           {canCreate && capacityReached && (
-            <p className="text-sm text-[var(--fg-muted)]">
+            <p className="text-sm text-fg-muted">
               Evidentiran je deklarisani broj guma. Za još jedan zapis prvo povećajte broj guma kompleta kroz
               izmjenu kompleta.
             </p>
@@ -231,7 +237,7 @@ export function TireSetTiresPanel({ tireSet, onClose }: { tireSet: TireSetView; 
                 create.mutate();
               }}
             >
-              <p className="text-sm text-[var(--fg-muted)]">
+              <p className="text-sm text-fg-muted">
                 Status nove gume se ne bira ručno. Server ga određuje prema statusu kompleta, aktivnoj montaži
                 i odabranoj poziciji.
               </p>
@@ -246,7 +252,7 @@ export function TireSetTiresPanel({ tireSet, onClose }: { tireSet: TireSetView; 
               </fieldset>
 
               {message && (
-                <p role="alert" className="text-sm text-[var(--danger)]">
+                <p role="alert" className="text-sm text-danger">
                   {message} Unos je ostao u formi.
                 </p>
               )}

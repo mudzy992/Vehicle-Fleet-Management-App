@@ -14,5 +14,7 @@ export type { CardProps } from './card.js';
 export { EmptyState } from './empty-state.js';
 export { Field, inputClassName } from './field.js';
 export type { FieldProps } from './field.js';
+export { Modal, ConfirmModal } from './modal.js';
+export type { ModalProps, ConfirmModalProps } from './modal.js';
 export { Stat } from './stat.js';
 export { Table, TBody, TD, TH, THead, TR } from './table.js';

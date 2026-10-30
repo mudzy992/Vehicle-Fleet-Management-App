@@ -142,6 +142,41 @@ async function request<T>(path: string, init?: RequestInit, allowRetry = true): 
   return (success && 'data' in success ? success.data : (payload as T)) ?? (undefined as T);
 }
 
+async function requestEventStream(
+  path: string,
+  signal: AbortSignal,
+  lastEventId?: string,
+  allowRetry = true,
+): Promise<Response> {
+  const headers: Record<string, string> = { Accept: 'text/event-stream', 'X-Client-Type': CLIENT_TYPE };
+  if (lastEventId) headers['Last-Event-ID'] = lastEventId;
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers,
+    signal,
+  });
+  if (response.status === 401 && allowRetry) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) return requestEventStream(path, signal, lastEventId, false);
+    sessionExpiredHandler?.();
+  }
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as unknown;
+    if (payload && isApiFailure(payload as never)) {
+      const error = (payload as { error: ApiErrorBody }).error;
+      throw new ApiError(error.code, error.message, response.status, error.details, error.requestId);
+    }
+    throw new ApiError(
+      'INTERNAL_ERROR',
+      `Veza sa obavijestima nije uspjela (HTTP ${response.status}).`,
+      response.status,
+    );
+  }
+  return response;
+}
+
 async function requestBlob(path: string, allowRetry = true): Promise<Blob> {
   const headers: Record<string, string> = {
     Accept: '*/*',
@@ -195,6 +230,8 @@ async function downloadUrl(url: string): Promise<Blob> {
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
+  openEventStream: (path: string, signal: AbortSignal, lastEventId?: string) =>
+    requestEventStream(path, signal, lastEventId),
   downloadUrl,
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) }),

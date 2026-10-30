@@ -20,10 +20,14 @@ export function PlaceholderPage({ title, code, phase, description }: Placeholder
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
         {code ? <Badge level="neutral">{code}</Badge> : null}
-        {phase ? <Badge level="info" dot>{phase}</Badge> : null}
+        {phase ? (
+          <Badge level="info" dot>
+            {phase}
+          </Badge>
+        ) : null}
       </div>
 
-      {description ? <p className="text-sm text-[var(--fg-muted)]">{description}</p> : null}
+      {description ? <p className="text-sm text-fg-muted">{description}</p> : null}
 
       <Card>
         <CardHeader

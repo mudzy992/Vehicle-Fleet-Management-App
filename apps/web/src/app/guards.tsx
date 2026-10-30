@@ -17,7 +17,7 @@ import { useSession } from '../features/auth/session.js';
 
 function FullPageMessage({ title, description }: { title: string; description: string }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[var(--bg)] px-4 text-[var(--fg)]">
+    <main className="flex min-h-screen items-center justify-center bg-bg px-4 text-fg">
       <Card className="w-full max-w-md">
         <EmptyState title={title} description={description} />
       </Card>
@@ -91,7 +91,7 @@ export function AnonymousOnly({ children }: { children: ReactNode }) {
 /** Mali `403` blok za akcije unutar ekrana (npr. dugme „Sačuvaj matricu"). */
 export function ForbiddenAction({ permission }: { permission: string }) {
   return (
-    <div className="rounded-md border border-[var(--border)] px-3 py-2 text-xs text-[var(--fg-muted)]">
+    <div className="rounded-md border border-border px-3 py-2 text-xs text-fg-muted">
       Akcija traži pravo <code className="font-mono">{permission}</code>.
       <Button
         type="button"

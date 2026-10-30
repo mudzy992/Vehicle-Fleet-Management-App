@@ -6,6 +6,7 @@ import { TIRE_SEASONS, TIRE_STATUSES, formatMoney, statusLabel } from '@vfm/shar
 import type { TireSetListResponse, TireSetView } from '@vfm/shared/schemas';
 import {
   Button,
+  ConfirmModal,
   Card,
   CardContent,
   CardHeader,
@@ -46,6 +47,7 @@ export function TireSetsPage() {
   const [usageSet, setUsageSet] = useState<TireSetView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TireSetView | null>(null);
 
   const query = useMemo(() => buildTireSetQuery(filters, page, PAGE_SIZE), [filters, page]);
   const list = useQuery({
@@ -60,6 +62,7 @@ export function TireSetsPage() {
   const remove = useMutation({
     mutationFn: (row: TireSetView) => api.delete<void>(`/tire-sets/${row.id}`),
     onSuccess: async (_data, row) => {
+      setDeleteTarget(null);
       if (editingId === row.id) setEditingId(null);
       if (selectedSet?.id === row.id) setSelectedSet(null);
       if (usageSet?.id === row.id) setUsageSet(null);
@@ -83,13 +86,7 @@ export function TireSetsPage() {
   const requestDelete = (row: TireSetView) => {
     setMessage(null);
     setActionError(null);
-    if (
-      window.confirm(
-        `Obrisati komplet ${row.code}? Komplet i njegove pojedinačne gume nestaju iz aktivne evidencije, a historija montaža ostaje.`,
-      )
-    ) {
-      remove.mutate(row);
-    }
+    setDeleteTarget(row);
   };
   const filtered =
     filters.q !== '' ||
@@ -109,7 +106,7 @@ export function TireSetsPage() {
       <div className="vfm-module-heading">
         <div>
           <h1 className="vfm-module-title">Kompleti guma</h1>
-          <p className="text-sm text-[var(--fg-muted)]" role={list.isPending ? 'status' : undefined}>
+          <p className="text-sm text-fg-muted" role={list.isPending ? 'status' : undefined}>
             {list.isPending ? 'Učitavanje…' : `${list.data?.total ?? 0} kompleta u evidenciji`}
           </p>
         </div>
@@ -133,7 +130,9 @@ export function TireSetsPage() {
       {message && (
         <Card>
           <CardContent>
-            <p className="text-sm" role="status">{message}</p>
+            <p className="text-sm" role="status">
+              {message}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -141,7 +140,7 @@ export function TireSetsPage() {
       {actionError && (
         <Card>
           <CardContent>
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {actionError}
             </p>
           </CardContent>
@@ -151,7 +150,7 @@ export function TireSetsPage() {
       {list.error && (
         <Card>
           <CardContent>
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {list.error instanceof ApiError ? list.error.message : 'Greška pri učitavanju kompleta.'}
             </p>
           </CardContent>
@@ -295,7 +294,9 @@ export function TireSetsPage() {
       <Card>
         <CardContent>
           {list.isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+            <p className="text-sm text-fg-muted" role="status">
+              Učitavanje…
+            </p>
           ) : list.isError ? null : !list.data?.items.length ? (
             <EmptyState
               title={filtered ? 'Nema kompleta za odabrane filtere' : 'Evidencija kompleta je prazna'}
@@ -383,6 +384,17 @@ export function TireSetsPage() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={deleteTarget !== null}
+        title={deleteTarget ? `Obrisati komplet ${deleteTarget.code}?` : 'Obrisati komplet?'}
+        description="Komplet i njegove pojedinačne gume nestaju iz aktivne evidencije; historija montaža ostaje sačuvana."
+        confirmLabel="Obriši komplet"
+        busy={remove.isPending}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) remove.mutate(deleteTarget);
+        }}
+      />
     </div>
   );
 }
@@ -414,11 +426,11 @@ function TireSetRow({
 }) {
   const deleteBlocked = row.status === 'MOUNTED' || row.mountedVehicleId !== null;
   return (
-    <TR className={isEditing || isViewingTires || isViewingUsage ? 'bg-[var(--hover)]' : undefined}>
+    <TR className={isEditing || isViewingTires || isViewingUsage ? 'bg-hover' : undefined}>
       <TD>
         <p className="font-medium">{row.code}</p>
         <p>{[row.brand, row.model].filter(Boolean).join(' ') || '—'}</p>
-        <p className="text-xs text-[var(--fg-muted)]">{row.size ?? 'Bez dimenzije'}</p>
+        <p className="text-xs text-fg-muted">{row.size ?? 'Bez dimenzije'}</p>
       </TD>
       <TD>
         <p>{statusLabel(row.season, 'tireSeason')}</p>
@@ -429,7 +441,7 @@ function TireSetRow({
       </TD>
       <TD>
         <p>{formatDate(row.purchaseDate)}</p>
-        <p className="text-xs text-[var(--fg-muted)]">
+        <p className="text-xs text-fg-muted">
           {row.purchasePrice === null ? '—' : formatMoney(row.purchasePrice)}
         </p>
       </TD>
@@ -439,7 +451,7 @@ function TireSetRow({
             <Link className="font-medium hover:underline" to={`/vozila/${row.mountedVehicleId}`}>
               {row.mountedVehicleInternalNo ?? 'Montirano vozilo'}
             </Link>
-            <p className="text-xs text-[var(--fg-muted)]">{row.mountedVehiclePlateNumber ?? '—'}</p>
+            <p className="text-xs text-fg-muted">{row.mountedVehiclePlateNumber ?? '—'}</p>
           </>
         ) : (
           (row.currentLocation ?? '—')

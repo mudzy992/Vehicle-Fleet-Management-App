@@ -51,7 +51,10 @@ export function MatrixPage() {
   });
 
   const current = useMemo(
-    () => (query.data ? grantsToState(query.data.roles, query.data.grants) : new Map<string, Map<string, MatrixScope>>()),
+    () =>
+      query.data
+        ? grantsToState(query.data.roles, query.data.grants)
+        : new Map<string, Map<string, MatrixScope>>(),
     [query.data],
   );
 
@@ -81,14 +84,14 @@ export function MatrixPage() {
 
   if (query.isPending)
     return (
-      <p className="text-sm text-[var(--fg-muted)]" role="status">
+      <p className="text-sm text-fg-muted" role="status">
         Učitavanje matrice…
       </p>
     );
   if (query.error) {
     const error = query.error instanceof ApiError ? query.error : null;
     return (
-      <p className="text-sm text-[var(--danger)]" role="alert">
+      <p className="text-sm text-danger" role="alert">
         Greška ({error?.code ?? 'INTERNAL_ERROR'}): {error?.message ?? 'matrica nije dostupna'}
       </p>
     );
@@ -113,9 +116,13 @@ export function MatrixPage() {
     <div className="vfm-module-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium">Matrica prava ({query.data.modules.reduce((total, group) => total + group.permissions.length, 0)} permisija)</p>
-          <p className="text-[11px] text-[var(--fg-muted)]">
-            Promjena važi za postojeće sesije u ≤ 5 s bez ponovne prijave. Super Admin ima sva prava implicitno (R-07).
+          <p className="text-sm font-medium">
+            Matrica prava ({query.data.modules.reduce((total, group) => total + group.permissions.length, 0)}{' '}
+            permisija)
+          </p>
+          <p className="text-xs text-fg-muted">
+            Promjena važi za postojeće sesije u ≤ 5 s bez ponovne prijave. Super Admin ima sva prava
+            implicitno (R-07).
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -149,7 +156,7 @@ export function MatrixPage() {
           <p className="text-sm font-medium" role="status">
             Sačuvano: {saved.affectedRoles} rola · +{saved.added} / −{saved.removed} / ~{saved.scopeChanged}
           </p>
-          <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
+          <p className="mt-1 text-xs text-fg-muted">
             Nova verzija prava: {Object.values(saved.permissionsVersion).join(', ')}. Promjena je u Audit logu
             (<code>PERMISSION_CHANGE</code>).
           </p>
@@ -157,8 +164,10 @@ export function MatrixPage() {
       ) : null}
 
       {save.error ? (
-        <p role="alert" className="text-sm text-[var(--danger)]">
-          {save.error instanceof ApiError ? `${save.error.message} (${save.error.code})` : 'Čuvanje nije uspjelo.'}
+        <p role="alert" className="text-sm text-danger">
+          {save.error instanceof ApiError
+            ? `${save.error.message} (${save.error.code})`
+            : 'Čuvanje nije uspjelo.'}
         </p>
       ) : null}
 
@@ -175,8 +184,8 @@ export function MatrixPage() {
           <TBody>
             {query.data.modules.map((group) => (
               <Fragment key={group.module}>
-                <TR className="bg-[var(--surface-muted)]">
-                  <TD className="text-[11px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">
+                <TR className="bg-surface-muted">
+                  <TD className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
                     {group.module}
                   </TD>
                   {editableRoles.map((role) => (
@@ -188,10 +197,10 @@ export function MatrixPage() {
                     <TD>
                       <span className="font-mono text-xs">{permission.code}</span>
                       {permission.isSensitive ? (
-                        <span className="ml-2 text-[10px] uppercase text-[var(--fg-muted)]">osjetljivo</span>
+                        <span className="ml-2 text-xs uppercase text-fg-muted">osjetljivo</span>
                       ) : null}
                       {!permission.inDatabase ? (
-                        <span className="ml-2 text-[10px] uppercase text-[var(--danger)]">nema u bazi</span>
+                        <span className="ml-2 text-xs uppercase text-danger">nema u bazi</span>
                       ) : null}
                     </TD>
                     {editableRoles.map((role) => {
@@ -205,7 +214,11 @@ export function MatrixPage() {
                             disabled={!canEdit}
                             onChange={(event) => {
                               const value = event.target.value;
-                              setCell(role.id, permission.code, value === '' ? null : (value as 'ALL' | 'OWN'));
+                              setCell(
+                                role.id,
+                                permission.code,
+                                value === '' ? null : (value as 'ALL' | 'OWN'),
+                              );
                             }}
                           >
                             <option value="">—</option>
@@ -224,7 +237,7 @@ export function MatrixPage() {
       </Card>
 
       {!canEdit ? (
-        <p className="text-xs text-[var(--fg-muted)]">
+        <p className="text-xs text-fg-muted">
           Matricu možete pregledati, ali ne mijenjati — traži pravo <code>role:manage_permissions</code>.
         </p>
       ) : null}

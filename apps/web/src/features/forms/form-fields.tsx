@@ -50,12 +50,10 @@ export function CoreFields({
   if (fields.length === 0) return null;
 
   return (
-    <section className="space-y-3 rounded-md border border-[var(--border)] p-3">
+    <section className="space-y-3 rounded-md border border-border p-3">
       <header>
         <h3 className="text-sm font-medium">Osnovni podaci</h3>
-        <p className="text-xs text-[var(--fg-muted)]">
-          Ovi podaci su strukturirane kolone (ne dio dinamičke forme).
-        </p>
+        <p className="text-xs text-fg-muted">Ovi podaci su strukturirane kolone (ne dio dinamičke forme).</p>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -171,12 +169,10 @@ export function FormFields({
   return (
     <>
       {sections.map((section) => (
-        <section key={section.key} className="space-y-3 rounded-md border border-[var(--border)] p-3">
+        <section key={section.key} className="space-y-3 rounded-md border border-border p-3">
           <header className="space-y-0.5">
             <h3 className="text-sm font-medium">{section.title}</h3>
-            {section.description ? (
-              <p className="text-xs text-[var(--fg-muted)]">{section.description}</p>
-            ) : null}
+            {section.description ? <p className="text-xs text-fg-muted">{section.description}</p> : null}
           </header>
 
           {section.fields.map((field) => (
@@ -226,9 +222,7 @@ function renderControl(field: RenderField, id: string, onChange: (value: unknown
     case 'SELECT':
       if (!field.options) {
         return (
-          <p className="text-xs text-[var(--fg-muted)]">
-            Dinamičke opcije (LIST/QUERY) nisu učitane na ovom ekranu.
-          </p>
+          <p className="text-xs text-fg-muted">Dinamičke opcije (LIST/QUERY) nisu učitane na ovom ekranu.</p>
         );
       }
       return (
@@ -251,9 +245,7 @@ function renderControl(field: RenderField, id: string, onChange: (value: unknown
     case 'MULTI_SELECT':
       if (!field.options) {
         return (
-          <p className="text-xs text-[var(--fg-muted)]">
-            Dinamičke opcije (LIST/QUERY) nisu učitane na ovom ekranu.
-          </p>
+          <p className="text-xs text-fg-muted">Dinamičke opcije (LIST/QUERY) nisu učitane na ovom ekranu.</p>
         );
       }
       return (
@@ -277,7 +269,7 @@ function renderControl(field: RenderField, id: string, onChange: (value: unknown
 
     case 'OUTPUT':
       return (
-        <p className="rounded-md border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1.5 text-sm">
+        <p className="rounded-md border border-border bg-surface-muted px-2.5 py-1.5 text-sm">
           {formatFieldValue(field)}
         </p>
       );
@@ -285,14 +277,14 @@ function renderControl(field: RenderField, id: string, onChange: (value: unknown
     case 'PHOTO':
     case 'FILE':
       return (
-        <p className="rounded-md border border-dashed border-[var(--border)] px-2.5 py-1.5 text-xs text-[var(--fg-muted)]">
+        <p className="rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-fg-muted">
           {field.widget === 'PHOTO' ? 'Fotografije' : 'Prilozi'} se dodaju uz zapis (kamera/upload).
         </p>
       );
 
     case 'REFERENCE':
       return (
-        <p className="rounded-md border border-dashed border-[var(--border)] px-2.5 py-1.5 text-xs text-[var(--fg-muted)]">
+        <p className="rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-fg-muted">
           Odabir zapisa ({field.type}) — puni se iz šifarnika.
         </p>
       );
@@ -310,7 +302,7 @@ function renderControl(field: RenderField, id: string, onChange: (value: unknown
             placeholder={field.placeholder ?? undefined}
             onChange={(event) => onChange(parseInputValue('MONEY', event.target.value))}
           />
-          <span className="text-xs text-[var(--fg-muted)]">KM</span>
+          <span className="text-xs text-fg-muted">KM</span>
         </div>
       );
 

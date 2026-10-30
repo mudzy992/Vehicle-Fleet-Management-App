@@ -6,6 +6,7 @@ import type { TaskTypeListResponse, TaskTypeView } from '@vfm/shared/schemas';
 import {
   Badge,
   Button,
+  ConfirmModal,
   Card,
   CardContent,
   CardHeader,
@@ -24,6 +25,7 @@ import { api, ApiError } from '../../lib/api.js';
 import { useSession } from '../auth/session.js';
 import { toQueryString } from '../vehicles/vehicles-model.js';
 import { TaskTypeCreateForm, TaskTypeEditPanel } from './task-type-form.js';
+import { taskTypeColorClass } from './task-type-colors.js';
 import { TaskTypeRequirementsPanel } from './task-type-requirements-panel.js';
 import {
   DEFAULT_TASK_TYPE_FILTERS,
@@ -51,6 +53,7 @@ export function TaskTypesPage() {
   const [requirementsFor, setRequirementsFor] = useState<TaskTypeView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<TaskTypeView | null>(null);
 
   const query = useMemo(() => buildTaskTypeQuery(filters, page, PAGE_SIZE), [filters, page]);
   const list = useQuery({
@@ -66,6 +69,7 @@ export function TaskTypesPage() {
   const archive = useMutation({
     mutationFn: (row: TaskTypeView) => api.post<void>(`/task-types/${row.id}/archive`, {}),
     onSuccess: async (_data, row) => {
+      setArchiveTarget(null);
       if (editingId === row.id) setEditingId(null);
       if (requirementsFor?.id === row.id) setRequirementsFor(null);
       setPage((current) => pageAfterArchive(list.data?.items.length ?? 0, current));
@@ -97,7 +101,7 @@ export function TaskTypesPage() {
   const requestArchive = (row: TaskTypeView) => {
     setMessage(null);
     setActionError(null);
-    if (window.confirm(taskTypeArchiveConfirmation(row))) archive.mutate(row);
+    setArchiveTarget(row);
   };
 
   return (
@@ -105,7 +109,7 @@ export function TaskTypesPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="vfm-module-title">Vrste zadataka</h1>
-            <p className="text-sm text-[var(--fg-muted)]" role={list.isPending ? 'status' : undefined}>
+          <p className="text-sm text-fg-muted" role={list.isPending ? 'status' : undefined}>
             {list.isPending ? 'Učitavanje…' : `${list.data?.total ?? 0} vrsta u konfiguraciji`}
           </p>
         </div>
@@ -126,7 +130,9 @@ export function TaskTypesPage() {
       {message && (
         <Card>
           <CardContent>
-            <p className="text-sm" role="status">{message}</p>
+            <p className="text-sm" role="status">
+              {message}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -134,7 +140,7 @@ export function TaskTypesPage() {
       {actionError && (
         <Card>
           <CardContent>
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {actionError}
             </p>
           </CardContent>
@@ -144,7 +150,7 @@ export function TaskTypesPage() {
       {list.error && (
         <Card>
           <CardContent>
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {list.error instanceof ApiError ? list.error.message : 'Greška pri učitavanju vrsta zadataka.'}
             </p>
           </CardContent>
@@ -291,7 +297,9 @@ export function TaskTypesPage() {
       <Card>
         <CardContent>
           {list.isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+            <p className="text-sm text-fg-muted" role="status">
+              Učitavanje…
+            </p>
           ) : list.isError ? null : !list.data?.items.length ? (
             <EmptyState
               title={filtered ? 'Nema vrsta za odabrane filtere' : 'Nema konfigurisanih vrsta zadataka'}
@@ -367,6 +375,21 @@ export function TaskTypesPage() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={archiveTarget !== null}
+        title={archiveTarget ? `Arhivirati vrstu ${archiveTarget.code}?` : 'Arhivirati vrstu zadatka?'}
+        description={
+          archiveTarget
+            ? taskTypeArchiveConfirmation(archiveTarget)
+            : 'Vrsta će nestati iz aktivne konfiguracije, ali historija zadataka ostaje sačuvana.'
+        }
+        confirmLabel="Arhiviraj vrstu"
+        busy={archive.isPending}
+        onClose={() => setArchiveTarget(null)}
+        onConfirm={() => {
+          if (archiveTarget) archive.mutate(archiveTarget);
+        }}
+      />
     </div>
   );
 }
@@ -400,61 +423,58 @@ function TaskTypeRow({
   ].filter(Boolean) as string[];
 
   return (
-    <TR className={isEditing || isViewingRequirements ? 'bg-[var(--hover)]' : undefined}>
+    <TR className={isEditing || isViewingRequirements ? 'bg-hover' : undefined}>
       <TD>
         <div className="flex items-start gap-2">
           <span
             aria-hidden="true"
-            className="mt-1.5 h-3 w-3 shrink-0 rounded-full border border-[var(--border)]"
-            style={row.colorHex ? { backgroundColor: row.colorHex } : undefined}
+            className={`mt-1.5 h-3 w-3 shrink-0 rounded-full border border-border ${taskTypeColorClass(row.colorHex)}`}
           />
           <div className="min-w-0">
             <p className="font-medium">{row.name}</p>
-            <p className="font-mono text-xs text-[var(--fg-muted)]">{row.code}</p>
-            <p className="mt-1 max-w-xs text-xs text-[var(--fg-muted)]">{row.description ?? 'Bez opisa'}</p>
+            <p className="font-mono text-xs text-fg-muted">{row.code}</p>
+            <p className="mt-1 max-w-xs text-xs text-fg-muted">{row.description ?? 'Bez opisa'}</p>
           </div>
         </div>
       </TD>
       <TD>
         <StatusBadge value={row.defaultPriority} domain="taskPriority" />
         <p className="mt-1 text-xs">{statusLabel(row.defaultAssignMode, 'taskAssignMode')}</p>
-        <p className="text-xs text-[var(--fg-muted)]">
+        <p className="text-xs text-fg-muted">
           {row.dueOffsetHours === null ? 'Bez zadanog roka' : `Rok: ${row.dueOffsetHours} h`}
         </p>
       </TD>
       <TD>
         {conditions.length ? (
-          <div className="flex max-w-[220px] flex-wrap gap-1">
+          <div className="flex max-w-56 flex-wrap gap-1">
             {conditions.map((condition) => (
               <Badge key={condition}>{condition}</Badge>
             ))}
           </div>
         ) : (
-          <span className="text-[var(--fg-muted)]">Bez posebnih uslova</span>
+          <span className="text-fg-muted">Bez posebnih uslova</span>
         )}
       </TD>
       <TD>
         {row.formSchemaId ? (
           <>
             <p>{row.formSchemaName ?? row.formSchemaKey ?? 'Povezana forma'}</p>
-            <p className="font-mono text-xs text-[var(--fg-muted)]">
+            <p className="font-mono text-xs text-fg-muted">
               {row.formSchemaKey ?? '—'}
               {row.formSchemaVersion ? ` · v${row.formSchemaVersion}` : ''}
             </p>
           </>
         ) : (
-          <p className="text-[var(--fg-muted)]">Bez zadane forme</p>
+          <p className="text-fg-muted">Bez zadane forme</p>
         )}
-        <p className="mt-1 text-xs text-[var(--fg-muted)]">
-          Zahtjeva završetka: {row.completionRequirementCount}
-        </p>
+        <p className="mt-1 text-xs text-fg-muted">Zahtjeva završetka: {row.completionRequirementCount}</p>
       </TD>
       <TD>
         <Badge level={row.active ? 'success' : 'neutral'} dot>
           {row.active ? 'Aktivna' : 'Neaktivna'}
         </Badge>
-        <p className="mt-1 text-xs text-[var(--fg-muted)]">Redoslijed: {row.sortOrder}</p>
-        <p className="text-xs text-[var(--fg-muted)]">Izmijenjeno: {formatDateTime(row.updatedAt)}</p>
+        <p className="mt-1 text-xs text-fg-muted">Redoslijed: {row.sortOrder}</p>
+        <p className="text-xs text-fg-muted">Izmijenjeno: {formatDateTime(row.updatedAt)}</p>
       </TD>
       <TD align="right">
         <div className="flex flex-wrap justify-end gap-2">

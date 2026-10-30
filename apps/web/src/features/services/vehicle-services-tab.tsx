@@ -17,6 +17,7 @@ import { useState } from 'react';
 import {
   Badge,
   Button,
+  ConfirmModal,
   Card,
   CardContent,
   EmptyState,
@@ -38,6 +39,7 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
   const [page, setPage] = useState(1);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ServiceRecord | null>(null);
   const query = useQuery({
     queryKey: ['services', vehicleId, page],
     queryFn: () =>
@@ -49,6 +51,7 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
   const remove = useMutation({
     mutationFn: (row: ServiceRecord) => api.delete<void>(`/services/${row.id}`),
     onSuccess: async (_data, row) => {
+      setDeleteTarget(null);
       const nextPage = nextServicesPageAfterDelete(page, query.data?.items.length ?? 0);
       if (nextPage !== page) setPage(nextPage);
       setDeleteMessage(serviceDeletedMessage(row));
@@ -68,13 +71,13 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
   const requestDelete = (row: ServiceRecord) => {
     setDeleteMessage(null);
     setDeleteError(null);
-    if (window.confirm(serviceDeleteConfirmation(row))) remove.mutate(row);
+    setDeleteTarget(row);
   };
   const deleteFeedback = (
     <>
       {deleteMessage && <p className="text-sm">{deleteMessage}</p>}
       {deleteError && (
-        <p role="alert" className="text-sm text-[var(--danger)]">
+        <p role="alert" className="text-sm text-danger">
           {deleteError}
         </p>
       )}
@@ -147,7 +150,7 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
                   </TD>
                   <TD>
                     <p>{row.serviceType}</p>
-                    <p className="text-xs text-[var(--fg-muted)]">{row.workshopName ?? '—'}</p>
+                    <p className="text-xs text-fg-muted">{row.workshopName ?? '—'}</p>
                     {row.description && <p className="text-sm">{row.description}</p>}
                   </TD>
                   <TD>{row.odometerKm === null ? '—' : `${row.odometerKm.toLocaleString('bs-BA')} km`}</TD>
@@ -204,6 +207,21 @@ export function VehicleServicesTab({ vehicleId }: { vehicleId: string }) {
           </Button>
         </div>
       </div>
+      <ConfirmModal
+        open={deleteTarget !== null}
+        title={deleteTarget ? `Obrisati servis ${deleteTarget.serviceType}?` : 'Obrisati servis?'}
+        description={
+          deleteTarget
+            ? serviceDeleteConfirmation(deleteTarget)
+            : 'Servis će biti uklonjen iz aktivne evidencije.'
+        }
+        confirmLabel="Obriši servis"
+        busy={remove.isPending}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) remove.mutate(deleteTarget);
+        }}
+      />
     </div>
   );
 }

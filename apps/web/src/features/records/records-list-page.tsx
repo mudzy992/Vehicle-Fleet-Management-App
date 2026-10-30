@@ -120,7 +120,7 @@ export function RecordsListPage({ kind }: { kind: RecordsListKind }) {
     <div className="vfm-module-page">
       <div>
         <h1 className="vfm-module-title">{title}</h1>
-        <p className="text-sm text-[var(--fg-muted)]">
+        <p className="text-sm text-fg-muted">
           {list.isPending ? 'Učitavanje…' : `${total} zapisa`} · periodi se ne preklapaju (409 PERIOD_OVERLAP)
         </p>
       </div>
@@ -128,7 +128,7 @@ export function RecordsListPage({ kind }: { kind: RecordsListKind }) {
       {(list.error || vehicles.error) && (
         <Card>
           <CardContent>
-            <p className="text-sm text-[var(--danger)]" role="alert">
+            <p className="text-sm text-danger" role="alert">
               {list.error
                 ? list.error instanceof ApiError
                   ? list.error.message
@@ -222,11 +222,11 @@ export function RecordsListPage({ kind }: { kind: RecordsListKind }) {
       <Card>
         <CardContent>
           {list.isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]" role="status">
+            <p className="text-sm text-fg-muted" role="status">
               Učitavanje…
             </p>
           ) : list.error ? (
-            <p className="text-sm text-[var(--danger)]">Evidencija nije dostupna.</p>
+            <p className="text-sm text-danger">Evidencija nije dostupna.</p>
           ) : rows.length === 0 ? (
             <EmptyState
               title={filtered ? 'Nema rezultata za filtere' : `Nema ${title.toLowerCase()}`}
@@ -288,7 +288,7 @@ export function RecordsListPage({ kind }: { kind: RecordsListKind }) {
 
       {(list.data?.totalPages ?? 0) > 1 && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-[var(--fg-muted)]">
+          <span className="text-fg-muted">
             Strana {list.data?.page ?? 1} / {list.data?.totalPages ?? 1}
           </span>
           <div className="flex gap-2">

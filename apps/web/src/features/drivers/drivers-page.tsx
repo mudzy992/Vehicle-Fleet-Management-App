@@ -90,9 +90,7 @@ export function DriversPage() {
       <div className="vfm-module-heading">
         <div>
           <h1 className="vfm-module-title">Vozači</h1>
-          <p className="text-sm text-[var(--fg-muted)]">
-            {isPending ? 'Učitavanje…' : `${total} vozača u registru`}
-          </p>
+          <p className="text-sm text-fg-muted">{isPending ? 'Učitavanje…' : `${total} vozača u registru`}</p>
         </div>
         <div className="flex items-center gap-2">
           {hasPermission('driver:create') && (
@@ -126,14 +124,14 @@ export function DriversPage() {
       {error && (
         <Card>
           <CardContent>
-            <p className="text-sm text-[var(--danger)]" role="alert">
+            <p className="text-sm text-danger" role="alert">
               {error instanceof ApiError ? error.message : 'Greška pri učitavanju vozača.'}
             </p>
           </CardContent>
         </Card>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+      <div className="grid gap-4 vfm-grid-2-1">
         <Card>
           <CardHeader title="Filteri" description="Pretraga po imenu, broju zaposlenog i dozvoli." />
           <CardContent>
@@ -196,13 +194,13 @@ export function DriversPage() {
           <CardHeader title="Dozvole ističu" description="U narednih 30 dana." />
           <CardContent>
             {isPending ? (
-              <p className="text-sm text-[var(--fg-muted)]" role="status">
+              <p className="text-sm text-fg-muted" role="status">
                 Učitavanje rokova…
               </p>
             ) : error ? (
-              <p className="text-sm text-[var(--danger)]">Rokovi dozvola nisu dostupni.</p>
+              <p className="text-sm text-danger">Rokovi dozvola nisu dostupni.</p>
             ) : deadlines.length === 0 ? (
-              <p className="text-sm text-[var(--fg-muted)]">Nema dozvola koje ističu u 30 dana.</p>
+              <p className="text-sm text-fg-muted">Nema dozvola koje ističu u 30 dana.</p>
             ) : (
               <ul className="space-y-2 text-sm">
                 {deadlines.map((entry) => (
@@ -224,11 +222,11 @@ export function DriversPage() {
       <Card>
         <CardContent>
           {isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]" role="status">
+            <p className="text-sm text-fg-muted" role="status">
               Učitavanje…
             </p>
           ) : error ? (
-            <p className="text-sm text-[var(--danger)]">Registar vozača nije dostupan.</p>
+            <p className="text-sm text-danger">Registar vozača nije dostupan.</p>
           ) : drivers.length === 0 ? (
             <EmptyState
               title={
@@ -294,7 +292,7 @@ export function DriversPage() {
 
       {(data?.totalPages ?? 0) > 1 && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-[var(--fg-muted)]">
+          <span className="text-fg-muted">
             Strana {data?.page ?? 1} / {data?.totalPages ?? 1}
           </span>
           <div className="flex gap-2">
@@ -316,7 +314,7 @@ export function DriversPage() {
 }
 
 function LicenseCell({ driver, today }: { driver: DriverSummary; today: string }) {
-  if (!driver.licenseExpiresAt) return <span className="text-[var(--fg-muted)]">—</span>;
+  if (!driver.licenseExpiresAt) return <span className="text-fg-muted">—</span>;
   return (
     <Badge
       level={deadlineLevel(deadlineTone(driver.licenseExpiresAt, today))}

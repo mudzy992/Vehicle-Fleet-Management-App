@@ -120,13 +120,18 @@ export function VehicleDetailPage() {
     },
   });
 
-  if (detail.isPending) return <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>;
+  if (detail.isPending)
+    return (
+      <p className="text-sm text-fg-muted" role="status">
+        Učitavanje…
+      </p>
+    );
 
   if (detail.error || !vehicle) {
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--danger)]" role="alert">
+          <p className="text-sm text-danger" role="alert">
             {detail.error instanceof ApiError ? detail.error.message : 'Vozilo nije pronađeno.'}
           </p>
           <Link className="mt-2 inline-block text-sm hover:underline" to="/vozila">
@@ -143,13 +148,13 @@ export function VehicleDetailPage() {
     <div className="vfm-module-page">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link className="text-xs text-[var(--fg-muted)] hover:underline" to="/vozila">
+          <Link className="text-xs text-fg-muted hover:underline" to="/vozila">
             ← Vozila
           </Link>
           <h1 className="vfm-module-title">
             {vehicle.internalNo} · {vehicle.make} {vehicle.model}
           </h1>
-          <p className="text-sm text-[var(--fg-muted)]">
+          <p className="text-sm text-fg-muted">
             {vehicle.plateNumber ?? 'bez tablica'} · {statusLabel(vehicle.status, 'vehicle')} ·{' '}
             {vehicle.odometerKm.toLocaleString('bs-BA')} km
           </p>
@@ -189,7 +194,7 @@ export function VehicleDetailPage() {
         </p>
       )}
 
-      <div className="flex flex-wrap gap-1 border-b border-[var(--border)] pb-1">
+      <div className="flex flex-wrap gap-1 border-b border-border pb-1">
         {TABS.filter(
           (item) =>
             (item.id !== 'servisi' || hasPermission('service:view')) &&
@@ -201,9 +206,7 @@ export function VehicleDetailPage() {
             onClick={() => setTab(item.id)}
             className={[
               'rounded-md px-3 py-1.5 text-sm',
-              tab === item.id
-                ? 'bg-[var(--primary)] text-[var(--primary-fg)]'
-                : 'text-[var(--fg-muted)] hover:bg-[var(--hover)]',
+              tab === item.id ? 'bg-primary text-primary-fg' : 'text-fg-muted hover:bg-hover',
             ].join(' ')}
           >
             {item.label}
@@ -213,9 +216,9 @@ export function VehicleDetailPage() {
           <span
             key={item.label}
             title={`${item.label} — ${item.phase}`}
-            className="cursor-not-allowed rounded-md px-3 py-1.5 text-sm text-[var(--fg-muted)]"
+            className="cursor-not-allowed rounded-md px-3 py-1.5 text-sm text-fg-muted"
           >
-            {item.label} <span className="text-[10px]">({item.phase})</span>
+            {item.label} <span className="text-xs">({item.phase})</span>
           </span>
         ))}
       </div>
@@ -272,7 +275,7 @@ function OverviewTab({ vehicle }: { vehicle: VehicleDetail }) {
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             {rows.map(([label, value]) => (
               <div key={label} className="contents">
-                <dt className="text-[var(--fg-muted)]">{label}</dt>
+                <dt className="text-fg-muted">{label}</dt>
                 <dd className="break-words">{value}</dd>
               </div>
             ))}
@@ -303,10 +306,10 @@ function OverviewTab({ vehicle }: { vehicle: VehicleDetail }) {
             description="Verzija forme koja je validirala zapis (P10) — migracija je eksplicitna."
           />
           <CardContent>
-            <p className="text-xs text-[var(--fg-muted)]">Verzija forme</p>
+            <p className="text-xs text-fg-muted">Verzija forme</p>
             <p className="font-mono text-xs">{vehicle.formSchemaVersionId}</p>
             {Object.keys(vehicle.formData).length > 0 && (
-              <pre className="mt-2 max-h-48 overflow-auto rounded bg-[var(--surface-muted)] p-2 text-[11px]">
+              <pre className="mt-2 max-h-48 overflow-auto rounded bg-surface-muted p-2 text-xs">
                 {JSON.stringify(vehicle.formData, null, 2)}
               </pre>
             )}
@@ -319,7 +322,7 @@ function OverviewTab({ vehicle }: { vehicle: VehicleDetail }) {
 
 function Deadline({ date }: { date: string | null }) {
   const tone = deadlineTone(date);
-  if (!date) return <span className="text-[var(--fg-muted)]">—</span>;
+  if (!date) return <span className="text-fg-muted">—</span>;
   const level = tone === 'overdue' ? 'danger' : tone === 'ok' ? 'success' : 'warning';
   return (
     <Badge level={level} title={date}>
@@ -373,9 +376,11 @@ function RegistrationsTab({ vehicleId, onChanged }: { vehicleId: string; onChang
         ))}
 
       {query.isPending ? (
-        <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+        <p className="text-sm text-fg-muted" role="status">
+          Učitavanje…
+        </p>
       ) : query.isError ? (
-        <p className="text-sm text-[var(--danger)]" role="alert">
+        <p className="text-sm text-danger" role="alert">
           {query.error instanceof ApiError ? query.error.message : 'Greška pri učitavanju registracija.'}
         </p>
       ) : !query.data?.items.length ? (
@@ -472,9 +477,11 @@ function InsurancesTab({ vehicleId, onChanged }: { vehicleId: string; onChanged:
         ))}
 
       {query.isPending ? (
-        <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+        <p className="text-sm text-fg-muted" role="status">
+          Učitavanje…
+        </p>
       ) : query.isError ? (
-        <p className="text-sm text-[var(--danger)]" role="alert">
+        <p className="text-sm text-danger" role="alert">
           {query.error instanceof ApiError ? query.error.message : 'Greška pri učitavanju osiguranja.'}
         </p>
       ) : !query.data?.items.length ? (
@@ -574,7 +581,7 @@ function OdometerTab({ vehicle, onChanged }: { vehicle: VehicleDetail; onChanged
   const canCorrect = hasPermission('odometer:correct');
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">
+    <div className="grid gap-4 vfm-grid-1-2">
       <Card>
         <CardHeader
           title="Novo očitanje"
@@ -628,7 +635,11 @@ function OdometerTab({ vehicle, onChanged }: { vehicle: VehicleDetail; onChanged
             >
               Upiši očitanje
             </Button>
-            {message && <p className="text-xs" role={add.isError ? 'alert' : 'status'}>{message}</p>}
+            {message && (
+              <p className="text-xs" role={add.isError ? 'alert' : 'status'}>
+                {message}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -640,9 +651,11 @@ function OdometerTab({ vehicle, onChanged }: { vehicle: VehicleDetail; onChanged
         />
         <CardContent>
           {query.isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+            <p className="text-sm text-fg-muted" role="status">
+              Učitavanje…
+            </p>
           ) : query.isError ? (
-            <p className="text-sm text-[var(--danger)]" role="alert">
+            <p className="text-sm text-danger" role="alert">
               {query.error instanceof ApiError ? query.error.message : 'Greška pri učitavanju očitanja.'}
             </p>
           ) : !query.data?.items.length ? (
@@ -685,10 +698,15 @@ function AttachmentsTab({ vehicleId }: { vehicleId: string }) {
       ),
   });
 
-  if (query.isPending) return <p className="text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>;
+  if (query.isPending)
+    return (
+      <p className="text-sm text-fg-muted" role="status">
+        Učitavanje…
+      </p>
+    );
   if (query.isError) {
     return (
-      <p className="text-sm text-[var(--danger)]" role="alert">
+      <p className="text-sm text-danger" role="alert">
         {query.error instanceof ApiError ? query.error.message : 'Greška pri učitavanju priloga.'}
       </p>
     );
@@ -705,7 +723,11 @@ function AttachmentsTab({ vehicleId }: { vehicleId: string }) {
   return (
     <Card>
       <CardContent>
-        {error && <p className="mb-2 text-xs text-[var(--danger)]" role="alert">{error}</p>}
+        {error && (
+          <p className="mb-2 text-xs text-danger" role="alert">
+            {error}
+          </p>
+        )}
         <Table scrollLabel="Prilozi vozila — pomjerite tabelu horizontalno za pregled svih kolona">
           <THead>
             <TR>

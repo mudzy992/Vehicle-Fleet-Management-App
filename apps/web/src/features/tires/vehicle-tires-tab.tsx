@@ -184,9 +184,7 @@ export function VehicleTiresTab({
                       <TD>
                         <p className="font-medium">{row.setCode}</p>
                         <p>{[row.brand, row.model, row.size].filter(Boolean).join(' ') || '—'}</p>
-                        <p className="text-xs text-[var(--fg-muted)]">
-                          {statusLabel(row.season, 'tireSeason')}
-                        </p>
+                        <p className="text-xs text-fg-muted">{statusLabel(row.season, 'tireSeason')}</p>
                       </TD>
                       <TD>
                         <Badge level={row.dismountedAt ? 'neutral' : 'success'}>
@@ -200,11 +198,11 @@ export function VehicleTiresTab({
                       </TD>
                       <TD>
                         {date(row.mountedAt)}
-                        <p className="text-xs text-[var(--fg-muted)]">{km(row.mountedOdometerKm)}</p>
+                        <p className="text-xs text-fg-muted">{km(row.mountedOdometerKm)}</p>
                       </TD>
                       <TD>
                         {date(row.dismountedAt)}
-                        <p className="text-xs text-[var(--fg-muted)]">{km(row.dismountedOdometerKm)}</p>
+                        <p className="text-xs text-fg-muted">{km(row.dismountedOdometerKm)}</p>
                       </TD>
                       <TD align="right" className="whitespace-nowrap tabular-nums">
                         {km(row.kmDriven)}
@@ -213,7 +211,7 @@ export function VehicleTiresTab({
                       <TD>
                         <p>{row.storageLocationOnDismount ?? '—'}</p>
                         {row.reason && (
-                          <p className="text-xs text-[var(--fg-muted)]">
+                          <p className="text-xs text-fg-muted">
                             {statusLabel(row.reason, 'tireDismountReason')}
                           </p>
                         )}

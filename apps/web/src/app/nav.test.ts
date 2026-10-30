@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  NAV_GROUPS,
-  NAV_ITEMS,
-  navByGroup,
-  visibleNavItems,
-} from './nav.js';
+import { NAV_GROUPS, NAV_ITEMS, navByGroup, visibleNavItems } from './nav.js';
 import { isKnownPermission } from '@vfm/shared';
 
 /**
@@ -12,13 +7,13 @@ import { isKnownPermission } from '@vfm/shared';
  * stavke nose `permission` iz kataloga, pa se filtriraju prema `/auth/me`.
  */
 describe('NAV_ITEMS', () => {
-  it('svaka stavka ima putanju, naziv, grupu i fazu', () => {
+  it('svaka stavka ima putanju, naziv i grupu; fazni metapodaci nisu dio korisničke navigacije', () => {
     expect(NAV_ITEMS.length).toBeGreaterThan(8);
     for (const item of NAV_ITEMS) {
       expect(item.to.startsWith('/'), `${item.to} mora počinjati s /`).toBe(true);
       expect(item.label.length).toBeGreaterThan(1);
       expect(NAV_GROUPS).toContain(item.group);
-      expect(item.phase).toMatch(/Faza \d|—/u);
+      expect('phase' in item).toBe(false);
     }
   });
 

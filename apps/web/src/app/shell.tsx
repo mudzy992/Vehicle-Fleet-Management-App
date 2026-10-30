@@ -1,15 +1,26 @@
 /** Main responsive application frame: navigation, context bar and route content. */
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { APP_NAME } from '@vfm/shared';
-import { Button } from '../components/ui/index.js';
+import { Button, buttonClassName } from '../components/ui/index.js';
+import type { NotificationUnreadCount } from '@vfm/shared/schemas';
+import { api } from '../lib/api.js';
 import { useSession } from '../features/auth/session.js';
 import { navByGroup, visibleNavItems } from './nav.js';
 
 export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useSession();
+  const { user, logout, hasPermission, status } = useSession();
+  const canViewNotifications = hasPermission('notification:view');
+  const unreadNotificationsQuery = useQuery({
+    queryKey: ['notification-unread-count'],
+    queryFn: () => api.get<NotificationUnreadCount>('/notifications/unread-count'),
+    enabled: status === 'authenticated' && canViewNotifications,
+    refetchInterval: 30_000,
+  });
+  const unreadNotifications = unreadNotificationsQuery.data?.count ?? 0;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
@@ -94,7 +105,6 @@ export function AppShell() {
                       >
                         <span className="vfm-nav-indicator" aria-hidden="true" />
                         <span>{item.label}</span>
-                        <span className="vfm-nav-phase">{item.phase}</span>
                       </NavLink>
                     </li>
                   ))}
@@ -143,6 +153,15 @@ export function AppShell() {
           <div className="vfm-topbar-meta">
             <span className="vfm-status-dot" /> Sistem spreman
           </div>
+          {canViewNotifications ? (
+            <Link
+              to="/obavijesti"
+              className={buttonClassName('secondary', 'sm')}
+              aria-label={`Obavijesti, ${unreadNotifications} nepročitanih`}
+            >
+              Obavijesti{unreadNotifications > 0 ? ` (${unreadNotifications})` : ''}
+            </Link>
+          ) : null}
           <Button type="button" size="sm" variant="ghost" onClick={() => void handleLogout()}>
             Odjava
           </Button>

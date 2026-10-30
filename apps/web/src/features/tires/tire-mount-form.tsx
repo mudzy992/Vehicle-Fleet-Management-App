@@ -161,17 +161,17 @@ export function TireMountForm({
       }}
     >
       {currentInstallation && (
-        <p className="text-sm text-[var(--fg-muted)]">
-          Trenutni komplet: <strong className="text-[var(--fg)]">{currentInstallation.setCode}</strong>{' '}
-          montiran {formatDate(currentInstallation.mountedAt)} na{' '}
+        <p className="text-sm text-fg-muted">
+          Trenutni komplet: <strong className="text-fg">{currentInstallation.setCode}</strong> montiran{' '}
+          {formatDate(currentInstallation.mountedAt)} na{' '}
           {currentInstallation.mountedOdometerKm.toLocaleString('bs-BA')} km.
         </p>
       )}
 
-      <section className="space-y-3 rounded-md border border-[var(--border)] p-3">
+      <section className="space-y-3 rounded-md border border-border p-3">
         <header>
           <h3 className="text-sm font-medium">{isSwap ? 'Novi komplet' : 'Komplet za montažu'}</h3>
-          <p className="text-xs text-[var(--fg-muted)]">
+          <p className="text-xs text-fg-muted">
             Prikazuju se samo kompleti na skladištu bez aktivne montaže. Server izbor ponovo provjerava pod
             zaključanim redovima.
           </p>
@@ -260,22 +260,22 @@ export function TireMountForm({
         </div>
 
         {sets.error ? (
-          <p role="alert" className="text-sm text-[var(--danger)]">
+          <p role="alert" className="text-sm text-danger">
             {sets.error instanceof ApiError ? sets.error.message : 'Dostupni kompleti se ne mogu učitati.'}
           </p>
         ) : sets.isPending ? (
-          <p className="text-sm text-[var(--fg-muted)]">Učitavanje dostupnih kompleta…</p>
+          <p className="text-sm text-fg-muted">Učitavanje dostupnih kompleta…</p>
         ) : options.length === 0 ? (
-          <p className="text-sm text-[var(--fg-muted)]">Nema dostupnih kompleta za odabranu pretragu.</p>
+          <p className="text-sm text-fg-muted">Nema dostupnih kompleta za odabranu pretragu.</p>
         ) : selectedSet ? (
-          <p className="text-xs text-[var(--fg-muted)]">
+          <p className="text-xs text-fg-muted">
             Odabran komplet ima {selectedSet.tireCount} guma
             {selectedSet.currentLocation ? ` · lokacija: ${selectedSet.currentLocation}` : ''}.
           </p>
         ) : null}
 
         <fieldset>
-          <legend className="text-xs font-medium text-[var(--fg-muted)]">Pozicije novog kompleta *</legend>
+          <legend className="text-xs font-medium text-fg-muted">Pozicije novog kompleta *</legend>
           <div className="mt-2 flex flex-wrap gap-3 text-sm">
             {TIRE_POSITION_ORDER.map((position) => (
               <label key={position} className="flex items-center gap-2">
@@ -295,9 +295,9 @@ export function TireMountForm({
       </section>
 
       {form.isPending ? (
-        <p className="text-sm text-[var(--fg-muted)]">Učitavanje forme montaže…</p>
+        <p className="text-sm text-fg-muted">Učitavanje forme montaže…</p>
       ) : !model ? (
-        <p role="alert" className="text-sm text-[var(--danger)]">
+        <p role="alert" className="text-sm text-danger">
           Nema ispravne objavljene forme TIRE_INSTALLATION. Pokrenite seed ili objavite formu u
           administraciji.
         </p>
@@ -312,7 +312,7 @@ export function TireMountForm({
       )}
 
       {message && (
-        <p role="alert" className="text-sm text-[var(--danger)]">
+        <p role="alert" className="text-sm text-danger">
           {message}
         </p>
       )}

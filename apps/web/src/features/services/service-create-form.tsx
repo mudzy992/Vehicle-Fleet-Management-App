@@ -43,10 +43,7 @@ export function ServiceCreateForm({
     queryFn: () => api.get<ActiveFormSchema>('/form-schemas/active?subject=SERVICE'),
     retry: false,
   });
-  const parsed = useMemo(
-    () => (form.data ? parseDefinition(form.data.definition) : null),
-    [form.data],
-  );
+  const parsed = useMemo(() => (form.data ? parseDefinition(form.data.definition) : null), [form.data]);
   const model = useMemo(() => {
     if (!parsed?.ok || !form.data) return null;
     return buildRenderModel({
@@ -96,19 +93,24 @@ export function ServiceCreateForm({
     >
       <h3 className="font-semibold">Novi servis</h3>
       {form.isPending ? (
-        <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje forme…</p>
+        <p role="status" className="text-sm text-fg-muted">
+          Učitavanje forme…
+        </p>
       ) : form.isError ? (
-        <p role="alert" className="text-sm text-[var(--danger)]">
+        <p role="alert" className="text-sm text-danger">
           {form.error instanceof ApiError
             ? `Nije dostupna aktivna forma SERVICE: ${form.error.message}`
             : 'Greška pri učitavanju forme SERVICE. Provjerite vezu i pokušajte ponovo.'}
         </p>
       ) : parsed && !parsed.ok ? (
-        <p role="alert" className="text-sm text-[var(--danger)]">
-          Definicija forme SERVICE nije ispravna: {parsed.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}
+        <p role="alert" className="text-sm text-danger">
+          Definicija forme SERVICE nije ispravna:{' '}
+          {parsed.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}
         </p>
       ) : !model ? (
-        <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje forme…</p>
+        <p role="status" className="text-sm text-fg-muted">
+          Učitavanje forme…
+        </p>
       ) : (
         <>
           <CoreFields
@@ -128,7 +130,7 @@ export function ServiceCreateForm({
         </>
       )}
       {message && (
-        <p role="alert" className="text-sm text-[var(--danger)]">
+        <p role="alert" className="text-sm text-danger">
           {message}
         </p>
       )}

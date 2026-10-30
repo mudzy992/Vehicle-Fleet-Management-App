@@ -6,6 +6,7 @@ import type { ServiceItemInput, ServiceItemsResponse } from '@vfm/shared/schemas
 import {
   Badge,
   Button,
+  ConfirmModal,
   Card,
   CardContent,
   CardHeader,
@@ -67,6 +68,7 @@ function ItemsEditor({
   const canEdit = hasPermission('service:update');
   const client = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const [confirmSave, setConfirmSave] = useState(false);
   const [items, setItems] = useState<Draft[]>(() =>
     initial.items.map((item) => ({
       kind: item.kind,
@@ -126,12 +128,12 @@ function ItemsEditor({
       />
       <CardContent>
         <div className="space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--hover)] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-hover p-4">
             <div>
-              <p className="text-xs text-[var(--fg-muted)]">Sačuvani ukupni trošak</p>
+              <p className="text-xs text-fg-muted">Sačuvani ukupni trošak</p>
               <p className="text-xl font-semibold tabular-nums">{formatServiceMoney(initial.totalCost)}</p>
             </div>
-            <p className="max-w-sm text-sm text-[var(--fg-muted)]">
+            <p className="max-w-sm text-sm text-fg-muted">
               {editing
                 ? 'Nove vrijednosti se primjenjuju tek nakon potvrde snimanja.'
                 : 'Iznosi stavki su zaokruženi na fening.'}
@@ -156,10 +158,10 @@ function ItemsEditor({
                         <TD>
                           <p className="font-medium break-words">{item.name}</p>
                           {item.partNumber && (
-                            <p className="text-xs text-[var(--fg-muted)]">Šifra: {item.partNumber}</p>
+                            <p className="text-xs text-fg-muted">Šifra: {item.partNumber}</p>
                           )}
                           {item.notes && (
-                            <p className="max-w-md whitespace-pre-wrap break-words text-sm text-[var(--fg-muted)]">
+                            <p className="max-w-md whitespace-pre-wrap break-words text-sm text-fg-muted">
                               {item.notes}
                             </p>
                           )}
@@ -197,14 +199,7 @@ function ItemsEditor({
               className="space-y-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (
-                  window.confirm(
-                    'Zamijeniti sve stavke i ukupni trošak njihovim zbirom? Prazna lista postavlja trošak na 0 KM.',
-                  )
-                ) {
-                  setMessage('');
-                  save.mutate();
-                }
+                setConfirmSave(true);
               }}
             >
               <p className="text-sm">
@@ -214,7 +209,7 @@ function ItemsEditor({
                 <fieldset
                   key={index}
                   disabled={save.isPending}
-                  className="min-w-0 rounded-lg border border-[var(--border)] p-4"
+                  className="min-w-0 rounded-lg border border-border p-4"
                 >
                   <legend className="px-2 text-sm font-semibold">Stavka {index + 1}</legend>
                   <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -266,7 +261,7 @@ function ItemsEditor({
                 </fieldset>
               ))}
               {message && (
-                <p role="alert" className="text-[var(--danger)]">
+                <p role="alert" className="text-danger">
                   {message} Unos nije obrisan. Ako je verzija zastarjela, zatvorite i ponovo otvorite stavke.
                 </p>
               )}
@@ -294,6 +289,20 @@ function ItemsEditor({
           </Button>
         </div>
       </CardContent>
+      <ConfirmModal
+        open={confirmSave}
+        title="Sačuvati stavke servisa?"
+        description="Ukupan trošak će postati zbir prikazanih stavki; prazna lista postavlja trošak na 0 KM."
+        confirmLabel="Sačuvaj stavke"
+        variant="primary"
+        busy={save.isPending}
+        onClose={() => setConfirmSave(false)}
+        onConfirm={() => {
+          setConfirmSave(false);
+          setMessage('');
+          save.mutate();
+        }}
+      />
     </Card>
   );
 }

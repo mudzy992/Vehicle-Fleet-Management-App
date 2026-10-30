@@ -74,7 +74,7 @@ export function DesignSystemPage() {
     <div className="vfm-module-page mx-auto max-w-5xl">
       <header>
         <h1 className="vfm-module-title">Dizajn sistem</h1>
-        <p className="mt-1 text-sm text-[var(--fg-muted)]">
+        <p className="mt-1 text-sm text-fg-muted">
           Zajednički grafitno-lime tokeni za web i mobilnu aplikaciju; kontrast i usklađenost provjerava web
           test. Web tokeni su u <code className="font-mono text-xs">styles/globals.css</code>, native
           mapiranje u <code className="font-mono text-xs">apps/mobile/src/lib/theme.ts</code>.
@@ -108,11 +108,11 @@ export function DesignSystemPage() {
                 <div className="h-12 rounded-md" style={{ backgroundColor: token.variable }} />
                 {token.soft ? (
                   <div
-                    className="h-6 rounded-md border border-[var(--border)]"
+                    className="h-6 rounded-md border border-border"
                     style={{ backgroundColor: token.soft }}
                   />
                 ) : null}
-                <p className="font-mono text-[11px] text-[var(--fg-muted)]">--{token.name}</p>
+                <p className="font-mono text-xs text-fg-muted">--{token.name}</p>
               </div>
             ))}
           </div>
@@ -125,7 +125,7 @@ export function DesignSystemPage() {
           <p className="text-2xl font-semibold tracking-tight">Naslov ekrana (24/600)</p>
           <p className="text-base font-semibold">Naslov sekcije (16/600)</p>
           <p className="text-sm">Osnovni tekst (14/400) — opis vozila ili zadatka.</p>
-          <p className="text-xs text-[var(--fg-muted)]">Pomoćni tekst (12/400) — metapodaci i hintovi.</p>
+          <p className="text-xs text-fg-muted">Pomoćni tekst (12/400) — metapodaci i hintovi.</p>
           <p className="tabular text-sm">1.234.567 km · 12.345,67 KM · 08.10.2026 14:32</p>
         </CardContent>
       </Card>
@@ -156,25 +156,25 @@ export function DesignSystemPage() {
         />
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="w-24 text-xs text-[var(--fg-muted)]">Zadaci</span>
+            <span className="w-24 text-xs text-fg-muted">Zadaci</span>
             {TASK_STATUS_SAMPLES.map((status) => (
               <StatusBadge key={status} value={status} />
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="w-24 text-xs text-[var(--fg-muted)]">Evidencije</span>
+            <span className="w-24 text-xs text-fg-muted">Evidencije</span>
             {RECORD_STATUS_SAMPLES.map((status) => (
               <StatusBadge key={status} value={status} />
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="w-24 text-xs text-[var(--fg-muted)]">Prioritet</span>
+            <span className="w-24 text-xs text-fg-muted">Prioritet</span>
             {PRIORITY_SAMPLES.map((priority) => (
               <StatusBadge key={priority} value={priority} />
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="w-24 text-xs text-[var(--fg-muted)]">Semantika</span>
+            <span className="w-24 text-xs text-fg-muted">Semantika</span>
             {SEMANTIC_LEVELS.map((level) => (
               <Badge key={level} level={level}>
                 {level}
@@ -198,7 +198,7 @@ export function DesignSystemPage() {
                 <li key={sample.label} className="flex items-center justify-between gap-3 py-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm">{sample.label}</p>
-                    <p className="text-xs text-[var(--fg-muted)]">
+                    <p className="text-xs text-fg-muted">
                       {formatDateTime(sample.date)} · {humanizeRemaining(days)}
                     </p>
                   </div>
@@ -235,8 +235,8 @@ export function DesignSystemPage() {
 
 function FormatRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-[var(--border)] pb-1.5">
-      <span className="text-xs text-[var(--fg-muted)]">{label}</span>
+    <div className="flex items-baseline justify-between gap-3 border-b border-border pb-1.5">
+      <span className="text-xs text-fg-muted">{label}</span>
       <span className="tabular font-mono text-sm">{value}</span>
     </div>
   );

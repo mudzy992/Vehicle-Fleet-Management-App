@@ -127,7 +127,7 @@ export function DriverCreatePage() {
   return (
     <div className="vfm-module-page">
       <div>
-        <Link className="text-xs text-[var(--fg-muted)] hover:underline" to="/vozaci">
+        <Link className="text-xs text-fg-muted hover:underline" to="/vozaci">
           ← Vozači
         </Link>
         <h1 className="vfm-module-title">Novi vozač</h1>
@@ -138,7 +138,11 @@ export function DriverCreatePage() {
           <CardContent>
             <div role="alert">
               <EmptyState
-                title={form.error instanceof ApiError ? 'Nema aktivne forme „Vozač“' : 'Greška pri učitavanju forme'}
+                title={
+                  form.error instanceof ApiError
+                    ? 'Nema aktivne forme „Vozač“'
+                    : 'Greška pri učitavanju forme'
+                }
                 description={`${form.error instanceof ApiError ? form.error.message : 'Provjerite vezu i pokušajte ponovo.'} Forme se objavljuju u Konfiguracija → Forme; bez dostupne verzije zapis se ne može kreirati (P10).`}
               />
             </div>
@@ -197,7 +201,7 @@ export function DriverCreatePage() {
           </Card>
 
           {message && (
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {message}
             </p>
           )}
@@ -214,7 +218,7 @@ export function DriverCreatePage() {
       )}
 
       {form.isPending && (
-        <p role="status" className="text-sm text-[var(--fg-muted)]">
+        <p role="status" className="text-sm text-fg-muted">
           Učitavanje forme…
         </p>
       )}

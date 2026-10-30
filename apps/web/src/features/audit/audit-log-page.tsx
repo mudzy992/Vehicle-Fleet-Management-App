@@ -137,7 +137,7 @@ export function AuditLogPage() {
       </div>
 
       {data?.securityHidden ? (
-        <p className="rounded-md border border-[var(--border)] px-3 py-2 text-xs text-[var(--fg-muted)]">
+        <p className="rounded-md border border-border px-3 py-2 text-xs text-fg-muted">
           Sigurnosni zapisi (<code>SECURITY</code>) nisu prikazani — potrebno je pravo{' '}
           <code>audit:view_security</code>.
         </p>
@@ -145,9 +145,11 @@ export function AuditLogPage() {
 
       <Card flush>
         {query.isPending ? (
-          <p className="p-4 text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+          <p className="p-4 text-sm text-fg-muted" role="status">
+            Učitavanje…
+          </p>
         ) : error ? (
-          <p className="p-4 text-sm text-[var(--danger)]" role="alert">
+          <p className="p-4 text-sm text-danger" role="alert">
             {error instanceof ApiError
               ? `Greška (${error.code}): ${error.message}`
               : 'Greška pri učitavanju audit loga.'}
@@ -178,7 +180,7 @@ export function AuditLogPage() {
         )}
       </Card>
 
-      <div className="flex items-center justify-between text-xs text-[var(--fg-muted)]">
+      <div className="flex items-center justify-between text-xs text-fg-muted">
         <span>
           Stranica {page} / {Math.max(totalPages, 1)} · ukupno {data?.total ?? 0}
         </span>
@@ -214,10 +216,12 @@ export function AuditLogPage() {
           </div>
 
           {detail.isPending ? (
-            <p role="status" className="mt-2 text-xs text-[var(--fg-muted)]">Učitavanje…</p>
+            <p role="status" className="mt-2 text-xs text-fg-muted">
+              Učitavanje…
+            </p>
           ) : null}
           {detail.error ? (
-            <p role="alert" className="mt-2 text-xs text-[var(--danger)]">
+            <p role="alert" className="mt-2 text-xs text-danger">
               {detail.error instanceof ApiError
                 ? `${detail.error.message} (${detail.error.code})`
                 : 'Greška.'}
@@ -226,21 +230,21 @@ export function AuditLogPage() {
           {detail.data ? (
             <div className="mt-2 grid gap-3 md:grid-cols-2">
               <div>
-                <p className="text-[11px] uppercase text-[var(--fg-muted)]">Prije</p>
-                <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-[var(--surface-muted)] p-2 text-[11px]">
+                <p className="text-xs uppercase text-fg-muted">Prije</p>
+                <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-surface-muted p-2 text-xs">
                   {JSON.stringify(detail.data.before ?? {}, null, 2)}
                 </pre>
               </div>
               <div>
-                <p className="text-[11px] uppercase text-[var(--fg-muted)]">Poslije</p>
-                <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-[var(--surface-muted)] p-2 text-[11px]">
+                <p className="text-xs uppercase text-fg-muted">Poslije</p>
+                <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-surface-muted p-2 text-xs">
                   {JSON.stringify(detail.data.after ?? {}, null, 2)}
                 </pre>
               </div>
               {detail.data.metadata ? (
                 <div className="md:col-span-2">
-                  <p className="text-[11px] uppercase text-[var(--fg-muted)]">Metapodaci</p>
-                  <pre className="mt-1 max-h-48 overflow-auto rounded-md bg-[var(--surface-muted)] p-2 text-[11px]">
+                  <p className="text-xs uppercase text-fg-muted">Metapodaci</p>
+                  <pre className="mt-1 max-h-48 overflow-auto rounded-md bg-surface-muted p-2 text-xs">
                     {JSON.stringify(detail.data.metadata, null, 2)}
                   </pre>
                 </div>
@@ -256,9 +260,7 @@ export function AuditLogPage() {
 function AuditRow({ item, onOpen }: { item: AuditLogSummary; onOpen: () => void }) {
   return (
     <TR>
-      <TD className="whitespace-nowrap text-[11px] text-[var(--fg-muted)]">
-        {formatDateTime(item.createdAt)}
-      </TD>
+      <TD className="whitespace-nowrap text-xs text-fg-muted">{formatDateTime(item.createdAt)}</TD>
       <TD className="font-mono text-xs">{item.action}</TD>
       <TD>
         <Badge level={severityLevel(item.severity)} dot>
@@ -268,16 +270,14 @@ function AuditRow({ item, onOpen }: { item: AuditLogSummary; onOpen: () => void 
       <TD className="text-xs">
         {item.actorEmail ?? item.actorId ?? '—'}
         {item.actorRoles.length > 0 ? (
-          <span className="ml-1 text-[10px] text-[var(--fg-muted)]">({item.actorRoles.join(', ')})</span>
+          <span className="ml-1 text-xs text-fg-muted">({item.actorRoles.join(', ')})</span>
         ) : null}
       </TD>
       <TD className="text-xs">
         {item.entityType ?? '—'}
-        {item.entityId ? (
-          <span className="ml-1 font-mono text-[10px]">{item.entityId.slice(0, 8)}…</span>
-        ) : null}
+        {item.entityId ? <span className="ml-1 font-mono text-xs">{item.entityId.slice(0, 8)}…</span> : null}
       </TD>
-      <TD className="text-[11px] text-[var(--fg-muted)]">{item.changedFields.join(', ') || '—'}</TD>
+      <TD className="text-xs text-fg-muted">{item.changedFields.join(', ') || '—'}</TD>
       <TD align="right">
         <Button type="button" size="sm" variant="ghost" onClick={onOpen}>
           Detalj

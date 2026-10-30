@@ -138,7 +138,7 @@ export function DashboardPage() {
       <div className="vfm-page-intro">
         <p className="vfm-eyebrow">PREGLED VOZNOG PARKA</p>
         <h1 className="text-2xl font-semibold tracking-tight">Nadzorna tabla</h1>
-        <p className="text-sm text-[var(--fg-muted)]">
+        <p className="text-sm text-fg-muted">
           Ključni brojevi i rokovi u narednih {WINDOW_DAYS} dana ({formatDate(today)}).
         </p>
       </div>
@@ -146,7 +146,7 @@ export function DashboardPage() {
       {error && (
         <Card>
           <CardContent>
-            <p className="text-sm text-[var(--danger)]">
+            <p className="text-sm text-danger">
               {error instanceof ApiError ? error.message : 'Greška pri učitavanju nadzorne table.'}
             </p>
           </CardContent>
@@ -205,11 +205,11 @@ export function DashboardPage() {
             />
             <CardContent>
               {vehicleDeadlines.isPending ? (
-                <p className="text-sm text-[var(--fg-muted)]" role="status">
+                <p className="text-sm text-fg-muted" role="status">
                   Učitavanje rokova…
                 </p>
               ) : vehicleDeadlines.error ? (
-                <p className="text-sm text-[var(--danger)]" role="alert">
+                <p className="text-sm text-danger" role="alert">
                   Rokovi vozila nisu dostupni.
                 </p>
               ) : deadlines.length === 0 ? (
@@ -243,11 +243,11 @@ export function DashboardPage() {
             />
             <CardContent>
               {licenseDeadlines.isPending ? (
-                <p className="text-sm text-[var(--fg-muted)]" role="status">
+                <p className="text-sm text-fg-muted" role="status">
                   Učitavanje rokova…
                 </p>
               ) : licenseDeadlines.error ? (
-                <p className="text-sm text-[var(--danger)]" role="alert">
+                <p className="text-sm text-danger" role="alert">
                   Rokovi dozvola nisu dostupni.
                 </p>
               ) : licenseEntries.length === 0 ? (
@@ -279,7 +279,7 @@ export function DashboardPage() {
           />
           <CardContent>
             {reminders.isPending ? (
-              <p className="text-sm text-[var(--fg-muted)]">Učitavanje…</p>
+              <p className="text-sm text-fg-muted">Učitavanje…</p>
             ) : !reminders.data?.items.length ? (
               <EmptyState
                 title="Nema zakazanih podsjetnika"
@@ -291,10 +291,10 @@ export function DashboardPage() {
                   <li key={item.id} className="flex items-center justify-between gap-2">
                     <span>
                       {item.kind}
-                      <span className="ml-2 text-xs text-[var(--fg-muted)]">{item.entityType}</span>
+                      <span className="ml-2 text-xs text-fg-muted">{item.entityType}</span>
                     </span>
                     <span className="flex items-center gap-2">
-                      <span className="text-xs text-[var(--fg-muted)]">
+                      <span className="text-xs text-fg-muted">
                         {formatDate(item.dueDate ?? item.fireAt.slice(0, 10))}
                       </span>
                       <Badge level={deadlineLevel(deadlineTone(item.dueDate, today))}>

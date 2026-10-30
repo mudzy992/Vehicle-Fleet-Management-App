@@ -70,7 +70,7 @@ export function ServiceEditForm({ record, onClose }: { record: ServiceRecord; on
             />
           </fieldset>
           {message && (
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {message}
             </p>
           )}

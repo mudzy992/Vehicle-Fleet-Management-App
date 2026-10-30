@@ -59,7 +59,7 @@ export function HealthPage() {
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="vfm-module-title">Zdravlje sistema</h1>
-          <p className="mt-1 text-sm text-[var(--fg-muted)]">
+          <p className="mt-1 text-sm text-fg-muted">
             Probe koje koriste Docker i Coolify: <code className="font-mono text-xs">/health/live</code>,{' '}
             <code className="font-mono text-xs">/health/ready</code>,{' '}
             <code className="font-mono text-xs">/health/startup</code>.
@@ -71,7 +71,7 @@ export function HealthPage() {
       </header>
 
       {loading ? (
-        <p role="status" className="text-sm text-[var(--fg-muted)]">
+        <p role="status" className="text-sm text-fg-muted">
           Provjeravam API probe…
         </p>
       ) : null}
@@ -121,8 +121,8 @@ export function HealthPage() {
 
       <Card flush>
         <CardHeader title="Detalji" description="Sirovi odgovori probe-ova (za dijagnostiku)." />
-        <CardContent className="border-t border-[var(--border)]">
-          <pre className="overflow-x-auto bg-[var(--surface-muted)] p-4 font-mono text-[11px] leading-relaxed text-[var(--fg)]">
+        <CardContent className="border-t border-border">
+          <pre className="overflow-x-auto bg-surface-muted p-4 font-mono text-xs leading-relaxed text-fg">
             {JSON.stringify(state, null, 2)}
           </pre>
         </CardContent>
@@ -153,8 +153,8 @@ function ProbeCard({
             {unknown ? 'nepoznato' : ok ? 'ok' : 'greška'}
           </Badge>
         </div>
-        <p className="font-mono text-[11px] text-[var(--fg-muted)]">{path}</p>
-        <p className="text-xs text-[var(--fg-muted)]">{detail}</p>
+        <p className="font-mono text-xs text-fg-muted">{path}</p>
+        <p className="text-xs text-fg-muted">{detail}</p>
       </CardContent>
     </Card>
   );

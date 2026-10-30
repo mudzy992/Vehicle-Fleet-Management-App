@@ -120,7 +120,7 @@ export function LoginPage() {
           <Card className="vfm-login-card">
             <form className="space-y-5" onSubmit={(event) => void onSubmit(event)} noValidate>
               <div className="space-y-2">
-                <label htmlFor="email" className="block text-sm font-medium text-[var(--fg)]">
+                <label htmlFor="email" className="block text-sm font-medium text-fg">
                   E-mail
                 </label>
                 <input
@@ -132,11 +132,11 @@ export function LoginPage() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="ime@organizacija.ba"
-                  className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
                 />
               </div>
               <div className="space-y-2">
-                <label htmlFor="password" className="block text-sm font-medium text-[var(--fg)]">
+                <label htmlFor="password" className="block text-sm font-medium text-fg">
                   Lozinka
                 </label>
                 <input
@@ -148,13 +148,13 @@ export function LoginPage() {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="Unesite lozinku"
-                  className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
                 />
               </div>
               {error ? (
                 <p
                   role="alert"
-                  className="rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] px-3 py-2.5 text-sm text-[var(--danger)]"
+                  className="rounded-lg border border-danger bg-[var(--danger-soft)] px-3 py-2.5 text-sm text-danger"
                 >
                   {error}
                 </p>

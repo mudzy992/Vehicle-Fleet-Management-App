@@ -7,7 +7,7 @@
 import type { ReactNode } from 'react';
 
 export const inputClassName =
-  'h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm outline-none focus:border-[var(--primary)] disabled:opacity-60';
+  'h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary disabled:opacity-60';
 
 export interface FieldProps {
   readonly label: string;
@@ -20,13 +20,13 @@ export interface FieldProps {
 export function Field({ label, htmlFor, hint, error, children }: FieldProps) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={htmlFor} className="block text-sm font-medium text-[var(--fg)]">
+      <label htmlFor={htmlFor} className="block text-sm font-medium text-fg">
         {label}
       </label>
       {children}
-      {hint && !error ? <p className="text-[11px] text-[var(--fg-muted)]">{hint}</p> : null}
+      {hint && !error ? <p className="text-xs text-fg-muted">{hint}</p> : null}
       {error ? (
-        <p role="alert" className="text-[11px] text-[var(--danger)]">
+        <p role="alert" className="text-xs text-danger">
           {error}
         </p>
       ) : null}

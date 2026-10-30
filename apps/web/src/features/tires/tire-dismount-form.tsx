@@ -56,8 +56,8 @@ export function TireDismountForm({
         save.mutate();
       }}
     >
-      <p className="text-sm text-[var(--fg-muted)]">
-        Komplet <strong className="text-[var(--fg)]">{installation.setCode}</strong> montiran je{' '}
+      <p className="text-sm text-fg-muted">
+        Komplet <strong className="text-fg">{installation.setCode}</strong> montiran je{' '}
         {formatDate(installation.mountedAt)} na {installation.mountedOdometerKm.toLocaleString('bs-BA')} km.
         Demontažom se trajno zaključava ovaj ciklus i računaju pređeni kilometri i dani.
       </p>
@@ -116,7 +116,7 @@ export function TireDismountForm({
       </div>
 
       {message && (
-        <p role="alert" className="text-sm text-[var(--danger)]">
+        <p role="alert" className="text-sm text-danger">
           {message}
         </p>
       )}

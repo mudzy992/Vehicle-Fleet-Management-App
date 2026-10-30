@@ -58,22 +58,41 @@ for (const [themeName, tokens] of Object.entries(themes)) {
       continue;
     }
     const ratio = contrast(foreground, background);
-    results.push({ theme: themeName, foreground: foregroundKey, background: backgroundKey, ratio, minimum, purpose });
-    if (ratio < minimum) failures.push(`${themeName}: ${foregroundKey}/${backgroundKey} = ${ratio.toFixed(2)}:1; traži se ≥ ${minimum}:1 (${purpose}).`);
+    results.push({
+      theme: themeName,
+      foreground: foregroundKey,
+      background: backgroundKey,
+      ratio,
+      minimum,
+      purpose,
+    });
+    if (ratio < minimum)
+      failures.push(
+        `${themeName}: ${foregroundKey}/${backgroundKey} = ${ratio.toFixed(2)}:1; traži se ≥ ${minimum}:1 (${purpose}).`,
+      );
   }
 }
 
-const taskList = await readFile(path.join(process.cwd(), 'apps/web/src/features/tasks/tasks-page.tsx'), 'utf8');
+const taskList = await readFile(
+  path.join(process.cwd(), 'apps/web/src/features/tasks/tasks-page.tsx'),
+  'utf8',
+);
 const taskCreateTarget = taskList.indexOf('to="/zadaci/novi"');
 const taskLinkStart = taskCreateTarget < 0 ? -1 : taskList.lastIndexOf('<Link', taskCreateTarget);
 const taskLinkEnd = taskCreateTarget < 0 ? -1 : taskList.indexOf('</Link>', taskCreateTarget);
-const newTaskAnchor = taskLinkStart >= 0 && taskLinkEnd >= 0 ? taskList.slice(taskLinkStart, taskLinkEnd) : '';
-const ctaClass = newTaskAnchor.match(/className="([^"]+)"/)?.[1] ?? '';
+const newTaskAnchor =
+  taskLinkStart >= 0 && taskLinkEnd >= 0 ? taskList.slice(taskLinkStart, taskLinkEnd) : '';
+const ctaClass = newTaskAnchor.match(/className=\{buttonClassName\('primary',\s*'lg'\)\}/)?.[0] ?? '';
+const sharedButton = await readFile(
+  path.join(process.cwd(), 'apps/web/src/components/ui/button.tsx'),
+  'utf8',
+);
+const primaryVariant = sharedButton.match(/primary:\s*'([^']+)'/)?.[1] ?? '';
 const ctaStyle = {
-  hasSemanticForeground: ctaClass.includes('text-[var(--primary-fg)]'),
-  hasSemanticBackground: ctaClass.includes('bg-[var(--primary)]'),
-  usesOpacityHover: ctaClass.includes('hover:opacity-90'),
-  usesSharedPrimitive: false,
+  hasSemanticForeground: primaryVariant.includes('text-primary-fg'),
+  hasSemanticBackground: primaryVariant.includes('bg-primary'),
+  usesOpacityHover: primaryVariant.includes('hover:opacity-90'),
+  usesSharedPrimitive: ctaClass.length > 0,
 };
 if (!newTaskAnchor) failures.push('Nije pronađen CTA link za /zadaci/novi; pregledati promjenu route-a.');
 if (newTaskAnchor && (!ctaStyle.hasSemanticForeground || !ctaStyle.hasSemanticBackground)) {
@@ -85,10 +104,17 @@ if (failures.length) {
   process.exitCode = 1;
 } else {
   const primaryRows = results.filter((row) => row.foreground === 'primary-fg');
-  console.log(`✅ Semantički kontrast: ${results.length} kombinacija u dark/light temi prolazi WCAG AA za obični tekst.`);
+  console.log(
+    `✅ Semantički kontrast: ${results.length} kombinacija u dark/light temi prolazi WCAG AA za obični tekst.`,
+  );
   for (const row of primaryRows) console.log(`   ${row.theme}: tekst CTA/primary ${row.ratio.toFixed(2)}:1`);
-  console.log(`ℹ️ CTA „Novi zadatak”: tokeni bg/fg ${ctaStyle.hasSemanticBackground && ctaStyle.hasSemanticForeground ? 'ispravni' : 'nepotpuni'}; hover opacity=${ctaStyle.usesOpacityHover}; zajednički Button primitive=${ctaStyle.usesSharedPrimitive}.`);
-  if (!ctaStyle.usesSharedPrimitive) console.log('⚠️ CTA koristi zasebne ručne klase; vizuelno ga uskladiti sa zajedničkim Button primitive-om tokom implementacije.');
+  console.log(
+    `ℹ️ CTA „Novi zadatak”: tokeni bg/fg ${ctaStyle.hasSemanticBackground && ctaStyle.hasSemanticForeground ? 'ispravni' : 'nepotpuni'}; hover opacity=${ctaStyle.usesOpacityHover}; zajednički Button primitive=${ctaStyle.usesSharedPrimitive}.`,
+  );
+  if (!ctaStyle.usesSharedPrimitive)
+    console.log(
+      '⚠️ CTA koristi zasebne ručne klase; vizuelno ga uskladiti sa zajedničkim Button primitive-om tokom implementacije.',
+    );
 }
 
 if (process.argv.includes('--json')) console.log(JSON.stringify({ results, ctaStyle, failures }, null, 2));

@@ -27,6 +27,8 @@ Nalazi su označeni kao:
 6. [06 — Registar datoteka](06-registar-datoteka.md)
 7. [07 — GPS privatnost i acceptance kriteriji](07-gps-privatnost.md)
 8. [08 — Status nalaza i odluka](08-status-registar.md)
+9. [09 — Ponovljivi frontend audit](09-frontend-audit.md)
+10. [10 — Web UI standard, obrasci i obavijesti](10-web-ui-standard-obavijesti-forme.md)
 
 ## Sažetak baseline-a
 

@@ -22,7 +22,7 @@ function lazyPage(load: () => Promise<{ default: ComponentType }>) {
     return (
       <Suspense
         fallback={
-          <div className="p-6 text-sm text-[var(--fg-muted)]" role="status">
+          <div className="p-6 text-sm text-fg-muted" role="status">
             Učitavanje stranice…
           </div>
         }
@@ -65,6 +65,12 @@ const ProfilePage = lazyPage(() =>
 
 const FormsPage = lazyPage(() =>
   import('../features/forms/forms-page.js').then((module) => ({ default: module.FormsPage })),
+);
+
+const NotificationsPage = lazyPage(() =>
+  import('../features/notifications/notifications-page.js').then((module) => ({
+    default: module.NotificationsPage,
+  })),
 );
 
 const VehiclesPage = lazyPage(() =>
@@ -332,12 +338,7 @@ export const appRoutes = [
         path: 'obavijesti',
         element: (
           <RequirePermission permission="notification:view">
-            <PlaceholderPage
-              title="Obavijesti"
-              code="W25"
-              phase="Faza 5"
-              description="In-app obavijesti, prijenos uživo (SSE) i postavke kanala."
-            />
+            <NotificationsPage />
           </RequirePermission>
         ),
       },

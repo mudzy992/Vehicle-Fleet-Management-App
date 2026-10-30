@@ -15,7 +15,15 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { RECORD_STATUSES, statusLabel } from '@vfm/shared';
-import { Button, Card, CardContent, CardHeader, Field, inputClassName } from '../../components/ui/index.js';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  ConfirmModal,
+  Field,
+  inputClassName,
+} from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
 import { useSession } from '../auth/session.js';
 import { CoreFields } from '../forms/form-fields.js';
@@ -53,6 +61,7 @@ export function VehicleRecordEditForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [overlap, setOverlap] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const save = useMutation({
     mutationFn: () =>
@@ -93,6 +102,7 @@ export function VehicleRecordEditForm({
   const label = kind === 'REGISTRATION' ? 'registraciju' : 'osiguranje';
 
   return (
+    <>
     <Card>
       <CardHeader
         title={kind === 'REGISTRATION' ? 'Izmjena registracije' : 'Izmjena osiguranja'}
@@ -133,14 +143,14 @@ export function VehicleRecordEditForm({
           </Field>
 
           {overlap && (
-            <div role="alert" className="rounded-md border border-[var(--danger)] p-3">
-              <p className="text-sm font-medium text-[var(--danger)]">Period se preklapa</p>
-              <p className="text-xs text-[var(--fg-muted)]">{overlap}</p>
+              <div role="alert" className="rounded-md border border-danger p-3">
+                <p className="text-sm font-medium text-danger">Period se preklapa</p>
+                <p className="text-xs text-fg-muted">{overlap}</p>
             </div>
           )}
 
           {message && (
-            <p role="alert" className="text-sm text-[var(--danger)]">
+              <p role="alert" className="text-sm text-danger">
               {message}
             </p>
           )}
@@ -158,12 +168,7 @@ export function VehicleRecordEditForm({
                 size="sm"
                 variant="danger"
                 loading={remove.isPending}
-                onClick={() => {
-                  // Soft-delete je `CRITICAL` u audit logu — potvrda je obavezna.
-                  if (window.confirm(`Obrisati ${label}? Zapis ostaje u historiji (soft-delete).`)) {
-                    remove.mutate();
-                  }
-                }}
+                  onClick={() => setDeleteConfirmOpen(true)}
               >
                 Obriši
               </Button>
@@ -172,5 +177,15 @@ export function VehicleRecordEditForm({
         </form>
       </CardContent>
     </Card>
+      <ConfirmModal
+        open={deleteConfirmOpen}
+        title={`Obrisati ${label}?`}
+        description="Zapis se soft-briše iz aktivne evidencije, a ostaje sačuvan u historiji i audit tragu."
+        confirmLabel="Obriši zapis"
+        busy={remove.isPending}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={() => remove.mutate()}
+      />
+    </>
   );
 }

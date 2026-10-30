@@ -11,7 +11,6 @@ export interface NavItem {
   readonly group: NavGroup;
   readonly permission?: string;
   readonly superAdminOnly?: boolean;
-  readonly phase: string;
 }
 
 export type NavGroup = 'Operativa' | 'Vozni park' | 'Konfiguracija' | 'Sistem';
@@ -19,49 +18,44 @@ export type NavGroup = 'Operativa' | 'Vozni park' | 'Konfiguracija' | 'Sistem';
 export const NAV_GROUPS: readonly NavGroup[] = ['Operativa', 'Vozni park', 'Konfiguracija', 'Sistem'];
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  { to: '/nadzorna-tabla', label: 'Nadzorna tabla', group: 'Operativa', phase: 'Faza 3' },
-  { to: '/rokovi', label: 'Rokovi', group: 'Operativa', permission: 'reminder:view', phase: 'Faza 3' },
-  { to: '/zadaci', label: 'Zadaci', group: 'Operativa', permission: 'task:view', phase: 'Faza 5' },
+  { to: '/nadzorna-tabla', label: 'Nadzorna tabla', group: 'Operativa' },
+  { to: '/rokovi', label: 'Rokovi', group: 'Operativa', permission: 'reminder:view' },
+  { to: '/zadaci', label: 'Zadaci', group: 'Operativa', permission: 'task:view' },
   {
     to: '/obavijesti',
     label: 'Obavijesti',
     group: 'Operativa',
     permission: 'notification:view',
-    phase: 'Faza 5',
   },
 
-  { to: '/vozila', label: 'Vozila', group: 'Vozni park', permission: 'vehicle:view', phase: 'Faza 3' },
-  { to: '/vozaci', label: 'Vozači', group: 'Vozni park', permission: 'driver:view', phase: 'Faza 3' },
+  { to: '/vozila', label: 'Vozila', group: 'Vozni park', permission: 'vehicle:view' },
+  { to: '/vozaci', label: 'Vozači', group: 'Vozni park', permission: 'driver:view' },
   {
     to: '/registracije',
     label: 'Registracije',
     group: 'Vozni park',
     permission: 'registration:view',
-    phase: 'Faza 3',
   },
   {
     to: '/osiguranja',
     label: 'Osiguranja',
     group: 'Vozni park',
     permission: 'insurance:view',
-    phase: 'Faza 3',
   },
-  { to: '/gume', label: 'Gume', group: 'Vozni park', permission: 'tire:view', phase: 'Faza 4' },
-  { to: '/izvjestaji', label: 'Izvještaji', group: 'Vozni park', permission: 'report:view', phase: 'Faza 7' },
+  { to: '/gume', label: 'Gume', group: 'Vozni park', permission: 'tire:view' },
+  { to: '/izvjestaji', label: 'Izvještaji', group: 'Vozni park', permission: 'report:view' },
 
   {
     to: '/vrste-zadataka',
     label: 'Vrste zadataka',
     group: 'Konfiguracija',
     permission: 'task_type:view',
-    phase: 'Faza 5',
   },
   {
     to: '/forme',
     label: 'Forme',
     group: 'Konfiguracija',
     permission: 'form:view',
-    phase: 'Faza 2',
     superAdminOnly: true,
   },
   {
@@ -69,7 +63,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Korisnici',
     group: 'Konfiguracija',
     permission: 'user:view',
-    phase: 'Faza 1',
     superAdminOnly: true,
   },
   {
@@ -79,7 +72,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
     // Pregled matrice traži `role:view`; dugme „Sačuvaj" traži
     // `role:manage_permissions` (server i dalje odlučuje — P14).
     permission: 'role:view',
-    phase: 'Faza 1',
     superAdminOnly: true,
   },
   {
@@ -87,17 +79,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Audit log',
     group: 'Sistem',
     permission: 'audit:view',
-    phase: 'Faza 1',
   },
-  { to: '/profil', label: 'Profil', group: 'Sistem', permission: 'auth:login', phase: 'Faza 1' },
+  { to: '/profil', label: 'Profil', group: 'Sistem', permission: 'auth:login' },
   {
     to: '/zdravlje',
     label: 'Zdravlje sistema',
     group: 'Sistem',
     permission: 'system:view_health',
-    phase: 'Faza 0',
   },
-  { to: '/dizajn-sistem', label: 'Dizajn sistem', group: 'Sistem', phase: 'Faza 0' },
+  { to: '/dizajn-sistem', label: 'Dizajn sistem', group: 'Sistem' },
 ];
 
 /** Grupisane stavke (za prikaz u sidebaru). */

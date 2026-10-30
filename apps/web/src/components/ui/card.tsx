@@ -17,7 +17,7 @@ export function Card({ children, className, flush = false }: CardProps) {
   return (
     <section
       className={[
-        'vfm-card rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)]',
+        'vfm-card rounded-xl border border-border bg-surface shadow-sm',
         flush ? '' : 'p-4',
         className ?? '',
       ]
@@ -41,8 +41,8 @@ export function CardHeader({
   return (
     <header className="mb-3 flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h2 className="truncate text-base font-semibold tracking-tight text-[var(--fg)]">{title}</h2>
-        {description ? <p className="mt-0.5 text-xs text-[var(--fg-muted)]">{description}</p> : null}
+        <h2 className="truncate text-base font-semibold tracking-tight text-fg">{title}</h2>
+        {description ? <p className="mt-0.5 text-xs text-fg-muted">{description}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
     </header>
@@ -55,7 +55,7 @@ export function CardContent({ children, className }: { children: ReactNode; clas
 
 export function CardFooter({ children }: { children: ReactNode }) {
   return (
-    <footer className="mt-3 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-3">
+    <footer className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-3">
       {children}
     </footer>
   );

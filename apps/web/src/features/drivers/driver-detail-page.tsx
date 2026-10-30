@@ -95,7 +95,7 @@ export function DriverDetailPage() {
 
   if (detail.isPending)
     return (
-      <p className="text-sm text-[var(--fg-muted)]" role="status">
+      <p className="text-sm text-fg-muted" role="status">
         Učitavanje…
       </p>
     );
@@ -104,7 +104,7 @@ export function DriverDetailPage() {
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--danger)]" role="alert">
+          <p className="text-sm text-danger" role="alert">
             {detail.error instanceof ApiError ? detail.error.message : 'Vozač nije pronađen.'}
           </p>
           <Link className="mt-2 inline-block text-sm hover:underline" to="/vozaci">
@@ -121,13 +121,13 @@ export function DriverDetailPage() {
     <div className="vfm-module-page">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link className="text-xs text-[var(--fg-muted)] hover:underline" to="/vozaci">
+          <Link className="text-xs text-fg-muted hover:underline" to="/vozaci">
             ← Vozači
           </Link>
           <h1 className="vfm-module-title">
             {driver.firstName} {driver.lastName}
           </h1>
-          <p className="text-sm text-[var(--fg-muted)]">
+          <p className="text-sm text-fg-muted">
             {driver.employeeNumber ?? 'bez broja zaposlenog'} · {statusLabel(driver.status, 'driver')} ·{' '}
             {driver.categories.length > 0 ? driver.categories.join(', ') : 'bez kategorija'}
           </p>
@@ -165,7 +165,7 @@ export function DriverDetailPage() {
       {driver.piiRedacted && (
         <Card>
           <CardContent>
-            <p className="text-sm text-[var(--warning)]">
+            <p className="text-sm text-warning">
               Lični podaci su maskirani — potrebna je permisija <code>driver:view_pii</code>.
             </p>
           </CardContent>
@@ -193,7 +193,7 @@ export function DriverDetailPage() {
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
               <Row label="Izdana" value={formatDate(driver.licenseIssuedAt)} />
               <div className="contents">
-                <dt className="text-[var(--fg-muted)]">Ističe</dt>
+                <dt className="text-fg-muted">Ističe</dt>
                 <dd>
                   {driver.licenseExpiresAt ? (
                     <Badge
@@ -222,11 +222,11 @@ export function DriverDetailPage() {
         />
         <CardContent>
           {categories.isPending ? (
-            <p className="text-sm text-[var(--fg-muted)]" role="status">
+            <p className="text-sm text-fg-muted" role="status">
               Učitavanje…
             </p>
           ) : categories.error ? (
-            <p className="text-sm text-[var(--danger)]" role="alert">
+            <p className="text-sm text-danger" role="alert">
               {categories.error instanceof ApiError
                 ? categories.error.message
                 : 'Greška pri učitavanju kategorija dozvole.'}
@@ -286,7 +286,7 @@ export function DriverDetailPage() {
 function Row({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="contents">
-      <dt className="text-[var(--fg-muted)]">{label}</dt>
+      <dt className="text-fg-muted">{label}</dt>
       <dd className="break-words">{value ?? '—'}</dd>
     </div>
   );
@@ -319,7 +319,7 @@ function AddCategoryForm({ driverId, onDone }: { driverId: string; onDone: () =>
 
   return (
     <form
-      className="mt-4 grid gap-3 border-t border-[var(--border)] pt-4 sm:grid-cols-4"
+      className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-4"
       onSubmit={(event) => {
         event.preventDefault();
         add.mutate();
@@ -358,7 +358,7 @@ function AddCategoryForm({ driverId, onDone }: { driverId: string; onDone: () =>
         </Button>
       </div>
       {error && (
-        <p role="alert" className="sm:col-span-4 text-xs text-[var(--danger)]">
+        <p role="alert" className="sm:col-span-4 text-xs text-danger">
           {error}
         </p>
       )}
@@ -386,7 +386,7 @@ function DeleteCategoryButton({
         Obriši
       </Button>
       {remove.error ? (
-        <span role="alert" className="text-[11px] text-[var(--danger)]">
+        <span role="alert" className="text-xs text-danger">
           {remove.error instanceof ApiError ? remove.error.message : 'Greška pri brisanju kategorije.'}
         </span>
       ) : null}

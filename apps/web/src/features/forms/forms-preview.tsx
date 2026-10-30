@@ -33,9 +33,9 @@ export function FormsPreview({ definition, version, formSchemaVersionId }: Forms
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--fg-muted)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
         <span>
-          Pregled: <strong className="text-[var(--fg)]">{model.title}</strong>
+          Pregled: <strong className="text-fg">{model.title}</strong>
           {model.version ? ` · v${model.version}` : ''}
         </span>
         <span>
@@ -55,12 +55,12 @@ export function FormsPreview({ definition, version, formSchemaVersionId }: Forms
       />
 
       {Object.keys(model.computed).length > 0 ? (
-        <div className="rounded-md border border-dashed border-[var(--border)] p-3">
+        <div className="rounded-md border border-dashed border-border p-3">
           <p className="mb-1 text-xs font-medium">Izračunato</p>
           <dl className="grid gap-1 text-xs sm:grid-cols-2">
             {Object.entries(model.computed).map(([key, value]) => (
               <div key={key} className="flex justify-between gap-2">
-                <dt className="text-[var(--fg-muted)]">{key}</dt>
+                <dt className="text-fg-muted">{key}</dt>
                 <dd className="font-mono">{String(value ?? '—')}</dd>
               </div>
             ))}

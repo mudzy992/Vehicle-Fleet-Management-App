@@ -30,9 +30,7 @@ export function Table({
 
 export function THead({ children }: { children: ReactNode }) {
   return (
-    <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--fg-muted)]">
-      {children}
-    </thead>
+    <thead className="border-b border-border text-xs uppercase tracking-wide text-fg-muted">{children}</thead>
   );
 }
 
@@ -41,9 +39,7 @@ export function TBody({ children }: { children: ReactNode }) {
 }
 
 export function TR({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <tr className={['hover:bg-[var(--hover)]', className ?? ''].filter(Boolean).join(' ')}>{children}</tr>
-  );
+  return <tr className={['hover:bg-hover', className ?? ''].filter(Boolean).join(' ')}>{children}</tr>;
 }
 
 export function TH({ children, align = 'left' }: { children: ReactNode; align?: 'left' | 'right' }) {

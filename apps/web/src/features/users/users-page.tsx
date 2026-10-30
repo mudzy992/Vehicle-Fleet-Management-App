@@ -60,9 +60,12 @@ export function UsersPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [issued, setIssued] = useState<{ kind: 'password' | 'token'; email: string; value: string; expiresAt?: string } | null>(
-    null,
-  );
+  const [issued, setIssued] = useState<{
+    kind: 'password' | 'token';
+    email: string;
+    value: string;
+    expiresAt?: string;
+  } | null>(null);
 
   const query = useQuery({
     queryKey: ['users', { page, search, status }],
@@ -110,7 +113,8 @@ export function UsersPage() {
   });
 
   const archiveUser = useMutation({
-    mutationFn: (id: string) => api.post<void>(`/users/${id}/archive`, { reason: 'Arhivirano iz web aplikacije' }),
+    mutationFn: (id: string) =>
+      api.post<void>(`/users/${id}/archive`, { reason: 'Arhivirano iz web aplikacije' }),
     onSuccess: refresh,
   });
 
@@ -169,20 +173,27 @@ export function UsersPage() {
       </div>
 
       {issued ? (
-        <Card className="border-[var(--warning,var(--border))]">
+        <Card className="border-warning">
           <p className="text-sm font-medium">
             {issued.kind === 'password'
               ? `Privremena lozinka za ${issued.email}`
               : `Jednokratni token za reset lozinke (${issued.email})`}
           </p>
-          <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
+          <p className="mt-1 text-xs text-fg-muted">
             Prikazuje se <strong>samo sada</strong>. Predajte je korisniku sigurnim kanalom
-            {issued.expiresAt ? `; token važi do ${formatDateTime(issued.expiresAt)}` : ''}. U bazi je samo hash.
+            {issued.expiresAt ? `; token važi do ${formatDateTime(issued.expiresAt)}` : ''}. U bazi je samo
+            hash.
           </p>
-          <pre className="mt-2 select-all overflow-x-auto rounded-md bg-[var(--surface-muted)] px-3 py-2 text-xs">
+          <pre className="mt-2 select-all overflow-x-auto rounded-md bg-surface-muted px-3 py-2 text-xs">
             {issued.value}
           </pre>
-          <Button type="button" size="sm" variant="secondary" className="mt-2" onClick={() => setIssued(null)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="mt-2"
+            onClick={() => setIssued(null)}
+          >
             Sakrij
           </Button>
         </Card>
@@ -199,7 +210,7 @@ export function UsersPage() {
 
       {actionErrors.map(([cause, fallback]) =>
         cause ? (
-          <p key={fallback} role="alert" className="text-sm text-[var(--danger)]">
+          <p key={fallback} role="alert" className="text-sm text-danger">
             {cause instanceof ApiError ? cause.message : fallback}
           </p>
         ) : null,
@@ -207,14 +218,19 @@ export function UsersPage() {
 
       <Card flush>
         {query.isPending ? (
-          <p className="p-4 text-sm text-[var(--fg-muted)]" role="status">Učitavanje…</p>
+          <p className="p-4 text-sm text-fg-muted" role="status">
+            Učitavanje…
+          </p>
         ) : query.isError ? (
-          <p className="p-4 text-sm text-[var(--danger)]" role="alert">
+          <p className="p-4 text-sm text-danger" role="alert">
             {queryErrorMessage}
           </p>
         ) : items.length === 0 ? (
           <div className="p-4">
-            <EmptyState title="Nema korisnika" description="Promijenite filter ili kreirajte novog korisnika." />
+            <EmptyState
+              title="Nema korisnika"
+              description="Promijenite filter ili kreirajte novog korisnika."
+            />
           </div>
         ) : (
           <Table scrollLabel="Korisnici — pomjerite tabelu horizontalno za pregled svih kolona">
@@ -246,12 +262,18 @@ export function UsersPage() {
         )}
       </Card>
 
-      <div className="flex items-center justify-between text-xs text-[var(--fg-muted)]">
+      <div className="flex items-center justify-between text-xs text-fg-muted">
         <span>
           Stranica {page} / {Math.max(totalPages, 1)} · ukupno {query.data?.total ?? 0}
         </span>
         <div className="flex gap-2">
-          <Button type="button" size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
             Prethodna
           </Button>
           <Button
@@ -293,11 +315,11 @@ function UserRow({
           {user.firstName} {user.lastName}
         </div>
         {user.mustChangePassword ? (
-          <span className="text-[11px] text-[var(--fg-muted)]">mora promijeniti lozinku</span>
+          <span className="text-xs text-fg-muted">mora promijeniti lozinku</span>
         ) : null}
       </TD>
       <TD>
-        <span className={user.piiRedacted ? 'text-[var(--fg-muted)]' : ''}>{user.email}</span>
+        <span className={user.piiRedacted ? 'text-fg-muted' : ''}>{user.email}</span>
       </TD>
       <TD>
         <div className="flex flex-wrap gap-1">
@@ -311,21 +333,39 @@ function UserRow({
           {user.status}
         </Badge>
       </TD>
-      <TD className="text-[11px] text-[var(--fg-muted)]">{formatDateTime(user.lastLoginAt)}</TD>
+      <TD className="text-xs text-fg-muted">{formatDateTime(user.lastLoginAt)}</TD>
       <TD align="right">
         <div className="flex justify-end gap-1">
           {canReset ? (
-            <Button type="button" size="sm" variant="ghost" onClick={onReset} title="Izdaj token za reset lozinke">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={onReset}
+              title="Izdaj token za reset lozinke"
+            >
               Reset lozinke
             </Button>
           ) : null}
           {canForceLogout ? (
-            <Button type="button" size="sm" variant="ghost" onClick={onForceLogout} title="Prekini sve sesije">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={onForceLogout}
+              title="Prekini sve sesije"
+            >
               Odjavi svuda
             </Button>
           ) : null}
           {canArchive ? (
-            <Button type="button" size="sm" variant="ghost" onClick={onArchive} title="Arhiviraj (soft delete)">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={onArchive}
+              title="Arhiviraj (soft delete)"
+            >
               Arhiviraj
             </Button>
           ) : null}
@@ -378,21 +418,46 @@ function CreateUserForm({
       >
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="E-mail" htmlFor="new-email" error={fieldErrors.get('email')}>
-            <input id="new-email" type="email" required className={inputClassName} value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input
+              id="new-email"
+              type="email"
+              required
+              className={inputClassName}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </Field>
           <Field label="Telefon" htmlFor="new-phone" error={fieldErrors.get('phone')}>
-            <input id="new-phone" className={inputClassName} placeholder="+387 61 000 000" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <input
+              id="new-phone"
+              className={inputClassName}
+              placeholder="+387 61 000 000"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
           </Field>
           <Field label="Ime" htmlFor="new-first-name" error={fieldErrors.get('firstName')}>
-            <input id="new-first-name" required className={inputClassName} value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            <input
+              id="new-first-name"
+              required
+              className={inputClassName}
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+            />
           </Field>
           <Field label="Prezime" htmlFor="new-last-name" error={fieldErrors.get('lastName')}>
-            <input id="new-last-name" required className={inputClassName} value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            <input
+              id="new-last-name"
+              required
+              className={inputClassName}
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+            />
           </Field>
         </div>
 
         <fieldset className="space-y-1.5">
-          <legend className="text-xs font-medium text-[var(--fg-muted)]">Role (najmanje jedna)</legend>
+          <legend className="text-xs font-medium text-fg-muted">Role (najmanje jedna)</legend>
           <div className="flex flex-wrap gap-3">
             {roles.map((role) => (
               <label key={role.id} className="flex items-center gap-1.5 text-sm">
@@ -410,18 +475,19 @@ function CreateUserForm({
             ))}
           </div>
           {fieldErrors.get('roleIds') ? (
-            <p role="alert" className="text-[11px] text-[var(--danger)]">
+            <p role="alert" className="text-xs text-danger">
               {fieldErrors.get('roleIds')}
             </p>
           ) : null}
         </fieldset>
 
-        <p className="text-[11px] text-[var(--fg-muted)]">
-          Lozinku generiše server i prikazuje je jednom nakon kreiranja; korisnik je mijenja pri prvoj prijavi.
+        <p className="text-xs text-fg-muted">
+          Lozinku generiše server i prikazuje je jednom nakon kreiranja; korisnik je mijenja pri prvoj
+          prijavi.
         </p>
 
         {error && fieldErrors.size === 0 ? (
-          <p role="alert" className="text-xs text-[var(--danger)]">
+          <p role="alert" className="text-xs text-danger">
             {error.message} ({error.code})
           </p>
         ) : null}

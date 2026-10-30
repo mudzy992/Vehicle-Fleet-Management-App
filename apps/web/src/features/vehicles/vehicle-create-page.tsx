@@ -99,7 +99,7 @@ export function VehicleCreatePage() {
     <div className="vfm-module-page">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <Link className="text-xs text-[var(--fg-muted)] hover:underline" to="/vozila">
+          <Link className="text-xs text-fg-muted hover:underline" to="/vozila">
             ← Vozila
           </Link>
           <h1 className="vfm-module-title">Novo vozilo</h1>
@@ -111,7 +111,11 @@ export function VehicleCreatePage() {
           <CardContent>
             <div role="alert">
               <EmptyState
-                title={form.error instanceof ApiError ? 'Nema aktivne forme „Vozilo“' : 'Greška pri učitavanju forme'}
+                title={
+                  form.error instanceof ApiError
+                    ? 'Nema aktivne forme „Vozilo“'
+                    : 'Greška pri učitavanju forme'
+                }
                 description={`${form.error instanceof ApiError ? form.error.message : 'Provjerite vezu i pokušajte ponovo.'} Forme se objavljuju u Konfiguracija → Forme; bez dostupne verzije zapis se ne može kreirati (P10).`}
               />
             </div>
@@ -169,7 +173,7 @@ export function VehicleCreatePage() {
           </Card>
 
           {message && (
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {message}
             </p>
           )}
@@ -186,7 +190,7 @@ export function VehicleCreatePage() {
       )}
 
       {form.isPending && (
-        <p className="text-sm text-[var(--fg-muted)]" role="status">
+        <p className="text-sm text-fg-muted" role="status">
           Učitavanje forme…
         </p>
       )}

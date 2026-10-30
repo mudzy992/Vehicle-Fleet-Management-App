@@ -14,7 +14,15 @@ import type {
 import { parseDefinition } from '@vfm/form-engine/definition';
 import type { RenderModel } from '@vfm/form-renderer';
 import { buildRenderModel } from '@vfm/form-renderer';
-import { Button, Card, CardContent, CardHeader, EmptyState, Field, inputClassName } from '../../components/ui/index.js';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  EmptyState,
+  Field,
+  inputClassName,
+} from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
 import { FormFields } from '../forms/form-fields.js';
 import { sarajevoToday } from '../forms/forms-preview-values.js';
@@ -24,7 +32,10 @@ import { useSession } from '../auth/session.js';
 
 const PAGE_SIZE = 100;
 const PRIORITY_LABELS: Record<(typeof TASK_PRIORITIES)[number], string> = {
-  LOW: 'Niska', NORMAL: 'Normalna', HIGH: 'Visoka', URGENT: 'Hitna',
+  LOW: 'Niska',
+  NORMAL: 'Normalna',
+  HIGH: 'Visoka',
+  URGENT: 'Hitna',
 };
 
 export function TaskCreatePage() {
@@ -53,17 +64,26 @@ export function TaskCreatePage() {
 
   const typesQuery = useQuery({
     queryKey: ['task-types', 'create-options'],
-    queryFn: () => api.get<TaskTypeListResponse>(`/task-types?${toQueryString({ page: 1, pageSize: PAGE_SIZE, activeOnly: true })}`),
+    queryFn: () =>
+      api.get<TaskTypeListResponse>(
+        `/task-types?${toQueryString({ page: 1, pageSize: PAGE_SIZE, activeOnly: true })}`,
+      ),
     retry: false,
   });
   const vehiclesQuery = useQuery({
     queryKey: ['vehicles', 'task-create-options'],
-    queryFn: () => api.get<VehicleListResponse>(`/vehicles?${toQueryString({ page: 1, pageSize: PAGE_SIZE, status: 'ACTIVE' })}`),
+    queryFn: () =>
+      api.get<VehicleListResponse>(
+        `/vehicles?${toQueryString({ page: 1, pageSize: PAGE_SIZE, status: 'ACTIVE' })}`,
+      ),
     retry: false,
   });
   const usersQuery = useQuery({
     queryKey: ['users', 'task-create-options'],
-    queryFn: () => api.get<UserListResponse>(`/users?${toQueryString({ page: 1, pageSize: PAGE_SIZE, status: 'ACTIVE' })}`),
+    queryFn: () =>
+      api.get<UserListResponse>(
+        `/users?${toQueryString({ page: 1, pageSize: PAGE_SIZE, status: 'ACTIVE' })}`,
+      ),
     enabled: canViewUsers,
     retry: false,
   });
@@ -75,17 +95,20 @@ export function TaskCreatePage() {
 
   const selectedType = typesQuery.data?.items.find((item) => item.id === taskTypeId) ?? null;
   const effectiveForm = useMemo(
-    () => selectedType ? effectiveTaskForm(formsQuery.data ?? [], selectedType) : null,
+    () => (selectedType ? effectiveTaskForm(formsQuery.data ?? [], selectedType) : null),
     [formsQuery.data, selectedType],
   );
   const versionQuery = useQuery({
     queryKey: ['form-version', effectiveForm?.id, effectiveForm?.currentPublishedVersionId],
-    queryFn: () => api.get<FormVersionDetail>(`/form-schemas/${effectiveForm!.id}/versions/${effectiveForm!.currentPublishedVersionId}`),
+    queryFn: () =>
+      api.get<FormVersionDetail>(
+        `/form-schemas/${effectiveForm!.id}/versions/${effectiveForm!.currentPublishedVersionId}`,
+      ),
     enabled: Boolean(effectiveForm?.currentPublishedVersionId),
     retry: false,
   });
   const parsed = useMemo(
-    () => versionQuery.data ? parseDefinition(versionQuery.data.definition) : null,
+    () => (versionQuery.data ? parseDefinition(versionQuery.data.definition) : null),
     [versionQuery.data],
   );
   const model = useMemo<RenderModel | null>(() => {
@@ -99,7 +122,9 @@ export function TaskCreatePage() {
     });
   }, [parsed, versionQuery.data, formData, today]);
   const attachmentFields = parsed?.ok
-    ? parsed.definition.sections.flatMap((section) => section.fields.filter((field) => field.type === 'PHOTO' || field.type === 'FILE'))
+    ? parsed.definition.sections.flatMap((section) =>
+        section.fields.filter((field) => field.type === 'PHOTO' || field.type === 'FILE'),
+      )
     : [];
 
   const uploadFiles = async (fieldKey: string, files: FileList | null, maxFiles: number | undefined) => {
@@ -108,7 +133,7 @@ export function TaskCreatePage() {
       setUploadError('Upload fotografija/priloga zahtijeva permisiju attachment:upload.');
       return;
     }
-    const current = Array.isArray(formData[fieldKey]) ? formData[fieldKey] as string[] : [];
+    const current = Array.isArray(formData[fieldKey]) ? (formData[fieldKey] as string[]) : [];
     if (maxFiles !== undefined && current.length + files.length > maxFiles) {
       setUploadError(`Polje prima najviše ${maxFiles} fajlova.`);
       return;
@@ -133,7 +158,8 @@ export function TaskCreatePage() {
 
   const create = useMutation({
     mutationFn: () => {
-      if (!selectedType || !effectiveForm || !versionQuery.data) throw new Error('Nedostaje objavljena TASK forma.');
+      if (!selectedType || !effectiveForm || !versionQuery.data)
+        throw new Error('Nedostaje objavljena TASK forma.');
       return api.post<TaskDetail>('/tasks', {
         taskTypeId: selectedType.id,
         vehicleId: vehicleId || null,
@@ -165,18 +191,38 @@ export function TaskCreatePage() {
     },
   });
 
-  if (typesQuery.isPending) return <p className="text-sm text-[var(--fg-muted)]">Učitavanje vrsta zadataka…</p>;
-  if (typesQuery.error) return <EmptyState title="Vrste zadataka nisu dostupne" description={typesQuery.error instanceof ApiError ? typesQuery.error.message : 'Greška pri učitavanju vrsta.'} />;
+  if (typesQuery.isPending) return <p className="text-sm text-fg-muted">Učitavanje vrsta zadataka…</p>;
+  if (typesQuery.error)
+    return (
+      <EmptyState
+        title="Vrste zadataka nisu dostupne"
+        description={
+          typesQuery.error instanceof ApiError ? typesQuery.error.message : 'Greška pri učitavanju vrsta.'
+        }
+      />
+    );
   const types = typesQuery.data?.items ?? [];
-  if (types.length === 0) return <EmptyState title="Nema aktivnih vrsta" description="Prije kreiranja zadatka potrebno je aktivirati barem jednu vrstu zadatka." />;
+  if (types.length === 0)
+    return (
+      <EmptyState
+        title="Nema aktivnih vrsta"
+        description="Prije kreiranja zadatka potrebno je aktivirati barem jednu vrstu zadatka."
+      />
+    );
 
   const vehicleItems = vehiclesQuery.data?.items ?? [];
   const users = usersQuery.data?.items ?? [];
   const nextStep = () => {
     setMessage(null);
     if (step === 1) {
-      if (!selectedType) { setMessage('Odaberite vrstu zadatka.'); return; }
-      if (selectedType.requiresVehicle && !vehicleId) { setMessage('Odabrana vrsta zahtijeva vozilo.'); return; }
+      if (!selectedType) {
+        setMessage('Odaberite vrstu zadatka.');
+        return;
+      }
+      if (selectedType.requiresVehicle && !vehicleId) {
+        setMessage('Odabrana vrsta zahtijeva vozilo.');
+        return;
+      }
       setPriority(selectedType.defaultPriority);
       setAssignMode(selectedType.defaultAssignMode);
       setAssigneeUserId('');
@@ -196,9 +242,11 @@ export function TaskCreatePage() {
   return (
     <main className="vfm-module-page mx-auto max-w-3xl">
       <header className="space-y-1">
-        <Link className="text-sm text-[var(--primary)] underline" to="/zadaci">← Zadaci</Link>
+        <Link className="text-sm text-primary underline" to="/zadaci">
+          ← Zadaci
+        </Link>
         <h1 className="vfm-module-title">Novi zadatak</h1>
-        <p className="text-sm text-[var(--fg-muted)]">Korak {step} od 3</p>
+        <p className="text-sm text-fg-muted">Korak {step} od 3</p>
       </header>
       <div
         className="flex gap-2"
@@ -209,106 +257,310 @@ export function TaskCreatePage() {
         aria-valuenow={step}
         aria-valuetext={`Korak ${step} od 3`}
       >
-        {[1, 2, 3].map((number) => <span key={number} className={`h-1.5 flex-1 rounded ${number <= step ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'}`} />)}
+        {[1, 2, 3].map((number) => (
+          <span
+            key={number}
+            className={`h-1.5 flex-1 rounded ${number <= step ? 'bg-primary' : 'bg-[var(--border)]'}`}
+          />
+        ))}
       </div>
-      {message && <p role="alert" className="rounded-md bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">{message}</p>}
+      {message && (
+        <p role="alert" className="rounded-md bg-[var(--danger-soft)] px-3 py-2 text-sm text-danger">
+          {message}
+        </p>
+      )}
 
       {step === 1 && (
         <Card>
-          <CardHeader title="Vrsta i vozilo" description="Odaberite aktivnu vrstu; zahtjev za vozilom određuje konfiguracija vrste." />
+          <CardHeader
+            title="Vrsta i vozilo"
+            description="Odaberite aktivnu vrstu; zahtjev za vozilom određuje konfiguracija vrste."
+          />
           <CardContent className="space-y-4">
             <Field label="Vrsta zadatka *" htmlFor="task-create-type">
-              <select id="task-create-type" className={inputClassName} value={taskTypeId} onChange={(event) => { setTaskTypeId(event.target.value); setFormData({}); }}>
+              <select
+                id="task-create-type"
+                className={inputClassName}
+                value={taskTypeId}
+                onChange={(event) => {
+                  setTaskTypeId(event.target.value);
+                  setFormData({});
+                }}
+              >
                 <option value="">Odaberite…</option>
-                {types.map((type) => <option key={type.id} value={type.id}>{type.code} · {type.name}</option>)}
+                {types.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.code} · {type.name}
+                  </option>
+                ))}
               </select>
             </Field>
-            {selectedType?.requiresVehicle && vehiclesQuery.isPending ? <p className="text-sm text-[var(--fg-muted)]">Učitavanje vozila…</p> : null}
-            {selectedType?.requiresVehicle && vehiclesQuery.error ? <p role="alert" className="text-sm text-[var(--danger)]">{vehiclesQuery.error instanceof ApiError ? vehiclesQuery.error.message : 'Vozila nije moguće učitati.'}</p> : null}
+            {selectedType?.requiresVehicle && vehiclesQuery.isPending ? (
+              <p className="text-sm text-fg-muted">Učitavanje vozila…</p>
+            ) : null}
+            {selectedType?.requiresVehicle && vehiclesQuery.error ? (
+              <p role="alert" className="text-sm text-danger">
+                {vehiclesQuery.error instanceof ApiError
+                  ? vehiclesQuery.error.message
+                  : 'Vozila nije moguće učitati.'}
+              </p>
+            ) : null}
             {selectedType?.requiresVehicle && !vehiclesQuery.error && !vehiclesQuery.isPending && (
               <Field label="Vozilo *" htmlFor="task-create-vehicle">
-                <select id="task-create-vehicle" className={inputClassName} value={vehicleId} onChange={(event) => setVehicleId(event.target.value)}>
+                <select
+                  id="task-create-vehicle"
+                  className={inputClassName}
+                  value={vehicleId}
+                  onChange={(event) => setVehicleId(event.target.value)}
+                >
                   <option value="">Odaberite vozilo…</option>
-                  {vehicleItems.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.internalNo} · {vehicle.make} {vehicle.model}{vehicle.plateNumber ? ` · ${vehicle.plateNumber}` : ''}</option>)}
+                  {vehicleItems.map((vehicle) => (
+                    <option key={vehicle.id} value={vehicle.id}>
+                      {vehicle.internalNo} · {vehicle.make} {vehicle.model}
+                      {vehicle.plateNumber ? ` · ${vehicle.plateNumber}` : ''}
+                    </option>
+                  ))}
                 </select>
               </Field>
             )}
-            {selectedType && <p className="text-xs text-[var(--fg-muted)]">{selectedType.requiresOdometer ? 'Pri završetku će se tražiti kilometraža.' : ''}{selectedType.requiresPhotos ? ' Za ovu vrstu su obavezne fotografije.' : ''}</p>}
+            {selectedType && (
+              <p className="text-xs text-fg-muted">
+                {selectedType.requiresOdometer ? 'Pri završetku će se tražiti kilometraža.' : ''}
+                {selectedType.requiresPhotos ? ' Za ovu vrstu su obavezne fotografije.' : ''}
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
 
       {step === 2 && selectedType && (
         <Card>
-          <CardHeader title="Opis i rok" description="Osnovni podaci zadatka; obavezna polja dinamičke forme dolaze u sljedećem koraku." />
+          <CardHeader
+            title="Opis i rok"
+            description="Osnovni podaci zadatka; obavezna polja dinamičke forme dolaze u sljedećem koraku."
+          />
           <CardContent className="space-y-4">
-            <Field label="Naslov" htmlFor="task-create-title" hint="Ako ostavite prazno, naslov se preuzima iz vrste zadatka.">
-              <input id="task-create-title" className={inputClassName} minLength={2} maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} />
+            <Field
+              label="Naslov"
+              htmlFor="task-create-title"
+              hint="Ako ostavite prazno, naslov se preuzima iz vrste zadatka."
+            >
+              <input
+                id="task-create-title"
+                className={inputClassName}
+                minLength={2}
+                maxLength={160}
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
             </Field>
             <Field label="Opis" htmlFor="task-create-description">
-              <textarea id="task-create-description" className={`${inputClassName} min-h-24`} maxLength={2000} value={description} onChange={(event) => setDescription(event.target.value)} />
+              <textarea
+                id="task-create-description"
+                className={`${inputClassName} min-h-24`}
+                maxLength={2000}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
             </Field>
             <Field label="Prioritet" htmlFor="task-create-priority">
-              <select id="task-create-priority" className={inputClassName} value={priority} onChange={(event) => setPriority(event.target.value as (typeof TASK_PRIORITIES)[number])}>
-                {TASK_PRIORITIES.map((value) => <option key={value} value={value}>{PRIORITY_LABELS[value]}</option>)}
+              <select
+                id="task-create-priority"
+                className={inputClassName}
+                value={priority}
+                onChange={(event) => setPriority(event.target.value as (typeof TASK_PRIORITIES)[number])}
+              >
+                {TASK_PRIORITIES.map((value) => (
+                  <option key={value} value={value}>
+                    {PRIORITY_LABELS[value]}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Rok (opciono)" htmlFor="task-create-due">
-              <input id="task-create-due" className={inputClassName} type="datetime-local" value={dueLocal} onChange={(event) => setDueLocal(event.target.value)} />
+              <input
+                id="task-create-due"
+                className={inputClassName}
+                type="datetime-local"
+                value={dueLocal}
+                onChange={(event) => setDueLocal(event.target.value)}
+              />
             </Field>
             <Field label="Način dodjele" htmlFor="task-create-assign-mode">
-              <select id="task-create-assign-mode" className={inputClassName} value={assignMode} onChange={(event) => { setAssignMode(event.target.value as TaskAssignMode); setAssigneeUserId(''); setInvitedUserIds([]); }}>
-                {TASK_ASSIGN_MODES.map((mode) => <option key={mode} value={mode}>{mode === 'OPEN_CLAIM' ? 'Slobodno preuzimanje' : mode === 'ASSIGN_DIRECT' ? 'Direktna dodjela' : 'Broadcast'}</option>)}
+              <select
+                id="task-create-assign-mode"
+                className={inputClassName}
+                value={assignMode}
+                onChange={(event) => {
+                  setAssignMode(event.target.value as TaskAssignMode);
+                  setAssigneeUserId('');
+                  setInvitedUserIds([]);
+                }}
+              >
+                {TASK_ASSIGN_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode === 'OPEN_CLAIM'
+                      ? 'Slobodno preuzimanje'
+                      : mode === 'ASSIGN_DIRECT'
+                        ? 'Direktna dodjela'
+                        : 'Broadcast'}
+                  </option>
+                ))}
               </select>
             </Field>
             {assignMode === 'ASSIGN_DIRECT' && (
               <Field label="Direktni izvršilac *" htmlFor="task-create-assignee">
-                {canViewUsers ? <select id="task-create-assignee" className={inputClassName} value={assigneeUserId} onChange={(event) => { setAssigneeUserId(event.target.value); setObserverUserIds((current) => current.filter((id) => id !== event.target.value)); }}>
+                {canViewUsers ? (
+                  <select
+                    id="task-create-assignee"
+                    className={inputClassName}
+                    value={assigneeUserId}
+                    onChange={(event) => {
+                      setAssigneeUserId(event.target.value);
+                      setObserverUserIds((current) => current.filter((id) => id !== event.target.value));
+                    }}
+                  >
                   <option value="">Odaberite izvršioca…</option>
-                  {users.map((user) => <option key={user.id} value={user.id} disabled={observerUserIds.includes(user.id)}>{user.displayName || `${user.firstName} ${user.lastName}`} · {user.email}</option>)}
-                </select> : <p className="text-sm text-[var(--danger)]">Za direktnu dodjelu potrebna je permisija user:view.</p>}
-                {usersQuery.error && <span className="text-xs text-[var(--danger)]">{usersQuery.error instanceof ApiError ? usersQuery.error.message : 'Korisnici nisu dostupni.'}</span>}
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id} disabled={observerUserIds.includes(user.id)}>
+                        {user.displayName || `${user.firstName} ${user.lastName}`} · {user.email}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-sm text-danger">Za direktnu dodjelu potrebna je permisija user:view.</p>
+                )}
+                {usersQuery.error && (
+                  <span className="text-xs text-danger">
+                    {usersQuery.error instanceof ApiError
+                      ? usersQuery.error.message
+                      : 'Korisnici nisu dostupni.'}
+                  </span>
+                )}
               </Field>
             )}
             {assignMode === 'OPEN_CLAIM' && canViewUsers && (
-              <Field label="Pozvani korisnici (opciono)" htmlFor="task-create-invited" hint="Pozvani korisnici mogu preuzeti zadatak prije ostalih.">
-                <select id="task-create-invited" className={`${inputClassName} min-h-24`} multiple value={invitedUserIds} onChange={(event) => { const selected = Array.from(event.currentTarget.selectedOptions, (option) => option.value); setInvitedUserIds(selected); setObserverUserIds((current) => current.filter((id) => !selected.includes(id))); }}>
-                  {users.map((user) => <option key={user.id} value={user.id} disabled={observerUserIds.includes(user.id)}>{user.displayName || `${user.firstName} ${user.lastName}`}</option>)}
+              <Field
+                label="Pozvani korisnici (opciono)"
+                htmlFor="task-create-invited"
+                hint="Pozvani korisnici mogu preuzeti zadatak prije ostalih."
+              >
+                <select
+                  id="task-create-invited"
+                  className={`${inputClassName} min-h-24`}
+                  multiple
+                  value={invitedUserIds}
+                  onChange={(event) => {
+                    const selected = Array.from(
+                      event.currentTarget.selectedOptions,
+                      (option) => option.value,
+                    );
+                    setInvitedUserIds(selected);
+                    setObserverUserIds((current) => current.filter((id) => !selected.includes(id)));
+                  }}
+                >
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id} disabled={observerUserIds.includes(user.id)}>
+                      {user.displayName || `${user.firstName} ${user.lastName}`}
+                    </option>
+                  ))}
                 </select>
               </Field>
             )}
             {canViewUsers && (
-              <Field label="Posmatrači (opciono)" htmlFor="task-create-observers" hint="Držite Ctrl/Cmd za višestruki izbor.">
-                <select id="task-create-observers" className={`${inputClassName} min-h-24`} multiple value={observerUserIds} onChange={(event) => setObserverUserIds(Array.from(event.currentTarget.selectedOptions, (option) => option.value))}>
-                  {users.map((user) => <option key={user.id} value={user.id} disabled={invitedUserIds.includes(user.id) || user.id === assigneeUserId}>{user.displayName || `${user.firstName} ${user.lastName}`}</option>)}
+              <Field
+                label="Posmatrači (opciono)"
+                htmlFor="task-create-observers"
+                hint="Držite Ctrl/Cmd za višestruki izbor."
+              >
+                <select
+                  id="task-create-observers"
+                  className={`${inputClassName} min-h-24`}
+                  multiple
+                  value={observerUserIds}
+                  onChange={(event) =>
+                    setObserverUserIds(
+                      Array.from(event.currentTarget.selectedOptions, (option) => option.value),
+                    )
+                  }
+                >
+                  {users.map((user) => (
+                    <option
+                      key={user.id}
+                      value={user.id}
+                      disabled={invitedUserIds.includes(user.id) || user.id === assigneeUserId}
+                    >
+                      {user.displayName || `${user.firstName} ${user.lastName}`}
+                    </option>
+                  ))}
                 </select>
               </Field>
             )}
-            {selectedType.dueOffsetHours && <p className="text-xs text-[var(--fg-muted)]">Vrsta predlaže rok za {selectedType.dueOffsetHours} sati; unesite tačan rok po potrebi.</p>}
+            {selectedType.dueOffsetHours && (
+              <p className="text-xs text-fg-muted">
+                Vrsta predlaže rok za {selectedType.dueOffsetHours} sati; unesite tačan rok po potrebi.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
 
       {step === 3 && selectedType && (
         <Card>
-          <CardHeader title="Forma i potvrda" description="Server ponovo validira sva polja prema snapshotovanoj objavljenoj verziji." />
+          <CardHeader
+            title="Forma i potvrda"
+            description="Server ponovo validira sva polja prema snapshotovanoj objavljenoj verziji."
+          />
           <CardContent className="space-y-4">
-            {formsQuery.isPending || (effectiveForm && versionQuery.isPending) ? <p className="text-sm text-[var(--fg-muted)]">Učitavanje objavljene TASK forme…</p> : null}
-            {formsQuery.error || versionQuery.error ? <p role="alert" className="text-sm text-[var(--danger)]">{(formsQuery.error ?? versionQuery.error) instanceof ApiError ? (formsQuery.error ?? versionQuery.error as ApiError).message : 'TASK forma nije dostupna.'}</p> : null}
-            {!effectiveForm && !formsQuery.isPending && <p role="alert" className="text-sm text-[var(--danger)]">Vrsta nema efektivnu objavljenu TASK formu. Zadatak se ne može kreirati.</p>}
+            {formsQuery.isPending || (effectiveForm && versionQuery.isPending) ? (
+              <p className="text-sm text-fg-muted">Učitavanje objavljene TASK forme…</p>
+            ) : null}
+            {formsQuery.error || versionQuery.error ? (
+              <p role="alert" className="text-sm text-danger">
+                {(formsQuery.error ?? versionQuery.error) instanceof ApiError
+                  ? (formsQuery.error ?? (versionQuery.error as ApiError)).message
+                  : 'TASK forma nije dostupna.'}
+              </p>
+            ) : null}
+            {!effectiveForm && !formsQuery.isPending && (
+              <p role="alert" className="text-sm text-danger">
+                Vrsta nema efektivnu objavljenu TASK formu. Zadatak se ne može kreirati.
+              </p>
+            )}
             {model && versionQuery.data && (
               <>
-                <p className="text-sm text-[var(--fg-muted)]">{effectiveForm?.name} · v{versionQuery.data.version}</p>
-                <FormFields model={model} errors={errors} hiddenKeys={attachmentFields.map((field) => field.key)} idPrefix="task-create" onChange={(key, value) => setFormData((current) => ({ ...current, [key]: value }))} />
+                <p className="text-sm text-fg-muted">
+                  {effectiveForm?.name} · v{versionQuery.data.version}
+                </p>
+                <FormFields
+                  model={model}
+                  errors={errors}
+                  hiddenKeys={attachmentFields.map((field) => field.key)}
+                  idPrefix="task-create"
+                  onChange={(key, value) => setFormData((current) => ({ ...current, [key]: value }))}
+                />
                 {attachmentFields.length > 0 && (
-                  <section className="space-y-3 rounded-md border border-[var(--border)] p-3">
+                  <section className="space-y-3 rounded-md border border-border p-3">
                     <h3 className="text-sm font-medium">Fotografije i prilozi za kreiranje</h3>
-                    {!canUpload && <p className="text-xs text-[var(--warning)]">Za upload je potrebna permisija attachment:upload.</p>}
+                    {!canUpload && (
+                      <p className="text-xs text-warning">
+                        Za upload je potrebna permisija attachment:upload.
+                      </p>
+                    )}
                     {attachmentFields.map((field) => {
-                      const ids = Array.isArray(formData[field.key]) ? formData[field.key] as string[] : [];
-                      const maxFiles = typeof field.validation?.maxFiles === 'number' ? field.validation.maxFiles : undefined;
+                      const ids = Array.isArray(formData[field.key]) ? (formData[field.key] as string[]) : [];
+                      const maxFiles =
+                        typeof field.validation?.maxFiles === 'number'
+                          ? field.validation.maxFiles
+                          : undefined;
                       return (
-                        <Field key={field.key} label={`${field.label}${field.required ? ' *' : ''}`} htmlFor={`task-create-upload-${field.key}`} hint={field.helpText ?? undefined} error={errors[field.key] ?? null}>
+                        <Field
+                          key={field.key}
+                          label={`${field.label}${field.required ? ' *' : ''}`}
+                          htmlFor={`task-create-upload-${field.key}`}
+                          hint={field.helpText ?? undefined}
+                          error={errors[field.key] ?? null}
+                        >
                           <input
                             id={`task-create-upload-${field.key}`}
                             className={inputClassName}
@@ -316,29 +568,81 @@ export function TaskCreatePage() {
                             accept={field.type === 'PHOTO' ? 'image/*' : undefined}
                             multiple
                             disabled={!canUpload || uploadingField !== null || create.isPending}
-                            onChange={(event) => { void uploadFiles(field.key, event.currentTarget.files, maxFiles); event.currentTarget.value = ''; }}
+                            onChange={(event) => {
+                              void uploadFiles(field.key, event.currentTarget.files, maxFiles);
+                              event.currentTarget.value = '';
+                            }}
                           />
-                          <p className="mt-1 text-xs text-[var(--fg-muted)]">Dodano fajlova: {ids.length}{uploadingField === field.key ? ' · Upload u toku…' : ''}</p>
+                          <p className="mt-1 text-xs text-fg-muted">
+                            Dodano fajlova: {ids.length}
+                            {uploadingField === field.key ? ' · Upload u toku…' : ''}
+                          </p>
                         </Field>
                       );
                     })}
-                    {uploadError && <p role="alert" className="text-sm text-[var(--danger)]">{uploadError}</p>}
-                    <p className="text-xs text-[var(--fg-muted)]">Fajlovi će se u istoj transakciji vezati uz zadatak tek nakon serverske validacije.</p>
+                    {uploadError && (
+                      <p role="alert" className="text-sm text-danger">
+                        {uploadError}
+                      </p>
+                    )}
+                    <p className="text-xs text-fg-muted">
+                      Fajlovi će se u istoj transakciji vezati uz zadatak tek nakon serverske validacije.
+                    </p>
                   </section>
                 )}
               </>
             )}
-            <div className="rounded-md bg-[var(--surface-muted)] p-3 text-sm">
-              <p><strong>{title.trim() || selectedType.name}</strong> · {PRIORITY_LABELS[priority]} · {assignMode === 'OPEN_CLAIM' ? 'Slobodno preuzimanje' : assignMode === 'ASSIGN_DIRECT' ? 'Direktna dodjela' : 'Broadcast'}</p>
-              <p className="text-[var(--fg-muted)]">{vehicleItems.find((item) => item.id === vehicleId)?.internalNo ?? 'Bez vozila'} · {dueLocal ? new Date(dueLocal).toLocaleString('bs-BA') : 'Bez roka'}</p>
+            <div className="rounded-md bg-surface-muted p-3 text-sm">
+              <p>
+                <strong>{title.trim() || selectedType.name}</strong> · {PRIORITY_LABELS[priority]} ·{' '}
+                {assignMode === 'OPEN_CLAIM'
+                  ? 'Slobodno preuzimanje'
+                  : assignMode === 'ASSIGN_DIRECT'
+                    ? 'Direktna dodjela'
+                    : 'Broadcast'}
+              </p>
+              <p className="text-fg-muted">
+                {vehicleItems.find((item) => item.id === vehicleId)?.internalNo ?? 'Bez vozila'} ·{' '}
+                {dueLocal ? new Date(dueLocal).toLocaleString('bs-BA') : 'Bez roka'}
+              </p>
             </div>
           </CardContent>
         </Card>
       )}
 
       <div className="flex flex-wrap justify-between gap-2">
-        <Button variant="ghost" disabled={step === 1 || create.isPending} onClick={() => { setMessage(null); setStep((current) => current - 1); }}>Nazad</Button>
-        {step < 3 ? <Button onClick={nextStep}>Nastavi</Button> : <Button loading={create.isPending} disabled={!effectiveForm || !model || formsQuery.isPending || versionQuery.isPending || Boolean(versionQuery.error) || uploadingField !== null} onClick={() => { setMessage(null); setErrors({}); create.mutate(); }}>Kreiraj zadatak</Button>}
+        <Button
+          variant="ghost"
+          disabled={step === 1 || create.isPending}
+          onClick={() => {
+            setMessage(null);
+            setStep((current) => current - 1);
+          }}
+        >
+          Nazad
+        </Button>
+        {step < 3 ? (
+          <Button onClick={nextStep}>Nastavi</Button>
+        ) : (
+          <Button
+            loading={create.isPending}
+            disabled={
+              !effectiveForm ||
+              !model ||
+              formsQuery.isPending ||
+              versionQuery.isPending ||
+              Boolean(versionQuery.error) ||
+              uploadingField !== null
+            }
+            onClick={() => {
+              setMessage(null);
+              setErrors({});
+              create.mutate();
+            }}
+          >
+            Kreiraj zadatak
+          </Button>
+        )}
       </div>
     </main>
   );

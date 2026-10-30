@@ -44,7 +44,9 @@ export function TireSetEditPanel({
     return (
       <Card>
         <CardContent>
-          <p role="status" className="text-sm text-[var(--fg-muted)]">Učitavanje kompleta…</p>
+          <p role="status" className="text-sm text-fg-muted">
+            Učitavanje kompleta…
+          </p>
         </CardContent>
       </Card>
     );
@@ -56,7 +58,7 @@ export function TireSetEditPanel({
         <CardHeader title="Izmjena kompleta guma" />
         <CardContent>
           <div className="space-y-3">
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {detailQuery.error instanceof ApiError
                 ? detailQuery.error.message
                 : 'Komplet nije moguće učitati.'}
@@ -184,7 +186,7 @@ function TireSetEditForm({
           }}
         >
           {original.mountedVehicleId && (
-            <p className="text-sm text-[var(--fg-muted)]">
+            <p className="text-sm text-fg-muted">
               Komplet je trenutno montiran na vozilo{' '}
               <Link className="font-medium hover:underline" to={`/vozila/${original.mountedVehicleId}`}>
                 {original.mountedVehicleInternalNo ?? 'otvori vozilo'}
@@ -194,13 +196,13 @@ function TireSetEditForm({
           )}
 
           {original.formSchemaVersionId && !model && (
-            <p role="alert" className="text-sm text-[var(--warning)]">
+            <p role="alert" className="text-sm text-warning">
               Definicija zapisne forme nije dostupna. Strukturirana polja možete mijenjati; dodatna polja se
               neće slati niti mijenjati.
             </p>
           )}
           {!original.formSchemaVersionId && (
-            <p className="text-sm text-[var(--fg-muted)]">
+            <p className="text-sm text-fg-muted">
               Komplet nema zapisnu verziju forme, pa su dostupna samo strukturirana polja.
             </p>
           )}
@@ -215,7 +217,7 @@ function TireSetEditForm({
               onChange={changeCore}
             />
 
-            <section className="rounded-md border border-[var(--border)] p-3">
+            <section className="rounded-md border border-border p-3">
               <Field
                 label="Status kompleta"
                 htmlFor="komplet-guma-izmjena-status"
@@ -251,7 +253,7 @@ function TireSetEditForm({
           </fieldset>
 
           {message && (
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {message}
             </p>
           )}

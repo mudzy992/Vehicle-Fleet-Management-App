@@ -41,7 +41,7 @@ export function TireSetUsagePanel({ tireSet, onClose }: { tireSet: TireSetView; 
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-[var(--fg-muted)]">Učitavanje korištenja kompleta…</p>
+          <p className="text-sm text-fg-muted">Učitavanje korištenja kompleta…</p>
         </CardContent>
       </Card>
     );
@@ -53,7 +53,7 @@ export function TireSetUsagePanel({ tireSet, onClose }: { tireSet: TireSetView; 
         <CardHeader title={`Korištenje kompleta — ${tireSet.code}`} />
         <CardContent>
           <div className="space-y-3">
-            <p role="alert" className="text-sm text-[var(--danger)]">
+            <p role="alert" className="text-sm text-danger">
               {usageQuery.error instanceof ApiError
                 ? usageQuery.error.message
                 : 'Korištenje kompleta nije moguće učitati.'}
@@ -117,7 +117,7 @@ export function TireSetUsagePanel({ tireSet, onClose }: { tireSet: TireSetView; 
           </div>
 
           {summary.activeCycles > 0 && (
-            <p className="text-sm text-[var(--fg-muted)]">
+            <p className="text-sm text-fg-muted">
               Aktivni ciklus još ne ulazi u ukupne kilometre i dane. Njegovi brojači se zaključavaju tek
               demontažom, prema stvarnom završnom datumu i kilometraži.
             </p>
@@ -150,13 +150,13 @@ export function TireSetUsagePanel({ tireSet, onClose }: { tireSet: TireSetView; 
                           <Link className="font-medium hover:underline" to={`/vozila/${vehicle.vehicleId}`}>
                             {vehicle.vehicleInternalNo}
                           </Link>
-                          <p className="text-xs text-[var(--fg-muted)]">
+                          <p className="text-xs text-fg-muted">
                             {vehicle.vehiclePlateNumber ?? 'Bez registarske oznake'}
                           </p>
                         </TD>
                         <TD align="right" className="tabular-nums">
                           <p>{formatInteger(vehicle.totalCycles)}</p>
-                          <p className="text-xs text-[var(--fg-muted)]">
+                          <p className="text-xs text-fg-muted">
                             {formatInteger(vehicle.completedCycles)} završena ·{' '}
                             {formatInteger(vehicle.activeCycles)} aktivna
                           </p>
@@ -170,16 +170,14 @@ export function TireSetUsagePanel({ tireSet, onClose }: { tireSet: TireSetView; 
                         <TD>
                           <p>{dateLabel(vehicle.firstMountedAt)}</p>
                           {vehicle.lastMountedAt !== vehicle.firstMountedAt && (
-                            <p className="text-xs text-[var(--fg-muted)]">
-                              do {dateLabel(vehicle.lastMountedAt)}
-                            </p>
+                            <p className="text-xs text-fg-muted">do {dateLabel(vehicle.lastMountedAt)}</p>
                           )}
                         </TD>
                         <TD>
                           {vehicle.activeSince ? (
                             <>
                               <Badge level="success">Montiran</Badge>
-                              <p className="mt-1 text-xs text-[var(--fg-muted)]">
+                              <p className="mt-1 text-xs text-fg-muted">
                                 od {dateLabel(vehicle.activeSince)}
                               </p>
                               <p className="text-xs">
@@ -217,7 +215,7 @@ export function TireSetUsagePanel({ tireSet, onClose }: { tireSet: TireSetView; 
                           <Link className="font-medium hover:underline" to={`/vozila/${cycle.vehicleId}`}>
                             {cycle.vehicleInternalNo}
                           </Link>
-                          <p className="text-xs text-[var(--fg-muted)]">
+                          <p className="text-xs text-fg-muted">
                             {cycle.vehiclePlateNumber ?? 'Bez registarske oznake'}
                           </p>
                           <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -233,9 +231,7 @@ export function TireSetUsagePanel({ tireSet, onClose }: { tireSet: TireSetView; 
                         </TD>
                         <TD>
                           <p>{dateLabel(cycle.mountedAt)}</p>
-                          <p className="text-xs text-[var(--fg-muted)]">
-                            {formatOdometer(cycle.mountedOdometerKm)}
-                          </p>
+                          <p className="text-xs text-fg-muted">{formatOdometer(cycle.mountedOdometerKm)}</p>
                         </TD>
                         <TD>
                           {cycle.isActive ? (
@@ -243,7 +239,7 @@ export function TireSetUsagePanel({ tireSet, onClose }: { tireSet: TireSetView; 
                           ) : (
                             <>
                               <p>{dateLabel(cycle.dismountedAt)}</p>
-                              <p className="text-xs text-[var(--fg-muted)]">
+                              <p className="text-xs text-fg-muted">
                                 {cycle.dismountedOdometerKm === null
                                   ? '—'
                                   : formatOdometer(cycle.dismountedOdometerKm)}
@@ -253,11 +249,11 @@ export function TireSetUsagePanel({ tireSet, onClose }: { tireSet: TireSetView; 
                         </TD>
                         <TD align="right" className="tabular-nums">
                           <p>{cycle.kmDriven === null ? '—' : formatOdometer(cycle.kmDriven)}</p>
-                          <p className="text-xs text-[var(--fg-muted)]">{daysLabel(cycle.daysInUse)}</p>
+                          <p className="text-xs text-fg-muted">{daysLabel(cycle.daysInUse)}</p>
                         </TD>
                         <TD>
                           <p>{cycle.reason ? statusLabel(cycle.reason, 'tireDismountReason') : '—'}</p>
-                          <p className="text-xs text-[var(--fg-muted)]">
+                          <p className="text-xs text-fg-muted">
                             {cycle.storageLocationOnDismount ?? 'Bez skladišta'}
                           </p>
                         </TD>

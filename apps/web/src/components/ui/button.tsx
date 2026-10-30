@@ -10,7 +10,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
-export type ButtonSize = 'sm' | 'md';
+export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -21,23 +21,22 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT_CLASSES: Readonly<Record<ButtonVariant, string>> = {
-  primary:
-    'bg-[var(--primary)] text-[var(--primary-fg)] hover:opacity-90 disabled:opacity-50 shadow-[var(--shadow-sm)]',
-  secondary:
-    'border border-[var(--border)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--hover)] disabled:opacity-50',
-  ghost: 'text-[var(--fg-muted)] hover:bg-[var(--hover)] hover:text-[var(--fg)] disabled:opacity-50',
-  danger: 'bg-[var(--danger)] text-[var(--primary-fg)] hover:opacity-90 disabled:opacity-50',
+  primary: 'bg-primary text-primary-fg hover:opacity-90 disabled:opacity-50 shadow-sm',
+  secondary: 'border border-border bg-surface text-fg hover:bg-hover disabled:opacity-50',
+  ghost: 'text-fg-muted hover:bg-hover hover:text-fg disabled:opacity-50',
+  danger: 'bg-danger text-primary-fg hover:opacity-90 disabled:opacity-50',
 } as const;
 
 const SIZE_CLASSES: Readonly<Record<ButtonSize, string>> = {
   sm: 'min-h-8 px-3 text-xs gap-1.5',
   md: 'min-h-10 px-4 text-sm gap-2',
+  lg: 'min-h-11 px-5 text-sm gap-2.5',
 } as const;
 
 export function buttonClassName(variant: ButtonVariant = 'secondary', size: ButtonSize = 'md'): string {
   return [
     'inline-flex items-center justify-center rounded-lg font-semibold transition-colors',
-    'focus-visible:outline-2 focus-visible:outline-[var(--primary)]',
+    'focus-visible:outline-2 focus-visible:outline-primary',
     'disabled:cursor-not-allowed',
     VARIANT_CLASSES[variant],
     SIZE_CLASSES[size],
