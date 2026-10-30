@@ -6,7 +6,7 @@
  * ponovo — UI samo ne nudi nemoguće akcije.
  */
 import type { FormSchemaStatus, FormSubject } from '@vfm/shared';
-import type { FormVersionDiff, FormVersionSummary } from '@vfm/shared/schemas';
+import type { FormSchemaDetail, FormVersionDetail, FormVersionDiff, FormVersionSummary } from '@vfm/shared/schemas';
 
 export const FORM_STATUS_LABELS: Readonly<Record<FormSchemaStatus, string>> = {
   DRAFT: 'Nacrt',
@@ -91,6 +91,34 @@ export function suggestedVersionId(
   if (draft) return draft.id;
   if (currentPublishedVersionId) return currentPublishedVersionId;
   return versions[0]?.id ?? null;
+}
+
+export function versionSummaryFromDetail(detail: FormVersionDetail): FormVersionSummary {
+  return {
+    id: detail.id,
+    version: detail.version,
+    status: detail.status,
+    changeNote: detail.changeNote,
+    contentHash: detail.contentHash,
+    mobileCompatible: detail.mobileCompatible,
+    publishedAt: detail.publishedAt,
+    publishedById: detail.publishedById,
+    retiredAt: detail.retiredAt,
+    createdAt: detail.createdAt,
+    recordCount: detail.recordCount,
+  };
+}
+
+export function appendVersionToDetail(
+  current: FormSchemaDetail,
+  created: FormVersionDetail,
+): FormSchemaDetail {
+  if (current.versions.some((version) => version.id === created.id)) return current;
+  return {
+    ...current,
+    versionCount: current.versionCount + 1,
+    versions: [versionSummaryFromDetail(created), ...current.versions],
+  };
 }
 
 export interface DefinitionIssueView {

@@ -20,10 +20,9 @@
  * ⚠️ `active` mora biti deklarisan **prije** `:id`, inače ga Nest tretira kao
  * UUID (docs/07 §2.3 ista zamka).
  *
- * `GET .../versions/:vid` i `GET /form-schemas/active` nose `ETag` =
- * `"<contentHash>"`; uz `If-None-Match` isti tag se vraća `304` bez tijela —
- * objavljena definicija je nepromjenjiva, pa je keš na klijentu siguran
- * (docs/04 §11, mobilna kešira po `contentHash`).
+ * `GET .../versions/:vid` za `PUBLISHED`/`RETIRED` i `GET /active` nose `ETag`
+ * + `Cache-Control: private, no-cache`. `DRAFT` ide s `no-store` (definicija
+ * se mijenja; 304 bi vratio klon prije PUT-a).
  */
 import {
   Body,
@@ -117,6 +116,7 @@ export class FormSchemasController {
   ): Promise<ActiveFormSchema | undefined> {
     const active = await this.forms.active(query);
     const etag = FormSchemasService.etagOf(active.contentHash);
+    response.setHeader('Cache-Control', 'private, no-cache');
     response.setHeader('ETag', etag);
     if (matchesIfNoneMatch(ifNoneMatch, etag)) {
       response.status(HttpStatus.NOT_MODIFIED);
@@ -178,7 +178,7 @@ export class FormSchemasController {
     return outcome.data;
   }
 
-  /** Definicija verzije s `ETag`-om (`If-None-Match` → `304`). */
+  /** Definicija verzije. `DRAFT` nije keširan; ostale nose `ETag`. */
   @Get(':id/versions/:vid')
   @RequirePermissions('form:view')
   async getVersion(
@@ -188,7 +188,12 @@ export class FormSchemasController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<FormVersionDetail | undefined> {
     const version = await this.forms.getVersion(id, vid);
+    if (version.status === 'DRAFT') {
+      response.setHeader('Cache-Control', 'no-store');
+      return version;
+    }
     const etag = FormSchemasService.etagOf(version.contentHash ?? '');
+    response.setHeader('Cache-Control', 'private, no-cache');
     response.setHeader('ETag', etag);
     if (version.contentHash && matchesIfNoneMatch(ifNoneMatch, etag)) {
       response.status(HttpStatus.NOT_MODIFIED);

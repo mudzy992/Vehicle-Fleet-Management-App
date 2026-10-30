@@ -51,6 +51,7 @@ import { useSession } from '../auth/session.js';
 import {
   FORM_STATUS_LABELS,
   SUBJECT_LABELS,
+  appendVersionToDetail,
   availableActions,
   buildDiffLines,
   formatDateTime,
@@ -231,8 +232,14 @@ export function FormsPage() {
       });
     },
     onSuccess: async (created) => {
-      setMessage({ kind: 'ok', text: `Kreirana verzija ${created.version} (nacrt).` });
+      loadedVersionId.current = created.id;
+      setEditor(JSON.stringify(created.definition, null, 2));
       setVersionId(created.id);
+      queryClient.setQueryData(['form-schemas', formId, 'versions', created.id], created);
+      queryClient.setQueryData(['form-schemas', formId], (current: FormSchemaDetail | undefined) =>
+        current ? appendVersionToDetail(current, created) : current,
+      );
+      setMessage({ kind: 'ok', text: `Kreirana verzija ${created.version} (nacrt).` });
       await invalidate();
       await queryClient.invalidateQueries({ queryKey: ['form-schemas', formId] });
     },
@@ -242,6 +249,12 @@ export function FormsPage() {
   const publish = useMutation({
     mutationFn: async () => {
       if (!formId || !versionId) throw new Error('Nema odabrane verzije.');
+      if (actions.includes('edit')) {
+        if (!parsed.ok) throw new Error('Definicija nije ispravna — popravi greške prije objave.');
+        await api.put<FormVersionDetail>(`/form-schemas/${formId}/versions/${versionId}`, {
+          definition: parsed.definition,
+        });
+      }
       const body: PublishFormVersionInput = { changeNote: changeNote.trim() };
       return api.post<FormVersionDetail>(`/form-schemas/${formId}/versions/${versionId}/publish`, body);
     },

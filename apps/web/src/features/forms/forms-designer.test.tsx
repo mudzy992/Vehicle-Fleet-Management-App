@@ -61,4 +61,20 @@ describe('FormsDesigner', () => {
     expect(onChange.mock.lastCall?.[0].sections[0]?.fields).toHaveLength(2);
     expect(onChange.mock.lastCall?.[0].sections[0]?.fields[1]?.label).toBe('Broj šasije');
   });
+
+  it('uklanja polje iz definicije', () => {
+    const onChange = vi.fn();
+    const withTwo = structuredClone(fixture());
+    withTwo.sections[0]!.fields.push({
+      ...withTwo.sections[0]!.fields[0]!,
+      key: 'ocjena',
+      label: 'Ocjena',
+      order: 2,
+    });
+    render(<FormsDesigner definition={withTwo} readOnly={false} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ukloni Napomena' }));
+    expect(onChange.mock.lastCall?.[0].sections[0]?.fields.map((field: { key: string }) => field.key)).toEqual([
+      'ocjena',
+    ]);
+  });
 });

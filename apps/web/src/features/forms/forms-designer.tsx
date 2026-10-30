@@ -370,6 +370,7 @@ export function FormsDesigner({ definition, readOnly, onChange }: Props) {
                   size="sm"
                   variant="danger"
                   disabled={readOnly || definition.sections.length <= 1}
+                  aria-label={`Ukloni sekciju ${sectionIndex + 1}`}
                   onClick={() => deleteSection(sectionIndex)}
                 >
                   Ukloni
@@ -446,6 +447,7 @@ export function FormsDesigner({ definition, readOnly, onChange }: Props) {
                       size="sm"
                       variant="danger"
                       disabled={readOnly || section.fields.length <= 1}
+                      aria-label={`Ukloni ${field.label}`}
                       onClick={() => deleteField(sectionIndex, fieldIndex)}
                     >
                       Ukloni
