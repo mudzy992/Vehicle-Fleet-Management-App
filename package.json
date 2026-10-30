@@ -16,6 +16,8 @@
     "env:check": "node scripts/env-sync-check.mjs",
     "env:check:strict": "node scripts/env-sync-check.mjs --strict",
     "design-tokens:check": "node scripts/check-design-tokens.mjs",
+    "audit:frontend": "node scripts/audit-frontend.mjs",
+    "audit:frontend:ci": "node scripts/audit-frontend.mjs --ci",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml,css}\"",
     "lint": "turbo run lint",

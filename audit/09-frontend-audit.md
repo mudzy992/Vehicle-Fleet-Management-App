@@ -1,7 +1,7 @@
 # 09 — Frontend audit (web/mobile)
 
 **Datum:** 28.10.2026
-**Stanje:** u toku; ovaj izvještaj ne zatvara nalaze bez izvršenog dokaza.
+**Stanje:** u toku; ovaj izvještaj ne zatvara nalaze bez izvršenog dokaza. Dopunjeni završni web audit, matrični skriptovi i implementacijski plan: [`docs/FRONTEND_FINAL_AUDIT_IMPLEMENTATION.md`](../docs/FRONTEND_FINAL_AUDIT_IMPLEMENTATION.md); izvještaji/obavijesti ostaju guarded future-phase kosturi.
 
 ## Sažetak provedenog
 
