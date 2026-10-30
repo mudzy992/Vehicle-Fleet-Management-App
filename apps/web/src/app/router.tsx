@@ -129,6 +129,10 @@ const TasksPage = lazyPage(() =>
   import('../features/tasks/tasks-page.js').then((module) => ({ default: module.TasksPage })),
 );
 
+const ReportsPage = lazyPage(() =>
+  import('../features/reports/reports-page.js').then((module) => ({ default: module.ReportsPage })),
+);
+
 const TaskDetailPage = lazyPage(() =>
   import('../features/tasks/task-detail-page.js').then((module) => ({ default: module.TaskDetailPage })),
 );
@@ -325,12 +329,7 @@ export const appRoutes = [
         path: 'izvjestaji',
         element: (
           <RequirePermission permission="report:view">
-            <PlaceholderPage
-              title="Izvještaji"
-              code="W22"
-              phase="Faza 7"
-              description="Izvještaji nad SQL view-ovima s izvozom u PDF i Excel."
-            />
+            <ReportsPage />
           </RequirePermission>
         ),
       },

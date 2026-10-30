@@ -17,6 +17,8 @@
  * ------------------------------------------------------------------------- */
 :root {
   --primary: #c6f75a;
+  --task-cta-bg: #c6f75a;
+  --task-cta-fg: #11170c;
   --primary-soft: #2a3a1b;
   --primary-fg: #11170c;
 
@@ -62,6 +64,8 @@
 /* Dostupna svijetla varijanta; koristi se samo uz eksplicitan data-theme. */
 [data-theme='light'] {
   --primary: #597b16;
+  --task-cta-bg: #c6f75a;
+  --task-cta-fg: #11170c;
   --primary-soft: #e7f4ce;
   --primary-fg: #ffffff;
   --bg: #f5f7f2;
@@ -1096,6 +1100,20 @@ button:active:not(:disabled) {
   }
 }
 
+.vfm-task-create-cta {
+  background-color: var(--task-cta-bg);
+  color: var(--task-cta-fg);
+}
+.vfm-report-filter-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.vfm-report-table {
+  min-width: 42rem;
+}
+.vfm-task-create-cta:hover {
+  filter: brightness(0.94);
+}
+
 /* Named responsive layout patterns: consumers use semantic classes, not one-off arbitrary grids. */
 .vfm-grid-2-1,
 .vfm-grid-1-2,
@@ -1105,6 +1123,9 @@ button:active:not(:disabled) {
   grid-template-columns: minmax(0, 1fr);
 }
 @media (min-width: 64rem) {
+  .vfm-report-filter-grid {
+    grid-template-columns: minmax(14rem, 1.4fr) repeat(3, minmax(10rem, 1fr));
+  }
   .vfm-grid-2-1 {
     grid-template-columns: var(--layout-two-one);
   }

@@ -116,7 +116,7 @@ export function TasksPage() {
           </p>
         </div>
         {hasPermission('task:create') && (
-          <Link className={buttonClassName('primary', 'lg')} to="/zadaci/novi">
+          <Link className={`${buttonClassName('primary', 'lg')} vfm-task-create-cta`} to="/zadaci/novi">
             Novi zadatak
           </Link>
         )}

@@ -82,8 +82,8 @@ if (!reportsRoute) failures.push('/izvjestaji: očekivana ruta nedostaje.');
 else {
   if (reportsRoute.permission !== 'report:view')
     failures.push('/izvjestaji: permission guard mora biti report:view.');
-  if (!reportsRoute.placeholder || !reportsRoute.source.includes('title="Izvještaji"'))
-    failures.push('/izvjestaji: mora ostati namjerni permission-guarded placeholder.');
+  if (!reportsRoute.source.includes('<ReportsPage />'))
+    failures.push('/izvjestaji: mora prikazivati implementirani ReportsPage.');
 }
 
 if (failures.length) {
@@ -95,9 +95,7 @@ if (failures.length) {
   console.log(
     `✅ Route matrix: ${navItems.length} navigacijskih stavki mapirano na rute; permission guardovi su usklađeni.`,
   );
-  console.log(
-    '✅ /obavijesti je implementiran uz notification:view; /izvjestaji ostaje namjerni report:view placeholder.',
-  );
+  console.log('✅ /obavijesti i /izvjestaji su implementirani uz notification:view i report:view guardove.');
 }
 for (const warning of warnings) console.warn(`⚠️ ${warning}`);
 

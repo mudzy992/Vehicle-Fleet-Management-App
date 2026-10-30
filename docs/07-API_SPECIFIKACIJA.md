@@ -463,6 +463,12 @@ dan `dueDate − threshold` (CET/CEST se računa iz zone, ne fiksno +1). Polise 
 | GET | `/reports/dashboard` | `auth:login` — KPI za nadzornu ploču |
 | GET/POST/PATCH/DELETE | `/reports/definitions[/:id]` | `report:manage_definitions` |
 
+**MVP status (web):** implementirani su katalog šest ugrađenih izvještaja, lista vozila
+u dozvoljenom opsegu, JSON podaci s filterima `from`, `to`, `vehicleId` i CSV izvoz
+(`GET /reports/:code/export`, zahtijeva `report:view` i `report:export`). Detaljni izvještaji
+vraćaju najviše 1.000 redova. PDF/XLSX, async `ExportJob`, Download centar, dashboard i
+upravljanje definicijama ostaju planirani.
+
 ### 2.16 Audit, postavke, sistem
 
 ```

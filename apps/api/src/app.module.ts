@@ -33,6 +33,7 @@ import { DriversModule } from './modules/drivers/drivers.module.js';
 import { ServicesModule } from './modules/services/services.module.js';
 import { TaskTypesModule } from './modules/task-types/task-types.module.js';
 import { TasksModule } from './modules/tasks/tasks.module.js';
+import { ReportsModule } from './modules/reports/reports.module.js';
 import { RegistrationsModule } from './modules/registrations/registrations.module.js';
 import { InsurancesModule } from './modules/insurances/insurances.module.js';
 import { RemindersModule } from './modules/reminders/reminders.module.js';
@@ -73,6 +74,7 @@ import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
     ServicesModule,
     TaskTypesModule,
     TasksModule,
+    ReportsModule,
     TiresModule,
     InsurancesModule,
     // Podsjetnici (docs/07 §2.14) — idempotentni skener (P-07).

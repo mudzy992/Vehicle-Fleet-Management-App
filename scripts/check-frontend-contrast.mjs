@@ -82,7 +82,7 @@ const taskLinkStart = taskCreateTarget < 0 ? -1 : taskList.lastIndexOf('<Link', 
 const taskLinkEnd = taskCreateTarget < 0 ? -1 : taskList.indexOf('</Link>', taskCreateTarget);
 const newTaskAnchor =
   taskLinkStart >= 0 && taskLinkEnd >= 0 ? taskList.slice(taskLinkStart, taskLinkEnd) : '';
-const ctaClass = newTaskAnchor.match(/className=\{buttonClassName\('primary',\s*'lg'\)\}/)?.[0] ?? '';
+const ctaClass = newTaskAnchor.includes("buttonClassName('primary', 'lg')") ? 'buttonClassName' : '';
 const sharedButton = await readFile(
   path.join(process.cwd(), 'apps/web/src/components/ui/button.tsx'),
   'utf8',
