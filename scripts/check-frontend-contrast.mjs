@@ -89,9 +89,15 @@ const sharedButton = await readFile(
   'utf8',
 );
 const primaryVariant = sharedButton.match(/primary:\s*'([^']+)'/)?.[1] ?? '';
+const primaryCss = declarationBlock('.vfm-button-primary') ?? '';
 const ctaStyle = {
-  hasSemanticForeground: primaryVariant.includes('text-button-primary-fg'),
-  hasSemanticBackground: primaryVariant.includes('bg-button-primary'),
+  hasSemanticForeground:
+    primaryVariant.includes('text-button-primary-fg') ||
+    (primaryVariant.includes('vfm-button-primary') && primaryCss.includes('color: var(--button-primary-fg)')),
+  hasSemanticBackground:
+    primaryVariant.includes('bg-button-primary') ||
+    (primaryVariant.includes('vfm-button-primary') &&
+      primaryCss.includes('background-color: var(--button-primary)')),
   usesOpacityHover: primaryVariant.includes('hover:opacity-90'),
   usesSharedPrimitive: ctaClass.length > 0,
 };
