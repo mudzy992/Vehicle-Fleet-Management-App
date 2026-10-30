@@ -1109,6 +1109,13 @@ button:active:not(:disabled) {
   min-width: 42rem;
 }
 
+/* Primary action colors are kept on the semantic component token, outside Tailwind
+   utility layers so inherited link/button rules cannot change the label contrast. */
+.vfm-button-primary {
+  color: var(--button-primary-fg);
+  background-color: var(--button-primary);
+}
+
 /* Named responsive layout patterns: consumers use semantic classes, not one-off arbitrary grids. */
 .vfm-grid-2-1,
 .vfm-grid-1-2,

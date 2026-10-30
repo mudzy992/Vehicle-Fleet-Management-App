@@ -21,7 +21,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT_CLASSES: Readonly<Record<ButtonVariant, string>> = {
-  primary: 'bg-button-primary text-button-primary-fg hover:opacity-90 disabled:opacity-50 shadow-sm',
+  primary: 'vfm-button-primary hover:opacity-90 disabled:opacity-50 shadow-sm',
   secondary: 'border border-border bg-surface text-fg hover:bg-hover disabled:opacity-50',
   ghost: 'text-fg-muted hover:bg-hover hover:text-fg disabled:opacity-50',
   danger: 'bg-danger text-primary-fg hover:opacity-90 disabled:opacity-50',
