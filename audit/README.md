@@ -29,6 +29,7 @@ Nalazi su označeni kao:
 8. [08 — Status nalaza i odluka](08-status-registar.md)
 9. [09 — Ponovljivi frontend audit](09-frontend-audit.md)
 10. [10 — Web UI standard, obrasci i obavijesti](10-web-ui-standard-obavijesti-forme.md)
+11. [11 — Audit mobilne aplikacije](11-mobile-audit.md) — [ekrani](11-mobile-ekrani.md), [nalazi](11-mobile-nalazi.md), [verifikacija](11-mobile-verifikacija.md)
 
 ## Sažetak baseline-a
 

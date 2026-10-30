@@ -38,7 +38,7 @@ Playwright (web E2E), Maestro (mobilni E2E), k6 (load/stress), gitleaks + `pnpm 
 | **P1** | Super Admin: web OK, mobilno NE | 1, 6 | unit ✅ + integration + e2e | ✅ `apps/api/test/unit/auth-service.spec.ts`, `auth-controller.spec.ts`, `auth-guards.spec.ts`; ⏳ `apps/api/test/e2e/auth-superadmin-mobile-blocked.spec.ts` | 1) login `clientType=WEB` → 200; 2) login `MOBILE_ANDROID` → 403 `MOBILE_ACCESS_FORBIDDEN`; 3) web token poslan s `X-Client-Type: MOBILE_ANDROID` na `/tasks` → 403 `MOBILE_SCOPE_NOT_ALLOWED`; 4) audit `SECURITY` zapis postoji; 5) Maestro: mobilni login Super Admina prikazuje poruku |
 | **P2** | Kreiranje rola i izmjena prava | 1 | unit ✅ + integration | ✅ `roles-service.spec.ts`, `roles-controller.spec.ts`; ⏳ `roles-matrix.integration.spec.ts` | `POST /roles` → 201; `PUT /roles/matrix` (dodaj `vehicle:create` za `OBICNI_KORISNIK`) → 200; `GET /roles/matrix` odražava promjenu; audit diff sadrži 3 izmjene |
 | **P3** | Oduzeto pravo odmah blokira API | 1 | unit ✅ + integration | ✅ `permissions-service.spec.ts`, `auth-guards.spec.ts`, `auth-service.spec.ts` (`me` nakon revokacije); ⏳ `rbac-revocation-latency.integration.spec.ts` | korisnik s `vehicle:create` → `POST /vehicles` 201; oduzeti pravo → isti **access token** (bez re-logina) → `POST /vehicles` 403 u ≤ 5 s; mjeri se `Date.now()` delta i tvrdi `< 5000` |
-| **P4** | Admin kreira zadatak na mobilu | 5, 6 | e2e ⏳ — preneseno u Fazu 6 | Maestro flow još nije dodat; mobilni ekran postoji | Kriterij nije potvrđen: login administratora → FAB → wizard → vozilo/tip → kreiranje → zadatak vidljiv u listi i na webu; korisniku bez `task:create` FAB ne postoji, a `POST /tasks` vraća 403. Zatvaranje Faze 5 odobreno uz ovaj izuzetak; zahtjev ostaje otvoren za Fazu 6. Izvoditi samo nad disposable staging/test okruženjem, nikad produkcijom |
+| **P4** | Admin kreira zadatak na mobilu | 5, 6 | e2e YAML | `apps/mobile/.maestro/task-create-admin.yaml` + `task-create-no-permission.yaml` + `verify-p4-api.mjs` | Login administratora → FAB → wizard → WASH/VFM-001 → kreiranje; korisniku bez `task:create` nema FAB-a; `POST /tasks` 403. Izvoditi samo nad disposable CI, nikad produkcijom |
 | **P5** | Oba korisnika vide/dobiju slobodan zadatak | 5, 6 | integration | `task-open-visibility.integration.spec.ts` | zadatak `OPEN_CLAIM` s 2 pozvana → `GET /tasks/available` vraća zadatak za oba; `Notification` postoji za oba (unique `notificationKey`); outbox `PROCESSED`; nakon claim-a drugi korisnik vidi `assigneeName` |
 | **P6** | Paralelno preuzimanje → tačno 1 izvršilac | 5, 6 | **stress** | `task-claim-http-idempotency.stress.spec.ts` + `task-claim-stress.stress.spec.ts` (CI **40213791946**) | 200 HTTP `POST /tasks/:id/claim` kroz Nest uz stvarni Redis Idempotency-Key i izolovani PostgreSQL; 199 korisnika, jedan korisnik šalje drugi zahtjev; tačno jedan 200 i 199 `TASK_ALREADY_CLAIMED`; `IN_PROGRESS`, jedan ASSIGNEE/CLAIMED/Outbox; isti ključ pobjednika vraća identičan status/body bez novog reda |
 | **P7** | Samo izvršilac/ovlaštena osoba završava | 5 | integration | `task-complete-authorization.integration.spec.ts` (CI **40217060801**) | korisnik B (nije izvršilac, nema override) → 403 bez status/event promjene; izvršilac → 200; korisnik C s `task:complete_override` → 200 + `OVERRIDE_COMPLETED` + AuditLog; dodatno trigger namjerno ruši `TaskEvent` insert nakon `Task` update-a → 500, a SQL potvrđuje rollback status/version/completedAt i nula event/outbox redova; interceptor zabilježi failure audit. Atomsku vezu uspješnog AuditLog upisa i task transakcije ova provjera ne tvrdi. |
@@ -236,15 +236,15 @@ integration 100 % prolaznost, **stress P6 100 % prolaznost**, security 0 high/cr
 
 ## 9. E2E scenariji (Maestro, mobilna)
 
-| # | Scenarij |
-|---|---|
-| M-E1 | Login administratora → FAB → kreiraj zadatak → potvrda |
-| M-E2 | Login korisnika → Slobodni → Preuzmi → „Tvoj zadatak" |
-| M-E3 | Dva emulatora istovremeno Preuzmi → jedan 200, drugi dijalog s imenom |
-| M-E4 | Završi zadatak → forma → kamera (mock) → upload → potvrda → push administratoru |
-| M-E5 | Super Admin login → odbijen s porukom (P1) |
-| M-E6 | Offline: avion režim → lista iz keša + banner → online → sinkronizacija |
-| M-E7 | Logout → token deregistrovan → push ne dolazi |
+| # | Scenarij | Dokaz |
+|---|---|---|
+| M-E1 | Login administratora → FAB → kreiraj zadatak → potvrda | `task-create-admin.yaml` |
+| M-E2 | Login korisnika → Slobodni → Preuzmi → „U radu" | `task-claim-complete-lite.yaml` |
+| M-E3 | Dva emulatora istovremeno Preuzmi | API stress; nije Maestro |
+| M-E4 | Završi zadatak (lite, INTERNAL, bez kamere) | isti YAML; kamera/FCM nisu CI |
+| M-E5 | Super Admin login → spec poruka (P1) | `super-admin-forbidden.yaml` |
+| M-E6 | Offline keš | namjerno nije (online-first) |
+| M-E7 | Logout → prijava | `logout.yaml` (nema push assertion dok FCM off) |
 
 ---
 

@@ -34,9 +34,9 @@ concurrency:
 
 jobs:
   mobile-task-create:
-    name: P4 Maestro task-create (isolated CI stack)
+    name: Mobile Maestro E2E (isolated CI stack)
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 70
     services:
       postgres:
         image: postgres:17-alpine
@@ -93,7 +93,7 @@ jobs:
           seed_log="$RUNNER_TEMP/mobile-e2e-seed.log"
           trap 'rm -f "$seed_log"' EXIT
           if ! pnpm --filter @vfm/api seed >"$seed_log" 2>&1; then
-            sed -E 's/(admin@vfm\.local|vozac@vfm\.local).*/\1 [MASKED]/' "$seed_log" | tail -n 40
+            sed -E 's/(admin@vfm\.local|vozac@vfm\.local|superadmin@vfm\.local).*/\1 [MASKED]/' "$seed_log" | tail -n 40
             exit 1
           fi
           SEED_LOG_PATH="$seed_log" node --input-type=module <<'NODE'
@@ -109,7 +109,8 @@ jobs:
           if (!adminPassword || !userPassword) throw new Error('Seed nije izdao oba jednokratna demo naloga.');
           const testAdminPassword = randomBytes(32).toString('hex');
           const testUserPassword = randomBytes(32).toString('hex');
-          for (const password of [adminPassword, userPassword, testAdminPassword, testUserPassword]) {
+          const testSuperPassword = randomBytes(32).toString('hex');
+          for (const password of [adminPassword, userPassword, testAdminPassword, testUserPassword, testSuperPassword]) {
             console.log(`::add-mask::${password}`);
           }
           appendFileSync(process.env.GITHUB_ENV, [
@@ -117,7 +118,10 @@ jobs:
             `TEST_ADMIN_PASSWORD=${testAdminPassword}`,
             'TEST_USER_EMAIL=vozac@vfm.local',
             `TEST_USER_PASSWORD=${testUserPassword}`,
+            'TEST_SUPER_ADMIN_EMAIL=superadmin@vfm.local',
+            `TEST_SUPER_ADMIN_PASSWORD=${testSuperPassword}`,
             `TEST_RUN_ID=${process.env.GITHUB_RUN_ID}`,
+            `CLAIM_TASK_TITLE=P4-CLAIM-${process.env.GITHUB_RUN_ID}`,
             '',
           ].join('\n'));
           NODE
@@ -173,6 +177,10 @@ jobs:
         env:
           P4_E2E_API_URL: http://127.0.0.1:3000/api/v1
         run: node apps/mobile/scripts/verify-p4-auth.mjs
+      - name: Pripremi OPEN WASH zadatak za claim/complete Maestro
+        env:
+          P4_E2E_API_URL: http://127.0.0.1:3000/api/v1
+        run: node apps/mobile/scripts/prepare-claim-task.mjs
       - name: Instaliraj Android NDK uz retry na oštećen download
         shell: bash
         run: |
@@ -278,8 +286,8 @@ jobs:
           timeout 15s adb logcat -d -t 500 2>/dev/null \
             | grep -E 'ReactNativeJS|AndroidRuntime|ActivityTaskManager|FATAL EXCEPTION|Expo|ReactNative' \
             | tail -n 10 \
-            | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local/[MASKED EMAIL]/g' \
-                -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
+            | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local|superadmin@vfm[.]local/[MASKED EMAIL]/g' \
+                -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_SUPER_ADMIN_PASSWORD:-}/[MASKED]/g" \
             | while IFS= read -r line; do echo "::error title=Android runtime diagnostic::$line"; done || true
           echo '::endgroup::'
           rm -f "$RUNNER_TEMP/mobile-e2e-window.xml"

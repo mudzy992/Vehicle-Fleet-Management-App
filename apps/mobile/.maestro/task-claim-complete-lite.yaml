@@ -1,0 +1,57 @@
+appId: ba.ba101.voznipark
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: "Idi na prijava"
+    commands:
+      - tapOn: "Idi na prijava"
+- extendedWaitUntil:
+    visible: "Prijava"
+    timeout: 30000
+- tapOn:
+    id: "login-email"
+- inputText: ${TEST_USER_EMAIL}
+- pressKey: Enter
+- assertVisible:
+    id: "login-password"
+- inputText: ${TEST_USER_PASSWORD}
+- pressKey: Enter
+- assertNotVisible: "Prijava"
+- extendedWaitUntil:
+    visible: "Moji zadaci"
+    timeout: 30000
+- tapOn: "Slobodni"
+- extendedWaitUntil:
+    visible: ${CLAIM_TASK_TITLE}
+    timeout: 30000
+- tapOn: ${CLAIM_TASK_TITLE}
+- extendedWaitUntil:
+    visible: "Preuzmi zadatak"
+    timeout: 30000
+- scrollUntilVisible:
+    element: "Unutrašnje"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Unutrašnje"
+- scrollUntilVisible:
+    element:
+      id: "task-claim-submit"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: "task-claim-submit"
+- extendedWaitUntil:
+    visible: "U radu"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "task-complete-submit"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: "task-complete-submit"
+- extendedWaitUntil:
+    visible: "Završen"
+    timeout: 30000

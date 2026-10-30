@@ -10,9 +10,10 @@ sanitize_maestro_debug() {
     case "$file" in
       *.log|*.json|*.yaml|*.txt)
         sed -i -E \
-          -e 's/admin@vfm[.]local|vozac@vfm[.]local/[MASKED EMAIL]/g' \
+          -e 's/admin@vfm[.]local|vozac@vfm[.]local|superadmin@vfm[.]local/[MASKED EMAIL]/g' \
           -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" \
           -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
+          -e "s/${TEST_SUPER_ADMIN_PASSWORD:-}/[MASKED]/g" \
           "$file"
         diagnostics+=("$file")
         ;;
@@ -40,16 +41,16 @@ sanitize_maestro_debug() {
         | while IFS= read -r line; do echo "::error title=Android device (in-script)::$line"; done || true
       timeout 8s adb shell uiautomator dump /sdcard/p4-window.xml >/dev/null 2>&1 || true
       timeout 8s adb shell cat /sdcard/p4-window.xml 2>/dev/null \
-        | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local/[MASKED EMAIL]/g' \
-            -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
+        | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local|superadmin@vfm[.]local/[MASKED EMAIL]/g' \
+            -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_SUPER_ADMIN_PASSWORD:-}/[MASKED]/g" \
         | grep -E 'login-email|login-password|E-mail|Lozinka|focused=|Prijava' \
         | head -n 15 \
         | while IFS= read -r line; do echo "::error title=Android UI node::$line"; done || true
       timeout 10s adb logcat -d -t 400 2>/dev/null \
         | grep -E 'ReactNativeJS|AndroidRuntime|ActivityTaskManager|FATAL EXCEPTION|Expo|ReactNative' \
         | tail -n 10 \
-        | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local/[MASKED EMAIL]/g' \
-            -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
+        | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local|superadmin@vfm[.]local/[MASKED EMAIL]/g' \
+            -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_SUPER_ADMIN_PASSWORD:-}/[MASKED]/g" \
         | while IFS= read -r line; do echo "::error title=Android runtime (in-script)::$line"; done || true
       {
         echo "host_memory: $(free -h 2>/dev/null | tail -n 1 || true)"
@@ -152,7 +153,7 @@ run_stage() {
         case "$file" in
           *.log|*.json|*.yaml|*.txt|*.xml|*.html|*.md)
             sed -i -E \
-              -e 's/admin@vfm[.]local|vozac@vfm[.]local/[MASKED EMAIL]/g' \
+              -e 's/admin@vfm[.]local|vozac@vfm[.]local|superadmin@vfm[.]local/[MASKED EMAIL]/g' \
               -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" \
               -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
               "$file"
@@ -181,7 +182,7 @@ run_stage() {
         adb logcat -d -t 300 2>/dev/null \
           | grep -E 'ReactNativeJS|AndroidRuntime|ActivityTaskManager|FATAL EXCEPTION|Expo|ReactNative' \
           | tail -n 60 \
-          | sed -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" \
+          | sed -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_SUPER_ADMIN_PASSWORD:-}/[MASKED]/g" \
           | while IFS= read -r line; do echo "::error title=Android app diagnostic::$line"; done || true
       else
         echo '::error title=Emulator diagnostic::adb is unavailable in the E2E script environment.'
@@ -214,4 +215,7 @@ run_stage android-provision bash -c '
 run_stage android-install adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
 run_stage maestro-admin maestro test --debug-output "$RUNNER_TEMP/maestro-debug-admin" --flatten-debug-output -e TEST_ADMIN_EMAIL="$TEST_ADMIN_EMAIL" -e TEST_ADMIN_PASSWORD="$TEST_ADMIN_PASSWORD" -e TEST_RUN_ID="$TEST_RUN_ID" apps/mobile/.maestro/task-create-admin.yaml
 run_stage maestro-user maestro test --debug-output "$RUNNER_TEMP/maestro-debug-user" --flatten-debug-output -e TEST_USER_EMAIL="$TEST_USER_EMAIL" -e TEST_USER_PASSWORD="$TEST_USER_PASSWORD" apps/mobile/.maestro/task-create-no-permission.yaml
+run_stage maestro-superadmin maestro test --debug-output "$RUNNER_TEMP/maestro-debug-superadmin" --flatten-debug-output -e TEST_SUPER_ADMIN_EMAIL="$TEST_SUPER_ADMIN_EMAIL" -e TEST_SUPER_ADMIN_PASSWORD="$TEST_SUPER_ADMIN_PASSWORD" apps/mobile/.maestro/super-admin-forbidden.yaml
+run_stage maestro-claim maestro test --debug-output "$RUNNER_TEMP/maestro-debug-claim" --flatten-debug-output -e TEST_USER_EMAIL="$TEST_USER_EMAIL" -e TEST_USER_PASSWORD="$TEST_USER_PASSWORD" -e CLAIM_TASK_TITLE="$CLAIM_TASK_TITLE" apps/mobile/.maestro/task-claim-complete-lite.yaml
+run_stage maestro-logout maestro test --debug-output "$RUNNER_TEMP/maestro-debug-logout" --flatten-debug-output -e TEST_USER_EMAIL="$TEST_USER_EMAIL" -e TEST_USER_PASSWORD="$TEST_USER_PASSWORD" apps/mobile/.maestro/logout.yaml
 run_stage api-assertions env P4_E2E_API_URL=http://127.0.0.1:3000/api/v1 node apps/mobile/scripts/verify-p4-api.mjs

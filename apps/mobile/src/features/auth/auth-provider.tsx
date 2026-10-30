@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { mobileApi, onAuthExpired, toUserMessage, type MobileUser } from '@/lib/api';
+import { registerPushToken, unregisterPushToken } from '@/features/notifications/push-registration';
 
 interface AuthContextValue {
   user: MobileUser | null;
@@ -21,7 +22,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setLoading(true);
     setError(null);
     try {
-      setUser(await mobileApi.restore());
+      const profile = await mobileApi.restore();
+      setUser(profile);
+      if (profile) await registerPushToken(profile.permissions);
     } catch (cause) {
       setError(toUserMessage(cause, 'Sesija se nije mogla obnoviti.'));
     } finally {
@@ -43,6 +46,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       const profile = await mobileApi.login(email.trim(), password);
       setUser(profile);
+      await registerPushToken(profile.permissions);
       return profile;
     } catch (cause) {
       const message = toUserMessage(cause, 'Prijava nije uspjela.');
@@ -54,6 +58,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const signOut = useCallback(async () => {
     setError(null);
     try {
+      await unregisterPushToken();
       await mobileApi.logout();
     } catch {
       // Lokalni token se uklanja i kad mreža nije dostupna.

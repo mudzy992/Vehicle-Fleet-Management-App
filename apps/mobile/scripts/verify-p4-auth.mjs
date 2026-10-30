@@ -1,7 +1,8 @@
 const rawBaseUrl = process.env.P4_E2E_API_URL;
 const credentials = [
-  ['admin', process.env.TEST_ADMIN_EMAIL, process.env.TEST_ADMIN_PASSWORD],
-  ['ordinary user', process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD],
+  ['admin', process.env.TEST_ADMIN_EMAIL, process.env.TEST_ADMIN_PASSWORD, 200],
+  ['ordinary user', process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD, 200],
+  ['super admin', process.env.TEST_SUPER_ADMIN_EMAIL, process.env.TEST_SUPER_ADMIN_PASSWORD, 403],
 ];
 
 if (!rawBaseUrl || credentials.some(([, email, password]) => !email || !password)) {
@@ -14,7 +15,7 @@ if (apiBase.protocol !== 'http:' || !['localhost', '127.0.0.1'].includes(apiBase
 }
 
 const apiRoot = `${apiBase.origin}${apiBase.pathname.replace(/\/$/u, '')}`;
-for (const [label, email, password] of credentials) {
+for (const [label, email, password, expectedStatus] of credentials) {
   const response = await fetch(`${apiRoot}/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-client-type': 'MOBILE_ANDROID' },
@@ -26,9 +27,15 @@ for (const [label, email, password] of credentials) {
     }),
   });
   const payload = await response.json();
-  if (!response.ok || typeof payload.data?.accessToken !== 'string') {
-    throw new Error(`P4 prijava za ${label} nije uspjela (HTTP ${response.status}).`);
+  if (expectedStatus === 200) {
+    if (!response.ok || typeof payload.data?.accessToken !== 'string') {
+      throw new Error(`P4 prijava za ${label} nije uspjela (HTTP ${response.status}).`);
+    }
+    continue;
+  }
+  if (response.status !== 403 || payload.error?.code !== 'MOBILE_ACCESS_FORBIDDEN') {
+    throw new Error(`P1 Super Admin mora biti 403 MOBILE_ACCESS_FORBIDDEN (dobijeno HTTP ${response.status}).`);
   }
 }
 
-console.log('P4 auth preflight: oba privremena naloga mogu se prijaviti kao MOBILE_ANDROID.');
+console.log('P4 auth preflight: demo nalozi se prijavljuju; Super Admin je 403 MOBILE_ACCESS_FORBIDDEN.');

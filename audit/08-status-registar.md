@@ -20,6 +20,7 @@ Ovaj registar dopunjava tehnički audit. Statusi se ažuriraju uz test ili refer
 | A-14 | Lockout counter, rate-limit TTL failure, nested audit redaction, global permission version | UNIT VERIFIED | API regresije; full API suite 916/916 |
 | A-15 | Faza 1 puna lokalna kvalitet-kapija | CLOSED (local gate only) | `turbo run lint typecheck test build`: 25/25; API 916/916. Ne zamjenjuje live DB/Redis/E2E. |
 | A-16 | Browser chrome i mobile shadow nisu bili potpuno usklađeni s dizajn tokenima | FIXED / LOCAL VERIFIED; CI PENDING | `theme-color` sada prati `--bg`, mobile shadow koristi `colors.shadow`, color-picker fallback koristi `--neutral`; token guard prolazi 19 web/mobile parova + 11 kontrastnih kombinacija; web suite 217/217. Čekati novi CI run. |
+| A-17 | Native mobile nema zatvoren audit | CODED / DEVICE UAT OPEN | Impl 30.10.2026.: `(app)` auth, spec Super Admin copy, 48 px primitive, FieldControl, preferences, FCM no-op, Maestro P1/claim/complete-lite/logout. Produkcijski `FIREBASE_ENABLED` i preview APK UAT ostaju na vlasniku (`apps/mobile/README.md`). |
 
 ## Definition of Done za svaki novi nalaz
 

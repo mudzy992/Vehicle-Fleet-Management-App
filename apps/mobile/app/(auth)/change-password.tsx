@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/features/auth/auth-provider';
 import { ApiError, mobileApi, toUserMessage } from '@/lib/api';
 import { colors } from '@/lib/theme';
+import { AppButton } from '@/ui/button';
+import { Screen } from '@/ui/screen';
+import { AppTextField } from '@/ui/text-field';
 
 export default function ChangePasswordScreen() {
   const router = useRouter();
@@ -40,51 +43,47 @@ export default function ChangePasswordScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.card}>
-        <Text style={styles.mark}>VP</Text>
-        <Text style={styles.title}>
-          {changed ? 'Lozinka je promijenjena' : isRequiredChange ? 'Promjena privremene lozinke' : 'Promjena lozinke'}
-        </Text>
-        <Text style={styles.help}>
-          {changed
-            ? 'Zbog sigurnosti su sesije zatvorene. Prijavite se ponovo novom lozinkom.'
-            : `${isRequiredChange ? 'Prije nastavka postavite svoju lozinku. ' : 'Unesite trenutnu lozinku i postavite novu. '}Nova lozinka mora imati najmanje 12 znakova i sadržavati znakove iz najmanje 3 grupe: mala slova, velika slova, cifre i simboli.`}
-        </Text>
-        {changed ? (
-          <Pressable accessibilityRole="button" onPress={() => router.replace('/(auth)/login')} style={styles.button}>
-            <Text style={styles.buttonText}>Prijavi se ponovo</Text>
-          </Pressable>
-        ) : (
-          <>
-            <Text style={styles.label}>{isRequiredChange ? 'Trenutna privremena lozinka' : 'Trenutna lozinka'}</Text>
-            <TextInput value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry autoCapitalize="none" autoComplete="current-password" textContentType="password" accessibilityLabel={isRequiredChange ? 'Trenutna privremena lozinka' : 'Trenutna lozinka'} style={styles.input} />
-            <Text style={styles.label}>Nova lozinka</Text>
-            <TextInput value={newPassword} onChangeText={setNewPassword} secureTextEntry autoCapitalize="none" autoComplete="new-password" textContentType="newPassword" accessibilityLabel="Nova lozinka" style={styles.input} />
-            <Text style={styles.label}>Potvrda nove lozinke</Text>
-            <TextInput value={confirmation} onChangeText={setConfirmation} secureTextEntry autoCapitalize="none" autoComplete="new-password" textContentType="newPassword" accessibilityLabel="Potvrda nove lozinke" style={styles.input} onSubmitEditing={() => void submit()} returnKeyType="go" />
-            {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-            <Pressable accessibilityRole="button" onPress={() => void submit()} disabled={submitting || !currentPassword || !newPassword || !confirmation} style={({ pressed }) => [styles.button, (pressed || submitting) && styles.pressed, (!currentPassword || !newPassword || !confirmation) && styles.disabled]}>
-              {submitting ? <ActivityIndicator color={colors.primaryFg} /> : <Text style={styles.buttonText}>Promijeni lozinku</Text>}
-            </Pressable>
-          </>
-        )}
-      </View>
-    </KeyboardAvoidingView>
+    <Screen edges={['top', 'left', 'right']} padded={false}>
+      <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.card}>
+            <Text style={styles.mark}>VP</Text>
+            <Text style={styles.title}>
+              {changed ? 'Lozinka je promijenjena' : isRequiredChange ? 'Promjena privremene lozinke' : 'Promjena lozinke'}
+            </Text>
+            <Text style={styles.help}>
+              {changed
+                ? 'Zbog sigurnosti su sesije zatvorene. Prijavite se ponovo novom lozinkom.'
+                : `${isRequiredChange ? 'Prije nastavka postavite svoju lozinku. ' : 'Unesite trenutnu lozinku i postavite novu. '}Nova lozinka mora imati najmanje 12 znakova i sadržavati znakove iz najmanje 3 grupe: mala slova, velika slova, cifre i simboli.`}
+            </Text>
+            {changed ? (
+              <AppButton label="Prijavi se ponovo" onPress={() => router.replace('/(auth)/login')} />
+            ) : (
+              <>
+                <Text style={styles.label}>{isRequiredChange ? 'Trenutna privremena lozinka' : 'Trenutna lozinka'}</Text>
+                <AppTextField value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry autoCapitalize="none" autoComplete="current-password" textContentType="password" accessibilityLabel={isRequiredChange ? 'Trenutna privremena lozinka' : 'Trenutna lozinka'} />
+                <Text style={styles.label}>Nova lozinka</Text>
+                <AppTextField value={newPassword} onChangeText={setNewPassword} secureTextEntry autoCapitalize="none" autoComplete="new-password" textContentType="newPassword" accessibilityLabel="Nova lozinka" />
+                <Text style={styles.label}>Potvrda nove lozinke</Text>
+                <AppTextField value={confirmation} onChangeText={setConfirmation} secureTextEntry autoCapitalize="none" autoComplete="new-password" textContentType="newPassword" accessibilityLabel="Potvrda nove lozinke" onSubmitEditing={() => void submit()} returnKeyType="go" />
+                {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+                <AppButton label="Promijeni lozinku" loading={submitting} disabled={!currentPassword || !newPassword || !confirmation} onPress={() => void submit()} />
+              </>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, justifyContent: 'center', paddingHorizontal: 22 },
+  page: { flex: 1 },
+  content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 22, paddingVertical: 24 },
   card: { backgroundColor: colors.surface, borderRadius: 20, padding: 22, gap: 12, borderWidth: 1, borderColor: colors.border },
   mark: { alignSelf: 'center', width: 48, height: 48, overflow: 'hidden', borderRadius: 15, backgroundColor: colors.primary, color: colors.primaryFg, fontSize: 19, fontWeight: '800', textAlign: 'center', textAlignVertical: 'center' },
   title: { color: colors.ink, fontSize: 22, fontWeight: '800', textAlign: 'center' },
-  help: { color: colors.muted, fontSize: 14, lineHeight: 21, textAlign: 'center', marginBottom: 4 },
+  help: { color: colors.muted, fontSize: 15, lineHeight: 22, textAlign: 'center', marginBottom: 4 },
   label: { color: colors.ink, fontSize: 14, fontWeight: '700', marginTop: 3 },
-  input: { minHeight: 50, borderColor: colors.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, color: colors.ink, fontSize: 16, backgroundColor: colors.surface },
   error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
-  button: { minHeight: 52, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-  buttonText: { color: colors.primaryFg, fontSize: 15, fontWeight: '800' },
-  pressed: { opacity: 0.84 },
-  disabled: { opacity: 0.55 },
 });

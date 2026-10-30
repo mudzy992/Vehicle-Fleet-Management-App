@@ -1,290 +1,49 @@
-import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
+import {
+  clearDeviceTokenId,
+  clearRefreshToken,
+  clearSessionMemory,
+  currentSessionId,
+  onAuthExpired,
+  readDeviceTokenId,
+  readRefreshToken,
+  request,
+  restoreSession,
+  setSession,
+  storeDeviceTokenId,
+  storeRefreshToken,
+} from '@/lib/api-client';
+import { appendAttachmentFile } from '@/lib/api-form-data';
+import { ApiError } from '@/lib/api-error';
+import type {
+  ActiveSession,
+  ActiveTaskForm,
+  AttachmentUploadResult,
+  AuthResult,
+  DeviceTokenView,
+  FormVersionSnapshot,
+  MobileTaskType,
+  MobileUser,
+  NotificationPreferenceView,
+  NotificationSummary,
+  TaskDetail,
+  TaskSummary,
+  UserSummary,
+  VehicleDetail,
+  VehicleSummary,
+} from '@/lib/api-types';
 
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? 'https://api.vehicle.ba101.top/api/v1').replace(/\/$/u, '');
-const REFRESH_KEY = 'vfm.refresh-token';
+export { ApiError, toUserMessage, isOfflineError } from '@/lib/api-error';
+export { onAuthExpired, currentSessionId, readDeviceTokenId, storeDeviceTokenId, clearDeviceTokenId } from '@/lib/api-client';
+export type * from '@/lib/api-types';
 
-let accessToken: string | null = null;
-let sessionId: string | null = null;
-let refreshFlight: Promise<boolean> | null = null;
-const authExpiredListeners = new Set<() => void>();
-
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly code: string,
-    readonly requestId?: string,
-    readonly details?: Array<{ path: string[]; message: string }>,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
-
-type Envelope<T> = { data: T } | { error: { code?: string; message?: string; requestId?: string; details?: Array<{ path: string[]; message: string }> } };
-
-export function toUserMessage(cause: unknown, fallback: string): string {
-  if (!(cause instanceof ApiError)) return cause instanceof Error ? cause.message : fallback;
-  if (cause.status === 0 || cause.code === 'NETWORK_ERROR') return 'Nema mrežne veze. Provjerite internet i pokušajte ponovo.';
-  if (cause.status === 401 && cause.code !== 'INVALID_CREDENTIALS') return 'Sesija je istekla. Prijavite se ponovo da nastavite.';
-  if (cause.status === 403) return 'Server nije dozvolio pristup ovom sadržaju. Osvježite prikaz ili kontaktirajte administratora.';
-  if (cause.status === 404) return 'Traženi zapis više nije dostupan.';
-  if (cause.status === 409) return 'Podaci su se promijenili. Osvježite prikaz i pokušajte ponovo.';
-  if (cause.status === 429) return 'Previše je zahtjeva u kratkom vremenu. Sačekajte i pokušajte ponovo.';
-  if (cause.status >= 500) return 'Usluga trenutno nije dostupna. Pokušajte ponovo za nekoliko trenutaka.';
-  return cause.message || fallback;
-}
-
-export function onAuthExpired(listener: () => void): () => void {
-  authExpiredListeners.add(listener);
-  return () => { authExpiredListeners.delete(listener); };
-}
-
-export interface FormVersionSnapshot {
-  id: string;
-  formSchemaId: string;
-  version: number;
-  definition: unknown;
-}
-
-export interface AttachmentUploadResult {
-  id: string;
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
-  sha256: string;
-}
-
-async function refresh(): Promise<boolean> {
-  if (refreshFlight) return refreshFlight;
-  const promise = (async () => {
-    const refreshToken = await SecureStore.getItemAsync(REFRESH_KEY);
-    if (!refreshToken) return false;
-    let response: Response;
-    try {
-      response = await fetch(`${API_BASE}/auth/refresh`, {
-        method: 'POST',
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Client-Type': 'MOBILE_ANDROID' },
-        body: JSON.stringify({ refreshToken, clientType: 'MOBILE_ANDROID' }),
-      });
-    } catch {
-      throw new ApiError('Nema mrežne veze. Provjerite internet i pokušajte ponovo.', 0, 'NETWORK_ERROR');
-    }
-    if (response.status === 429 || response.status >= 500) {
-      throw new ApiError('Usluga trenutno nije dostupna. Pokušajte ponovo za nekoliko trenutaka.', response.status, 'HTTP_ERROR');
-    }
-    let body: Envelope<{ accessToken: string; refreshToken: string; sessionId: string }>;
-    try {
-      body = (await response.json()) as Envelope<{ accessToken: string; refreshToken: string; sessionId: string }>;
-    } catch {
-      return false;
-    }
-    if (!response.ok || !('data' in body) || !body.data.accessToken || !body.data.refreshToken) return false;
-    accessToken = body.data.accessToken;
-    sessionId = body.data.sessionId ?? null;
-    await SecureStore.setItemAsync(REFRESH_KEY, body.data.refreshToken);
-    return true;
-  })();
-  refreshFlight = promise;
-  try {
-    return await promise;
-  } finally {
-    if (refreshFlight === promise) refreshFlight = null;
-  }
-}
-
-async function request<T>(path: string, init: RequestInit = {}, mayRefresh = true): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}${path}`, {
-      ...init,
-      headers: {
-        Accept: 'application/json',
-        'X-Client-Type': 'MOBILE_ANDROID',
-        ...(init.body && !(typeof FormData !== 'undefined' && init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        ...init.headers,
-      },
-    });
-  } catch {
-    throw new ApiError('Nema mrežne veze. Provjerite internet i pokušajte ponovo.', 0, 'NETWORK_ERROR');
-  }
-
-  const authRouteDoesNotUseBearer = ['/auth/login', '/auth/refresh', '/auth/logout'].includes(path);
-  if (response.status === 401 && !authRouteDoesNotUseBearer) {
-    if (mayRefresh && await refresh()) return request<T>(path, init, false);
-    accessToken = null;
-    sessionId = null;
-    await SecureStore.deleteItemAsync(REFRESH_KEY);
-    authExpiredListeners.forEach((listener) => listener());
-  }
-
-  let body: Envelope<T> | null = null;
-  try {
-    body = (await response.json()) as Envelope<T>;
-  } catch {
-    if (!response.ok) throw new ApiError(`Zahtjev nije uspio (HTTP ${response.status}).`, response.status, 'HTTP_ERROR');
-  }
-  if (!response.ok) {
-    const error = body && 'error' in body ? body.error : {};
-    throw new ApiError(error.message ?? `Zahtjev nije uspio (HTTP ${response.status}).`, response.status, error.code ?? 'HTTP_ERROR', error.requestId, error.details);
-  }
-  return body && 'data' in body ? body.data : (body as T);
-}
-
-export interface MobileUser {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  displayName: string;
-  roles: Array<{ id: string; code: string; name: string }>;
-  permissions: string[];
-  mustChangePassword: boolean;
-  isSuperAdmin: boolean;
-}
-
-export interface AuthResult {
-  accessToken: string;
-  refreshToken: string;
-  sessionId: string;
-  user: MobileUser;
-}
-
-export interface TaskSummary {
-  id: string;
-  code: string;
-  title: string;
-  description: string | null;
-  status: string;
-  priority: string;
-  dueAt: string | null;
-  createdAt: string;
-  taskTypeName: string;
-  vehicleInternalNo: string | null;
-  vehicleId: string | null;
-  assigneeName: string | null;
-  formSchemaId: string;
-  formSchemaName: string;
-  formSchemaVersionId: string;
-  formSchemaVersion: number;
-}
-
-export interface TaskDetail extends TaskSummary {
-  version: number;
-  formData: Record<string, unknown>;
-  assignments: Array<{ id: string; userId: string; userName: string; role: string }>;
-  attachmentIds: string[];
-}
-
-export interface ActiveSession {
-  id: string;
-  clientType: string;
-  createdAt: string;
-  expiresAt: string;
-  lastUsedAt: string | null;
-  ipAddress: string | null;
-  userAgent: string | null;
-  deviceInfo: { model?: string; osVersion?: string; appVersion?: string } | null;
-}
-
-export interface NotificationSummary {
-  id: string;
-  type: string;
-  title: string;
-  body: string | null;
-  data: unknown;
-  linkToType: string | null;
-  linkToId: string | null;
-  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
-  status: 'PENDING' | 'SENT' | 'READ' | 'FAILED';
-  isRead: boolean;
-  readAt: string | null;
-  createdAt: string;
-}
-
-export interface UserSummary {
-  id: string;
-  firstName: string;
-  lastName: string;
-  displayName: string | null;
-  status: string;
-}
-
-export interface VehicleSummary {
-  id: string;
-  internalNo: string;
-  make: string;
-  model: string;
-  year: number | null;
-  plateNumber: string | null;
-  fuelType: string;
-  status: string;
-  odometerKm: number;
-  odometerUpdatedAt: string | null;
-  registrationExpiresAt: string | null;
-  insuranceExpiresAt: string | null;
-  archivedAt: string | null;
-  version: number;
-  updatedAt: string;
-}
-
-export interface MobileTaskType {
-  id: string;
-  code: string;
-  name: string;
-  description: string | null;
-  requiresVehicle: boolean;
-  requiresOdometer: boolean;
-  requiresPhotos: boolean;
-  defaultPriority: string;
-  defaultAssignMode: string;
-  formSchemaId: string | null;
-}
-
-export interface ActiveTaskForm {
-  formSchemaId: string;
-  key: string;
-  name: string;
-  subject: string;
-  formSchemaVersionId: string;
-  version: number;
-  contentHash: string;
-  mobileCompatible: boolean;
-  definition: unknown;
-}
-
-export interface VehicleDetail extends VehicleSummary {
-  vin: string | null;
-  transmission: string | null;
-  color: string | null;
-  bodyType: string | null;
-  engineCcm: number | null;
-  enginePowerKw: number | null;
-  seats: number | null;
-  ownershipType: string;
-  acquisitionDate: string | null;
-  acquisitionPrice: number | null;
-  costCenter: string | null;
-  nextServiceDueDate: string | null;
-  nextServiceDueKm: number | null;
-  notes: string | null;
-  photoAttachmentId: string | null;
-  formSchemaId: string;
-  formSchemaVersionId: string;
-  formData: Record<string, unknown>;
-  createdAt: string;
-}
+const UNSUPPORTED_RECORD_TYPES = new Set(['VEHICLE_HANDOVER', 'OTHER']);
 
 export const mobileApi = {
   changePassword: (currentPassword: string, newPassword: string) =>
-    request<void>('/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify({ currentPassword, newPassword }),
-    }),
-  currentSessionId: () => sessionId,
+    request<void>('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
+  currentSessionId,
   activeSessions: () => request<ActiveSession[]>('/auth/sessions'),
   revokeSession: (id: string) => request<void>(`/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   logoutAll: () => request<void>('/auth/logout-all', { method: 'POST', body: JSON.stringify({}) }),
@@ -299,23 +58,21 @@ export const mobileApi = {
         deviceInfo: { model: deviceName, osVersion: Device.osVersion ?? undefined, appVersion: Constants.expoConfig?.version ?? '1.0.0' },
       }),
     });
-    accessToken = session.accessToken;
-    sessionId = session.sessionId;
-    await SecureStore.setItemAsync(REFRESH_KEY, session.refreshToken);
+    setSession({ accessToken: session.accessToken, sessionId: session.sessionId });
+    await storeRefreshToken(session.refreshToken);
     return session.user;
   },
   restore: async () => {
-    if (!(await refresh())) return null;
+    if (!(await restoreSession())) return null;
     return request<MobileUser>('/auth/me');
   },
   logout: async () => {
-    const refreshToken = await SecureStore.getItemAsync(REFRESH_KEY);
+    const refreshToken = await readRefreshToken();
     try {
       await request('/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken }) }, false);
     } finally {
-      accessToken = null;
-      sessionId = null;
-      await SecureStore.deleteItemAsync(REFRESH_KEY);
+      clearSessionMemory();
+      await clearRefreshToken();
     }
   },
   tasks: () => request<{ items: TaskSummary[]; total: number }>('/tasks/available?page=1&pageSize=50'),
@@ -325,6 +82,9 @@ export const mobileApi = {
   formOptions: (listCode: string) => request<Array<{ value: string; label: string }>>(`/form-schemas/options?listCode=${encodeURIComponent(listCode)}`),
   tireSets: () => request<{ items: Array<{ id: string; code: string; brand: string | null; model: string | null; size: string | null; mountedVehicleId: string | null }> }>('/tire-sets?page=1&pageSize=100'),
   recordOptions: async (entityType: string) => {
+    if (UNSUPPORTED_RECORD_TYPES.has(entityType)) {
+      throw new ApiError(`Reference entiteta ${entityType} nije podržan.`, 400, 'UNSUPPORTED_REFERENCE');
+    }
     const paths: Record<string, string> = {
       VEHICLE: '/vehicles?page=1&pageSize=100&status=ACTIVE',
       DRIVER: '/drivers?page=1&pageSize=100&status=ACTIVE',
@@ -358,6 +118,12 @@ export const mobileApi = {
   unreadNotificationCount: () => request<{ count: number }>('/notifications/unread-count'),
   markAllNotificationsRead: () => request<{ updatedCount: number }>('/notifications/read-all', { method: 'POST', body: JSON.stringify({}) }),
   markNotificationRead: (id: string) => request<NotificationSummary>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'POST', body: JSON.stringify({}) }),
+  notificationPreferences: () => request<{ items: NotificationPreferenceView[] }>('/notifications/preferences'),
+  saveNotificationPreference: (input: { type: string; channelFcm: boolean; channelInApp: boolean; channelEmail: boolean }) =>
+    request<NotificationPreferenceView>('/notifications/preferences', { method: 'PUT', body: JSON.stringify(input) }),
+  registerDeviceToken: (input: { token: string; platform: 'android'; appVersion?: string; deviceModel?: string; osVersion?: string; locale?: string }) =>
+    request<DeviceTokenView>('/devices/tokens', { method: 'POST', body: JSON.stringify(input) }),
+  revokeDeviceToken: (id: string) => request<void>(`/devices/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   vehicles: () => request<{ items: VehicleSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/vehicles?page=1&pageSize=100&status=ACTIVE'),
   drivers: () => request<{ items: Array<{ id: string; firstName: string; lastName: string; displayName: string | null; status: string }> }>('/drivers?page=1&pageSize=100&status=ACTIVE'),
   vehicle: (id: string) => request<VehicleDetail>(`/vehicles/${encodeURIComponent(id)}`),
@@ -366,13 +132,10 @@ export const mobileApi = {
   claimTask: (id: string, formData: Record<string, unknown>) =>
     request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/claim`, { method: 'POST', body: JSON.stringify({ formData }) }),
   completeTask: (id: string, version: number, formData: Record<string, unknown>, extra: { comment?: string; odometerKm?: number } = {}) =>
-    request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/complete`, {
-      method: 'POST',
-      body: JSON.stringify({ version, formData, ...extra }),
-    }),
-  uploadAttachment: (uri: string, fileName: string, mimeType: string) => {
+    request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/complete`, { method: 'POST', body: JSON.stringify({ version, formData, ...extra }) }),
+  uploadAttachment: async (uri: string, fileName: string, mimeType: string) => {
     const form = new FormData();
-    form.append('file', { uri, name: fileName, type: mimeType } as unknown as Blob);
+    await appendAttachmentFile(form, uri, fileName, mimeType);
     return request<AttachmentUploadResult>('/attachments', { method: 'POST', body: form });
   },
 };

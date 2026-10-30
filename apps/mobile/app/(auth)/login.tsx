@@ -1,9 +1,13 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '@/features/auth/auth-provider';
 import { toUserMessage } from '@/lib/api';
-import { colors } from '@/lib/theme';
+import { t } from '@/lib/i18n';
+import { colors, type } from '@/lib/theme';
+import { AppButton } from '@/ui/button';
+import { Screen } from '@/ui/screen';
+import { AppTextField } from '@/ui/text-field';
 
 export default function LoginScreen() {
   const { signIn, error } = useAuth();
@@ -20,7 +24,7 @@ export default function LoginScreen() {
     setLocalError(null);
     try {
       const user = await signIn(email, password);
-      router.replace(user.mustChangePassword ? '/(auth)/change-password' : '/(tabs)/tasks');
+      router.replace(user.mustChangePassword ? '/(auth)/change-password' : '/tasks');
     } catch (cause) {
       setLocalError(toUserMessage(cause, 'Prijava nije uspjela.'));
     } finally {
@@ -29,24 +33,24 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <View style={styles.brand}><Text style={styles.mark}>VP</Text><View><Text style={styles.brandTitle}>Vozni park</Text><Text style={styles.brandSubtitle}>Mobilni portal</Text></View></View>
-      <View style={styles.card}>
-        <Text style={styles.heading}>Prijava</Text>
-        <Text style={styles.helper}>Prijavite se službenim korisničkim nalogom.</Text>
-        <Text style={styles.label}>E-mail</Text>
-        <TextInput testID="login-email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" textContentType="emailAddress" accessibilityLabel="E-mail" style={styles.input} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => passwordInputRef.current?.focus()} />
-        <Text style={styles.label}>Lozinka</Text>
-        <TextInput ref={passwordInputRef} testID="login-password" value={password} onChangeText={setPassword} autoCapitalize="none" autoComplete="current-password" secureTextEntry textContentType="password" accessibilityLabel="Lozinka" style={styles.input} onSubmitEditing={() => void submit()} returnKeyType="go" />
-        {(localError ?? error) ? <Text accessibilityRole="alert" style={styles.error}>{localError ?? error}</Text> : null}
-        <Pressable testID="login-submit" accessibilityRole="button" accessibilityState={{ disabled: submitting }} onPress={() => void submit()} disabled={submitting || !email || !password} style={({ pressed }) => [styles.button, (pressed || submitting) && styles.buttonPressed, (!email || !password) && styles.buttonDisabled]}>
-          <Text style={styles.buttonText}>{submitting ? 'Prijavljujem…' : 'Prijavi se'}</Text>
-        </Pressable>
-        <Text style={styles.notice}>Pristup mobilnoj aplikaciji provjerava server. Super Admin nalozi koriste web portal.</Text>
-      </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    <Screen edges={['top', 'left', 'right']} padded={false}>
+      <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.brand}><Text style={styles.mark}>VP</Text><View><Text style={styles.brandTitle}>Vozni park</Text><Text style={styles.brandSubtitle}>Mobilni portal</Text></View></View>
+          <View style={styles.card}>
+            <Text style={styles.heading}>Prijava</Text>
+            <Text style={styles.helper}>Prijavite se službenim korisničkim nalogom.</Text>
+            <Text style={styles.label}>E-mail</Text>
+            <AppTextField testID="login-email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" textContentType="emailAddress" accessibilityLabel="E-mail" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => passwordInputRef.current?.focus()} />
+            <Text style={styles.label}>Lozinka</Text>
+            <AppTextField ref={passwordInputRef} testID="login-password" value={password} onChangeText={setPassword} autoCapitalize="none" autoComplete="current-password" secureTextEntry textContentType="password" accessibilityLabel="Lozinka" onSubmitEditing={() => void submit()} returnKeyType="go" />
+            {(localError ?? error) ? <Text testID="login-error" accessibilityRole="alert" style={styles.error}>{localError ?? error}</Text> : null}
+            <AppButton testID="login-submit" label={submitting ? 'Prijavljujem…' : 'Prijavi se'} loading={submitting} disabled={!email || !password} onPress={() => void submit()} />
+            <Text style={styles.notice}>{t('mobileAccessForbidden')}</Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }
 
@@ -55,12 +59,12 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 22, paddingVertical: 24, gap: 28 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12, alignSelf: 'center' },
   mark: { width: 52, height: 52, borderRadius: 16, backgroundColor: colors.primary, color: colors.primaryFg, fontSize: 20, fontWeight: '800', textAlign: 'center', textAlignVertical: 'center', overflow: 'hidden' },
-  brandTitle: { color: colors.ink, fontSize: 22, fontWeight: '800' }, brandSubtitle: { color: colors.muted, fontSize: 14, marginTop: 2 },
-  card: { backgroundColor: colors.surface, borderRadius: 20, padding: 22, gap: 12, shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 18, elevation: 3 },
-  heading: { color: colors.ink, fontSize: 24, fontWeight: '800' }, helper: { color: colors.muted, fontSize: 14, marginBottom: 8 },
+  brandTitle: { color: colors.ink, fontSize: 22, fontWeight: '800' },
+  brandSubtitle: { color: colors.muted, fontSize: 14, marginTop: 2, lineHeight: 20 },
+  card: { backgroundColor: colors.surface, borderRadius: 20, padding: 22, gap: 12, borderWidth: 1, borderColor: colors.border },
+  heading: { color: colors.ink, fontSize: 24, fontWeight: '800' },
+  helper: { color: colors.muted, fontSize: 15, lineHeight: 22, marginBottom: 8 },
   label: { color: colors.ink, fontSize: 14, fontWeight: '700', marginTop: 4 },
-  input: { minHeight: 50, borderColor: colors.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, color: colors.ink, fontSize: 16 },
-  error: { color: colors.danger, fontSize: 14 },
-  button: { minHeight: 52, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 8 }, buttonPressed: { opacity: 0.85 }, buttonDisabled: { opacity: 0.55 }, buttonText: { color: colors.primaryFg, fontSize: 16, fontWeight: '700' },
-  notice: { color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 4 },
+  error: { color: colors.danger, ...type.sm, lineHeight: 20 },
+  notice: { color: colors.muted, ...type.sm, lineHeight: 20, textAlign: 'center', marginTop: 4 },
 });

@@ -793,17 +793,17 @@ i ne pokreće nijedan upit. W23 Forms UI ostaje jasno definisan fazni nedostatak
 
 | # | Ekran | Faza | Permisija | Status |
 |---|---|---|---|---|
-| M1 | Prijava | 6 | javno | ✅ `apps/mobile/app/(auth)/login.tsx`, refresh token u SecureStore; API odbija Super Admina |
-| M2 | Zadaci — moji i slobodni | 6 | `task:view`, `task:claim` | ✅ `apps/mobile/app/(tabs)/tasks.tsx`, segmenti filtrirani po permisijama, online-only i pull-to-refresh |
-| M3 | Zadatak — detalj | 6 | `task:view` | ✅ `apps/mobile/app/task/[id].tsx`, metapodaci i snapshot verzije |
-| M4 | Preuzimanje | 6 | `task:claim` | ✅ `ON_CLAIM` polja, multipart upload fotografije/priloga, server greške i konflikta |
-| M5 | Završetak — dinamička forma + kamera | 6 | `task:complete` | ✅ zajednički `@vfm/form-renderer`, kamera/galerija, kompresija i upload; ✅ REFERENCE vozilo/vozač/zapis (vozilo, vozač, registracija, osiguranje, servis, set guma, montaža guma, zadatak), LIST i svi whitelist QUERY izvori; ⏳ REFERENCE_RECORD za VEHICLE_HANDOVER/OTHER i test na uređaju |
-| M6 | Novi zadatak (wizard, 3 koraka) | 6 | `task:create` | ✅ vrsta/vozilo, detalji, snapshot forme, OPEN_CLAIM/BROADCAST/direktna dodjela, pozvani i posmatrači; ✅ LIST, REFERENCE vozilo/vozač/zapis (podržani tipovi) i svi whitelist QUERY izvori; ⏳ REFERENCE_RECORD za VEHICLE_HANDOVER/OTHER i test na uređaju |
-| M7 | Vozila — lista | 6 | `vehicle:view` | ✅ `apps/mobile/app/(tabs)/vehicles.tsx`, online lista, pull-to-refresh i statusni pregled |
-| M8 | Vozilo — profil (read-only) | 6 | `vehicle:view` | ✅ `apps/mobile/app/vehicle/[id].tsx`, osnovni podaci, VIN i rokovi |
-| M9 | Obavijesti — lista + read | 6 | `notification:view`, `notification:mark_read` | ✅ API lista, unread count, pojedinačno i masovno označavanje pročitane; mobilni tab (permission-gated), deep-link zadatak/vozilo i refresh; ⏳ preferences/SSE/FCM i uređajski test |
-| M10 | Profil — sesije, lozinka, postavke obavijesti, logout | 6 | `auth:login` | 🟡 profil, odjava, ručna/obavezna promjena lozinke; aktivne sesije, odjava pojedinog uređaja i odjava svih uređaja (prikaz/akcije samo uz `auth:manage_sessions`); postavke obavijesti i uređajski UAT ostaju otvoreni |
-| M11 | Sistem: offline/greška/403 stanja | 6 | — | 🟡 standardizirane poruke za mrežu, istek sesije, 403/404/409/429/5xx, retry i automatski povratak na prijavu nakon isteka sesije; uređajski UAT ostaje otvoren |
+| M1 | Prijava | 6 | javno | ✅ `apps/mobile/app/(auth)/login.tsx`, SafeArea, CTA 48; spec Super Admin copy (§10) kao helper i kao 403 |
+| M2 | Zadaci — moji i slobodni | 6 | `task:view`, `task:claim` | ✅ `apps/mobile/app/(app)/(tabs)/tasks.tsx`, segmenti ≥48, FAB 56, StatusBadge, skeleton, pagination hint |
+| M3 | Zadatak — detalj | 6 | `task:view` | ✅ `apps/mobile/app/(app)/task/[id].tsx` iza `(app)` guarda; metapodaci i snapshot verzije |
+| M4 | Preuzimanje | 6 | `task:claim` | ✅ sticky CTA 56, 409 dijalog „Zadatak je preuzeo…” + Nazad/Osvježi |
+| M5 | Završetak — dinamička forma + kamera | 6 | `task:complete` | ✅ isti `FieldControl`/`upload-picked`; HANDOVER/OTHER eksplicitno nedostupni u mobilnoj formi; ⏳ kamera UAT na uređaju |
+| M6 | Novi zadatak (wizard, 3 koraka) | 6 | `task:create` | ✅ guard na ekranu, rok `dd.MM.yyyy`; LIST/REFERENCE/QUERY kao ranije; HANDOVER/OTHER copy bez novog API-ja |
+| M7 | Vozila — lista | 6 | `vehicle:view` | ✅ `apps/mobile/app/(app)/(tabs)/vehicles.tsx`, DuePill, `href: null` bez prava |
+| M8 | Vozilo — profil (read-only) | 6 | `vehicle:view` | ✅ `apps/mobile/app/(app)/vehicle/[id].tsx`, VIN RO, DuePill za registraciju/osiguranje/servis |
+| M9 | Obavijesti — lista + read | 6 | `notification:view`, `notification:mark_read` | ✅ inbox, badge, deep-link; preferences u profilu; FCM klijent no-op dok nema google-services + `FIREBASE_ENABLED` |
+| M10 | Profil — sesije, lozinka, postavke obavijesti, logout | 6 | `auth:login` | ✅ sesije uz `auth:manage_sessions`; preferences uz `notification:manage_preferences`; e-mail kanal disabled; ⏳ uređajski UAT |
+| M11 | Sistem: offline/greška/403 stanja | 6 | — | ✅ spec Super Admin, offline banner, write disabled, nema keša; ⏳ uređajski UAT |
 
 ---
 

@@ -24,3 +24,34 @@ export const colors = {
   neutralSoft: '#252E27',
   shadow: '#000000',
 } as const;
+
+export const space = {
+  1: 4,
+  2: 8,
+  3: 12,
+  4: 16,
+  5: 20,
+  6: 24,
+  8: 32,
+  12: 48,
+} as const;
+
+export const type = {
+  xs: { fontSize: 12, lineHeight: 16 },
+  sm: { fontSize: 13, lineHeight: 20 },
+  base: { fontSize: 16, lineHeight: 24 },
+  lg: { fontSize: 18, lineHeight: 28 },
+  xl: { fontSize: 20, lineHeight: 28 },
+  xxl: { fontSize: 24, lineHeight: 32 },
+} as const;
+
+export const radius = {
+  sm: 6,
+  md: 8,
+  lg: 12,
+  xl: 16,
+  pill: 9999,
+} as const;
+
+export const controlMinHeight = 48;
+export const stickyCtaHeight = 56;
