@@ -116,7 +116,7 @@ export function TaskTypesPage() {
         {canCreate && !showCreate && (
           <Button
             variant="primary"
-            size="sm"
+            size="lg"
             onClick={() => {
               clearPanels();
               setShowCreate(true);

@@ -111,7 +111,7 @@ export function VehiclesPage() {
           <p className="text-sm text-fg-muted">{isPending ? 'Učitavanje…' : `${total} vozila u registru`}</p>
         </div>
         {hasPermission('vehicle:create') && (
-          <Link className={buttonClassName('primary', 'sm')} to="/vozila/novo">
+          <Link className={buttonClassName('primary', 'lg')} to="/vozila/novo">
             Novo vozilo
           </Link>
         )}

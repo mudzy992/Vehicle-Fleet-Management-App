@@ -108,6 +108,16 @@ export function FormsPage() {
   });
 
   const detail = detailQuery.data ?? null;
+  const subjectsWithoutPublishedForm = useMemo(() => {
+    const requiredSubjects: FormSubject[] = [
+      'VEHICLE', 'DRIVER', 'REGISTRATION', 'INSURANCE', 'SERVICE',
+      'TIRE_SET', 'TIRE_INSTALLATION', 'TASK', 'VEHICLE_HANDOVER',
+    ];
+    const forms = formsQuery.data ?? [];
+    return requiredSubjects.filter((subject) =>
+      !forms.some((form) => form.subject === subject && form.status === 'PUBLISHED'),
+    );
+  }, [formsQuery.data]);
   const selected = useMemo<FormVersionSummary | null>(() => {
     if (!detail) return null;
     return detail.versions.find((version) => version.id === versionId) ?? null;
@@ -307,6 +317,7 @@ export function FormsPage() {
         {canCreateForm ? (
           <Button
             variant="primary"
+            size="lg"
             onClick={() => {
               setCreateName('');
               setCreateKey('');
@@ -323,6 +334,16 @@ export function FormsPage() {
         <Card>
           <CardHeader title="Katalog" description={`${formsQuery.data?.length ?? 0} formi`} />
           <CardContent className="space-y-1">
+            {!formsQuery.isPending && !formsQuery.isError && subjectsWithoutPublishedForm.length > 0 ? (
+              <p
+                role="alert"
+                className="mb-2 rounded-md border border-warning bg-warning-soft p-3 text-xs text-warning"
+              >
+                Nema aktivne objavljene forme za: {' '}
+                {subjectsWithoutPublishedForm.map((subject) => SUBJECT_LABELS[subject]).join(', ')}.
+                {' '}Provjerite katalog i objavite potrebne forme prije unosa podataka.
+              </p>
+            ) : null}
             {formsQuery.isPending ? (
               <p role="status" className="text-xs text-fg-muted">
                 Učitavanje…

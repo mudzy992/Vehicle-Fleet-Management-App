@@ -94,7 +94,7 @@ export function DriversPage() {
         </div>
         <div className="flex items-center gap-2">
           {hasPermission('driver:create') && (
-            <Link className={buttonClassName('primary', 'sm')} to="/vozaci/novi">
+            <Link className={buttonClassName('primary', 'lg')} to="/vozaci/novi">
               Novi vozač
             </Link>
           )}

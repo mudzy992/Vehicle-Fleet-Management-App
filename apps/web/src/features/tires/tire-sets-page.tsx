@@ -113,7 +113,7 @@ export function TireSetsPage() {
         {canCreate && !showCreate && (
           <Button
             variant="primary"
-            size="sm"
+            size="lg"
             onClick={() => {
               setEditingId(null);
               setSelectedSet(null);
