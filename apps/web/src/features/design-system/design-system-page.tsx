@@ -190,7 +190,7 @@ export function DesignSystemPage() {
           description=">30 dana success · 8–30 info · 1–7 warning · ≤0 danger (docs/06 §6.2)."
         />
         <CardContent>
-          <ul className="divide-y divide-[var(--border)]">
+          <ul className="divide-y divide-border">
             {DEADLINE_SAMPLES.map((sample) => {
               const days = daysUntil(sample.date, NOW);
               const level = deadlineLevel(days);

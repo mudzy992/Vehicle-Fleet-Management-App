@@ -330,27 +330,25 @@ export function FormsPage() {
             ) : null}
             {formsQuery.data?.length === 0 ? <EmptyState title="Nema formi" /> : null}
             {formsQuery.data?.map((form) => (
-              <button
+              <Button
                 key={form.id}
                 type="button"
+                size="md"
+                variant={form.id === formId ? 'secondary' : 'ghost'}
                 onClick={() => {
                   setFormId(form.id);
                   setVersionId(null);
                   setMessage(null);
                 }}
                 aria-pressed={form.id === formId}
-                className={`w-full rounded-md border px-2.5 py-2 text-left text-xs ${
-                  form.id === formId
-                    ? 'border-primary bg-surface-muted'
-                    : 'border-border hover:bg-surface-muted'
-                }`}
+                className="w-full justify-start whitespace-normal text-left"
               >
                 <span className="block font-medium">{form.name}</span>
                 <span className="block text-xs text-fg-muted">
                   {SUBJECT_LABELS[form.subject]} · {FORM_STATUS_LABELS[form.status]} · {form.versionCount}{' '}
                   {form.versionCount === 1 ? 'verzija' : 'verzije'}
                 </span>
-              </button>
+              </Button>
             ))}
           </CardContent>
         </Card>
@@ -386,13 +384,15 @@ export function FormsPage() {
                         className={version.id === versionId ? 'bg-surface-muted' : undefined}
                       >
                         <TD>
-                          <button
+                          <Button
                             type="button"
+                            size="sm"
+                            variant="ghost"
                             className="font-medium underline-offset-2 hover:underline"
                             onClick={() => setVersionId(version.id)}
                           >
                             v{version.version}
-                          </button>
+                          </Button>
                         </TD>
                         <TD>
                           <Badge

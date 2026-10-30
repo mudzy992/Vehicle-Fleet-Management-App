@@ -19,21 +19,21 @@ export interface BadgeProps {
 }
 
 const LEVEL_CLASSES: Readonly<Record<SemanticLevel, string>> = {
-  success: 'bg-[var(--success-soft)] text-success',
-  info: 'bg-[var(--info-soft)] text-info',
-  warning: 'bg-[var(--warning-soft)] text-warning',
-  danger: 'bg-[var(--danger-soft)] text-danger',
-  neutral: 'bg-[var(--neutral-soft)] text-neutral',
-  default: 'bg-[var(--neutral-soft)] text-fg-muted',
+  success: 'bg-success-soft text-success',
+  info: 'bg-info-soft text-info',
+  warning: 'bg-warning-soft text-warning',
+  danger: 'bg-danger-soft text-danger',
+  neutral: 'bg-neutral-soft text-neutral',
+  default: 'bg-neutral-soft text-fg-muted',
 } as const;
 
 const DOT_CLASSES: Readonly<Record<SemanticLevel, string>> = {
   success: 'bg-success',
-  info: 'bg-[var(--info)]',
-  warning: 'bg-[var(--warning)]',
+  info: 'bg-info',
+  warning: 'bg-warning',
   danger: 'bg-danger',
-  neutral: 'bg-[var(--neutral)]',
-  default: 'bg-[var(--fg-muted)]',
+  neutral: 'bg-neutral',
+  default: 'bg-fg-muted',
 } as const;
 
 export function Badge({ level = 'default', children, dot = false, className, title }: BadgeProps) {

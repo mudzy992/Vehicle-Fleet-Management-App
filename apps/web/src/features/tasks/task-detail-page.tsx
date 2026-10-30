@@ -151,7 +151,7 @@ export function TaskDetailPage() {
         </p>
       )}
       {claimError && (
-        <p role="alert" className="rounded-md bg-[var(--danger-soft)] px-3 py-2 text-sm text-danger">
+        <p role="alert" className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
           {claimError}
         </p>
       )}

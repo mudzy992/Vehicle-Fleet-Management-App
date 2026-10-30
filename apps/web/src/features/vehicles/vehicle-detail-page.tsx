@@ -200,17 +200,15 @@ export function VehicleDetailPage() {
             (item.id !== 'servisi' || hasPermission('service:view')) &&
             (item.id !== 'gume' || hasPermission('tire:view')),
         ).map((item) => (
-          <button
+          <Button
             key={item.id}
             type="button"
+            size="sm"
+            variant={tab === item.id ? 'primary' : 'ghost'}
             onClick={() => setTab(item.id)}
-            className={[
-              'rounded-md px-3 py-1.5 text-sm',
-              tab === item.id ? 'bg-primary text-primary-fg' : 'text-fg-muted hover:bg-hover',
-            ].join(' ')}
           >
             {item.label}
-          </button>
+          </Button>
         ))}
         {PHASE_LATER.map((item) => (
           <span
@@ -747,9 +745,10 @@ function AttachmentsTab({ vehicleId }: { vehicleId: string }) {
                 <TD>{formatDateTime(item.createdAt)}</TD>
                 <TD>
                   {/* Potpisani URL je vezan za korisnika i preuzima se uz access token. */}
-                  <button
+                  <Button
                     type="button"
-                    className="text-sm hover:underline"
+                    variant="ghost"
+                    size="sm"
                     onClick={async () => {
                       try {
                         const signed = await api.get<{ url: string }>(`/attachments/${item.id}/url`);
@@ -768,7 +767,7 @@ function AttachmentsTab({ vehicleId }: { vehicleId: string }) {
                     }}
                   >
                     Preuzmi
-                  </button>
+                  </Button>
                 </TD>
               </TR>
             ))}

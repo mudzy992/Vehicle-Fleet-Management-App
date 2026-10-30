@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { APP_NAME } from '@vfm/shared';
-import { Button, buttonClassName } from '../components/ui/index.js';
+import { BareButton, Button, buttonClassName } from '../components/ui/index.js';
 import type { NotificationUnreadCount } from '@vfm/shared/schemas';
 import { api } from '../lib/api.js';
 import { useSession } from '../features/auth/session.js';
@@ -124,8 +124,7 @@ export function AppShell() {
       </aside>
 
       {sidebarOpen && (
-        <button
-          type="button"
+        <BareButton
           aria-label="Zatvori navigaciju"
           className="vfm-scrim"
           onClick={() => setSidebarOpen(false)}
@@ -134,9 +133,8 @@ export function AppShell() {
 
       <div className="vfm-main">
         <header className="vfm-topbar">
-          <button
+          <BareButton
             ref={menuButtonRef}
-            type="button"
             aria-label="Otvori navigaciju"
             aria-controls="vfm-sidebar"
             aria-expanded={sidebarOpen}
@@ -144,7 +142,7 @@ export function AppShell() {
             className="vfm-menu-button"
           >
             <span aria-hidden="true">☰</span>
-          </button>
+          </BareButton>
           <div className="vfm-breadcrumb">
             <span className="vfm-breadcrumb-root">Vozni park</span>
             <span aria-hidden="true">/</span>

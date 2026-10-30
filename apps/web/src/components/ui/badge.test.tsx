@@ -11,12 +11,12 @@ describe('Badge', () => {
     render(<Badge level="danger">Probijen rok</Badge>);
     const badge = screen.getByText('Probijen rok');
     expect(badge).toBeTruthy();
-    expect(badge.className).toContain('var(--danger-soft)');
+    expect(badge.className).toContain('bg-danger-soft');
   });
 
   it('bez nivoa koristi neutralnu (default) boju', () => {
     render(<Badge>Obično</Badge>);
-    expect(screen.getByText('Obično').className).toContain('var(--neutral-soft)');
+    expect(screen.getByText('Obično').className).toContain('bg-neutral-soft');
   });
 
   it('tačka je dekorativna (aria-hidden)', () => {
@@ -46,13 +46,13 @@ describe('StatusBadge — koristi @vfm/shared nazive i boje', () => {
 
   it('nivo boje prati semantiku iz shared paketa', () => {
     const { rerender } = render(<StatusBadge value="COMPLETED" />);
-    expect(screen.getByText('Završen').className).toContain('var(--success-soft)');
+    expect(screen.getByText('Završen').className).toContain('bg-success-soft');
 
     rerender(<StatusBadge value="IN_PROGRESS" />);
-    expect(screen.getByText('U radu').className).toContain('var(--warning-soft)');
+    expect(screen.getByText('U radu').className).toContain('bg-warning-soft');
 
     rerender(<StatusBadge value="OPEN" />);
-    expect(screen.getByText('Otvoren').className).toContain('var(--info-soft)');
+    expect(screen.getByText('Otvoren').className).toContain('bg-info-soft');
   });
 
   it('domen otklanja dvosmislenost (CANCELLED: zadatak vs evidencija)', () => {
@@ -71,7 +71,7 @@ describe('StatusBadge — koristi @vfm/shared nazive i boje', () => {
   it('label/level se mogu prepisati', () => {
     render(<StatusBadge value="ACTIVE" label="Vrijedi do 12.11.2026." level="info" />);
     const badge = screen.getByText('Vrijedi do 12.11.2026.');
-    expect(badge.className).toContain('var(--info-soft)');
+    expect(badge.className).toContain('bg-info-soft');
   });
 
   it('title atribut nosi sirovu vrijednost enuma (za dev/inspect)', () => {

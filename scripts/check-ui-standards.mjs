@@ -19,7 +19,7 @@ async function walk(directory) {
 for (const directory of sourceRoots) await walk(directory);
 
 const oneOffUtility =
-  /\b(?:[\w-]+:)*-?(?:p[xytrbl]?|m[xytrbl]?|gap(?:-[xy])?|space-[xy]|scroll-[mp][xytrbl]?|text|leading|tracking|rounded|shadow|w|min-w|max-w|h|min-h|max-h|size|top|bottom|left|right|inset|grid-cols|grid-rows|font|ring|outline|outline-offset|opacity|z|order|col|row|basis|grow|shrink|translate-[xy]|rotate|scale|duration|delay|ease|blur|backdrop-blur|border|decoration|underline-offset|aspect|object|overflow|cursor|pointer-events|fill|stroke|flex)-\[[^\]]+\]/gu;
+  /\b(?:[\w-]+:)*-?(?:p[xytrbl]?|m[xytrbl]?|gap(?:-[xy])?|space-[xy]|scroll-[mp][xytrbl]?|text|leading|tracking|rounded|shadow|w|min-w|max-w|h|min-h|max-h|size|top|bottom|left|right|inset|grid-cols|grid-rows|font|ring|outline|outline-offset|opacity|z|order|col|row|basis|grow|shrink|translate-[xy]|rotate|scale|duration|delay|ease|blur|backdrop-blur|border|decoration|underline-offset|aspect|object|overflow|cursor|pointer-events|fill|stroke|flex|bg|from|via|to|placeholder|accent|caret|decoration|divide)-\[[^\]]+\]/gu;
 const hardcodedPalette =
   /\b(?:text|bg|border|ring|ring-offset|outline|fill|stroke|from|via|to|placeholder|caret|accent|decoration|divide|shadow)-(?:white|black)(?:\/\d{1,3})?\b|\b(?:text|bg|border|ring|ring-offset|outline|fill|stroke|from|via|to|placeholder|caret|accent|decoration|divide|shadow)-(?:red|blue|gray|slate|lime|emerald|amber|yellow|orange|green|cyan|purple|pink|zinc|stone|neutral|indigo|violet|fuchsia|rose|teal|sky)-(?:[1-9]00|50|950)(?:\/\d{1,3})?\b/gu;
 const rawColor = /#[\da-f]{3,8}\b|(?:rgb|hsl)a?\s*\(/giu;
@@ -40,6 +40,9 @@ for (const file of files) {
     'Koristi standardni token/alias ili imenovanu layout klasu; ne koristi arbitrary-value stil',
   );
   addMatches(hardcodedPalette, 'Koristi semantički color token umjesto Tailwind palete');
+  if (file !== 'apps/web/src/components/ui/button.tsx' && file !== 'apps/web/src/components/ui/bare-button.tsx') {
+    addMatches(/<button\b/gu, 'Koristi zajednički Button ili BareButton primitive umjesto sirovog HTML buttona');
+  }
   if (file !== 'apps/web/src/features/design-system/design-system-page.tsx') {
     addMatches(/\bstyle\s*=/gu, 'Inline stil nije dozvoljen izvan galerije dizajn tokena');
     addMatches(rawColor, 'Boja mora biti semantički dizajn token, nikad literalna vrijednost');

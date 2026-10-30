@@ -260,12 +260,12 @@ export function TaskCreatePage() {
         {[1, 2, 3].map((number) => (
           <span
             key={number}
-            className={`h-1.5 flex-1 rounded ${number <= step ? 'bg-primary' : 'bg-[var(--border)]'}`}
+            className={`h-1.5 flex-1 rounded ${number <= step ? 'bg-primary' : 'bg-border'}`}
           />
         ))}
       </div>
       {message && (
-        <p role="alert" className="rounded-md bg-[var(--danger-soft)] px-3 py-2 text-sm text-danger">
+        <p role="alert" className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
           {message}
         </p>
       )}

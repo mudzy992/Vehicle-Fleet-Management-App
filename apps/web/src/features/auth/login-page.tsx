@@ -154,7 +154,7 @@ export function LoginPage() {
               {error ? (
                 <p
                   role="alert"
-                  className="rounded-lg border border-danger bg-[var(--danger-soft)] px-3 py-2.5 text-sm text-danger"
+                  className="rounded-lg border border-danger bg-danger-soft px-3 py-2.5 text-sm text-danger"
                 >
                   {error}
                 </p>

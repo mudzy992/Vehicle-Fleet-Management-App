@@ -8,6 +8,8 @@
 export { Badge, StatusBadge } from './badge.js';
 export type { BadgeProps, StatusBadgeProps } from './badge.js';
 export { Button, buttonClassName } from './button.js';
+export { BareButton } from './bare-button.js';
+export type { BareButtonProps } from './bare-button.js';
 export type { ButtonProps, ButtonSize, ButtonVariant } from './button.js';
 export { Card, CardContent, CardFooter, CardHeader } from './card.js';
 export type { CardProps } from './card.js';

@@ -119,10 +119,10 @@ export function HealthPage() {
         />
       </div>
 
-      <Card flush>
+      <Card>
         <CardHeader title="Detalji" description="Sirovi odgovori probe-ova (za dijagnostiku)." />
-        <CardContent className="border-t border-border">
-          <pre className="overflow-x-auto bg-surface-muted p-4 font-mono text-xs leading-relaxed text-fg">
+        <CardContent className="pt-0">
+          <pre className="overflow-x-auto rounded-md bg-surface-muted p-3 font-mono text-xs leading-relaxed text-fg">
             {JSON.stringify(state, null, 2)}
           </pre>
         </CardContent>

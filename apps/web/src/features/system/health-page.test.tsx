@@ -34,6 +34,10 @@ describe('HealthPage', () => {
     await waitFor(() => expect(screen.getAllByText('ok')).toHaveLength(3));
     expect(screen.getByText(/uptime 240 s/)).toBeTruthy();
     expect(screen.queryByText('API nije dostupan')).toBeNull();
+    const detailsCard = screen.getByText('Detalji').closest('section');
+    expect(detailsCard?.className).toContain('p-4');
+    expect(detailsCard?.querySelector('pre')?.className).toContain('rounded-md');
+    expect(detailsCard?.querySelector('pre')?.className).toContain('p-3');
   });
 
   it('shows an actionable unavailable state when all probes fail', async () => {

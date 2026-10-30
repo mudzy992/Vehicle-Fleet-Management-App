@@ -124,17 +124,13 @@ export function TasksPage() {
 
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Prikaz zadataka">
         {tabs.map((value) => (
-          <button
+          <Button
             key={value}
             type="button"
+            size="md"
+            variant={tab === value ? 'primary' : 'secondary'}
             role="tab"
             aria-selected={tab === value}
-            className={[
-              'min-h-10 rounded-md border px-4 text-sm font-medium transition-colors',
-              tab === value
-                ? 'border-primary bg-primary text-primary-fg'
-                : 'border-border bg-surface text-fg hover:bg-hover',
-            ].join(' ')}
             onClick={() => {
               setTab(value);
               setPage(1);
@@ -142,7 +138,7 @@ export function TasksPage() {
             }}
           >
             {TAB_LABELS[value]}
-          </button>
+          </Button>
         ))}
       </div>
 
