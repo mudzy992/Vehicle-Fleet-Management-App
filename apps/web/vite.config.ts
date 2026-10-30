@@ -19,7 +19,12 @@ export default defineConfig(({ mode }) => {
     // Workspace packages are symlinked and compile to CommonJS. Prebundle their
     // barrels so browser-native ESM receives discoverable named exports in dev/E2E.
     optimizeDeps: {
-      include: ['@vfm/shared', '@vfm/form-engine/definition', '@vfm/form-renderer'],
+      include: [
+        '@vfm/shared',
+        '@vfm/form-engine/definition',
+        '@vfm/form-engine/field-types',
+        '@vfm/form-renderer',
+      ],
     },
     server: {
       host: '0.0.0.0',

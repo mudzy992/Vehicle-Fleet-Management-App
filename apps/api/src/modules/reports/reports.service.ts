@@ -297,7 +297,7 @@ export class ReportsService {
     if (actor?.isSuperAdmin || scope === 'ALL') return null;
     if (scope === 'VEHICLE_IDS') {
       return (
-        actor.permissions?.grants
+        actor?.permissions?.grants
           .filter((grant) => grant.permission === 'report:view' && grant.scope === 'VEHICLE_IDS')
           .flatMap((grant) => grant.scopeVehicleIds ?? []) ?? []
       );

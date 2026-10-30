@@ -30,6 +30,7 @@ import { DeviceTokensController } from '../../src/modules/notifications/device-t
 import { NotificationsController } from '../../src/modules/notifications/notifications.controller.js';
 import { RegistrationsController } from '../../src/modules/registrations/registrations.controller.js';
 import { RemindersController } from '../../src/modules/reminders/reminders.controller.js';
+import { ReportsController } from '../../src/modules/reports/reports.controller.js';
 import { PermissionsController, RolesController } from '../../src/modules/roles/roles.controller.js';
 import { ServiceItemsController } from '../../src/modules/services/service-items.controller.js';
 import { ServicesController } from '../../src/modules/services/services.controller.js';
@@ -55,6 +56,7 @@ const CONTROLLERS: readonly Type[] = [
   NotificationsController,
   RegistrationsController,
   RemindersController,
+  ReportsController,
   RolesController,
   PermissionsController,
   ServiceItemsController,

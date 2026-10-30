@@ -1817,7 +1817,7 @@ test('Super Admin can create, edit, and configure completion requirements for a 
     name: currentName ?? 'Dopuna goriva',
     description: 'Opis vrste zadatka',
     iconName: null,
-    colorHex: '#2E7D32',
+    colorHex: '#4ADE80',
     requiresVehicle: true,
     requiresOdometer: false,
     requiresPhotos: false,
@@ -1856,7 +1856,7 @@ test('Super Admin can create, edit, and configure completion requirements for a 
     }
     if (method === 'POST' && path === '/api/v1/task-types') {
       const payload = route.request().postDataJSON();
-      expect(payload).toMatchObject({ code: 'FUEL_REFILL', name: 'Dopuna goriva', colorHex: '#2E7D32' });
+      expect(payload).toMatchObject({ code: 'FUEL_REFILL', name: 'Dopuna goriva', colorHex: '#4ADE80' });
       currentName = 'Dopuna goriva';
       await route.fulfill({ status: 201, json: { data: { ...taskType(), completionRequirements: [] }, meta: {} } });
       return;
@@ -1899,7 +1899,7 @@ test('Super Admin can create, edit, and configure completion requirements for a 
   await page.getByRole('button', { name: 'Nova vrsta' }).click();
   await page.getByLabel('Kod vrste').fill('FUEL_REFILL');
   await page.getByLabel('Naziv vrste').fill('Dopuna goriva');
-  await page.getByLabel('Boja', { exact: true }).fill('#2E7D32');
+  await page.getByLabel('Boja', { exact: true }).selectOption({ label: 'Zelena' });
   await page.getByRole('button', { name: 'Sačuvaj vrstu' }).click();
   await expect(page.getByRole('status')).toContainText('Nova vrsta zadatka FUEL_REFILL je sačuvana.');
   await expect(page.getByText('Dopuna goriva', { exact: true })).toBeVisible();
