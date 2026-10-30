@@ -61,6 +61,12 @@ import {
 } from './forms-model.js';
 import { FormsPreview } from './forms-preview.js';
 import { FormsDesigner } from './forms-designer.js';
+import { FormsPublishFields } from './forms-publish-confirm.js';
+import {
+  buildPublishInput,
+  isNormalizedRemovalError,
+  needsNormalizedRemovalConfirm,
+} from './forms-publish.js';
 
 function formKeyFromName(name: string): string {
   const stem = name
@@ -87,6 +93,8 @@ export function FormsPage() {
   const [createKey, setCreateKey] = useState('');
   const [createDescription, setCreateDescription] = useState('');
   const [createSubject, setCreateSubject] = useState<FormSubject>('OTHER');
+  const [confirmNormalizedRemoval, setConfirmNormalizedRemoval] = useState(false);
+  const [blockedByNormalizedRemoval, setBlockedByNormalizedRemoval] = useState(false);
   const loadedVersionId = useRef<string | null>(null);
 
   const canCreateForm = hasPermission('form:create');
@@ -154,6 +162,8 @@ export function FormsPage() {
     setEditor(JSON.stringify(loaded.definition, null, 2));
     setDiff(null);
     setChangeNote('');
+    setConfirmNormalizedRemoval(false);
+    setBlockedByNormalizedRemoval(false);
     setMessage(null);
   }, [versionQuery.data]);
 
@@ -172,6 +182,28 @@ export function FormsPage() {
 
   const parsed = useMemo(() => toParseResult(definitionResult), [definitionResult]);
 
+  const previousPublishedId =
+    selected?.status === 'DRAFT' &&
+    detail?.currentPublishedVersionId &&
+    detail.currentPublishedVersionId !== versionId
+      ? detail.currentPublishedVersionId
+      : null;
+
+  const previousPublishedQuery = useQuery({
+    queryKey: ['form-schemas', formId, 'versions', previousPublishedId],
+    queryFn: () =>
+      api.get<FormVersionDetail>(`/form-schemas/${formId}/versions/${previousPublishedId}`),
+    enabled: formId !== null && previousPublishedId !== null,
+  });
+
+  const showNormalizedRemovalConfirm =
+    blockedByNormalizedRemoval ||
+    (definitionResult.ok &&
+      needsNormalizedRemovalConfirm(
+        previousPublishedQuery.data?.definition,
+        definitionResult.definition,
+      ));
+
   const actions = availableActions({
     version: selected,
     currentPublishedVersionId: detail?.currentPublishedVersionId ?? null,
@@ -188,7 +220,9 @@ export function FormsPage() {
       text:
         error instanceof ApiError
           ? `${error.message}${error.details && error.details.length > 0 ? ` (${error.details.map((detail) => detail.message).join('; ')})` : ''}`
-          : 'Akcija nije uspjela.',
+          : error instanceof Error
+            ? error.message
+            : 'Akcija nije uspjela.',
     });
   };
 
@@ -255,7 +289,15 @@ export function FormsPage() {
           definition: parsed.definition,
         });
       }
-      const body: PublishFormVersionInput = { changeNote: changeNote.trim() };
+      if (showNormalizedRemovalConfirm && !confirmNormalizedRemoval) {
+        throw new Error(
+          'Potvrdite uklanjanje mapiranih polja prije objave. Stari zapisi zadržavaju vrijednosti; novi više neće puniti tu kolonu.',
+        );
+      }
+      const body: PublishFormVersionInput = buildPublishInput({
+        changeNote: changeNote.trim(),
+        confirmNormalizedRemoval: showNormalizedRemovalConfirm && confirmNormalizedRemoval,
+      });
       return api.post<FormVersionDetail>(`/form-schemas/${formId}/versions/${versionId}/publish`, body);
     },
     onSuccess: async () => {
@@ -263,7 +305,10 @@ export function FormsPage() {
       await invalidate();
       await queryClient.invalidateQueries({ queryKey: ['form-schemas', formId] });
     },
-    onError: failure,
+    onError: (error) => {
+      if (isNormalizedRemovalError(error)) setBlockedByNormalizedRemoval(true);
+      failure(error);
+    },
   });
 
   const retire = useMutation({
@@ -514,19 +559,13 @@ export function FormsPage() {
               />
               <CardContent className="space-y-3">
                 {actions.includes('publish') || actions.includes('retire') ? (
-                  <Field
-                    label="Bilješka o promjeni (obavezna, najmanje 5 znakova)"
-                    htmlFor="change-note"
-                    hint="Upisuje se uz objavu/povlačenje i vidljiva je u historiji verzija."
-                  >
-                    <input
-                      id="change-note"
-                      className={inputClassName}
-                      value={changeNote}
-                      maxLength={500}
-                      onChange={(event) => setChangeNote(event.target.value)}
-                    />
-                  </Field>
+                  <FormsPublishFields
+                    changeNote={changeNote}
+                    onChangeNote={setChangeNote}
+                    showNormalizedRemovalConfirm={actions.includes('publish') && showNormalizedRemovalConfirm}
+                    confirmNormalizedRemoval={confirmNormalizedRemoval}
+                    onConfirmNormalizedRemoval={setConfirmNormalizedRemoval}
+                  />
                 ) : null}
 
                 <div className="flex gap-1" role="tablist" aria-label="Način prikaza">

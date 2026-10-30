@@ -157,4 +157,97 @@ describe('FormsPage — copy then publish', () => {
     expect(savedKeys).toEqual(['ocjena']);
     expect(post.mock.calls.some((call) => String(call[0]).endsWith('/publish'))).toBe(true);
   });
+
+  it('šalje confirmNormalizedRemoval kad se ukloni mapirano polje', async () => {
+    for (const permission of ['form:view', 'form:update', 'form:manage_schema', 'form:publish_version']) {
+      permissions.add(permission);
+    }
+    const publishedDef = {
+      ...definition(['napomena', 'ocjena']),
+      normalizedName: [{ fieldKey: 'napomena', column: 'plateNumber', transform: 'TO_TEXT' }],
+    };
+    let versions = [versionRow(publishedId, 1, 'PUBLISHED')];
+    let draftDef = structuredClone(publishedDef);
+
+    vi.spyOn(api, 'get').mockImplementation(async (path) => {
+      if (path === '/form-schemas') {
+        return [
+          {
+            id: formId,
+            key: 'pregled_vozila',
+            name: 'Pregled vozila',
+            subject: 'VEHICLE',
+            taskTypeId: null,
+            description: null,
+            ownerModule: 'vehicles',
+            status: 'PUBLISHED',
+            currentPublishedVersionId: publishedId,
+            currentPublishedVersion: 1,
+            versionCount: versions.length,
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ] as never;
+      }
+      if (path === `/form-schemas/${formId}`) {
+        return {
+          id: formId,
+          key: 'pregled_vozila',
+          name: 'Pregled vozila',
+          subject: 'VEHICLE',
+          taskTypeId: null,
+          description: null,
+          ownerModule: 'vehicles',
+          status: 'PUBLISHED',
+          currentPublishedVersionId: publishedId,
+          currentPublishedVersion: 1,
+          versionCount: versions.length,
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          versions,
+        } as never;
+      }
+      if (path.endsWith(draftId)) {
+        return { ...versionRow(draftId, 2, 'DRAFT'), formSchemaId: formId, definition: draftDef, normalizedName: null } as never;
+      }
+      return {
+        ...versionRow(publishedId, 1, 'PUBLISHED'),
+        formSchemaId: formId,
+        definition: publishedDef,
+        normalizedName: null,
+      } as never;
+    });
+
+    vi.spyOn(api, 'put').mockImplementation(async (_path, input) => {
+      draftDef = (input as { definition: typeof publishedDef }).definition;
+      return { ...versionRow(draftId, 2, 'DRAFT'), formSchemaId: formId, definition: draftDef, normalizedName: null } as never;
+    });
+    const post = vi.spyOn(api, 'post').mockImplementation(async (path) => {
+      if (path === `/form-schemas/${formId}/versions`) {
+        versions = [versionRow(draftId, 2, 'DRAFT'), versionRow(publishedId, 1, 'PUBLISHED')];
+        draftDef = structuredClone(publishedDef);
+        return { ...versionRow(draftId, 2, 'DRAFT'), formSchemaId: formId, definition: draftDef, normalizedName: null } as never;
+      }
+      return { ...versionRow(draftId, 2, 'PUBLISHED'), formSchemaId: formId, definition: draftDef, normalizedName: null } as never;
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Nova verzija' }));
+    expect(await screen.findByText('Kreirana verzija 2 (nacrt).')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ukloni Napomena' }));
+    fireEvent.change(screen.getByLabelText(/Bilješka o promjeni/u), { target: { value: 'Samo ocjena' } });
+    const confirm = await screen.findByRole('checkbox', { name: /Potvrđujem uklanjanje mapiranih polja/u });
+    fireEvent.click(screen.getByRole('button', { name: 'Objavi…' }));
+    expect(await screen.findByText(/Potvrdite uklanjanje mapiranih polja prije objave/u)).toBeTruthy();
+    expect(post.mock.calls.some((call) => String(call[0]).endsWith('/publish'))).toBe(false);
+
+    fireEvent.click(confirm);
+    fireEvent.click(screen.getByRole('button', { name: 'Objavi…' }));
+    await screen.findByText('Verzija je objavljena; prethodna aktivna je povučena.');
+    const publishCall = post.mock.calls.find((call) => String(call[0]).endsWith('/publish'));
+    expect(publishCall?.[1]).toEqual({
+      changeNote: 'Samo ocjena',
+      confirmNormalizedRemoval: true,
+    });
+  });
 });

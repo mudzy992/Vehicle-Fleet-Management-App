@@ -18,7 +18,7 @@ Aktivna je tačno jedna `PUBLISHED` verzija po formi. Nova objava: stara `PUBLIS
 
 1. `POST /form-schemas/:id/versions` `{ copyFromVersionId }` → `DRAFT` vN+1, definicija = kopija.
 2. `PUT .../versions/:vid` `{ definition }` — dodana/uklonjena polja **moraju** biti u tijelu.
-3. `POST .../publish` `{ changeNote }` čita **sačuvanu** definiciju nacrta.
+3. `POST .../publish` `{ changeNote, confirmNormalizedRemoval? }` čita **sačuvanu** definiciju nacrta.
 4. `GET` verzije/`active` vraća novu definiciju; `contentHash` ≠ hash izvora ako se polja razlikuju.
 
 Kopija bez koraka 2, pa objava, **jeste** klon — dozvoljeno. Korak 2 + 3 **ne smije** vratiti klon.
@@ -34,6 +34,7 @@ Kopija bez koraka 2, pa objava, **jeste** klon — dozvoljeno. Korak 2 + 3 **ne 
 | **FV-NOTE** | `changeNote` < 5 | 400, nacrt ostaje | isti spec |
 | **FV-COMPARE** | Copy → ukloni polje → Sačuvaj → Uporedi | Diff `− polje napomena` | isti spec |
 | **FV-XOR** | `POST /versions` bez xor copy/definition | 400 `VALIDATION_ERROR` | stub u copy specu (oba ili nijedno) |
+| **FV-NORM** | Ukloni mapirano polje → Objavi bez potvrde → s potvrdom | UI checkbox; bez potvrde nema publish; sa `confirmNormalizedRemoval: true` objava prolazi | `forms-version-workflow.test.tsx` |
 
 ## Keš
 
@@ -50,7 +51,8 @@ Kopija bez koraka 2, pa objava, **jeste** klon — dozvoljeno. Korak 2 + 3 **ne 
 | `POST /versions` | ni copy ni definition (ili oba) | `400 VALIDATION_ERROR` |
 | `publish` | `changeNote` < 5 (Zod) | `400 VALIDATION_ERROR` |
 | `publish` | nevalidna definicija / U-16 | `422` |
-| `publish` | uklonjeno mapirano polje | `422 NORMALIZED_FIELD_REMOVED` |
+| `publish` | uklonjeno mapirano polje, bez potvrde | `422 NORMALIZED_FIELD_REMOVED` |
+| `publish` | isto, uz checkbox u builderu | UI šalje `confirmNormalizedRemoval: true`; objava prolazi |
 | `retire` aktivne bez zamjene | nema druge `PUBLISHED` | `422` |
 
 ## Permisije
