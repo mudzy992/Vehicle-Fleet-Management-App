@@ -1,6 +1,8 @@
 import { ALLOWED_VALIDATION_KEYS, REFERENCE_ENTITY_TYPES } from '@vfm/form-engine/field-types';
 import type { FieldDefinition } from '@vfm/form-engine/definition';
 import { Field, inputClassName } from '../../components/ui/index.js';
+import { CommaSeparatedInput } from './comma-separated-input.js';
+import { parseMimeTypes } from './comma-separated.js';
 
 const BOOLEAN_RULES = new Set([
   'trim',
@@ -102,22 +104,22 @@ export function FieldValidationEditor({
             );
           }
           if (ARRAY_RULES.has(key)) {
-            const values = Array.isArray(value) ? value.join(', ') : '';
             return (
-              <Field key={key} label={label} htmlFor={id} hint="Vrijednosti odvojiti zarezom.">
-                <input
+              <Field
+                key={key}
+                label={label}
+                htmlFor={id}
+                hint={
+                  key === 'mimeTypes'
+                    ? 'Npr. image/jpeg, image/png ili JPG, PNG, GIF.'
+                    : 'Vrijednosti odvojiti zarezom.'
+                }
+              >
+                <CommaSeparatedInput
                   id={id}
-                  className={inputClassName}
-                  value={values}
-                  onChange={(event) =>
-                    update(
-                      key,
-                      event.target.value
-                        .split(',')
-                        .map((item) => item.trim())
-                        .filter(Boolean),
-                    )
-                  }
+                  value={value}
+                  parse={key === 'mimeTypes' ? parseMimeTypes : undefined}
+                  onChange={(items) => update(key, items.length > 0 ? items : undefined)}
                 />
               </Field>
             );
