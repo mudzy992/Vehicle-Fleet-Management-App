@@ -138,7 +138,16 @@ run_stage() {
     echo "::error title=Mobile E2E::$stage failed with exit $status"
     if [[ "$stage" == maestro-* ]]; then
       # GitHub prikazuje samo ~10 anotacija po koraku, a logovi runa nisu
-      # preuzimljivi u ovom okruženju — zato UI hijerarhija ide prva.
+      # preuzimljivi u ovom okruženju — zato JS/Android greške i tekstovi s
+      # ekrana idu prvi, prije ostalih dijagnostika.
+      timeout 12s adb logcat -d -t 400 2>/dev/null \
+        | grep -E 'ReactNativeJS|AndroidRuntime|FATAL EXCEPTION' \
+        | grep -viE 'Displayed|Choreographer|OpenGLRenderer' \
+        | tail -n 6 \
+        | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local|superadmin@vfm[.]local/[MASKED EMAIL]/g' \
+            -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_SUPER_ADMIN_PASSWORD:-}/[MASKED]/g" \
+        | cut -c1-600 \
+        | while IFS= read -r line; do echo "::error title=Android log::$line"; done || true
       for attempt in 1 2 3; do
         if timeout 12s adb shell uiautomator dump --compressed /sdcard/p4-window.xml >/dev/null 2>&1; then
           break
@@ -148,8 +157,8 @@ run_stage() {
       timeout 8s adb shell cat /sdcard/p4-window.xml 2>/dev/null \
         | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local|superadmin@vfm[.]local/[MASKED EMAIL]/g' \
             -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_SUPER_ADMIN_PASSWORD:-}/[MASKED]/g" \
-        | grep -oE 'resource-id="[^"]*"|text="[^"]+"' \
-        | head -n 8 \
+        | grep -oE 'text="[^"]+"|content-desc="[^"]+"' \
+        | head -n 12 \
         | while IFS= read -r line; do echo "::error title=Android UI::$line"; done || true
     fi
     echo '::error title=Android diagnostics::Failure handler reached before emulator teardown.'
