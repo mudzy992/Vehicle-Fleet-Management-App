@@ -39,20 +39,27 @@ appId: ba.ba101.voznipark
     element:
       id: "task-create-type-fuel_refill"
     direction: DOWN
+    centerElement: true
+    waitToSettleTimeoutMs: 800
     timeout: 30000
 - tapOn:
     id: "task-create-type-fuel_refill"
 # Promjena vrste resetuje odabir vozila i ponovo renderuje listu; na
 # opterećenom emulatoru tapovi u tom trenutku umeju biti izgubljeni, a dugme
-# "Nastavi" ostane onemogućeno (`requiresVehicle && !vehicleId`). Zato se svaki
-# odabir ponavlja (nije toggle) i čeka se da se animacije smire.
+# "Nastavi" ostane onemogućeno (`requiresVehicle && !vehicleId`). Zato se red
+# centrira (`centerElement`), čeka smirivanje liste prije tapa, a odabir
+# (nije toggle) se ponavlja.
 - waitForAnimationToEnd:
     timeout: 5000
 - scrollUntilVisible:
     element:
       id: "task-create-vehicle-vfm-001"
     direction: DOWN
+    centerElement: true
+    waitToSettleTimeoutMs: 800
     timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
 - tapOn:
     id: "task-create-vehicle-vfm-001"
 - waitForAnimationToEnd:
