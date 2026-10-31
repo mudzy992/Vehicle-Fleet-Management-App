@@ -295,11 +295,11 @@ export function TaskDetailPage() {
                 ? commentsQuery.error.message
                 : 'Greška pri učitavanju komentara.'}
             </p>
-          ) : (commentsQuery.data?.items.length ?? 0) === 0 ? (
+          ) : (commentsQuery.data?.items?.length ?? 0) === 0 ? (
             <p className="text-sm text-fg-muted">Još nema komentara.</p>
           ) : (
             <ul className="space-y-3">
-              {commentsQuery.data!.items.map((item) => (
+              {(commentsQuery.data?.items ?? []).map((item) => (
                 <li key={item.id} className="rounded-md bg-surface-muted p-3">
                   <p className="whitespace-pre-wrap text-sm">{item.body}</p>
                   <p className="mt-2 text-xs text-fg-muted">
