@@ -134,6 +134,7 @@ export function CreateTaskStepThree({
   uploadingField,
   canUpload,
   error,
+  localUris,
   onChange,
   onCamera,
   onGallery,
@@ -146,6 +147,7 @@ export function CreateTaskStepThree({
   uploadingField: string | null;
   canUpload: boolean;
   error: string | null;
+  localUris?: Record<string, string>;
   onChange(key: string, value: unknown): void;
   onCamera(field: RenderField): void;
   onGallery(field: RenderField): void;
@@ -158,7 +160,7 @@ export function CreateTaskStepThree({
         <View key={section.key} style={styles.section}>
           <Text style={styles.sectionTitle}>{section.title}</Text>
           {section.fields.map((field) => (
-            <FieldControl key={field.key} field={field} value={values[field.key]} disabled={submitting || uploadingField !== null || field.disabled} uploadLocked={submitting || uploadingField !== null} onChange={(value) => onChange(field.key, value)} onCamera={() => onCamera(field)} onGallery={() => onGallery(field)} onDocument={() => onDocument(field)} canUpload={canUpload} uploading={uploadingField === field.key} />
+            <FieldControl key={field.key} field={field} value={values[field.key]} disabled={submitting || uploadingField !== null || field.disabled} uploadLocked={submitting || uploadingField !== null} onChange={(value) => onChange(field.key, value)} onCamera={() => onCamera(field)} onGallery={() => onGallery(field)} onDocument={() => onDocument(field)} canUpload={canUpload} uploading={uploadingField === field.key} localUris={localUris} />
           ))}
         </View>
       ) : null) : <Text accessibilityRole="alert" style={styles.error}>{error ?? 'Obrazac se ne može prikazati.'}</Text>}

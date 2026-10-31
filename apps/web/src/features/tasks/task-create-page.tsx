@@ -12,6 +12,7 @@ import type {
   VehicleListResponse,
 } from '@vfm/shared/schemas';
 import { parseDefinition } from '@vfm/form-engine/definition';
+import { AttachmentGallery } from './attachment-gallery.js';
 import type { RenderModel } from '@vfm/form-renderer';
 import { buildRenderModel } from '@vfm/form-renderer';
 import {
@@ -580,6 +581,16 @@ export function TaskCreatePage() {
                             Dodano fajlova: {ids.length}
                             {uploadingField === field.key ? ' · Upload u toku…' : ''}
                           </p>
+                          <AttachmentGallery
+                            ids={ids}
+                            kind={field.type === 'FILE' ? 'FILE' : 'PHOTO'}
+                            onRemove={(id) =>
+                              setFormData((current) => ({
+                                ...current,
+                                [field.key]: ids.filter((item) => item !== id),
+                              }))
+                            }
+                          />
                         </Field>
                       );
                     })}

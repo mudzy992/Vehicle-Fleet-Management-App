@@ -8,6 +8,11 @@ import { buildRenderModel, formatFieldValue } from '@vfm/form-renderer';
 import { Card, CardContent, CardHeader } from '../../components/ui/index.js';
 import { api } from '../../lib/api.js';
 import { sarajevoToday } from '../forms/forms-preview-values.js';
+import { AttachmentGallery } from './attachment-gallery.js';
+
+function stringIds(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
 
 function linkedPath(task: TaskDetail): string | null {
   if (!task.linkedRecordId || !task.vehicleId) return task.vehicleId ? `/vozila/${task.vehicleId}` : null;
@@ -49,9 +54,15 @@ export function TaskOrderBlock({ task }: { task: TaskDetail }) {
           <dl className="grid gap-3 sm:grid-cols-2">
             {model.sections.flatMap((section) =>
               section.fields.map((field) => (
-                <div key={field.key} className="min-w-0">
+                <div key={field.key} className={field.widget === 'PHOTO' || field.widget === 'FILE' ? 'min-w-0 sm:col-span-2' : 'min-w-0'}>
                   <dt className="text-xs text-fg-muted">{field.label}</dt>
-                  <dd className="mt-1 break-words text-sm">{formatFieldValue(field)}</dd>
+                  <dd className="mt-1 break-words text-sm">
+                    {field.widget === 'PHOTO' || field.widget === 'FILE' ? (
+                      <AttachmentGallery ids={stringIds(field.value)} kind={field.widget} />
+                    ) : (
+                      formatFieldValue(field)
+                    )}
+                  </dd>
                 </div>
               )),
             )}

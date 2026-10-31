@@ -11,6 +11,11 @@ const TONE: Record<string, { color: string; background: string }> = {
   default: { color: colors.ink, background: colors.neutralSoft },
 };
 
+export function statusAccent(value: string, domain?: LabelDomain): string {
+  const level = statusLevel(value, domain);
+  return (TONE[level] ?? TONE.default).color;
+}
+
 export function StatusBadge({ value, domain }: { value: string; domain?: LabelDomain }) {
   const level = statusLevel(value, domain);
   const tone = TONE[level] ?? TONE.default;

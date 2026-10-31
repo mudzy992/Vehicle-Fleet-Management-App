@@ -3,8 +3,13 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { buildRenderModel, formatFieldValue, type RenderModel } from '@vfm/form-renderer/render-model';
 import { parseDefinition } from '@vfm/form-engine/definition';
 import { toLocalDateString } from '@vfm/shared';
+import { AttachmentThumbs } from '@/features/tasks/attachment-thumbs';
 import { mobileApi, toUserMessage, type TaskDetail } from '@/lib/api';
 import { colors, radius, space, type } from '@/lib/theme';
+
+function stringIds(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
 
 export function TaskOrderReadonly({ task }: { task: TaskDetail }) {
   const [snapshot, setSnapshot] = useState<{ definition: unknown; version: number } | null>(null);
@@ -66,7 +71,11 @@ export function TaskOrderReadonly({ task }: { task: TaskDetail }) {
             {section.fields.map((field) => (
               <View key={field.key} style={styles.field}>
                 <Text style={styles.label}>{field.label}</Text>
-                <Text style={styles.value}>{formatFieldValue(field)}</Text>
+                {field.widget === 'PHOTO' || field.widget === 'FILE' ? (
+                  <AttachmentThumbs ids={stringIds(field.value)} kind={field.widget} />
+                ) : (
+                  <Text style={styles.value}>{formatFieldValue(field)}</Text>
+                )}
               </View>
             ))}
           </View>

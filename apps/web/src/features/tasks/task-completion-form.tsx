@@ -7,6 +7,7 @@ import { buildRenderModel } from '@vfm/form-renderer';
 import { Button, Card, CardContent, CardHeader, Field, inputClassName } from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
 import { FormFields } from '../forms/form-fields.js';
+import { AttachmentGallery } from './attachment-gallery.js';
 import { useSession } from '../auth/session.js';
 import { sarajevoToday } from '../forms/forms-preview-values.js';
 
@@ -180,6 +181,16 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
                       Dodano fajlova: {ids.length}
                       {uploadingField === field.key ? ' · Upload u toku…' : ''}
                     </p>
+                    <AttachmentGallery
+                      ids={ids}
+                      kind={field.type === 'FILE' ? 'FILE' : 'PHOTO'}
+                      onRemove={(id) =>
+                        setValues((current) => ({
+                          ...current,
+                          [field.key]: ids.filter((item) => item !== id),
+                        }))
+                      }
+                    />
                   </Field>
                 );
               })}

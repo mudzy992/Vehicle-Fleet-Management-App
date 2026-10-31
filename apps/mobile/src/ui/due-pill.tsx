@@ -11,6 +11,12 @@ const TONE: Record<string, { color: string; background: string }> = {
   neutral: { color: colors.ink, background: colors.neutralSoft },
 };
 
+export function dueAccent(value: string | null): string {
+  const meta = dueMeta(value);
+  const tone = meta ? TONE[meta.level] ?? TONE.neutral : TONE.neutral;
+  return tone.color;
+}
+
 export function DuePill({ value, label }: { value: string | null; label: string }) {
   const meta = dueMeta(value);
   const tone = meta ? TONE[meta.level] ?? TONE.neutral : TONE.neutral;

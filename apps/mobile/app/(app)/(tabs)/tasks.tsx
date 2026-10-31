@@ -5,12 +5,13 @@ import { useAuth } from '@/features/auth/auth-provider';
 import { isOfflineError, mobileApi, toUserMessage, type TaskSummary } from '@/lib/api';
 import { displayDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { colors, controlMinHeight, radius, space, type } from '@/lib/theme';
+import { colors, controlMinHeight, space, type } from '@/lib/theme';
 import { EmptyState } from '@/ui/empty-state';
+import { ListCard } from '@/ui/list-card';
 import { ErrorBanner } from '@/ui/error-banner';
 import { Screen } from '@/ui/screen';
 import { SkeletonList } from '@/ui/skeleton';
-import { StatusBadge } from '@/ui/status-badge';
+import { StatusBadge, statusAccent } from '@/ui/status-badge';
 
 type TaskListMode = 'MINE' | 'AVAILABLE';
 
@@ -89,17 +90,19 @@ function ModeButton({ active, label, onPress }: { active: boolean; label: string
 function TaskCard({ item, showStatus }: { item: TaskSummary; showStatus: boolean }) {
   return (
     <Link href={{ pathname: '/task/[id]', params: { id: item.id } }} asChild>
-      <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]} accessibilityRole="button">
-        <View style={styles.cardTop}>
-          <Text style={styles.code}>{item.code}</Text>
-          <View style={styles.badges}>
-            {showStatus ? <StatusBadge value={item.status} domain="taskStatus" /> : null}
-            <StatusBadge value={item.priority} domain="taskPriority" />
+      <Pressable style={({ pressed }) => [pressed && styles.pressed]} accessibilityRole="button">
+        <ListCard accent={statusAccent(item.status, 'taskStatus')}>
+          <View style={styles.cardTop}>
+            <Text style={styles.code}>{item.code}</Text>
+            <View style={styles.badges}>
+              {showStatus ? <StatusBadge value={item.status} domain="taskStatus" /> : null}
+              <StatusBadge value={item.priority} domain="taskPriority" />
+            </View>
           </View>
-        </View>
-        <Text style={styles.cardTitle}>{item.title}</Text>
-        <Text style={styles.meta}>{item.taskTypeName}{item.vehicleInternalNo ? ` · ${item.vehicleInternalNo}` : ''}</Text>
-        <Text style={styles.due}>Rok: {displayDateTime(item.dueAt) ?? 'Bez roka'}</Text>
+          <Text style={styles.cardTitle}>{item.title}</Text>
+          <Text style={styles.meta}>{item.taskTypeName}{item.vehicleInternalNo ? ` · ${item.vehicleInternalNo}` : ''}</Text>
+          <Text style={styles.due}>Rok: {displayDateTime(item.dueAt) ?? 'Bez roka'}</Text>
+        </ListCard>
       </Pressable>
     </Link>
   );
@@ -111,9 +114,8 @@ const styles = StyleSheet.create({
   modeButtonActive: { backgroundColor: colors.primary },
   modeText: { color: colors.ink, fontSize: 14, fontWeight: '700' },
   modeTextActive: { color: colors.primaryFg },
-  list: { gap: space[3], paddingBottom: 96 },
+  list: { gap: 10, paddingBottom: 96 },
   emptyList: { flexGrow: 1, justifyContent: 'center', paddingBottom: 96 },
-  card: { padding: space[4], borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: 7 },
   pressed: { opacity: 0.8 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   code: { color: colors.muted, fontWeight: '700', fontSize: 12 },

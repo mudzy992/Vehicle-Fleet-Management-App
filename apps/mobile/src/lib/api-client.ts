@@ -15,6 +15,10 @@ export function currentAccessToken(): string | null {
   return accessToken;
 }
 
+export function apiBaseUrl(): string {
+  return API_BASE;
+}
+
 export function currentSessionId(): string | null {
   return sessionId;
 }
@@ -133,6 +137,33 @@ export async function request<T>(path: string, init: RequestInit = {}, mayRefres
     throw new ApiError(error.message ?? `Zahtjev nije uspio (HTTP ${response.status}).`, response.status, error.code ?? 'HTTP_ERROR', error.requestId, error.details);
   }
   return body && 'data' in body ? body.data : (body as T);
+}
+
+export async function requestBinary(path: string, mayRefresh = true): Promise<ArrayBuffer> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        Accept: '*/*',
+        'X-Client-Type': 'MOBILE_ANDROID',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+    });
+  } catch {
+    throw new ApiError('Nema mrežne veze. Provjerite internet i pokušajte ponovo.', 0, 'NETWORK_ERROR');
+  }
+  if (response.status === 401 && mayRefresh && await refresh()) return requestBinary(path, false);
+  if (response.status === 401) {
+    clearSessionMemory();
+    await clearRefreshToken();
+    emitAuthExpired();
+  }
+  if (!response.ok) throw new ApiError(`Preuzimanje nije uspjelo (HTTP ${response.status}).`, response.status, 'HTTP_ERROR');
+  return response.arrayBuffer();
+}
+
+export async function refreshSession(): Promise<boolean> {
+  return refresh();
 }
 
 export async function restoreSession(): Promise<boolean> {

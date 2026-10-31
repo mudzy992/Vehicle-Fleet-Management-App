@@ -41,6 +41,7 @@ export async function uploadFiles(input: {
   existing: unknown;
   canUpload: boolean;
   onValues(ids: string[]): void;
+  onPreview?(id: string, uri: string): void;
   onError(message: string): void;
 }): Promise<void> {
   if (!input.canUpload) {
@@ -58,6 +59,7 @@ export async function uploadFiles(input: {
   for (const file of input.files) {
     const result = await mobileApi.uploadAttachment(file.uri, file.name, file.mimeType);
     ids.push(result.id);
+    input.onPreview?.(result.id, file.uri);
     input.onValues([...ids]);
   }
 }

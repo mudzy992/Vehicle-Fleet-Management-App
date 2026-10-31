@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { type RenderField } from '@vfm/form-renderer/render-model';
-import { PhotoActions } from '@/features/tasks/photo-actions';
+import { PhotoField } from '@/features/tasks/photo-field';
 import { ApiError, mobileApi, toUserMessage } from '@/lib/api';
 import { t } from '@/lib/i18n';
 import { colors, controlMinHeight, radius, space, type } from '@/lib/theme';
@@ -24,7 +24,7 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
-export function FieldControl({ field, value, disabled, uploadLocked = false, onChange, onCamera, onGallery, onDocument, canUpload, uploading }: {
+export function FieldControl({ field, value, disabled, uploadLocked = false, onChange, onCamera, onGallery, onDocument, canUpload, uploading, localUris }: {
   field: RenderField;
   value: unknown;
   disabled: boolean;
@@ -35,6 +35,7 @@ export function FieldControl({ field, value, disabled, uploadLocked = false, onC
   onDocument(): void;
   canUpload: boolean;
   uploading: boolean;
+  localUris?: Record<string, string>;
 }) {
   const [loadedOptions, setLoadedOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
@@ -133,18 +134,19 @@ export function FieldControl({ field, value, disabled, uploadLocked = false, onC
           return <Pressable key={option.value} testID={`task-form-option-${field.key}-${option.value}`} accessibilityRole={multiple ? 'checkbox' : 'radio'} accessibilityState={{ selected: active }} onPress={() => onChange(multiple ? (active ? selected.filter((item) => item !== option.value) : [...selected, option.value]) : active ? undefined : nextValue)} disabled={disabled || ('disabled' in option && option.disabled === true)} style={[styles.option, active && styles.optionActive]}><Text style={[styles.optionText, active && styles.optionTextActive]}>{option.label}</Text></Pressable>;
         })}</View> : <Text style={styles.help}>{loadingOptions ? 'Učitavanje izbora…' : optionError ?? (reference ? 'Nema dostupnih zapisa ili nedostaje dozvola za pregled.' : 'Šifarnik je prazan ili nije dostupan.')}</Text>
       ) : field.widget === 'PHOTO' || field.widget === 'FILE' ? (
-        canUpload ? (
-          <PhotoActions
-            widget={field.widget}
-            locked={uploadLocked || field.disabled}
-            uploading={uploading}
-            count={stringArray(value).length}
-            required={field.required}
-            onCamera={onCamera}
-            onGallery={onGallery}
-            onDocument={onDocument}
-          />
-        ) : <Text style={styles.help}>Za upload je potrebna dozvola attachment:upload.</Text>
+        <PhotoField
+          widget={field.widget}
+          value={value}
+          required={field.required}
+          locked={uploadLocked || field.disabled}
+          uploading={uploading}
+          canUpload={canUpload}
+          localUris={localUris}
+          onCamera={onCamera}
+          onGallery={onGallery}
+          onDocument={onDocument}
+          onRemove={(id) => onChange(stringArray(value).filter((item) => item !== id))}
+        />
       ) : (
         <AppTextField
           value={fieldText(field, value)}

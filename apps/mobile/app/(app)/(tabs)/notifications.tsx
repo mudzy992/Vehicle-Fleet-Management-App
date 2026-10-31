@@ -8,8 +8,9 @@ import { useUnreadCount } from '@/features/notifications/unread-store';
 import { mobileApi, toUserMessage, type NotificationSummary } from '@/lib/api';
 import { displayDateTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { colors, radius, space, type } from '@/lib/theme';
+import { colors, type } from '@/lib/theme';
 import { EmptyState } from '@/ui/empty-state';
+import { ListCard } from '@/ui/list-card';
 import { ErrorBanner } from '@/ui/error-banner';
 import { Screen } from '@/ui/screen';
 import { SkeletonList } from '@/ui/skeleton';
@@ -97,17 +98,19 @@ export default function NotificationsScreen() {
           ListEmptyComponent={<EmptyState title="Nema obavijesti" hint="Nove obavijesti će se prikazati ovdje." />}
           ListFooterComponent={total > items.length ? <Text style={styles.muted}>{t('loadMoreHint')}</Text> : null}
           renderItem={({ item }) => (
-            <Pressable accessibilityRole="button" onPress={() => { void markRead(item); openNotificationLink(item.linkToType, item.linkToId); }} disabled={markingId !== null || (!item.isRead && !canMarkRead)} style={[styles.card, !item.isRead && styles.unread]}>
-              <View style={styles.row}>
-                <View style={[styles.icon, !item.isRead && styles.iconUnread]}>
-                  <MaterialCommunityIcons name={item.isRead ? 'bell-outline' : 'bell-badge'} size={21} color={item.isRead ? colors.muted : colors.primary} />
+            <Pressable accessibilityRole="button" onPress={() => { void markRead(item); openNotificationLink(item.linkToType, item.linkToId); }} disabled={markingId !== null || (!item.isRead && !canMarkRead)} style={({ pressed }) => [pressed && styles.pressed]}>
+              <ListCard accent={item.isRead ? undefined : colors.primary}>
+                <View style={styles.row}>
+                  <View style={[styles.icon, !item.isRead && styles.iconUnread]}>
+                    <MaterialCommunityIcons name={item.isRead ? 'bell-outline' : 'bell-badge'} size={21} color={item.isRead ? colors.muted : colors.primary} />
+                  </View>
+                  <View style={styles.content}>
+                    <Text style={styles.title}>{item.title}</Text>
+                    {item.body ? <Text style={item.isRead ? styles.body : styles.bodyUnread}>{item.body}</Text> : null}
+                    <Text style={styles.date}>{displayDateTime(item.createdAt)}</Text>
+                  </View>
                 </View>
-                <View style={styles.content}>
-                  <Text style={styles.title}>{item.title}</Text>
-                  {item.body ? <Text style={item.isRead ? styles.body : styles.bodyUnread}>{item.body}</Text> : null}
-                  <Text style={styles.date}>{displayDateTime(item.createdAt)}</Text>
-                </View>
-              </View>
+              </ListCard>
             </Pressable>
           )}
         />
@@ -123,8 +126,7 @@ const styles = StyleSheet.create({
   markAllText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
   list: { gap: 10, paddingBottom: 24 },
   emptyList: { flexGrow: 1, justifyContent: 'center' },
-  card: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 14, padding: 14 },
-  unread: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  pressed: { opacity: 0.8 },
   row: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   icon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   iconUnread: { backgroundColor: colors.primarySoft },

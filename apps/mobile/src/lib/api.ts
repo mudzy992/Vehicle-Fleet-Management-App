@@ -14,7 +14,7 @@ import {
   storeDeviceTokenId,
   storeRefreshToken,
 } from '@/lib/api-client';
-import { appendAttachmentFile } from '@/lib/api-form-data';
+import { uploadMultipart } from '@/lib/api-upload';
 import { ApiError } from '@/lib/api-error';
 import type {
   ActiveSession,
@@ -35,7 +35,7 @@ import type {
 } from '@/lib/api-types';
 
 export { ApiError, toUserMessage, isOfflineError } from '@/lib/api-error';
-export { onAuthExpired, currentSessionId, readDeviceTokenId, storeDeviceTokenId, clearDeviceTokenId } from '@/lib/api-client';
+export { onAuthExpired, currentAccessToken, currentSessionId, readDeviceTokenId, storeDeviceTokenId, clearDeviceTokenId } from '@/lib/api-client';
 export type * from '@/lib/api-types';
 
 const UNSUPPORTED_RECORD_TYPES = new Set(['VEHICLE_HANDOVER', 'OTHER']);
@@ -134,9 +134,7 @@ export const mobileApi = {
     request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/claim`, { method: 'POST', body: JSON.stringify({}) }),
   completeTask: (id: string, version: number, formData: Record<string, unknown>, extra: { comment?: string; odometerKm?: number } = {}) =>
     request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/complete`, { method: 'POST', body: JSON.stringify({ version, realizationFormData: formData, ...extra }) }),
-  uploadAttachment: async (uri: string, fileName: string, mimeType: string) => {
-    const form = new FormData();
-    await appendAttachmentFile(form, uri, fileName, mimeType);
-    return request<AttachmentUploadResult>('/attachments', { method: 'POST', body: form });
-  },
+  uploadAttachment: (uri: string, fileName: string, mimeType: string) =>
+    uploadMultipart<AttachmentUploadResult>('/attachments', { uri, name: fileName, mimeType }),
+  attachmentUrl: (id: string) => request<{ url: string; expiresAt: string; token: string }>(`/attachments/${encodeURIComponent(id)}/url`),
 };

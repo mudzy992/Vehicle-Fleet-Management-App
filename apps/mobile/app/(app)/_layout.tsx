@@ -35,6 +35,7 @@ export default function AppLayout() {
         <Stack.Screen name="task/create" options={{ headerShown: true, title: 'Novi zadatak', headerBackTitle: 'Nazad' }} />
         <Stack.Screen name="task/[id]" options={{ headerShown: true, title: 'Zadatak', headerBackTitle: 'Nazad' }} />
         <Stack.Screen name="vehicle/[id]" options={{ headerShown: true, title: 'Vozilo', headerBackTitle: 'Nazad' }} />
+        <Stack.Screen name="profile" options={{ headerShown: false }} />
       </Stack>
       </RealtimeProvider>
     </UnreadProvider>

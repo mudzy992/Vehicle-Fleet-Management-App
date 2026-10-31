@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { buildRenderModel, collectSubmitValues, type RenderField, type RenderModel } from '@vfm/form-renderer/render-model';
 import { parseDefinition } from '@vfm/form-engine/definition';
@@ -9,8 +9,9 @@ import { CreateTaskStepOne, CreateTaskStepThree, CreateTaskStepTwo } from '@/fea
 import { pickDocument, pickPhoto, uploadFiles } from '@/features/tasks/upload-picked';
 import { ApiError, mobileApi, toUserMessage, type ActiveTaskForm, type MobileTaskType, type UserSummary, type VehicleSummary } from '@/lib/api';
 import { dueAtFromDate } from '@/lib/format';
+import { createTaskStyles as styles } from '@/features/tasks/create-task-styles';
 import { AppButton } from '@/ui/button';
-import { colors, type } from '@/lib/theme';
+import { colors } from '@/lib/theme';
 
 type AssignMode = 'OPEN_CLAIM' | 'ASSIGN_DIRECT' | 'BROADCAST';
 
@@ -42,6 +43,7 @@ export function CreateTaskScreen() {
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Array<{ key: string; code: string; message: string }>>([]);
+  const [previews, setPreviews] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!canCreate) return;
@@ -99,7 +101,15 @@ export function CreateTaskScreen() {
     try {
       const files = source === 'FILE' ? await pickDocument(field) : await pickPhoto(field, source);
       setUploadingField(field.key);
-      await uploadFiles({ field, files, existing: values[field.key], canUpload: user?.permissions.includes('attachment:upload') === true, onValues: (ids) => setValues((current) => ({ ...current, [field.key]: ids })), onError: setError });
+      await uploadFiles({
+        field,
+        files,
+        existing: values[field.key],
+        canUpload: user?.permissions.includes('attachment:upload') === true,
+        onValues: (ids) => setValues((current) => ({ ...current, [field.key]: ids })),
+        onPreview: (id, uri) => setPreviews((current) => ({ ...current, [id]: uri })),
+        onError: setError,
+      });
     } catch (cause) {
       setError(toUserMessage(cause, 'Upload priloga nije uspio.'));
     } finally {
@@ -151,7 +161,6 @@ export function CreateTaskScreen() {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: 'Novi zadatak' }} />
-      {step === 2 ? <View style={styles.stepBar}><AppButton testID="task-create-next-step-2" label="Nastavi na obrazac" disabled={step2BlockReason !== null} onPress={() => { setError(null); setStep(3); }} /></View> : null}
       <ScrollView style={styles.flex} contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <View style={styles.heading}><Text style={styles.title}>Novi zadatak</Text><Text style={styles.muted}>Korak {step} od 3</Text></View>
         <View style={styles.progress}><View style={[styles.progressFill, { width: `${(step / 3) * 100}%` }]} /></View>
@@ -170,32 +179,18 @@ export function CreateTaskScreen() {
           />
         ) : null}
         {step === 3 ? (
-          <CreateTaskStepThree formLoading={formLoading} model={model} values={values} submitting={submitting} uploadingField={uploadingField} canUpload={user?.permissions.includes('attachment:upload') ?? false} error={error} onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} onCamera={(field) => void handleUpload(field, 'CAMERA')} onGallery={(field) => void handleUpload(field, 'GALLERY')} onDocument={(field) => void handleUpload(field, 'FILE')} />
+          <CreateTaskStepThree formLoading={formLoading} model={model} values={values} submitting={submitting} uploadingField={uploadingField} canUpload={user?.permissions.includes('attachment:upload') ?? false} error={error} localUris={previews} onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} onCamera={(field) => void handleUpload(field, 'CAMERA')} onGallery={(field) => void handleUpload(field, 'GALLERY')} onDocument={(field) => void handleUpload(field, 'FILE')} />
         ) : null}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       </ScrollView>
       <View style={styles.footer}>
         <View style={styles.actions}>
-          {step > 1 ? <AppButton label="Nazad" variant="secondary" disabled={submitting || uploadingField !== null} onPress={() => setStep((current) => (current - 1) as 1 | 2 | 3)} /> : null}
-          {step === 1 ? <AppButton testID="task-create-next-step-1" label="Nastavi" disabled={!selectedType || (selectedType.requiresVehicle && !vehicleId)} onPress={() => { setError(null); setStep(2); }} /> : null}
-          {step === 3 ? <AppButton testID="task-create-submit" label={submitting ? 'Kreiram…' : 'Kreiraj zadatak'} disabled={!model || submitting || uploadingField !== null} loading={submitting} onPress={() => void submit()} /> : null}
+          {step > 1 ? <AppButton label="Nazad" variant="secondary" disabled={submitting || uploadingField !== null} style={styles.footerBtn} onPress={() => setStep((current) => (current - 1) as 1 | 2 | 3)} /> : null}
+          {step === 1 ? <AppButton testID="task-create-next-step-1" label="Nastavi" style={styles.footerBtn} disabled={!selectedType || (selectedType.requiresVehicle && !vehicleId)} onPress={() => { setError(null); setStep(2); }} /> : null}
+          {step === 2 ? <AppButton testID="task-create-next-step-2" label="Nastavi na obrazac" style={styles.footerBtn} disabled={step2BlockReason !== null} onPress={() => { setError(null); setStep(3); }} /> : null}
+          {step === 3 ? <AppButton testID="task-create-submit" label={submitting ? 'Kreiram…' : 'Kreiraj zadatak'} style={styles.footerBtn} disabled={!model || submitting || uploadingField !== null} loading={submitting} onPress={() => void submit()} /> : null}
         </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  page: { padding: 18, gap: 14, paddingBottom: 140 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
-  heading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { color: colors.ink, fontSize: 22, fontWeight: '800' },
-  muted: { color: colors.muted, ...type.sm, lineHeight: 19 },
-  progress: { height: 6, backgroundColor: colors.surfaceMuted, borderRadius: 99, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 99 },
-  stepBar: { paddingHorizontal: 18, paddingVertical: 8, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 18, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
-  actions: { flexDirection: 'row', gap: 10 },
-  error: { color: colors.danger, ...type.sm, lineHeight: 19 },
-});

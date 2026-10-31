@@ -5,8 +5,9 @@ import { useAuth } from '@/features/auth/auth-provider';
 import { isOfflineError, mobileApi, toUserMessage, type VehicleSummary } from '@/lib/api';
 import { displayOdometer } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { colors, radius, space, type } from '@/lib/theme';
-import { DuePill } from '@/ui/due-pill';
+import { colors, space, type } from '@/lib/theme';
+import { DuePill, dueAccent } from '@/ui/due-pill';
+import { ListCard } from '@/ui/list-card';
 import { EmptyState } from '@/ui/empty-state';
 import { ErrorBanner } from '@/ui/error-banner';
 import { Screen } from '@/ui/screen';
@@ -58,15 +59,17 @@ export default function VehiclesScreen() {
           ListFooterComponent={total > items.length ? <Text style={styles.more}>{t('loadMoreHint')}</Text> : null}
           renderItem={({ item }) => (
             <Link href={{ pathname: '/vehicle/[id]', params: { id: item.id } }} asChild>
-              <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]} accessibilityRole="button">
-                <View style={styles.cardTop}>
-                  <Text style={styles.internalNo}>{item.internalNo}</Text>
-                  <StatusBadge value={item.status} domain="vehicle" />
-                </View>
-                <Text style={styles.vehicleName}>{item.make} {item.model}{item.year ? ` · ${item.year}` : ''}</Text>
-                <Text style={styles.meta}>{item.plateNumber ?? 'Bez registarske oznake'}</Text>
-                <Text style={styles.odometer}>{displayOdometer(item.odometerKm)}</Text>
-                <DuePill label="Registracija" value={item.registrationExpiresAt} />
+              <Pressable style={({ pressed }) => [pressed && styles.pressed]} accessibilityRole="button">
+                <ListCard accent={dueAccent(item.registrationExpiresAt)}>
+                  <View style={styles.cardTop}>
+                    <Text style={styles.internalNo}>{item.internalNo}</Text>
+                    <StatusBadge value={item.status} domain="vehicle" />
+                  </View>
+                  <Text style={styles.vehicleName}>{item.make} {item.model}{item.year ? ` · ${item.year}` : ''}</Text>
+                  <Text style={styles.meta}>{item.plateNumber ?? 'Bez registarske oznake'}</Text>
+                  <Text style={styles.odometer}>{displayOdometer(item.odometerKm)}</Text>
+                  <DuePill label="Registracija" value={item.registrationExpiresAt} />
+                </ListCard>
               </Pressable>
             </Link>
           )}
@@ -77,9 +80,8 @@ export default function VehiclesScreen() {
 }
 
 const styles = StyleSheet.create({
-  list: { gap: space[3], paddingBottom: space[5] },
+  list: { gap: 10, paddingBottom: space[5] },
   emptyList: { flexGrow: 1, justifyContent: 'center' },
-  card: { padding: space[4], borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: 7 },
   pressed: { opacity: 0.8 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   internalNo: { color: colors.primary, fontWeight: '800', fontSize: 13 },

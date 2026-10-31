@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { buildRenderModel, collectSubmitValues, type RenderField, type RenderModel } from '@vfm/form-renderer/render-model';
 import { parseDefinition } from '@vfm/form-engine/definition';
 import { toLocalDateString } from '@vfm/shared';
 import { ApiError, mobileApi, toUserMessage, type TaskDetail } from '@/lib/api';
 import { FieldControl } from '@/features/tasks/field-control';
+import { dynamicTaskFormStyles as styles } from '@/features/tasks/dynamic-task-form-styles';
 import { TaskOrderReadonly } from '@/features/tasks/task-order-readonly';
 import { pickDocument, pickPhoto, uploadFiles } from '@/features/tasks/upload-picked';
-import { colors, radius, space, stickyCtaHeight, type } from '@/lib/theme';
+import { colors } from '@/lib/theme';
 import { AppTextField } from '@/ui/text-field';
 
 interface Props {
@@ -33,6 +34,7 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
   const [fieldErrors, setFieldErrors] = useState<Array<{ key: string; code: string; message: string }>>([]);
   const [comment, setComment] = useState('');
   const [odometer, setOdometer] = useState('');
+  const [previews, setPreviews] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!isInProgress) return;
@@ -77,6 +79,7 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
         existing: values[field.key],
         canUpload,
         onValues: (ids) => setValues((current) => ({ ...current, [field.key]: ids })),
+        onPreview: (id, uri) => setPreviews((current) => ({ ...current, [id]: uri })),
         onError: setError,
       });
     } catch (cause) {
@@ -163,6 +166,7 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
                     onDocument={() => void handleUpload(field, 'FILE')}
                     canUpload={canUpload}
                     uploading={activeUpload === field.key}
+                    localUris={previews}
                   />
                 ))}
               </View>
@@ -185,19 +189,3 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: { gap: space[3] },
-  formTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' },
-  muted: { color: colors.muted, ...type.sm, lineHeight: 20 },
-  section: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.lg, padding: space[3], gap: space[3] },
-  sectionTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
-  textarea: { minHeight: 90, textAlignVertical: 'top' },
-  submit: { minHeight: stickyCtaHeight, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: radius.lg, marginBottom: 10 },
-  submitText: { color: colors.primaryFg, fontSize: 16, fontWeight: '800' },
-  pressed: { opacity: 0.82 },
-  disabled: { backgroundColor: colors.surfaceMuted },
-  submitMuted: { color: colors.muted },
-  error: { color: colors.danger, ...type.sm, lineHeight: 19 },
-  state: { padding: 18, gap: 10, alignItems: 'center' },
-});
