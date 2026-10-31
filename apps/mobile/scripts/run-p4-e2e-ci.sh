@@ -43,8 +43,8 @@ sanitize_maestro_debug() {
       timeout 8s adb shell cat /sdcard/p4-window.xml 2>/dev/null \
         | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local|superadmin@vfm[.]local/[MASKED EMAIL]/g' \
             -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_SUPER_ADMIN_PASSWORD:-}/[MASKED]/g" \
-        | grep -E 'login-email|login-password|E-mail|Lozinka|focused=|Prijava' \
-        | head -n 15 \
+        | grep -oE 'resource-id="[^"]*"|text="[^"]+"|content-desc="[^"]+"' \
+        | head -n 40 \
         | while IFS= read -r line; do echo "::error title=Android UI node::$line"; done || true
       timeout 10s adb logcat -d -t 400 2>/dev/null \
         | grep -E 'ReactNativeJS|AndroidRuntime|ActivityTaskManager|FATAL EXCEPTION|Expo|ReactNative' \

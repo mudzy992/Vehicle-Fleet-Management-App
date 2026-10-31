@@ -183,6 +183,19 @@ jobs:
         env:
           P4_E2E_API_URL: http://127.0.0.1:3000/api/v1
         run: node apps/mobile/scripts/verify-p4-auth.mjs
+      - name: Provjeri aktivne ORDER/REALIZATION forme mobilnih vrsta zadataka
+        env:
+          P4_E2E_API_URL: http://127.0.0.1:3000/api/v1
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/verify-task-forms.log"
+          if ! node apps/mobile/scripts/verify-task-forms.mjs >"$log" 2>&1; then
+            tail -n 40 "$log" | while IFS= read -r line; do
+              echo "::error title=Provjera formi::$line"
+            done
+            exit 1
+          fi
+          cat "$log"
       - name: Pripremi OPEN WASH zadatak za claim/complete Maestro
         env:
           P4_E2E_API_URL: http://127.0.0.1:3000/api/v1
