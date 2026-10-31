@@ -22,7 +22,7 @@ export default function AppLayout() {
   return (
     <UnreadProvider>
       <RealtimeProvider>
-      <Stack>
+      <Stack
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.background },

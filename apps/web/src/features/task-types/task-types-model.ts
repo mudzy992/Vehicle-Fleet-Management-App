@@ -165,7 +165,8 @@ interface ParsedTaskTypeValues {
   readonly defaultAssignMode: TaskAssignMode;
   readonly allowMultipleClaimants: boolean;
   readonly dueOffsetHours: number | null;
-  readonly formSchemaId: string | null;
+  readonly orderFormSchemaId: string | null;
+  readonly realizationFormSchemaId: string | null;
   readonly sortOrder: number;
 }
 
@@ -261,7 +262,11 @@ export function buildTaskTypeUpdatePayload(
     throw new Error('Kod vrste zadatka se nakon kreiranje ne može mijenjati.');
   }
 
-  const parsed = parseTaskTypeValues(values, formSelectionAvailable, detail.formSchemaId);
+  const parsed = parseTaskTypeValues(
+    values,
+    formSelectionAvailable,
+    detail.orderFormSchemaId ?? detail.formSchemaId,
+  );
   const payload: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(parsed)) {
     if (detail[key as keyof ParsedTaskTypeValues] !== value) payload[key] = value;

@@ -1,10 +1,11 @@
 import { useEffect, type PropsWithChildren } from 'react';
+import type { Socket } from 'socket.io-client';
 import { useUnreadCount } from '@/features/notifications/unread-store';
 
 export function RealtimeProvider({ children }: PropsWithChildren) {
   const unread = useUnreadCount();
   useEffect(() => {
-    let socket: { disconnect: () => void } | null = null;
+    let socket: Socket | null = null;
     void import('socket.io-client')
       .then(({ io }) => {
         const origin = process.env.EXPO_PUBLIC_API_URL?.replace(/\/api\/v1\/?$/u, '') ?? '';

@@ -87,17 +87,20 @@ describe.skipIf(!isIsolatedCiDatabase)('P7 — završetak zadatka, override i Au
       ],
     );
 
+    //  Namjerno vrsta bez obaveznih polja u ORDER formi (legacy complete koristi
+    //  ORDER shemu dok `realizationFormSchemaVersionId` nije postavljen): ovaj
+    //  test mjeri autorizaciju završetka, ne formu.
     const formResult = await sql.query<{ taskTypeId: string; formSchemaId: string; versionId: string }>(
       `SELECT tt."id" AS "taskTypeId", fs."id" AS "formSchemaId",
               fs."currentPublishedVersionId" AS "versionId"
          FROM "TaskType" tt
          JOIN "FormSchema" fs ON fs."id" = tt."formSchemaId"
-        WHERE tt."code" = 'WASH' AND tt."active" = TRUE AND tt."deletedAt" IS NULL
+        WHERE tt."code" = 'FUEL_REFILL' AND tt."active" = TRUE AND tt."deletedAt" IS NULL
           AND fs."currentPublishedVersionId" IS NOT NULL
         LIMIT 1`,
     );
     const form = formResult.rows[0];
-    if (!form) throw new Error('Seedovana WASH vrsta i objavljena forma su obavezni za P7 test.');
+    if (!form) throw new Error('Seedovana FUEL_REFILL vrsta i objavljena forma su obavezni za P7 test.');
 
     for (const [taskId, suffix] of [
       [assigneeTaskId, 'assignee'],
@@ -111,7 +114,7 @@ describe.skipIf(!isIsolatedCiDatabase)('P7 — završetak zadatka, override i Au
            "formData", "version", "updatedAt"
          ) VALUES ($1::uuid, $2, $3, $4::uuid, 'NORMAL', 'IN_PROGRESS', 'OPEN_CLAIM',
                   $5::uuid, $6::uuid, CURRENT_TIMESTAMP, $7::uuid, $8::uuid,
-                  '{"washType":"INTERNAL"}'::jsonb, 1, CURRENT_TIMESTAMP)`,
+                  '{"napomena":"P7 testni nalog."}'::jsonb, 1, CURRENT_TIMESTAMP)`,
         [
           taskId,
           `${taskCodePrefix}-${suffix}`,
@@ -225,7 +228,7 @@ describe.skipIf(!isIsolatedCiDatabase)('P7 — završetak zadatka, override i Au
       headers: { 'x-p7-user': userId, 'content-type': 'application/json' },
       body: JSON.stringify({
         version: 1,
-        formData: { washType: 'INTERNAL' },
+        formData: { napomena: 'P7 testni završetak.' },
         ...(reason ? { reason } : {}),
       }),
     });

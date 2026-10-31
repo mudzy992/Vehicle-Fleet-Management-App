@@ -649,7 +649,7 @@ export class TasksService {
           actor: access.actor,
           at: now,
           data: { commentId },
-          formSchemaVersionId: task.formSchemaVersionId,
+          formSchemaVersionId: task.orderFormSchemaVersionId,
         }),
       });
       await tx.outboxEvent.create({

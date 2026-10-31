@@ -1,0 +1,22 @@
+# Gitleaks konfiguracija — proširuje podrazumijevana pravila i dodaje SAMO
+# dokumentovane izuzetke (vidi objašnjenje ispod).
+#
+# Zašto postoji: `gitleaks/gitleaks-action@v2` automatski koristi
+# `(target path)/.gitleaks.toml`, pa ovaj fajl važi i u CI-u i lokalno
+# (`gitleaks git .`), bez posebnih env varijabli u workflow-u.
+[extend]
+useDefault = true
+
+[[allowlists]]
+id = "firebase-android-client-config"
+description = """
+`apps/mobile/google-services.json` je Firebase/Google Services klijentska
+konfiguracija. Google je eksplicitno dokumentovao da `api_key` iz ovog fajla
+NIJE tajna: identifikuje projekat u klijentskoj aplikaciji i mora biti javan da
+bi APK radio. Zaštita se ne postiže skrivanjem ključa, nego ograničenjima u
+Google Cloud/Firebase konzoli (Android app restriction: package name
+`ba.ba101.voznipark` + SHA-1 otisak potpisa; API restriction samo na potrebne
+servise). Zato je izuzet samo taj TAČAN fajl — svi ostali fajlovi ostaju pod
+punim gitleaks pravilima, uključujući `google-api-key`.
+"""
+paths = ['''^apps/mobile/google-services\.json$''']

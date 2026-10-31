@@ -516,7 +516,7 @@ export function FormsPage() {
             </Card>
           ) : null}
 
-          {selected && versionQuery.data ? (
+          {selected && versionQuery.data && detail ? (
             <Card>
               <CardHeader
                 title={`Definicija v${selected.version}`}

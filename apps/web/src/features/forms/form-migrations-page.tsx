@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MIGRATION_TARGET_ENTITIES } from '@vfm/shared';
 import type { FormMigrationJob, FormMigrationPreview, FormSchemaSummary } from '@vfm/shared/schemas';
-import { Button, Card, CardContent, CardHeader, Field, inputClassName } from '../../components/ui/index.js';
+import { BareButton, Button, Card, CardContent, CardHeader, Field, inputClassName } from '../../components/ui/index.js';
 import { api } from '../../lib/api.js';
 
 export function FormMigrationsPage() {
@@ -116,9 +116,9 @@ export function FormMigrationsPage() {
         <CardContent className="space-y-2">
           {(jobsQuery.data ?? []).map((job) => (
             <div key={job.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2">
-              <button type="button" className="text-left text-sm" onClick={() => setSelectedId(job.id)}>
+              <BareButton className="text-left text-sm" onClick={() => setSelectedId(job.id)}>
                 {job.id} · {job.status} · {job.targetEntityType}
-              </button>
+              </BareButton>
               <div className="flex gap-2">
                 <Button size="sm" variant="secondary" onClick={() => preview.mutate(job.id)}>
                   Preview

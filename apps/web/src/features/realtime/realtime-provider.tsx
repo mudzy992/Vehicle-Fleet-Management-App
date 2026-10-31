@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import type { Socket } from 'socket.io-client';
 
 /** Osvježava listu zadataka i obavijesti kad API emituje Socket.IO `refresh`. */
 export function RealtimeProvider({ children }: { children: React.ReactNode }) {
@@ -7,7 +8,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const origin = window.location.origin.replace(/:\d+$/u, ':3000');
-    let socket: { disconnect: () => void } | null = null;
+    let socket: Socket | null = null;
     void import('socket.io-client')
       .then(({ io }) => {
         socket = io(`${origin}/realtime`, { transports: ['websocket'], withCredentials: true });

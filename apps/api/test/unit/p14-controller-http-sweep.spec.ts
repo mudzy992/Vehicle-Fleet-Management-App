@@ -33,6 +33,7 @@ import { RemindersController } from '../../src/modules/reminders/reminders.contr
 import { ReportsController } from '../../src/modules/reports/reports.controller.js';
 import { PermissionsController, RolesController } from '../../src/modules/roles/roles.controller.js';
 import { ServiceItemsController } from '../../src/modules/services/service-items.controller.js';
+import { SettingsController } from '../../src/modules/settings/settings.controller.js';
 import { ServicesController } from '../../src/modules/services/services.controller.js';
 import { TaskTypesController } from '../../src/modules/task-types/task-types.controller.js';
 import { TasksController } from '../../src/modules/tasks/tasks.controller.js';
@@ -61,6 +62,7 @@ const CONTROLLERS: readonly Type[] = [
   PermissionsController,
   ServiceItemsController,
   ServicesController,
+  SettingsController,
   TaskTypesController,
   TasksController,
   TireInstallationsController,

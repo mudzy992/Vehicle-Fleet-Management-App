@@ -14,7 +14,7 @@ export function inspectionDefinition(): Record<string, unknown> {
         fields: [
           {
             key: 'napomena',
-            type: 'TEXT',
+            type: 'TEXTAREA',
             label: 'Napomena',
             order: 1,
             required: false,

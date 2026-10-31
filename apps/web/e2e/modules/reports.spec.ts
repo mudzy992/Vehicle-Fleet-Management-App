@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { envelope, expectDenied, loginTo, openApp, startApp } from '../helpers/harness.js';
+import { envelope, expectDenied, loginTo, startApp } from '../helpers/harness.js';
 
 const catalog = {
   items: [
