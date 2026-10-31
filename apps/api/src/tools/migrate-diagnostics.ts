@@ -27,6 +27,60 @@ export interface PrismaRun {
 export function diagnosePrismaFailure(output: string): string[] {
   const text = output.toLowerCase();
   const hints: string[] = [];
+  const failedMigration = extractFailedMigrationName(output);
+
+  if (text.includes('p3009') || text.includes('found failed migrations')) {
+    hints.push(
+      'UZROK: P3009 — u `_prisma_migrations` postoji red s `finished_at IS NULL`' +
+        (failedMigration ? ` (migracija \`${failedMigration}\`)` : '') +
+        ' iz prethodnog pokušaja.\n' +
+        '  Prisma zato NE primjenjuje nijednu novu migraciju, pa deploy pada odmah.\n' +
+        'RJEŠENJE: u Coolify → Environment Variables postavi\n' +
+        `  MIGRATIONS_ROLLED_BACK=${failedMigration ?? '<naziv_migracije>'}\n` +
+        '  i redeployaj — servis `migrate` pokrene `prisma migrate resolve --rolled-back`,\n' +
+        '  pa tek onda `migrate deploy`. Nakon uspješnog deploya vrati varijablu na prazno.',
+    );
+  }
+
+  if (text.includes('p3018') || text.includes('a migration failed to apply')) {
+    const checkViolation =
+      text.includes('violates check constraint') ||
+      text.includes('23514') ||
+      text.includes('check_violation');
+    const duplicateKey =
+      text.includes('duplicate key value') || text.includes('23505') || text.includes('unique constraint');
+
+    hints.push(
+      'UZROK: P3018 — SQL migracije se izvršio i pao' +
+        (failedMigration ? ` (migracija \`${failedMigration}\`)` : '') +
+        '.\n' +
+        '  Detalj je u redu iznad ("Database error:"); Prisma je migraciju odbacio u\n' +
+        '  cjelini (PostgreSQL transakcija), pa su objekti iz nje netaknuti.\n' +
+        'RJEŠENJE (redoslijed je obavezan):\n' +
+        '  1. otkloni uzrok u SQL-u migracije i deployaj novu verziju image-a;\n' +
+        `  2. u Coolify postavi MIGRATIONS_ROLLED_BACK=${failedMigration ?? '<naziv_migracije>'} i redeployaj\n` +
+        '     (bez ovoga Prisma i dalje javlja P3009);\n' +
+        '  3. nakon uspjeha vrati varijablu na prazno.',
+    );
+
+    if (checkViolation) {
+      hints.push(
+        'UZROK (CHECK): novo ograničenje ne prolazi na POSTOJEĆIM redovima — najčešće\n' +
+          '  historijski/soft-deleted redovi koje stara migracija nije normalizovala.\n' +
+          'RJEŠENJE: migracija mora prvo UPDATE-om popraviti podatke, a CHECK dodati kao\n' +
+          '  NOT VALID + `VALIDATE CONSTRAINT` (vidi 6_task_order_realization). Ne brisati\n' +
+          '  podatke i ne zaobilaziti migraciju.',
+      );
+    }
+
+    if (duplicateKey) {
+      hints.push(
+        'UZROK (UNIQUE): u bazi postoje duplikati po novom jedinstvenom ključu.\n' +
+          'RJEŠENJE: prije CREATE UNIQUE INDEX soft-deletuj viškove (zadrži najnoviji red),\n' +
+          '  pa ponovi migraciju — ne uklanjaj indeks iz šeme.',
+      );
+    }
+  }
 
   if (
     text.includes('permission denied to create extension') ||
@@ -95,9 +149,10 @@ export function diagnosePrismaFailure(output: string): string[] {
   }
 
   if (
-    text.includes('an earlier migration failed') ||
-    text.includes('failed to apply') ||
-    text.includes('rolled_back_at')
+    !failedMigration &&
+    (text.includes('an earlier migration failed') ||
+      text.includes('failed to apply') ||
+      text.includes('rolled_back_at'))
   ) {
     hints.push(
       'UZROK: u `_prisma_migrations` postoji red s `finished_at IS NULL` (pali pokušaj).\n' +
@@ -146,6 +201,28 @@ export function diagnosePrismaFailure(output: string): string[] {
   }
 
   return hints;
+}
+
+/**
+ * Iz izlaza prisma CLI-ja vadi naziv migracije koja je pala.
+ *
+ * Prisma ga ispisuje u dva oblika:
+ *  - P3009: „The `6_task_order_realization` migration started at … failed"
+ *  - P3018: „Migration name: 6_task_order_realization"
+ * Naziv ide direktno u `MIGRATIONS_ROLLED_BACK=<naziv>` — bez njega operator mora
+ * ručno čitati `_prisma_migrations`.
+ */
+export function extractFailedMigrationName(output: string): string | null {
+  const patterns = [
+    /Migration name:\s*([0-9A-Za-z_]+)/u,
+    /The `([0-9A-Za-z_]+)` migration started at/u,
+    /migration `([0-9A-Za-z_]+)` failed/u,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(output);
+    if (match?.[1]) return match[1];
+  }
+  return null;
 }
 
 /**
@@ -200,7 +277,10 @@ export function listMigrationNames(migrationsDir: string): string[] {
  * `pnpm deploy --prod` ga preslikava u `/prod/api/node_modules/…`. Provjeravaju se
  * i pnpm `.pnpm` putanje (dev mašina), da bi alat radio i lokalno.
  */
-export function findSchemaEngineBinary(cwd: string = process.cwd(), dirname: string = __dirname): string | null {
+export function findSchemaEngineBinary(
+  cwd: string = process.cwd(),
+  dirname: string = __dirname,
+): string | null {
   const prefix = 'schema-engine-';
   const roots = [
     resolve(cwd, 'node_modules', '@prisma', 'engines'),

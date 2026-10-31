@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
   diagnosePrismaFailure,
+  extractFailedMigrationName,
   findSchemaEngineBinary,
   listMigrationNames,
   parsePendingMigrations,
@@ -42,6 +43,32 @@ const DEPLOY_P3005 = [
   'Error: P3005',
   'The database schema is not empty. Read more about how to baseline an existing',
   'production database: https://pris.ly/d/migrate-baseline',
+].join('\n');
+
+/** Stvarni izlaz `prisma migrate deploy` pri P3009 (pali red iz prethodnog pokušaja). */
+const DEPLOY_P3009 = [
+  'Loaded Prisma config from prisma.config.ts.',
+  'Error: P3009',
+  '',
+  'migrate found failed migrations in the target database, new migrations will not be applied. ' +
+    'Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve',
+  '',
+  'The `6_task_order_realization` migration started at 2026-10-30 21:11:57.123 UTC failed',
+].join('\n');
+
+/** Stvarni izlaz `prisma migrate deploy` pri P3018 + CHECK ograničenju. */
+const DEPLOY_P3018_CHECK = [
+  'Error: P3018',
+  '',
+  'A migration failed to apply. New migrations cannot be applied before the error is recovered from. ' +
+    'Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve',
+  '',
+  'Migration name: 6_task_order_realization',
+  '',
+  'Database error code: 23514',
+  '',
+  'Database error:',
+  'ERROR: new row for relation "FormSchema" violates check constraint "ck_form_schema_task_requires_type"',
 ].join('\n');
 
 const tempDirs: string[] = [];
@@ -97,11 +124,12 @@ describe('parsePendingMigrations', () => {
 
   it('vraća praznu listu kada izlaz ne sadrži marker', () => {
     expect(parsePendingMigrations('')).toEqual([]);
-    expect(parsePendingMigrations('Error: P1001 Can\'t reach database server')).toEqual([]);
+    expect(parsePendingMigrations("Error: P1001 Can't reach database server")).toEqual([]);
   });
 
   it('radi i s timestamp-prefiksom (pravi naziv direktorija migracije)', () => {
-    const output = 'Following migrations have not yet been applied:\n20261020120000_add_index\nRun something.';
+    const output =
+      'Following migrations have not yet been applied:\n20261020120000_add_index\nRun something.';
     expect(parsePendingMigrations(output)).toEqual(['20261020120000_add_index']);
   });
 });
@@ -148,7 +176,15 @@ describe('findSchemaEngineBinary', () => {
 
   it('nalazi engine i u pnpm .pnpm stablu', () => {
     const dir = makeTempDir();
-    const engines = join(dir, 'node_modules', '.pnpm', '@prisma+engines@7.10.1', 'node_modules', '@prisma', 'engines');
+    const engines = join(
+      dir,
+      'node_modules',
+      '.pnpm',
+      '@prisma+engines@7.10.1',
+      'node_modules',
+      '@prisma',
+      'engines',
+    );
     mkdirSync(engines, { recursive: true });
     const binary = join(engines, 'schema-engine-debian-openssl-3.0.x');
     writeFileSync(binary, 'bin');
@@ -196,6 +232,26 @@ describe('diagnosePrismaFailure', () => {
     expect(hints).toContain('migrate diff --from-empty');
   });
 
+  it('za P3009 navodi konkretan naziv u MIGRATIONS_ROLLED_BACK', () => {
+    const hints = diagnosePrismaFailure(DEPLOY_P3009).join('\n');
+    expect(hints).toContain('P3009');
+    expect(hints).toContain('MIGRATIONS_ROLLED_BACK=6_task_order_realization');
+    expect(hints).toContain('prisma migrate resolve --rolled-back');
+  });
+
+  it('za P3018 s CHECK ograničenjem traži normalizaciju podataka i NOT VALID', () => {
+    const hints = diagnosePrismaFailure(DEPLOY_P3018_CHECK).join('\n');
+    expect(hints).toContain('P3018');
+    expect(hints).toContain('MIGRATIONS_ROLLED_BACK=6_task_order_realization');
+    expect(hints).toContain('VALIDATE CONSTRAINT');
+    expect(hints).toContain('NOT VALID');
+  });
+
+  it('ne ponavlja generički hint kad je migracija već prepoznata', () => {
+    const hints = diagnosePrismaFailure(DEPLOY_P3018_CHECK).join('\n');
+    expect(hints).not.toContain('rolled_back_at');
+  });
+
   it('za red s finished_at IS NULL upućuje na MIGRATIONS_ROLLED_BACK', () => {
     const hints = diagnosePrismaFailure(
       'Error: P3004 ... An earlier migration failed to apply. Rješava se preko rolled_back_at.',
@@ -213,9 +269,25 @@ describe('diagnosePrismaFailure', () => {
   });
 
   it('za probleme s konekcijom navodi DATABASE_URL i mrežu', () => {
-    const hints = diagnosePrismaFailure('Error: P1001: Can\'t reach database server at `host`:5432').join('\n');
+    const hints = diagnosePrismaFailure("Error: P1001: Can't reach database server at `host`:5432").join(
+      '\n',
+    );
     expect(hints).toContain('DATABASE_URL');
     expect(hints).toContain('db_net');
+  });
+});
+
+describe('extractFailedMigrationName', () => {
+  it('čita naziv iz P3009 oblika', () => {
+    expect(extractFailedMigrationName(DEPLOY_P3009)).toBe('6_task_order_realization');
+  });
+
+  it('čita naziv iz P3018 oblika', () => {
+    expect(extractFailedMigrationName(DEPLOY_P3018_CHECK)).toBe('6_task_order_realization');
+  });
+
+  it('vraća null kad naziva nema', () => {
+    expect(extractFailedMigrationName('Error: P3005 database schema is not empty')).toBeNull();
   });
 });
 

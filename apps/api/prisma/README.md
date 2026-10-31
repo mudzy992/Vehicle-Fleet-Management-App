@@ -375,6 +375,57 @@ Postupak (2 koraka, bez ručnog upisivanja u `_prisma_migrations`):
    ✅ Nakon uspješnog deploya **vrati varijablu na prazno**
    (`MIGRATIONS_BASELINE=`), da se ne bi ponavljala pri svakom deployu.
 
+### E1.1) `P3018` — SQL migracije pao na postojećim podacima
+
+Najčešći produkcioni slučaj: nova migracija dodaje `CHECK`/`UNIQUE` ograničenje
+koje važi za **sve** redove, a baza ima historijske (npr. soft-deleted) redove
+koje stara migracija nije normalizovala. Prisma tada ispiše:
+
+```
+Error: P3018
+A migration failed to apply. ...
+Migration name: 6_task_order_realization
+Database error code: 23514
+Database error:
+ERROR: new row for relation "FormSchema" violates check constraint "ck_form_schema_task_requires_type"
+```
+
+Postupak (redoslijed je obavezan):
+
+1. Popravi **SQL migracije** tako da prvo normalizuje podatke, pa dodaje
+   ograničenje. Za `CHECK` nad historijskim redovima obavezan obrazac:
+
+   ```sql
+   -- 1) skloni staro ograničenje PRIJE UPDATE-a (inače UPDATE padne na njemu)
+   ALTER TABLE "FormSchema" DROP CONSTRAINT IF EXISTS ck_form_schema_task_requires_type;
+   -- 2) normalizuj SVE redove (i soft-deleted)
+   UPDATE "FormSchema" SET role = 'ORDER' WHERE subject = 'TASK' AND role IS NULL;
+   -- 3) novo ograničenje važi za aktivne redove; NOT VALID čuva historiju
+   ALTER TABLE "FormSchema" ADD CONSTRAINT ck_form_schema_task_requires_type
+     CHECK (subject <> 'TASK' OR "deletedAt" IS NOT NULL OR ("taskTypeId" IS NOT NULL AND role IS NOT NULL))
+     NOT VALID;
+   -- 4) ako je baza čista — validiraj odmah; ako nije, ostaje NOT VALID + WARNING
+   DO $$ BEGIN
+     ALTER TABLE "FormSchema" VALIDATE CONSTRAINT ck_form_schema_task_requires_type;
+   EXCEPTION WHEN check_violation THEN
+     RAISE WARNING 'ostaje NOT VALID — postoje legacy redovi';
+   END $$;
+   ```
+
+   Migracija mora biti **idempotentna** (`IF NOT EXISTS`, `DROP … IF EXISTS`,
+   `DO $$ … EXCEPTION WHEN duplicate_object`), jer se nakon popravke pokreće
+   ponovo. Primjer: `6_task_order_realization` (popravljena 31.10.2026 — prvo je
+   padala na Coolify deploy-u jer je `UPDATE` preskakao soft-deleted redove).
+
+2. Deployaj novi image — SQL se čita iz image-a, ne iz baze.
+
+3. U Coolify postavi `MIGRATIONS_ROLLED_BACK=<naziv>` (naziv iz P3018/P3009
+   izlaza) i redeployaj — bez toga Prisma i dalje javlja `P3009`. Nakon uspjeha
+   varijablu vrati na prazno.
+
+> Alat `node dist/tools/migrate.js` pri neuspjehu sam ispiše `Database error`,
+> `prisma migrate status` i hint (`apps/api/src/tools/migrate-diagnostics.ts`).
+
 ### E2) Pao pokušaj migracije (red s `finished_at IS NULL`)
 
 `migrate deploy` odbija nastaviti dok se taj red ne razriješi. U Coolify:

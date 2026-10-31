@@ -361,6 +361,9 @@ Rezultat (trajanje, broj zapisa, checksum) se **zapisuje** u `docs/10-OPERACIJE.
 | Redis `WRONGPASS` | `requirepass` + `aclfile` konflikt | Ukloni `requirepass`; koristi `user default off` |
 | BullMQ jobovi nestaju | `maxmemory-policy` evikcija | `noeviction` (§4.2) |
 | `migrate` pada odmah | DB još nije spreman / pogrešna lozinka | Retry petlja + provjera `DATABASE_URL` |
+| `service "migrate" didn't complete successfully: exit 1`, a compose log **ne pokazuje razlog** | Coolify deployment log prikazuje samo status `docker compose`-a, ne i stdout one-shot kontejnera | `docker logs vfm-migrate` (ili Coolify → Resource → Logs → `migrate`). Alat ispiše P-kod, `Database error`, `prisma migrate status` i hint |
+| `migrate` padne s **P3018** (`A migration failed to apply`) | SQL migracije ne prolazi na **postojećim** podacima (npr. `violates check constraint` na historijskim/soft-deleted redovima) | Popravi SQL migracije (normalizuj podatke prije ograničenja; `CHECK … NOT VALID` + `VALIDATE CONSTRAINT`), deployaj image, pa `MIGRATIONS_ROLLED_BACK=<naziv>` i redeploy — vidi `apps/api/prisma/README.md` §E1.1 i §E2 |
+| `migrate` padne s **P3009** (`found failed migrations`) | U `_prisma_migrations` postoji red s `finished_at IS NULL` iz prethodnog pokušaja | `MIGRATIONS_ROLLED_BACK=<naziv>` (alat ispiše tačan naziv) → redeploy → vrati varijablu na prazno |
 | `migrate` kontejner „unhealthy" u Coolify UI-ju | One-shot servis nema healthcheck | Očekivano — ignorisati; nema domenu ni healthcheck |
 | Upload pada s 413 | nginx `client_max_body_size` / `BODY_LIMIT_MULTIPART` | Uskladiti (25m) |
 | Prilozi 403 nakon migracije servera | Promijenjen `storageKey` korijen ili permisije direktorija | `chown 1001:1001 /data/vfm`; `VFM_STORAGE_PATH` isti |
