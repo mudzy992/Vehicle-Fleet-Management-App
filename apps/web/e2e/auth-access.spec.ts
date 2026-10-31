@@ -1814,6 +1814,12 @@ test('Super Admin can create, edit, and configure completion requirements for a 
     defaultAssignMode: 'OPEN_CLAIM',
     allowMultipleClaimants: false,
     dueOffsetHours: 48,
+    orderFormSchemaId: null,
+    orderFormSchemaKey: null,
+    orderFormSchemaName: null,
+    realizationFormSchemaId: null,
+    realizationFormSchemaKey: null,
+    realizationFormSchemaName: null,
     formSchemaId: null,
     formSchemaKey: null,
     formSchemaName: null,
@@ -2576,9 +2582,11 @@ test('task creation wizard submits the published form snapshot and opens the new
         requiresOdometer: false,
         requiresPhotos: false,
         defaultPriority: 'HIGH',
-        defaultAssignMode: 'OPEN_CLAIM',
+        defaultAssignMode: 'BROADCAST',
         allowMultipleClaimants: true,
         dueOffsetHours: 48,
+        orderFormSchemaId: formId,
+        realizationFormSchemaId: null,
         formSchemaId: formId,
         formSchemaKey: 'service',
         formSchemaName: 'Servis forma',
@@ -2649,9 +2657,9 @@ test('task creation wizard submits the published form snapshot and opens the new
     title: 'Servis Octavie',
     description: 'Provjera kočnica',
     priority: 'HIGH',
-    assignMode: 'OPEN_CLAIM',
+    assignMode: 'BROADCAST',
     observerUserIds: [],
-    formData: { inspectionNote: 'Provjera kočnica' },
+    orderFormData: { inspectionNote: 'Provjera kočnica' },
   });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await expectNoA11yViolations(page);
@@ -2870,7 +2878,7 @@ test('task completion submits the form snapshot, comment and odometer then refre
   await expect(page.getByText('Završen', { exact: true })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('Zadatak je završen.');
   expect(completionAttempts).toBe(2);
-  expect(completionPayload).toMatchObject({ version: 6, formData: { napomena: 'Sve provjereno.' }, comment: 'Vozilo spremno.', odometerKm: 123456 });
+  expect(completionPayload).toMatchObject({ version: 6, realizationFormData: { napomena: 'Sve provjereno.' }, comment: 'Vozilo spremno.', odometerKm: 123456 });
   await expectNoA11yViolations(page);
 });
 

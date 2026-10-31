@@ -22,6 +22,9 @@ describe.skipIf(!databaseUrl)('Form versioning — PostgreSQL workflow', () => {
       updateMany(args: unknown): Promise<unknown>;
       deleteMany(args: unknown): Promise<unknown>;
     };
+    formSchemaVersion: {
+      updateMany(args: unknown): Promise<unknown>;
+    };
   };
   let service: FormSchemasService;
   const createdIds: string[] = [];
@@ -40,6 +43,13 @@ describe.skipIf(!databaseUrl)('Form versioning — PostgreSQL workflow', () => {
 
   afterAll(async () => {
     if (createdIds.length > 0) {
+      //  Trigger `vfm_guard_published_form_version` brani brisanje objavljene
+      //  verzije: prvo je umirovimo (PUBLISHED → RETIRED uz retiredById), pa tek
+      //  onda brišemo shemu i njene verzije.
+      await prisma.formSchemaVersion.updateMany({
+        where: { formSchemaId: { in: createdIds }, status: 'PUBLISHED' },
+        data: { status: 'RETIRED', retiredAt: new Date(), retiredById: ACTOR },
+      });
       await prisma.formSchema.updateMany({
         where: { id: { in: createdIds } },
         data: { currentPublishedVersionId: null },
@@ -82,9 +92,12 @@ describe.skipIf(!databaseUrl)('Form versioning — PostgreSQL workflow', () => {
       });
     });
     await service.updateVersion(created.data.id, draft.data.id, { definition: edited });
-    const published = await service.publish(created.data.id, draft.data.id, {
-      changeNote: 'Uklonjena napomena',
-    });
+    const published = await service.publish(
+      created.data.id,
+      draft.data.id,
+      { changeNote: 'Uklonjena napomena' },
+      ACTOR,
+    );
     const reloaded = await service.getVersion(created.data.id, draft.data.id);
     const previous = await service.getVersion(created.data.id, firstId);
 

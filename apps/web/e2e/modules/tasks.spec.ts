@@ -87,7 +87,7 @@ test('TASK-DETAIL: nalog je read-only blok s labelama', async ({ page }) => {
       await route.fulfill({ status: 200, json: envelope(paged([])) });
       return;
     }
-    await route.continue();
+    await route.fallback();
   });
   await loginTo(page, `/zadaci/${taskRow.id}`);
   await expect(page.getByRole('heading', { name: 'Nalog' }).or(page.getByText('Nalog'))).toBeVisible();
@@ -121,7 +121,7 @@ test('TASK-LINKED: complete servisa vodi na evidenciju vozila', async ({ page })
       });
       return;
     }
-    await route.continue();
+    await route.fallback();
   });
   await loginTo(page, `/zadaci/${taskRow.id}`);
   await expect(page.getByText('Povezana evidencija:')).toBeVisible();
