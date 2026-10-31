@@ -14,6 +14,7 @@ import { TaskTypesController } from '../../src/modules/task-types/task-types.con
 import { TaskTypesService } from '../../src/modules/task-types/task-types.service.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 import { SEED_FORMS } from '../../src/tools/seed-forms.js';
+import { SEED_TASK_FORMS } from '../../src/tools/seed-task-forms.js';
 
 const actorId = '11111111-1111-4111-8111-111111111111';
 const washTypeId = '22222222-2222-4222-8222-222222222222';
@@ -178,8 +179,7 @@ class FakeTaskTypesPrisma {
   }
 
   private enrich(row: Row, detail = false): Row {
-    const orderId =
-      row.orderFormSchemaId !== undefined ? row.orderFormSchemaId : row.formSchemaId;
+    const orderId = row.orderFormSchemaId !== undefined ? row.orderFormSchemaId : row.formSchemaId;
     const form = orderId ? this.forms.get(String(orderId)) : null;
     const version = form?.currentPublishedVersionId
       ? this.versions.get(String(form.currentPublishedVersionId))
@@ -291,6 +291,9 @@ class FakeTaskTypesPrisma {
         if (where.id !== undefined && candidate.id !== where.id) return false;
         if (where.subject !== undefined && candidate.subject !== where.subject) return false;
         if (where.taskTypeId !== undefined && candidate.taskTypeId !== where.taskTypeId) return false;
+        // `role: null` je eksplicitan filter (legacy TASK šeme), pa se provjerava
+        // kao i svaka druga vrijednost.
+        if (where.role !== undefined && (candidate.role ?? null) !== where.role) return false;
         const current = where.currentPublishedVersionId as Row | undefined;
         if (current?.not === null && candidate.currentPublishedVersionId === null) return false;
         return true;
@@ -558,6 +561,65 @@ describe('Vrste zadataka', () => {
       ),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(fake.requirements.filter((row) => row.taskTypeId === washTypeId)).toHaveLength(2);
+  });
+
+  it('zahtjev za fazu završetka validira se prema REALIZACIJSKOJ formi, ne samo nalogu', async () => {
+    const { fake, service } = setup();
+    const realizationFormId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const realizationVersionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const realization = SEED_TASK_FORMS.find((form) => form.key === 'ciscenje_realizacija')!;
+    fake.addForm(
+      {
+        id: realizationFormId,
+        key: 'pranje_realizacija',
+        role: 'REALIZATION',
+        taskTypeId: washTypeId,
+        currentPublishedVersionId: realizationVersionId,
+      },
+      realization.definition,
+    );
+    fake.types.get(washTypeId)!.realizationFormSchemaId = realizationFormId;
+
+    // `photosAfter` postoji SAMO u realizacijskoj formi — do sada je API ovo
+    // odbijao porukom "ne postoji u objavljenoj TASK formi".
+    const saved = await service.replaceCompletionRequirements(
+      washTypeId,
+      replaceTaskCompletionRequirementsSchema.parse({
+        requirements: [{ fieldKey: 'photosAfter', stage: 'ON_COMPLETE', minPhotos: 2 }],
+      }),
+    );
+    expect(saved.data.requirements).toEqual([
+      expect.objectContaining({ fieldKey: 'photosAfter', stage: 'ON_COMPLETE', minPhotos: 2 }),
+    ]);
+
+    // `washDurationMin` postoji samo u nalogu → za ON_COMPLETE je pogrešna
+    // faza, a poruka mora reći u kojoj formi polje jeste.
+    await expect(
+      service.replaceCompletionRequirements(
+        washTypeId,
+        replaceTaskCompletionRequirementsSchema.parse({
+          requirements: [{ fieldKey: 'washDurationMin', stage: 'ON_COMPLETE' }],
+        }),
+      ),
+    ).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: [
+        expect.objectContaining({
+          message: expect.stringMatching(/REALIZACIJA.*NALOG/u),
+        }),
+      ],
+    });
+
+    // Isto polje je ispravno za fazu kreiranja (nalog).
+    const created = await service.replaceCompletionRequirements(
+      washTypeId,
+      replaceTaskCompletionRequirementsSchema.parse({
+        requirements: [{ fieldKey: 'washDurationMin', stage: 'ON_CREATE' }],
+      }),
+    );
+    expect(created.data.requirements).toEqual([
+      expect.objectContaining({ fieldKey: 'washDurationMin', stage: 'ON_CREATE' }),
+    ]);
   });
 
   it('prazna lista zahtjeva briše postojeće, a pregled arhivirane vrste je 404', async () => {

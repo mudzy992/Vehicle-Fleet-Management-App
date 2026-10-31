@@ -87,6 +87,19 @@ type RequirementRow = Prisma.TaskCompletionRequirementGetPayload<{
 type Tx = Prisma.TransactionClient;
 type Client = PrismaService | Tx;
 
+/** Efektivna objavljena TASK forma (jedna uloga) sa mapom polja iz definicije. */
+interface EffectiveTaskForm {
+  readonly id: string;
+  readonly key: string;
+  readonly role: 'ORDER' | 'REALIZATION';
+  readonly version: number;
+  readonly fields: ReadonlyMap<string, string>;
+}
+
+function roleLabel(role: 'ORDER' | 'REALIZATION'): string {
+  return role === 'ORDER' ? 'NALOG' : 'REALIZACIJA';
+}
+
 export interface TaskTypeMutation<T> {
   readonly data: T;
   readonly before?: Readonly<Record<string, unknown>>;
@@ -307,11 +320,15 @@ export class TaskTypesService {
       // Promjena zadane forme ne smije ostaviti zahtjeve koji pokazuju na
       // polja kojih u novoj objavljenoj definiciji nema. Korisnik prvo ukloni
       // zahtjeve, promijeni formu, pa ih ponovo zada prema novoj definiciji.
-      if (orderFormId !== current.orderFormSchemaId) {
+      if (
+        orderFormId !== current.orderFormSchemaId ||
+        realizationFormId !== current.realizationFormSchemaId
+      ) {
         await this.assertRequirementsFitForm(
           tx,
           id,
           orderFormId,
+          realizationFormId,
           current.completionRequirements.map((row) => ({
             fieldKey: row.fieldKey,
             required: row.required,
@@ -404,7 +421,13 @@ export class TaskTypesService {
       const current = await this.loadDetail(tx, id);
       const before = current.completionRequirements.map(serializeRequirement);
 
-      await this.assertRequirementsFitForm(tx, id, current.orderFormSchemaId, input.requirements);
+      await this.assertRequirementsFitForm(
+        tx,
+        id,
+        current.orderFormSchemaId,
+        current.realizationFormSchemaId,
+        input.requirements,
+      );
 
       await tx.taskCompletionRequirement.deleteMany({ where: { taskTypeId: id } });
       if (input.requirements.length > 0) {
@@ -507,9 +530,7 @@ export class TaskTypesService {
       ]);
     }
     if (form.taskTypeId !== null && form.taskTypeId !== taskTypeId) {
-      throw VfmErrors.validationError([
-        detail(path, 'Odabrana forma je već vezana za drugu vrstu zadatka.'),
-      ]);
+      throw VfmErrors.validationError([detail(path, 'Odabrana forma je već vezana za drugu vrstu zadatka.')]);
     }
     if (!form.currentPublishedVersionId) {
       throw new VfmException('FORM_VERSION_NOT_PUBLISHED', 'Odabrana TASK forma nema objavljenu verziju.', [
@@ -518,59 +539,69 @@ export class TaskTypesService {
     }
   }
 
+  /**
+   * Efektivna TASK forma za datu ulogu: eksplicitno vezana (`formSchemaId`) ili
+   * prva objavljena forma vrste sa tom ulogom (legacy redovi bez `role` tretiraju
+   * se kao ORDER — tako ih je postavila migracija `6_task_order_realization`).
+   */
   private async effectiveTaskForm(
     client: Client,
     taskTypeId: string,
     formSchemaId: string | null,
-  ): Promise<{ id: string; currentPublishedVersionId: string | null } | null> {
-    if (formSchemaId) {
-      return client.formSchema.findFirst({
-        where: { id: formSchemaId, deletedAt: null },
-        select: { id: true, currentPublishedVersionId: true },
+    role: 'ORDER' | 'REALIZATION',
+  ): Promise<EffectiveTaskForm | null> {
+    const select = {
+      id: true,
+      key: true,
+      role: true,
+      currentPublishedVersionId: true,
+    } as const;
+
+    let schema = formSchemaId
+      ? await client.formSchema.findFirst({
+          where: { id: formSchemaId, deletedAt: null },
+          select,
+        })
+      : null;
+
+    if (!schema) {
+      schema = await client.formSchema.findFirst({
+        where: {
+          subject: 'TASK',
+          taskTypeId,
+          role,
+          deletedAt: null,
+          currentPublishedVersionId: { not: null },
+        },
+        select,
+        orderBy: { updatedAt: 'desc' },
       });
     }
-
-    return client.formSchema.findFirst({
-      where: {
-        subject: 'TASK',
-        taskTypeId,
-        deletedAt: null,
-        currentPublishedVersionId: { not: null },
-      },
-      select: { id: true, currentPublishedVersionId: true },
-    });
-  }
-
-  /**
-   * Kad vrsta ima efektivnu formu, zahtjev mora pokazivati na stvarno polje
-   * trenutno objavljene definicije; `minPhotos > 0` dodatno traži PHOTO polje.
-   * Bez efektivne forme ključevi se mogu unaprijed konfigurisati, a stvarna
-   * forma će ih ponovo provjeriti pri kreiranju/završetku zadatka.
-   */
-  private async assertRequirementsFitForm(
-    client: Client,
-    taskTypeId: string,
-    formSchemaId: string | null,
-    requirements: readonly TaskCompletionRequirementInput[],
-  ): Promise<void> {
-    if (requirements.length === 0) return;
-
-    const form = await this.effectiveTaskForm(client, taskTypeId, formSchemaId);
-    if (!form) return;
-    if (!form.currentPublishedVersionId) {
-      throw new VfmException('FORM_VERSION_NOT_PUBLISHED', 'Efektivna TASK forma nema objavljenu verziju.');
+    if (!schema) {
+      // Legacy: forma vezana za vrstu bez `role` (prije migracije 6) ili forma
+      // bez `taskTypeId`. Prihvata se samo za ORDER, jer realizacija tada nije
+      // ni postojala.
+      if (role !== 'ORDER') return null;
+      schema = await client.formSchema.findFirst({
+        where: {
+          subject: 'TASK',
+          taskTypeId,
+          role: null,
+          deletedAt: null,
+          currentPublishedVersionId: { not: null },
+        },
+        select,
+        orderBy: { updatedAt: 'desc' },
+      });
     }
+    if (!schema) return null;
 
+    if (!schema.currentPublishedVersionId) return null;
     const version = await client.formSchemaVersion.findUnique({
-      where: { id: form.currentPublishedVersionId },
-      select: { definition: true },
+      where: { id: schema.currentPublishedVersionId },
+      select: { definition: true, version: true },
     });
-    if (!version) {
-      throw new VfmException(
-        'FORM_VERSION_NOT_PUBLISHED',
-        'Objavljena verzija efektivne TASK forme ne postoji.',
-      );
-    }
+    if (!version) return null;
 
     const definition = parseStoredDefinition(version.definition);
     const fields = new Map<string, string>();
@@ -578,22 +609,71 @@ export class TaskTypesService {
       for (const field of section.fields ?? []) fields.set(field.key, field.type);
     }
 
+    return {
+      id: schema.id,
+      key: schema.key,
+      role,
+      version: version.version,
+      fields,
+    };
+  }
+
+  /**
+   * Forma protiv koje se zahtjev stvarno provjerava u svojoj fazi:
+   * `ON_CREATE`/`ON_CLAIM` idu na nalog (forma pri kreiranju/preuzimanju),
+   * `ON_COMPLETE`/`GENERAL`/`ON_CANCEL` na realizaciju (forma pri završetku).
+   * Ako forma za tu ulogu ne postoji, koristi se druga (jedna te ista forma).
+   */
+  private formForRequirementStage(
+    stage: string,
+    order: EffectiveTaskForm | null,
+    realization: EffectiveTaskForm | null,
+  ): EffectiveTaskForm | null {
+    const usesRealization = stage === 'ON_COMPLETE' || stage === 'GENERAL' || stage === 'ON_CANCEL';
+    return usesRealization ? (realization ?? order) : (order ?? realization);
+  }
+
+  private async assertRequirementsFitForm(
+    client: Client,
+    taskTypeId: string,
+    orderFormSchemaId: string | null,
+    realizationFormSchemaId: string | null,
+    requirements: readonly TaskCompletionRequirementInput[],
+  ): Promise<void> {
+    if (requirements.length === 0) return;
+
+    const [order, realization] = await Promise.all([
+      this.effectiveTaskForm(client, taskTypeId, orderFormSchemaId, 'ORDER'),
+      this.effectiveTaskForm(client, taskTypeId, realizationFormSchemaId, 'REALIZATION'),
+    ]);
+    if (!order && !realization) return;
+
     const issues = requirements.flatMap((requirement, index) => {
-      const type = fields.get(requirement.fieldKey);
-      if (!type) {
-        return [
-          detail(
-            `requirements[${index}].fieldKey`,
-            `Polje "${requirement.fieldKey}" ne postoji u objavljenoj TASK formi.`,
-          ),
-        ];
+      const form = this.formForRequirementStage(requirement.stage, order, realization);
+      if (!form) return [];
+
+      const type = form.fields.get(requirement.fieldKey);
+      if (type) {
+        if (requirement.minPhotos > 0 && type !== 'PHOTO') {
+          return [
+            detail(`requirements[${index}].minPhotos`, `Polje "${requirement.fieldKey}" nije PHOTO polje.`),
+          ];
+        }
+        return [];
       }
-      if (requirement.minPhotos > 0 && type !== 'PHOTO') {
-        return [
-          detail(`requirements[${index}].minPhotos`, `Polje "${requirement.fieldKey}" nije PHOTO polje.`),
-        ];
-      }
-      return [];
+
+      // Polje postoji u drugoj formi → zahtjev je vjerovatno u pogrešnoj fazi.
+      const other = form === order ? realization : order;
+      const elsewhere = other?.fields.has(requirement.fieldKey) ? other : null;
+      const hint = elsewhere
+        ? ` Polje postoji u ${roleLabel(elsewhere.role)} formi (${elsewhere.key}) — za nju koristite odgovarajuću fazu zahtjeva.`
+        : '';
+      return [
+        detail(
+          `requirements[${index}].fieldKey`,
+          `Polje "${requirement.fieldKey}" ne postoji u objavljenoj ${roleLabel(form.role)} formi (${form.key}) za fazu ${requirement.stage}.${hint}`,
+        ),
+      ];
     });
 
     if (issues.length > 0) throw VfmErrors.validationError(issues);

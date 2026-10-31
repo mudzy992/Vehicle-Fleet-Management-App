@@ -153,6 +153,38 @@ export function effectiveTaskForm(
   );
 }
 
+/**
+ * Koja forma mjerodavna za fazu zahtjeva — ista podjela koju radi API:
+ * kreiranje/preuzimanje ide na nalog, završetak/otkazivanje na realizaciju.
+ */
+export function formRoleForRequirementStage(stage: string): 'ORDER' | 'REALIZATION' {
+  return stage === 'ON_COMPLETE' || stage === 'GENERAL' || stage === 'ON_CANCEL' ? 'REALIZATION' : 'ORDER';
+}
+
+/**
+ * Efektivne forme po ulozi (nalog i realizacija). Zahtjevi se u API-ju provjeravaju
+ * prema obje, pa panel mora nuditi polja iz obje — npr. `photosAfter` živi u
+ * realizacijskoj formi, a `photosBefore` u nalogu.
+ */
+export function effectiveTaskForms(
+  forms: readonly FormSchemaSummary[],
+  taskType: Pick<TaskTypeView, 'id' | 'formSchemaId' | 'orderFormSchemaId' | 'realizationFormSchemaId'>,
+): { order: FormSchemaSummary | null; realization: FormSchemaSummary | null } {
+  const published = forms.filter(
+    (form) =>
+      form.subject === 'TASK' && form.status === 'PUBLISHED' && form.currentPublishedVersionId !== null,
+  );
+  const byId = (id: string | null): FormSchemaSummary | null =>
+    id ? (published.find((form) => form.id === id) ?? null) : null;
+  const byRole = (role: 'ORDER' | 'REALIZATION'): FormSchemaSummary | null =>
+    published.find((form) => form.taskTypeId === taskType.id && form.role === role) ?? null;
+
+  return {
+    order: byId(taskType.orderFormSchemaId) ?? byId(taskType.formSchemaId) ?? byRole('ORDER'),
+    realization: byId(taskType.realizationFormSchemaId) ?? byRole('REALIZATION'),
+  };
+}
+
 interface ParsedTaskTypeValues {
   readonly name: string;
   readonly description: string | null;
@@ -234,9 +266,7 @@ function parseTaskTypeValues(
     allowMultipleClaimants: values.allowMultipleClaimants,
     dueOffsetHours: parseDueOffsetHours(values.dueOffsetHours),
     orderFormSchemaId: formSelectionAvailable ? optionalText(values.formSchemaId) : currentFormSchemaId,
-    realizationFormSchemaId: formSelectionAvailable
-      ? optionalText(values.realizationFormSchemaId)
-      : null,
+    realizationFormSchemaId: formSelectionAvailable ? optionalText(values.realizationFormSchemaId) : null,
     sortOrder: parseSortOrder(values.sortOrder),
   };
 }

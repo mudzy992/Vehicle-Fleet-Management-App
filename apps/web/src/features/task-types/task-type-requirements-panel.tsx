@@ -13,11 +13,30 @@ import { Button, Card, CardContent, CardHeader, Field, inputClassName } from '..
 import { api, ApiError } from '../../lib/api.js';
 import {
   buildRequirementsPayload,
-  effectiveTaskForm,
+  effectiveTaskForms,
   emptyRequirementDraft,
+  formRoleForRequirementStage,
   requirementDrafts,
   type TaskCompletionRequirementDraft,
 } from './task-types-model.js';
+
+interface FieldOption {
+  readonly key: string;
+  readonly label: string;
+  readonly type: string;
+}
+
+/** Polja za unos iz objavljene verzije forme (prazno ako se ne može parsirati). */
+function toFieldOptions(version: FormVersionDetail | undefined): readonly FieldOption[] {
+  if (!version) return [];
+  const parsed = parseDefinition(version.definition);
+  if (!parsed.ok) return [];
+  return inputFields(parsed.definition).map(({ field }) => ({
+    key: field.key,
+    label: field.label,
+    type: field.type,
+  }));
+}
 
 export function TaskTypeRequirementsPanel({
   taskType,
@@ -110,31 +129,60 @@ function TaskTypeRequirementsForm({
     queryFn: () => api.get<FormSchemaSummary[]>('/form-schemas?subject=TASK&status=PUBLISHED'),
     retry: false,
   });
-  const effectiveForm = useMemo(
-    () => effectiveTaskForm(formsQuery.data ?? [], taskType),
+  const effectiveForms = useMemo(
+    () => effectiveTaskForms(formsQuery.data ?? [], taskType),
     [formsQuery.data, taskType],
   );
-  const versionQuery = useQuery({
-    queryKey: ['form-version', effectiveForm?.id, effectiveForm?.currentPublishedVersionId],
+  const orderVersionQuery = useQuery({
+    queryKey: ['form-version', effectiveForms.order?.id, effectiveForms.order?.currentPublishedVersionId],
     queryFn: () =>
       api.get<FormVersionDetail>(
-        `/form-schemas/${effectiveForm!.id}/versions/${effectiveForm!.currentPublishedVersionId}`,
+        `/form-schemas/${effectiveForms.order!.id}/versions/${effectiveForms.order!.currentPublishedVersionId}`,
       ),
-    enabled: Boolean(effectiveForm?.currentPublishedVersionId),
+    enabled: Boolean(effectiveForms.order?.currentPublishedVersionId),
     retry: false,
   });
-  const effectiveFormLoading = formsQuery.isPending || (Boolean(effectiveForm) && versionQuery.isPending);
+  const realizationVersionQuery = useQuery({
+    queryKey: [
+      'form-version',
+      effectiveForms.realization?.id,
+      effectiveForms.realization?.currentPublishedVersionId,
+    ],
+    queryFn: () =>
+      api.get<FormVersionDetail>(
+        `/form-schemas/${effectiveForms.realization!.id}/versions/${effectiveForms.realization!.currentPublishedVersionId}`,
+      ),
+    enabled: Boolean(effectiveForms.realization?.currentPublishedVersionId),
+    retry: false,
+  });
+  const effectiveFormLoading =
+    formsQuery.isPending ||
+    (Boolean(effectiveForms.order) && orderVersionQuery.isPending) ||
+    (Boolean(effectiveForms.realization) && realizationVersionQuery.isPending);
 
-  const fields = useMemo(() => {
-    if (!versionQuery.data) return [];
-    const parsed = parseDefinition(versionQuery.data.definition);
-    if (!parsed.ok) return [];
-    return inputFields(parsed.definition).map(({ field }) => ({
-      key: field.key,
-      label: field.label,
-      type: field.type,
-    }));
-  }, [versionQuery.data]);
+  const orderFields = useMemo(() => toFieldOptions(orderVersionQuery.data), [orderVersionQuery.data]);
+  const realizationFields = useMemo(
+    () => toFieldOptions(realizationVersionQuery.data),
+    [realizationVersionQuery.data],
+  );
+  const hasAnyFields = orderFields.length > 0 || realizationFields.length > 0;
+
+  /** Polja koja odgovaraju fazi zahtjeva (nalog za ON_CREATE/ON_CLAIM, realizacija za završetak). */
+  const fieldsForStage = (stage: string): readonly FieldOption[] => {
+    const primary = formRoleForRequirementStage(stage) === 'REALIZATION' ? realizationFields : orderFields;
+    const fallback = formRoleForRequirementStage(stage) === 'REALIZATION' ? orderFields : realizationFields;
+    return primary.length ? primary : fallback;
+  };
+
+  const staleRequirements = !hasAnyFields
+    ? []
+    : drafts
+        .map((draft, index) => ({ draft, index }))
+        .filter(
+          ({ draft }) =>
+            draft.fieldKey.trim().length > 0 &&
+            !fieldsForStage(draft.stage).some((field) => field.key === draft.fieldKey.trim()),
+        );
 
   const save = useMutation({
     mutationFn: () =>
@@ -182,10 +230,27 @@ function TaskTypeRequirementsForm({
             save.mutate();
           }}
         >
-          {effectiveForm && versionQuery.data ? (
+          {hasAnyFields ? (
             <p className="text-sm text-fg-muted">
-              Efektivna forma: <span className="font-medium text-fg">{effectiveForm.name}</span> (
-              {effectiveForm.key}, v{versionQuery.data.version}). Ključ se bira iz njenih polja za unos.
+              Efektivne forme:{' '}
+              {effectiveForms.order && orderVersionQuery.data ? (
+                <>
+                  nalog <span className="font-medium text-fg">{effectiveForms.order.name}</span> (
+                  {effectiveForms.order.key}, v{orderVersionQuery.data.version})
+                </>
+              ) : (
+                <span className="text-warning">nalog nije objavljen</span>
+              )}
+              {' · '}
+              {effectiveForms.realization && realizationVersionQuery.data ? (
+                <>
+                  realizacija <span className="font-medium text-fg">{effectiveForms.realization.name}</span> (
+                  {effectiveForms.realization.key}, v{realizationVersionQuery.data.version})
+                </>
+              ) : (
+                <span className="text-warning">realizacija nije objavljena</span>
+              )}
+              . Faza zahtjeva određuje iz koje forme se bira ključ.
             </p>
           ) : effectiveFormLoading ? (
             <p className="text-sm text-fg-muted">Učitavanje efektivne TASK forme…</p>
@@ -211,7 +276,8 @@ function TaskTypeRequirementsForm({
               </p>
             ) : (
               drafts.map((draft, index) => {
-                const fieldKnown = fields.some((field) => field.key === draft.fieldKey);
+                const stageFields = fieldsForStage(draft.stage);
+                const fieldKnown = stageFields.some((field) => field.key === draft.fieldKey);
                 const idPrefix = `zahtjev-zavrs-${index}`;
                 return (
                   <section key={index} className="rounded-md border border-border p-3">
@@ -220,12 +286,14 @@ function TaskTypeRequirementsForm({
                         label={`Polje forme ${index + 1}`}
                         htmlFor={`${idPrefix}-field`}
                         hint={
-                          fields.length
-                            ? 'PHOTO polje je jedino koje smije imati minimalan broj fotografija veći od 0.'
+                          stageFields.length
+                            ? formRoleForRequirementStage(draft.stage) === 'REALIZATION'
+                              ? 'Polja realizacijske forme; PHOTO polje je jedino koje smije imati min. broj fotografija > 0.'
+                              : 'Polja naloga; PHOTO polje je jedino koje smije imati min. broj fotografija > 0.'
                             : 'Tehnički ključ iz definicije, npr. photosAfter.'
                         }
                       >
-                        {fields.length ? (
+                        {stageFields.length ? (
                           <select
                             id={`${idPrefix}-field`}
                             className={inputClassName}
@@ -238,7 +306,7 @@ function TaskTypeRequirementsForm({
                                 {draft.fieldKey} (nije u trenutnoj formi)
                               </option>
                             ) : null}
-                            {fields.map((field) => (
+                            {stageFields.map((field) => (
                               <option key={field.key} value={field.key}>
                                 {field.label} · {field.key} · {field.type}
                               </option>
@@ -307,6 +375,46 @@ function TaskTypeRequirementsForm({
               })
             )}
 
+            {staleRequirements.length > 0 && (
+              <div
+                role="alert"
+                className="rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger"
+              >
+                <p className="font-medium">
+                  {staleRequirements.length === 1
+                    ? 'Jedan zahtjev pokazuje na polje kojeg nema u objavljenoj formi za svoju fazu:'
+                    : `${staleRequirements.length} zahtjeva pokazuju na polja kojih nema u objavljenoj formi za svoju fazu:`}
+                </p>
+                <ul className="mt-1 list-disc pl-5">
+                  {staleRequirements.map(({ draft, index }) => (
+                    <li key={index}>
+                      <span className="font-mono">{draft.fieldKey}</span> ·{' '}
+                      {statusLabel(draft.stage, 'attachmentStage')}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2">
+                  Uklonite ih ili odaberite polje iz forme koja odgovara fazi — sa zastarjelim poljem zadaci
+                  te vrste ne mogu biti završeni.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="mt-2"
+                  onClick={() =>
+                    setDrafts((current) =>
+                      current.filter((draft) =>
+                        fieldsForStage(draft.stage).some((field) => field.key === draft.fieldKey.trim()),
+                      ),
+                    )
+                  }
+                >
+                  Ukloni zastarjele zahtjeve
+                </Button>
+              </div>
+            )}
+
             {canUpdate && drafts.length < 50 && (
               <Button
                 type="button"
@@ -328,7 +436,12 @@ function TaskTypeRequirementsForm({
 
           <div className="flex flex-wrap gap-2">
             {canUpdate && (
-              <Button type="submit" variant="primary" loading={save.isPending}>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={save.isPending}
+                disabled={staleRequirements.length > 0}
+              >
                 Sačuvaj zahtjeve
               </Button>
             )}

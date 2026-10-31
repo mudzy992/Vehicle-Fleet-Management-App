@@ -1,27 +1,19 @@
 name: Mobile E2E
 
+# Maestro se pokreće SAMO kad se mijenja mobilna aplikacija. Backend/web izmjene
+# (apps/api, apps/web, packages/*) ne troše ~25 min runnera na Android emulator:
+# njih pokriva CI (unit, integracijski, Playwright), a mobilni typecheck/export je
+# i dalje u CI-ju. Za namjerno pokretanje koristi workflow_dispatch.
 on:
   push:
     branches: [main, "arena/**"]
     paths:
       - "apps/mobile/**"
-      - "apps/api/src/**"
-      - "apps/api/prisma/**"
-      - "packages/shared/src/**"
-      - "packages/form-engine/**"
-      - "packages/form-renderer/**"
-      - "pnpm-workspace.yaml"
       - ".github/workflows/mobile-e2e.yml"
   pull_request:
     branches: [main]
     paths:
       - "apps/mobile/**"
-      - "apps/api/src/**"
-      - "apps/api/prisma/**"
-      - "packages/shared/src/**"
-      - "packages/form-engine/**"
-      - "packages/form-renderer/**"
-      - "pnpm-workspace.yaml"
       - ".github/workflows/mobile-e2e.yml"
   workflow_dispatch:
 

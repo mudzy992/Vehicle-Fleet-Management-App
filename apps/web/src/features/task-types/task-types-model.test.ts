@@ -10,6 +10,8 @@ import {
   buildTaskTypeQuery,
   buildTaskTypeUpdatePayload,
   effectiveTaskForm,
+  effectiveTaskForms,
+  formRoleForRequirementStage,
   isTaskTypeFiltered,
   pageAfterArchive,
   requirementDrafts,
@@ -131,6 +133,37 @@ describe('Model vrsta zadataka', () => {
     expect(effectiveTaskForm(forms, detail)?.key).toBe('pranje_vozila');
     expect(effectiveTaskForm(forms, { ...detail, formSchemaId: null })?.key).toBe('vlastita');
     expect(effectiveTaskForm([forms[0]!], { ...detail, formSchemaId: null })).toBeNull();
+  });
+
+  it('faza zahtjeva određuje formu: nalog za kreiranje, realizacija za završetak', () => {
+    expect(formRoleForRequirementStage('ON_CREATE')).toBe('ORDER');
+    expect(formRoleForRequirementStage('ON_CLAIM')).toBe('ORDER');
+    expect(formRoleForRequirementStage('ON_COMPLETE')).toBe('REALIZATION');
+    expect(formRoleForRequirementStage('GENERAL')).toBe('REALIZATION');
+    expect(formRoleForRequirementStage('ON_CANCEL')).toBe('REALIZATION');
+  });
+
+  it('efektivne forme vraćaju i nalog i realizaciju (photosAfter živi u realizaciji)', () => {
+    const realizationId = '99999999-9999-4999-8999-999999999992';
+    const forms = [
+      formSummary(),
+      formSummary({ id: realizationId, key: 'pranje_realizacija', role: 'REALIZATION', taskTypeId }),
+    ];
+
+    const { order, realization } = effectiveTaskForms(forms, {
+      ...detail,
+      realizationFormSchemaId: realizationId,
+    });
+    expect(order?.key).toBe('pranje_vozila');
+    expect(realization?.key).toBe('pranje_realizacija');
+
+    // Bez vezane realizacije koristi se ona objavljena za tu vrstu.
+    expect(effectiveTaskForms(forms, detail).realization?.key).toBe('pranje_realizacija');
+    // Nema realizacijske forme → null (zahtjevi se tada provjeravaju prema nalogu).
+    expect(effectiveTaskForms([forms[0]!], detail)).toMatchObject({
+      order: expect.objectContaining({ key: 'pranje_vozila' }),
+      realization: null,
+    });
   });
 
   it('kreiranje normalizuje kod, boju i brojeve prije slanja', () => {
