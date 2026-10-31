@@ -95,7 +95,7 @@ Evaluator scope-a je **whitelist** podržanih uslova — nepoznat uslov se ignor
 | `reports` | `report:view`, `report:export`, `report:manage_definitions`, `report:view_costs` |
 | `audit` | `audit:view`, `audit:export`, `audit:view_security` |
 | `settings` | `settings:view`, `settings:update`, `settings:manage_lists` |
-| `system` | `system:view_health`, `system:view_metrics`, `system:run_maintenance`, `system:view_queue` |
+| `system` | `system:view_health`, `system:view_metrics`, `system:run_maintenance`, `system:view_queue`, `app_release:manage` |
 
 Ukupno: **120+** permisija (tačan popis se seeduje u Fazi 1 i drži u
 `packages/shared/src/permissions.ts` — jedan izvor za API, web i mobilnu).

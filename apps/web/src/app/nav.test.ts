@@ -34,6 +34,7 @@ describe('NAV_ITEMS', () => {
     expect(superAdminOnly).toContain('/administracija/prava');
     expect(superAdminOnly).toContain('/administracija/korisnici');
     expect(superAdminOnly).toContain('/forme');
+    expect(superAdminOnly).toContain('/administracija/mobilna-aplikacija');
   });
 
   it('nazivi su na bosanskom', () => {
@@ -84,6 +85,7 @@ describe('visibleNavItems — filtriranje po pravima', () => {
     expect(paths).not.toContain('/administracija/prava');
     expect(paths).not.toContain('/administracija/korisnici');
     expect(paths).not.toContain('/forme');
+    expect(paths).not.toContain('/administracija/mobilna-aplikacija');
   });
 
   it('stavka bez potrebne permisije se ne prikazuje', () => {

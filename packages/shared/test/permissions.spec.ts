@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ALL_PERMISSIONS,
+  catalogModuleOf,
   DEFAULT_ROLE_MATRIX,
   DEFAULT_ROLE_PERMISSIONS,
   defaultGrantsForRole,
@@ -52,6 +53,7 @@ describe('katalog permisija (docs/05 §3)', () => {
       'report:export',
       'audit:view_security',
       'system:view_health',
+      'app_release:manage',
     ]) {
       expect(ALL_PERMISSIONS, `nedostaje ${required}`).toContain(required);
     }
@@ -62,6 +64,8 @@ describe('katalog permisija (docs/05 §3)', () => {
     expect(isSensitivePermission('task:complete_override')).toBe(true);
     expect(isSensitivePermission('vehicle:delete')).toBe(true);
     expect(isSensitivePermission('task:view')).toBe(false);
+    expect(isSensitivePermission('app_release:manage')).toBe(true);
+    expect(catalogModuleOf('app_release:manage')).toBe('system');
     for (const permission of SENSITIVE_PERMISSIONS) {
       expect(ALL_PERMISSIONS, `${permission} mora biti u katalogu`).toContain(permission);
     }
@@ -96,6 +100,7 @@ describe('default matrica (docs/05 §4)', () => {
       'form:publish_version',
       'system:run_maintenance',
       'audit:view',
+      'app_release:manage',
     ]) {
       expect(admin[permission], `${permission} treba biti null`).toBeNull();
     }

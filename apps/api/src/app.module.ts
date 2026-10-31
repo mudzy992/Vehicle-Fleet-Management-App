@@ -41,6 +41,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { SettingsModule } from './modules/settings/settings.module.js';
 import { RealtimeModule } from './modules/realtime/realtime.module.js';
 import { AttachmentsModule } from './modules/attachments/attachments.module.js';
+import { AppReleasesModule } from './modules/app-releases/app-releases.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { ClientTypeGuard } from './common/guards/client-type.guard.js';
 import { PermissionsGuard } from './common/guards/permissions.guard.js';
@@ -87,6 +88,7 @@ import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
     RealtimeModule,
     // Prilozi (docs/07 §2.12) — host bind-mount, magic bytes, potpisani URL (B-15).
     AttachmentsModule,
+    AppReleasesModule,
   ],
   controllers: [],
   providers: [

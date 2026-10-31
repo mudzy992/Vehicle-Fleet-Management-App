@@ -89,6 +89,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     superAdminOnly: true,
   },
   {
+    to: '/administracija/mobilna-aplikacija',
+    label: 'Mobilna aplikacija',
+    group: 'Sistem',
+    permission: 'app_release:manage',
+    superAdminOnly: true,
+  },
+  {
     to: '/audit-log',
     label: 'Audit log',
     group: 'Sistem',

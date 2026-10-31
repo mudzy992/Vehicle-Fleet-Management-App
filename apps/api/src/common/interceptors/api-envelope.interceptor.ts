@@ -73,7 +73,10 @@ function shouldSkipEnvelope(request: RequestWithId | undefined): boolean {
   if (UNWRAPPED_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))) return true;
   // Potpisani i sesijski sadržaj priloga mora ostati sirovi bajtovi; `instanceof
   // StreamableFile` padne kad postoje dvije kopije `@nestjs/common`.
-  return /\/attachments\/[^/?]+\/content(?:\/|$|\?)/u.test(path);
+  return (
+    /\/attachments\/[^/?]+\/content(?:\/|$|\?)/u.test(path) ||
+    /\/app-releases\/[^/?]+\/file(?:\/|$|\?)/u.test(path)
+  );
 }
 
 function isBinaryPayload(payload: unknown): boolean {

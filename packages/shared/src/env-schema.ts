@@ -273,6 +273,7 @@ export const baseEnvSchema = z.object({
   VFM_STORAGE_PATH: z.string().min(1).default(STORAGE_PATH_DEFAULT),
   VFM_STORAGE_CONTAINER_PATH: z.string().min(1).default(STORAGE_PATH_DEFAULT),
   ATTACHMENT_MAX_SIZE_MB: integer(10, (schema) => schema.min(1).max(1024)),
+  APP_RELEASE_MAX_SIZE_MB: integer(150, (schema) => schema.min(1).max(512)),
   ATTACHMENT_VALIDATE_MAGIC_BYTES: bool(true),
   ATTACHMENT_IMAGE_MAX_WIDTH: integer(1920, (schema) => schema.min(0)),
   ATTACHMENT_IMAGE_JPEG_QUALITY: integer(82, (schema) => schema.min(1).max(100)),
@@ -668,6 +669,11 @@ export function durationToSeconds(value: string): number {
 /** Maksimalna veličina fajla u bajtovima (iz `ATTACHMENT_MAX_SIZE_MB`). */
 export function maxFileSizeBytes(env: BaseEnv): number {
   return Math.min(env.ATTACHMENT_MAX_SIZE_MB * 1024 * 1024, MAX_FILE_SIZE_BYTES * 5);
+}
+
+/** Maksimalna veličina APK-a u bajtovima (iz `APP_RELEASE_MAX_SIZE_MB`). */
+export function maxAppReleaseSizeBytes(env: BaseEnv): number {
+  return env.APP_RELEASE_MAX_SIZE_MB * 1024 * 1024;
 }
 
 /** Broj hopova koje `trust proxy` prihvata (Express). */

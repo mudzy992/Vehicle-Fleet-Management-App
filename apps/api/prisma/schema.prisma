@@ -379,6 +379,7 @@ model User {
   exportJobs            ExportJob[]
   attachments           Attachment[]
   scheduledReminderAcks ScheduledReminder[]      @relation("ReminderAcknowledgedBy")
+  publishedAppReleases  AppRelease[]
   // SQL: partial unique index umjesto @@unique (Prisma ne podržava partial):
   //   DROP INDEX IF EXISTS "User_email_key";
   //   CREATE UNIQUE INDEX IF NOT EXISTS ux_user_email_active
@@ -1673,4 +1674,26 @@ model AppSetting {
   updatedAt   DateTime @updatedAt @db.Timestamptz(6)
 
   @@map("AppSetting")
+}
+
+/// Katalog objavljenih Android APK-ova (javni download, obavezan update).
+model AppRelease {
+  id            String    @id @db.Uuid
+  versionCode   Int       @unique
+  versionName   String
+  fileName      String
+  storageKey    String    @unique
+  sha256        String
+  sizeBytes     Int
+  releaseNotes  String?
+  isLatest      Boolean   @default(false)
+  publishedById String    @db.Uuid
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  retiredAt     DateTime? @db.Timestamptz(6)
+
+  publishedBy User @relation(fields: [publishedById], references: [id], onDelete: Restrict)
+
+  @@index([isLatest])
+  @@map("AppRelease")
+  // SQL: CREATE UNIQUE INDEX ux_app_release_latest ON "AppRelease" ("isLatest") WHERE "isLatest" = true;
 }

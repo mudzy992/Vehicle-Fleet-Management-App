@@ -184,7 +184,13 @@ export const PERMISSION_CATALOG: Readonly<Record<PermissionModule, readonly Perm
   reports: ['report:view', 'report:export', 'report:manage_definitions', 'report:view_costs'],
   audit: ['audit:view', 'audit:export', 'audit:view_security'],
   settings: ['settings:view', 'settings:update', 'settings:manage_lists'],
-  system: ['system:view_health', 'system:view_metrics', 'system:run_maintenance', 'system:view_queue'],
+  system: [
+    'system:view_health',
+    'system:view_metrics',
+    'system:run_maintenance',
+    'system:view_queue',
+    'app_release:manage',
+  ],
 } as const;
 
 /** Flat lista svih permisija iz kataloga (sortirana, bez duplikata). */
@@ -215,6 +221,7 @@ export const SENSITIVE_PERMISSIONS: readonly Permission[] = [
   'audit:view_security',
   'settings:update',
   'system:run_maintenance',
+  'app_release:manage',
 ] as const;
 
 /** Modul iz koda permisije (`vehicle:view` → `vehicle`). */
@@ -239,6 +246,9 @@ export function isSensitivePermission(permission: Permission): boolean {
 
 /** Modul (`Permission.module`, množina) za kod permisije. */
 export function catalogModuleOf(permission: Permission): PermissionModule | undefined {
+  for (const module of PERMISSION_MODULES) {
+    if ((PERMISSION_CATALOG[module] as readonly string[]).includes(permission)) return module;
+  }
   const action = permissionModule(permission);
   return PERMISSION_MODULES.find(
     (module) => module === action || module === `${action}s` || module.startsWith(action),
@@ -404,6 +414,7 @@ const MATRIX: readonly MatrixEntry[] = [
   ['system:view_metrics', null, null],
   ['system:run_maintenance', null, null],
   ['system:view_queue', null, null],
+  ['app_release:manage', null, null],
 
   // auth — svaki prijavljeni korisnik
   ['auth:login', 'ALL', 'ALL'],

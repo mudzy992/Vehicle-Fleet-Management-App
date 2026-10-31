@@ -19,6 +19,7 @@ import { PermissionsGuard } from '../../src/common/guards/permissions.guard.js';
 import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter.js';
 import { PermissionsService } from '../../src/modules/auth/permissions/permissions.service.js';
 import type { AuthenticatedUser } from '../../src/common/types/authenticated-user.js';
+import { AppReleasesController } from '../../src/modules/app-releases/app-releases.controller.js';
 import { AttachmentsController } from '../../src/modules/attachments/attachments.controller.js';
 import { AuditLogController } from '../../src/modules/audit-logs/audit-log.controller.js';
 import { AuthController } from '../../src/modules/auth/auth.controller.js';
@@ -46,6 +47,7 @@ import { HealthController } from '../../src/health/health.controller.js';
 vi.mock('../../src/prisma/prisma.service.js', () => ({ PrismaService: class PrismaService {} }));
 
 const CONTROLLERS: readonly Type[] = [
+  AppReleasesController,
   AttachmentsController,
   AuditLogController,
   AuthController,

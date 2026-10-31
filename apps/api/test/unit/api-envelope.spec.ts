@@ -97,6 +97,11 @@ describe('ApiEnvelopeInterceptor — izuzeci', () => {
     expect(await run('/api/v1/attachments/1/content', fake)).toBe(fake);
   });
 
+  it('APK fajl se ne omata (path skip /app-releases/.../file)', async () => {
+    const fake = { constructor: { name: 'StreamableFile' } };
+    expect(await run('/api/v1/app-releases/latest/file', fake)).toBe(fake);
+  });
+
   it('string odgovor se ne omata (npr. CSV tekst)', async () => {
     expect(await run('/api/v1/reports/3/download', 'a,b,c')).toBe('a,b,c');
   });

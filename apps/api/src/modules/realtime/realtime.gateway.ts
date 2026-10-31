@@ -16,7 +16,7 @@ export class RealtimeGateway {
     this.logger.debug(`socket connected ${client.id}`);
   }
 
-  emitRefresh(topic: 'notifications' | 'tasks'): void {
+  emitRefresh(topic: 'notifications' | 'tasks' | 'app-releases'): void {
     this.server?.emit('refresh', { topic });
   }
 }

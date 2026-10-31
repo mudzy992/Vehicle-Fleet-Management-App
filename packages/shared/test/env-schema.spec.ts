@@ -7,6 +7,7 @@ import {
   envProfileSchema,
   isProduction,
   loadEnv,
+  maxAppReleaseSizeBytes,
   maxFileSizeBytes,
   paginationQuerySchema,
   normalizeRedisKeyPrefix,
@@ -373,6 +374,11 @@ describe('izvedene vrijednosti', () => {
   it('maxFileSizeBytes poštuje ATTACHMENT_MAX_SIZE_MB', () => {
     expect(maxFileSizeBytes(parseEnv({ ATTACHMENT_MAX_SIZE_MB: '10' }))).toBe(10 * 1024 * 1024);
     expect(maxFileSizeBytes(parseEnv({ ATTACHMENT_MAX_SIZE_MB: '20' }))).toBe(20 * 1024 * 1024);
+  });
+
+  it('maxAppReleaseSizeBytes poštuje APP_RELEASE_MAX_SIZE_MB (default 150)', () => {
+    expect(maxAppReleaseSizeBytes(parseEnv({}))).toBe(150 * 1024 * 1024);
+    expect(maxAppReleaseSizeBytes(parseEnv({ APP_RELEASE_MAX_SIZE_MB: '80' }))).toBe(80 * 1024 * 1024);
   });
 
   it('buildDatabaseUrl sastavlja URL iz dijelova kad DATABASE_URL nije zadan', () => {
