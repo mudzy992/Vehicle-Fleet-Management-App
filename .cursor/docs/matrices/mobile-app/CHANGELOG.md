@@ -1,5 +1,10 @@
 # Changelog — matrica mobilne aplikacije
 
+## 2026-10-30 (re-audit)
+
+- Re-audit koda nakon AA kontrasta i PHOTO fikseva. P1/P2 impl ostaju zatvoreni u kodu. Otvoreno: M-08 UAT, M-11/13/16/19, FCM host.
+- Zašto: Canvas i audit dokumenti su bili na stanju prije polish/kamera.
+
 ## 2026-10-30 (contrast + PHOTO)
 
 - WCAG AA na mobilnim površinama: placeholder, badge/pill ink, disabled bez opacity, input `surfaceMuted`.

@@ -38,6 +38,8 @@ import { RegistrationsModule } from './modules/registrations/registrations.modul
 import { InsurancesModule } from './modules/insurances/insurances.module.js';
 import { RemindersModule } from './modules/reminders/reminders.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
+import { SettingsModule } from './modules/settings/settings.module.js';
+import { RealtimeModule } from './modules/realtime/realtime.module.js';
 import { AttachmentsModule } from './modules/attachments/attachments.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { ClientTypeGuard } from './common/guards/client-type.guard.js';
@@ -81,6 +83,8 @@ import { RateLimitService } from './common/rate-limit/rate-limit.service.js';
     RemindersModule,
     // Obavijesti (in-app + SSE polling); FCM ostaje opcionalan do vlasničke konfiguracije.
     NotificationsModule,
+    SettingsModule,
+    RealtimeModule,
     // Prilozi (docs/07 §2.12) — host bind-mount, magic bytes, potpisani URL (B-15).
     AttachmentsModule,
   ],

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
-import { TASK_ASSIGN_MODES, TASK_PRIORITIES, type TaskAssignMode } from '@vfm/shared';
+import { TASK_ASSIGN_MODES, TASK_PRIORITIES, statusLabel, type TaskAssignMode } from '@vfm/shared';
 import type {
   AttachmentUploadResult,
   FormSchemaSummary,
@@ -51,7 +51,7 @@ export function TaskCreatePage() {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<(typeof TASK_PRIORITIES)[number]>('NORMAL');
   const [dueLocal, setDueLocal] = useState('');
-  const [assignMode, setAssignMode] = useState<TaskAssignMode>('OPEN_CLAIM');
+  const [assignMode, setAssignMode] = useState<TaskAssignMode>('BROADCAST');
   const [assigneeUserId, setAssigneeUserId] = useState('');
   const [invitedUserIds, setInvitedUserIds] = useState<string[]>([]);
   const [observerUserIds, setObserverUserIds] = useState<string[]>([]);
@@ -88,8 +88,11 @@ export function TaskCreatePage() {
     retry: false,
   });
   const formsQuery = useQuery({
-    queryKey: ['form-schemas', 'TASK', 'PUBLISHED'],
-    queryFn: () => api.get<FormSchemaSummary[]>('/form-schemas?subject=TASK&status=PUBLISHED'),
+    queryKey: ['form-schemas', 'TASK', 'PUBLISHED', 'ORDER', taskTypeId],
+    queryFn: () =>
+      api.get<FormSchemaSummary[]>(
+        `/form-schemas?subject=TASK&status=PUBLISHED&role=ORDER${taskTypeId ? `&taskTypeId=${taskTypeId}` : ''}`,
+      ),
     retry: false,
   });
 
@@ -171,7 +174,7 @@ export function TaskCreatePage() {
         ...(assignMode === 'OPEN_CLAIM' ? { invitedUserIds } : {}),
         observerUserIds,
         ...(dueLocal ? { dueAt: new Date(dueLocal).toISOString() } : {}),
-        formData,
+        orderFormData: formData,
       });
     },
     onSuccess: async (task) => {
@@ -233,7 +236,11 @@ export function TaskCreatePage() {
       return;
     }
     if (step === 2 && assignMode === 'ASSIGN_DIRECT' && !canViewUsers) {
-      setMessage('Za odabir izvršioca potrebna je permisija user:view. Odaberite OPEN_CLAIM ili BROADCAST.');
+      setMessage('Za odabir izvršioca potrebna je permisija user:view. Odaberite Svima ili Pozvanima.');
+      return;
+    }
+    if (step === 2 && assignMode === 'OPEN_CLAIM' && invitedUserIds.length === 0) {
+      setMessage('Pozvanima treba lista korisnika. Za sve vozače odaberite Svima (ko prvi preuzme).');
       return;
     }
     setStep((current) => Math.min(3, current + 1));
@@ -399,11 +406,7 @@ export function TaskCreatePage() {
               >
                 {TASK_ASSIGN_MODES.map((mode) => (
                   <option key={mode} value={mode}>
-                    {mode === 'OPEN_CLAIM'
-                      ? 'Slobodno preuzimanje'
-                      : mode === 'ASSIGN_DIRECT'
-                        ? 'Direktna dodjela'
-                        : 'Broadcast'}
+                    {statusLabel(mode, 'taskAssignMode')}
                   </option>
                 ))}
               </select>
@@ -441,9 +444,9 @@ export function TaskCreatePage() {
             )}
             {assignMode === 'OPEN_CLAIM' && canViewUsers && (
               <Field
-                label="Pozvani korisnici (opciono)"
+                label="Pozvani korisnici *"
                 htmlFor="task-create-invited"
-                hint="Pozvani korisnici mogu preuzeti zadatak prije ostalih."
+                hint="Bez liste zadatak vidi samo kreator. Za sve vozače koristite Svima."
               >
                 <select
                   id="task-create-invited"
@@ -595,11 +598,7 @@ export function TaskCreatePage() {
             <div className="rounded-md bg-surface-muted p-3 text-sm">
               <p>
                 <strong>{title.trim() || selectedType.name}</strong> · {PRIORITY_LABELS[priority]} ·{' '}
-                {assignMode === 'OPEN_CLAIM'
-                  ? 'Slobodno preuzimanje'
-                  : assignMode === 'ASSIGN_DIRECT'
-                    ? 'Direktna dodjela'
-                    : 'Broadcast'}
+                {statusLabel(assignMode, 'taskAssignMode')}
               </p>
               <p className="text-fg-muted">
                 {vehicleItems.find((item) => item.id === vehicleId)?.internalNo ?? 'Bez vozila'} ·{' '}

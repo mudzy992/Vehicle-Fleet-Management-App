@@ -41,7 +41,8 @@ const TASK_TYPE_SELECT = {
   defaultAssignMode: true,
   allowMultipleClaimants: true,
   dueOffsetHours: true,
-  formSchemaId: true,
+  orderFormSchemaId: true,
+  realizationFormSchemaId: true,
   active: true,
   sortOrder: true,
   createdAt: true,
@@ -57,14 +58,17 @@ const COMPLETION_REQUIREMENT_SELECT = {
   minPhotos: true,
 } as const satisfies Prisma.TaskCompletionRequirementSelect;
 
+const FORM_SCHEMA_META = {
+  select: {
+    key: true,
+    name: true,
+    currentPublishedVersion: { select: { version: true } },
+  },
+} as const;
+
 type TaskTypeSelectWithForm = typeof TASK_TYPE_SELECT & {
-  formSchema: {
-    select: {
-      key: true;
-      name: true;
-      currentPublishedVersion: { select: { version: true } };
-    };
-  };
+  orderFormSchema: typeof FORM_SCHEMA_META;
+  realizationFormSchema: typeof FORM_SCHEMA_META;
   _count: { select: { completionRequirements: true } };
 };
 
@@ -93,13 +97,8 @@ export interface TaskTypeMutation<T> {
 function taskTypeSelect(): TaskTypeSelectWithForm {
   return {
     ...TASK_TYPE_SELECT,
-    formSchema: {
-      select: {
-        key: true,
-        name: true,
-        currentPublishedVersion: { select: { version: true } },
-      },
-    },
+    orderFormSchema: FORM_SCHEMA_META,
+    realizationFormSchema: FORM_SCHEMA_META,
     _count: { select: { completionRequirements: true } },
   };
 }
@@ -140,10 +139,16 @@ function serialize(row: TaskTypeRow): TaskTypeView {
     defaultAssignMode: row.defaultAssignMode,
     allowMultipleClaimants: row.allowMultipleClaimants,
     dueOffsetHours: row.dueOffsetHours,
-    formSchemaId: row.formSchemaId,
-    formSchemaKey: row.formSchema?.key ?? null,
-    formSchemaName: row.formSchema?.name ?? null,
-    formSchemaVersion: row.formSchema?.currentPublishedVersion?.version ?? null,
+    orderFormSchemaId: row.orderFormSchemaId,
+    orderFormSchemaKey: row.orderFormSchema?.key ?? null,
+    orderFormSchemaName: row.orderFormSchema?.name ?? null,
+    realizationFormSchemaId: row.realizationFormSchemaId,
+    realizationFormSchemaKey: row.realizationFormSchema?.key ?? null,
+    realizationFormSchemaName: row.realizationFormSchema?.name ?? null,
+    formSchemaId: row.orderFormSchemaId,
+    formSchemaKey: row.orderFormSchema?.key ?? null,
+    formSchemaName: row.orderFormSchema?.name ?? null,
+    formSchemaVersion: row.orderFormSchema?.currentPublishedVersion?.version ?? null,
     active: row.active,
     sortOrder: row.sortOrder,
     completionRequirementCount: row._count.completionRequirements,
@@ -221,8 +226,13 @@ export class TaskTypesService {
       });
       if (existing) throw duplicateCodeError(input.code);
 
-      if (input.formSchemaId) {
-        await this.assertAssignableTaskForm(tx, input.formSchemaId, id);
+      const orderFormId = input.orderFormSchemaId ?? input.formSchemaId ?? null;
+      const realizationFormId = input.realizationFormSchemaId ?? null;
+      if (orderFormId) {
+        await this.assertAssignableTaskForm(tx, orderFormId, id, 'ORDER');
+      }
+      if (realizationFormId) {
+        await this.assertAssignableTaskForm(tx, realizationFormId, id, 'REALIZATION');
       }
 
       let row: TaskTypeRow;
@@ -242,7 +252,8 @@ export class TaskTypesService {
             defaultAssignMode: input.defaultAssignMode,
             allowMultipleClaimants: input.allowMultipleClaimants,
             dueOffsetHours: input.dueOffsetHours ?? null,
-            formSchemaId: input.formSchemaId ?? null,
+            orderFormSchemaId: orderFormId,
+            realizationFormSchemaId: realizationFormId,
             active: true,
             sortOrder: input.sortOrder,
             createdById: actorId ?? null,
@@ -265,8 +276,21 @@ export class TaskTypesService {
       const current = await this.loadDetail(tx, id);
       const before = this.serializeDetail(current);
 
-      if (input.formSchemaId) {
-        await this.assertAssignableTaskForm(tx, input.formSchemaId, id);
+      const orderFormId =
+        input.orderFormSchemaId !== undefined
+          ? input.orderFormSchemaId
+          : input.formSchemaId !== undefined
+            ? input.formSchemaId
+            : current.orderFormSchemaId;
+      const realizationFormId =
+        input.realizationFormSchemaId !== undefined
+          ? input.realizationFormSchemaId
+          : current.realizationFormSchemaId;
+      if (orderFormId) {
+        await this.assertAssignableTaskForm(tx, orderFormId, id, 'ORDER');
+      }
+      if (realizationFormId) {
+        await this.assertAssignableTaskForm(tx, realizationFormId, id, 'REALIZATION');
       }
 
       const requiresVehicle = input.requiresVehicle ?? current.requiresVehicle;
@@ -283,11 +307,11 @@ export class TaskTypesService {
       // Promjena zadane forme ne smije ostaviti zahtjeve koji pokazuju na
       // polja kojih u novoj objavljenoj definiciji nema. Korisnik prvo ukloni
       // zahtjeve, promijeni formu, pa ih ponovo zada prema novoj definiciji.
-      if (input.formSchemaId !== undefined && input.formSchemaId !== current.formSchemaId) {
+      if (orderFormId !== current.orderFormSchemaId) {
         await this.assertRequirementsFitForm(
           tx,
           id,
-          input.formSchemaId,
+          orderFormId,
           current.completionRequirements.map((row) => ({
             fieldKey: row.fieldKey,
             required: row.required,
@@ -311,7 +335,12 @@ export class TaskTypesService {
           ? { allowMultipleClaimants: input.allowMultipleClaimants }
           : {}),
         ...(input.dueOffsetHours !== undefined ? { dueOffsetHours: input.dueOffsetHours } : {}),
-        ...(input.formSchemaId !== undefined ? { formSchemaId: input.formSchemaId } : {}),
+        ...(input.orderFormSchemaId !== undefined || input.formSchemaId !== undefined
+          ? { orderFormSchemaId: orderFormId }
+          : {}),
+        ...(input.realizationFormSchemaId !== undefined
+          ? { realizationFormSchemaId: realizationFormId }
+          : {}),
         ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
       };
 
@@ -375,7 +404,7 @@ export class TaskTypesService {
       const current = await this.loadDetail(tx, id);
       const before = current.completionRequirements.map(serializeRequirement);
 
-      await this.assertRequirementsFitForm(tx, id, current.formSchemaId, input.requirements);
+      await this.assertRequirementsFitForm(tx, id, current.orderFormSchemaId, input.requirements);
 
       await tx.taskCompletionRequirement.deleteMany({ where: { taskTypeId: id } });
       if (input.requirements.length > 0) {
@@ -453,32 +482,38 @@ export class TaskTypesService {
     client: Client,
     formSchemaId: string,
     taskTypeId: string,
+    role: 'ORDER' | 'REALIZATION',
   ): Promise<void> {
+    const path = role === 'ORDER' ? 'orderFormSchemaId' : 'realizationFormSchemaId';
     const form = await client.formSchema.findFirst({
       where: { id: formSchemaId, deletedAt: null },
       select: {
         id: true,
         subject: true,
         taskTypeId: true,
+        role: true,
         currentPublishedVersionId: true,
       },
     });
     if (!form) {
-      throw VfmErrors.validationError([detail('formSchemaId', 'Odabrana forma ne postoji.')]);
+      throw VfmErrors.validationError([detail(path, 'Odabrana forma ne postoji.')]);
     }
     if (form.subject !== 'TASK') {
+      throw VfmErrors.validationError([detail(path, 'Zadana forma vrste zadatka mora imati subject TASK.')]);
+    }
+    if (form.role !== role) {
       throw VfmErrors.validationError([
-        detail('formSchemaId', 'Zadana forma vrste zadatka mora imati subject TASK.'),
+        detail(path, `Odabrana forma mora imati ulogu ${role === 'ORDER' ? 'Nalog' : 'Realizacija'}.`),
       ]);
     }
     if (form.taskTypeId !== null && form.taskTypeId !== taskTypeId) {
       throw VfmErrors.validationError([
-        detail('formSchemaId', 'Odabrana forma je već vezana za drugu vrstu zadatka.'),
+        detail(path, 'Odabrana forma je već vezana za drugu vrstu zadatka.'),
       ]);
     }
     if (!form.currentPublishedVersionId) {
       throw new VfmException('FORM_VERSION_NOT_PUBLISHED', 'Odabrana TASK forma nema objavljenu verziju.', [
-        detail('formSchemaId', 'Objavite formu prije nego je vežete za vrstu zadatka.'),
+        detail(path, 'Objavite formu prije nego je vežete za vrstu zadatka.'),
       ]);
     }
   }

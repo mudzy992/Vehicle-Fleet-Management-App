@@ -427,6 +427,12 @@ describe('vrste zadataka i zahtjevi završetka (docs/07 §7.6)', () => {
       formSchemaId,
       formSchemaKey: 'pranje_vozila',
       formSchemaName: 'Pranje vozila',
+      orderFormSchemaId: formSchemaId,
+      orderFormSchemaKey: 'pranje_vozila',
+      orderFormSchemaName: 'Pranje vozila',
+      realizationFormSchemaId: formSchemaId,
+      realizationFormSchemaKey: 'pranje_vozila',
+      realizationFormSchemaName: 'Pranje vozila',
       formSchemaVersion: 1,
       active: true,
       sortOrder: 10,
@@ -471,7 +477,7 @@ describe('zadaci (docs/07 §2.11)', () => {
       description: 'Vanjsko pranje',
       invitedUserIds: [invitedId],
       observerUserIds: [observerId],
-      formData: {},
+      orderFormData: {},
     });
 
     const direct = createTaskSchema.parse({ taskTypeId, assigneeUserId: assigneeId });
@@ -489,6 +495,7 @@ describe('zadaci (docs/07 §2.11)', () => {
       { assigneeUserId: assigneeId, invitedUserIds: [invitedId] },
       { assigneeUserId: assigneeId, observerUserIds: [assigneeId] },
       { assignMode: 'ASSIGN_DIRECT' },
+      { assignMode: 'OPEN_CLAIM' },
       { assignMode: 'OPEN_CLAIM', assigneeUserId: assigneeId },
       { assignMode: 'BROADCAST', invitedUserIds: [invitedId] },
       { title: 'x' },
@@ -569,7 +576,7 @@ describe('zadaci (docs/07 §2.11)', () => {
   });
 
   it('claim prima samo opcioni nacrt forme, a available query ne prima serverski status', () => {
-    expect(claimTaskSchema.parse({})).toEqual({ formData: {} });
+    expect(claimTaskSchema.parse({})).toEqual({});
     expect(claimTaskSchema.parse({ formData: { washType: 'FULL' } })).toEqual({
       formData: { washType: 'FULL' },
     });
@@ -601,7 +608,7 @@ describe('zadaci (docs/07 §2.11)', () => {
     const attachmentId = '99999999-9999-4999-8999-999999999999';
     expect(completeTaskSchema.parse({ version: 4 })).toEqual({
       version: 4,
-      formData: {},
+      realizationFormData: {},
       attachmentIds: [],
     });
     expect(
@@ -616,6 +623,7 @@ describe('zadaci (docs/07 §2.11)', () => {
     ).toEqual({
       version: 5,
       formData: { photosAfter: [attachmentId] },
+      realizationFormData: { photosAfter: [attachmentId] },
       attachmentIds: [attachmentId],
       comment: 'Završeno',
       odometerKm: 148230,
@@ -681,10 +689,17 @@ describe('zadaci (docs/07 §2.11)', () => {
       formSchemaName: 'Pranje vozila',
       formSchemaVersionId,
       formSchemaVersion: 1,
+      orderFormSchemaId: formSchemaId,
+      realizationFormSchemaId: formSchemaId,
+      realizationFormSchemaVersionId: formSchemaVersionId,
+      linkedRecordType: null,
+      linkedRecordId: null,
       version: 0,
       createdAt: '2026-10-21T10:00:00.000Z',
       updatedAt: '2026-10-21T10:00:00.000Z',
       formData: { washType: 'FULL' },
+      orderFormData: { washType: 'FULL' },
+      realizationFormData: {},
       assignments: [
         {
           id: formSchemaVersionId,
@@ -718,6 +733,8 @@ describe('zadaci (docs/07 §2.11)', () => {
     expect(taskDetailSchema.parse(detail).assignments).toHaveLength(1);
     const {
       formData: _formData,
+      orderFormData: _orderFormData,
+      realizationFormData: _realizationFormData,
       assignments: _assignments,
       events: _events,
       attachmentIds: _attachmentIds,

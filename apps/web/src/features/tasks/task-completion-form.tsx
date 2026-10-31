@@ -14,7 +14,9 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
   const queryClient = useQueryClient();
   const { hasPermission } = useSession();
   const canUpload = hasPermission('attachment:upload');
-  const [values, setValues] = useState<Record<string, unknown>>(task.formData);
+  const realizationSchemaId = task.realizationFormSchemaId ?? task.formSchemaId;
+  const realizationVersionId = task.realizationFormSchemaVersionId ?? task.formSchemaVersionId;
+  const [values, setValues] = useState<Record<string, unknown>>(task.realizationFormData ?? {});
   const [comment, setComment] = useState('');
   const [odometerKm, setOdometerKm] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -23,9 +25,11 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
   const [uploadError, setUploadError] = useState<string | null>(null);
   const today = useMemo(() => sarajevoToday(), []);
   const versionQuery = useQuery({
-    queryKey: ['form-version', task.formSchemaId, task.formSchemaVersionId],
+    queryKey: ['form-version', realizationSchemaId, realizationVersionId],
     queryFn: () =>
-      api.get<FormVersionDetail>(`/form-schemas/${task.formSchemaId}/versions/${task.formSchemaVersionId}`),
+      api.get<FormVersionDetail>(
+        `/form-schemas/${realizationSchemaId}/versions/${realizationVersionId}`,
+      ),
   });
   const parsed = useMemo(
     () => (versionQuery.data ? parseDefinition(versionQuery.data.definition) : null),
@@ -38,9 +42,9 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
       values,
       today,
       version: versionQuery.data.version,
-      formSchemaVersionId: task.formSchemaVersionId,
+      formSchemaVersionId: realizationVersionId,
     });
-  }, [parsed, versionQuery.data, values, today, task.formSchemaVersionId]);
+  }, [parsed, versionQuery.data, values, today, realizationVersionId]);
 
   const attachmentFields = parsed?.ok
     ? parsed.definition.sections.flatMap((section) =>
@@ -81,7 +85,7 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
     mutationFn: () =>
       api.post<TaskDetail>(`/tasks/${task.id}/complete`, {
       version: task.version,
-      formData: values,
+      realizationFormData: values,
       ...(comment.trim() ? { comment: comment.trim() } : {}),
       ...(odometerKm.trim() ? { odometerKm: Number(odometerKm) } : {}),
     }),

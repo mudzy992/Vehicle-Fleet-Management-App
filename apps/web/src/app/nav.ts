@@ -59,6 +59,20 @@ export const NAV_ITEMS: readonly NavItem[] = [
     superAdminOnly: true,
   },
   {
+    to: '/forme/migracije',
+    label: 'Migracija formi',
+    group: 'Konfiguracija',
+    permission: 'form:migrate_records',
+    superAdminOnly: true,
+  },
+  {
+    to: '/postavke',
+    label: 'Postavke',
+    group: 'Konfiguracija',
+    permission: 'settings:view',
+    superAdminOnly: true,
+  },
+  {
     to: '/administracija/korisnici',
     label: 'Korisnici',
     group: 'Konfiguracija',

@@ -38,6 +38,8 @@ import type {
   TASK_ASSIGN_MODES,
   TASK_ASSIGNMENT_ROLES,
   TASK_EVENT_ACTIONS,
+  TASK_FORM_ROLES,
+  LINKED_RECORD_TYPES,
   TASK_PRIORITIES,
   TASK_STATUSES,
   TASK_TYPE_CODES,
@@ -158,9 +160,9 @@ export const TASK_PRIORITY_LABELS: Readonly<Record<(typeof TASK_PRIORITIES)[numb
 } as const;
 
 export const TASK_ASSIGN_MODE_LABELS: Readonly<Record<(typeof TASK_ASSIGN_MODES)[number], string>> = {
-  OPEN_CLAIM: 'Slobodno preuzimanje',
-  ASSIGN_DIRECT: 'Direktna dodjela',
-  BROADCAST: 'Obavijest svima',
+  OPEN_CLAIM: 'Pozvanima',
+  ASSIGN_DIRECT: 'Direktno vozaču',
+  BROADCAST: 'Svima (ko prvi preuzme)',
 } as const;
 
 export const TASK_ASSIGNMENT_ROLE_LABELS: Readonly<
@@ -196,7 +198,21 @@ export const TASK_TYPE_LABELS: Readonly<Record<(typeof TASK_TYPE_CODES)[number],
   TIRE_CHANGE: 'Zamjena guma',
   TECHNICAL_INSPECTION: 'Tehnički pregled',
   REGISTRATION: 'Registracija vozila',
+  HANDOVER: 'Predaja vozila',
   CUSTOM: 'Prilagođeni zadatak',
+} as const;
+
+export const TASK_FORM_ROLE_LABELS: Readonly<Record<(typeof TASK_FORM_ROLES)[number], string>> = {
+  ORDER: 'Nalog',
+  REALIZATION: 'Realizacija',
+} as const;
+
+export const LINKED_RECORD_TYPE_LABELS: Readonly<
+  Record<(typeof LINKED_RECORD_TYPES)[number], string>
+> = {
+  SERVICE: 'Servisni zapis',
+  REGISTRATION: 'Registracija',
+  TIRE_INSTALLATION: 'Montaža guma',
 } as const;
 
 // --- Forme ------------------------------------------------------------------
@@ -417,6 +433,8 @@ export type LabelDomain =
   | 'taskAssignmentRole'
   | 'taskEvent'
   | 'taskType'
+  | 'taskFormRole'
+  | 'linkedRecordType'
   | 'formSchemaStatus'
   | 'formSubject'
   | 'fieldType'
@@ -455,6 +473,8 @@ export const LABEL_MAPS: Readonly<Record<LabelDomain, LabelMap>> = {
   taskAssignmentRole: TASK_ASSIGNMENT_ROLE_LABELS,
   taskEvent: TASK_EVENT_ACTION_LABELS,
   taskType: TASK_TYPE_LABELS,
+  taskFormRole: TASK_FORM_ROLE_LABELS,
+  linkedRecordType: LINKED_RECORD_TYPE_LABELS,
   formSchemaStatus: FORM_SCHEMA_STATUS_LABELS,
   formSubject: FORM_SUBJECT_LABELS,
   fieldType: FIELD_TYPE_LABELS,
@@ -512,6 +532,8 @@ const ALL_LABEL_MAPS: readonly LabelMap[] = [
   TASK_ASSIGNMENT_ROLE_LABELS,
   TASK_EVENT_ACTION_LABELS,
   TASK_TYPE_LABELS,
+  TASK_FORM_ROLE_LABELS,
+  LINKED_RECORD_TYPE_LABELS,
   FORM_SUBJECT_LABELS,
   FIELD_TYPE_LABELS,
   TIRE_SEASON_LABELS,

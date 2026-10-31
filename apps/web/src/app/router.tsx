@@ -67,6 +67,16 @@ const FormsPage = lazyPage(() =>
   import('../features/forms/forms-page.js').then((module) => ({ default: module.FormsPage })),
 );
 
+const FormMigrationsPage = lazyPage(() =>
+  import('../features/forms/form-migrations-page.js').then((module) => ({
+    default: module.FormMigrationsPage,
+  })),
+);
+
+const SettingsPage = lazyPage(() =>
+  import('../features/settings/settings-page.js').then((module) => ({ default: module.SettingsPage })),
+);
+
 const NotificationsPage = lazyPage(() =>
   import('../features/notifications/notifications-page.js').then((module) => ({
     default: module.NotificationsPage,
@@ -322,6 +332,22 @@ export const appRoutes = [
         element: (
           <RequirePermission permission="form:view">
             <FormsPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: 'forme/migracije',
+        element: (
+          <RequirePermission permission="form:migrate_records">
+            <FormMigrationsPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: 'postavke',
+        element: (
+          <RequirePermission permission="settings:view">
+            <SettingsPage />
           </RequirePermission>
         ),
       },

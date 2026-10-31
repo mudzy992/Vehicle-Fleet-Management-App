@@ -13,6 +13,7 @@
 | `RETIRED` | ne | ne | ne | da | ne |
 
 Aktivna je tačno jedna `PUBLISHED` verzija po formi. Nova objava: stara `PUBLISHED` → `RETIRED`.
+Za `subject=TASK`: unique `(taskTypeId, role)` — po vrsti postoji jedna ORDER i jedna REALIZATION forma.
 
 ## Tok izmjene (obavezni redoslijed)
 

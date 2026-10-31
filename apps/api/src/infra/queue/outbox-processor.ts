@@ -93,6 +93,12 @@ function taskCopy(event: Pick<OutboxRow, 'eventType' | 'aggregateType' | 'aggreg
   const content = TASK_EVENT_COPY[event.eventType];
   const payload = payloadObject(event.payload);
   const code = typeof payload.code === 'string' ? payload.code : event.aggregateId;
+  const typeName = typeof payload.taskTypeName === 'string' ? payload.taskTypeName : null;
+  const vehicleNo = typeof payload.vehicleInternalNo === 'string' ? payload.vehicleInternalNo : null;
+  const detail = [typeName, vehicleNo].filter(Boolean).join(' · ');
+  if (event.eventType === 'TASK_CREATED' && detail) {
+    return { title: `Novi zadatak: ${detail}`, body: `Zadatak ${code} je kreiran.` };
+  }
   return {
     title: content?.title ?? 'Obavijest o promjeni',
     body: `${event.aggregateType === 'TASK' ? 'Zadatak' : event.aggregateType} ${code} ${content?.action ?? 'je ažuriran'}.`,

@@ -48,6 +48,7 @@ import { PasswordService } from '../modules/auth/services/password.service.js';
 import { prismaConnectionOptions } from '../prisma/prisma.service.js';
 import { syncFieldKeys, type FieldKeyRegistryClient } from '../modules/form-schemas/field-key-registry.js';
 import { SEED_FORMS } from './seed-forms.js';
+import { SEED_TASK_FORMS } from './seed-task-forms.js';
 import { SEED_TASK_TYPES } from './seed-task-types.js';
 
 /** Sistemske role koje seed uvijek postavlja (P-01: tri role). */
@@ -391,10 +392,10 @@ async function seedForms(prisma: PrismaClient): Promise<{
   const existing: string[] = [];
   const byKey = new Map<string, { formSchemaId: string; versionId: string }>();
 
-  for (const form of SEED_FORMS) {
-    const linkedTaskType = SEED_TASK_TYPES.find((taskType) => taskType.formKey === form.key);
-    const taskType = linkedTaskType
-      ? await prisma.taskType.findUnique({ where: { code: linkedTaskType.code }, select: { id: true } })
+  for (const form of [...SEED_FORMS, ...SEED_TASK_FORMS]) {
+    const taskTypeCode = form.taskTypeCode ?? SEED_TASK_TYPES.find((item) => item.formKey === form.key)?.code;
+    const taskType = taskTypeCode
+      ? await prisma.taskType.findUnique({ where: { code: taskTypeCode }, select: { id: true } })
       : null;
     if (form.subject === 'TASK' && !taskType) {
       throw new Error(`Seed forma zadatka "${form.key}" nema prethodno seedovanu vrstu zadatka.`);
@@ -419,10 +420,16 @@ async function seedForms(prisma: PrismaClient): Promise<{
 
     const existingRow = await prisma.formSchema.findUnique({
       where: { key: form.key },
-      select: { id: true, currentPublishedVersionId: true },
+      select: { id: true, currentPublishedVersionId: true, role: true },
     });
 
     if (existingRow?.currentPublishedVersionId) {
+      if (form.role && existingRow.role !== form.role) {
+        await prisma.formSchema.update({
+          where: { id: existingRow.id },
+          data: { role: form.role, ...(taskType ? { taskTypeId: taskType.id } : {}) },
+        });
+      }
       existing.push(form.key);
       byKey.set(form.key, {
         formSchemaId: existingRow.id,
@@ -440,6 +447,7 @@ async function seedForms(prisma: PrismaClient): Promise<{
           name: form.name,
           subject: form.subject,
           ...(taskType ? { taskTypeId: taskType.id } : {}),
+          ...(form.role ? { role: form.role } : {}),
           description: form.description,
           status: 'ACTIVE',
           ownerModule: form.ownerModule,
@@ -498,16 +506,22 @@ async function seedTaskTypes(
   for (const taskType of SEED_TASK_TYPES) {
     const existing = await prisma.taskType.findUnique({
       where: { code: taskType.code },
-      select: { id: true, formSchemaId: true },
+      select: { id: true, orderFormSchemaId: true, realizationFormSchemaId: true },
     });
+    const orderForm = (taskType.orderFormKey ?? taskType.formKey)
+      ? formsByKey.get(taskType.orderFormKey ?? taskType.formKey ?? '')
+      : undefined;
+    const realizationForm = taskType.realizationFormKey
+      ? formsByKey.get(taskType.realizationFormKey)
+      : undefined;
     if (existing) {
-      const defaultForm = taskType.formKey ? formsByKey.get(taskType.formKey) : undefined;
-      // Samo dopuni praznu default formu; ne prepisuj administratorsku vezu.
-      if (defaultForm && !existing.formSchemaId) {
-        await prisma.taskType.update({
-          where: { id: existing.id },
-          data: { formSchemaId: defaultForm.formSchemaId },
-        });
+      const patch: { orderFormSchemaId?: string; realizationFormSchemaId?: string } = {};
+      if (orderForm && !existing.orderFormSchemaId) patch.orderFormSchemaId = orderForm.formSchemaId;
+      if (realizationForm && !existing.realizationFormSchemaId) {
+        patch.realizationFormSchemaId = realizationForm.formSchemaId;
+      }
+      if (Object.keys(patch).length > 0) {
+        await prisma.taskType.update({ where: { id: existing.id }, data: patch });
       }
       continue;
     }
@@ -527,7 +541,8 @@ async function seedTaskTypes(
         defaultAssignMode: taskType.defaultAssignMode,
         allowMultipleClaimants: false,
         dueOffsetHours: taskType.dueOffsetHours,
-        formSchemaId: taskType.formKey ? (formsByKey.get(taskType.formKey)?.formSchemaId ?? null) : null,
+        orderFormSchemaId: orderForm?.formSchemaId ?? null,
+        realizationFormSchemaId: realizationForm?.formSchemaId ?? null,
         active: true,
         sortOrder: taskType.sortOrder,
       },

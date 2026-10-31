@@ -40,9 +40,11 @@ import {
   FUEL_TYPES,
   ODOMETER_SOURCES,
   OWNERSHIP_TYPES,
+  LINKED_RECORD_TYPES,
   TASK_ASSIGN_MODES,
   TASK_ASSIGNMENT_ROLES,
   TASK_EVENT_ACTIONS,
+  TASK_FORM_ROLES,
   TASK_PRIORITIES,
   TASK_STATUSES,
   TIRE_DISMOUNT_REASONS,
@@ -1182,12 +1184,36 @@ export const createFormSchemaSchema = z
     name: formNameSchema,
     subject: z.enum(FORM_SUBJECTS),
     taskTypeId: uuidSchema.nullable().optional(),
+    role: z.enum(TASK_FORM_ROLES).nullable().optional(),
     description: z.string().trim().max(500).nullable().optional(),
     ownerModule: z.string().trim().max(60).nullable().optional(),
     /** Prva verzija se kreira kao `DRAFT` s ovom definicijom. */
     definition: formDefinitionBodySchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.subject === 'TASK' && !value.taskTypeId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['taskTypeId'],
+        message: 'TASK forma mora biti vezana za vrstu zadatka.',
+      });
+    }
+    if (value.subject === 'TASK' && !value.role) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['role'],
+        message: 'TASK forma mora imati ulogu Nalog ili Realizacija.',
+      });
+    }
+    if (value.subject !== 'TASK' && value.role) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['role'],
+        message: 'Uloga se zadaje samo za TASK forme.',
+      });
+    }
+  });
 export type CreateFormSchemaInput = z.output<typeof createFormSchemaSchema>;
 
 export const updateFormSchemaSchema = z
@@ -1234,6 +1260,8 @@ export const formSchemaListQuerySchema = z
   .object({
     subject: z.enum(FORM_SUBJECTS).optional(),
     status: z.enum(FORM_SCHEMA_STATUSES).optional(),
+    taskTypeId: uuidSchema.optional(),
+    role: z.enum(TASK_FORM_ROLES).optional(),
     q: z.string().trim().max(120).optional(),
   })
   .strict();
@@ -1243,8 +1271,18 @@ export const activeFormSchemaQuerySchema = z
   .object({
     subject: z.enum(FORM_SUBJECTS),
     taskTypeId: uuidSchema.optional(),
+    role: z.enum(TASK_FORM_ROLES).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.subject === 'TASK' && !value.role) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['role'],
+        message: 'Aktivna TASK forma zahtijeva ulogu ORDER ili REALIZATION.',
+      });
+    }
+  });
 export type ActiveFormSchemaQuery = z.output<typeof activeFormSchemaQuerySchema>;
 
 export const validateFormValuesSchema = z
@@ -1282,6 +1320,7 @@ export const formSchemaSummarySchema = z
     name: z.string(),
     subject: z.enum(FORM_SUBJECTS),
     taskTypeId: uuidSchema.nullable(),
+    role: z.enum(TASK_FORM_ROLES).nullable(),
     description: z.string().nullable(),
     ownerModule: z.string().nullable(),
     status: z.enum(FORM_SCHEMA_STATUSES),
@@ -1370,6 +1409,7 @@ export const activeFormSchemaSchema = z
     key: z.string(),
     name: z.string(),
     subject: z.enum(FORM_SUBJECTS),
+    role: z.enum(TASK_FORM_ROLES).nullable().optional(),
     formSchemaVersionId: uuidSchema,
     version: z.number().int().positive(),
     /** Vrijednost `ETag` zaglavlja (SHA-256 kanonskog JSON-a definicije). */
@@ -2758,6 +2798,9 @@ const taskTypeCreateShape = {
   defaultAssignMode: taskAssignModeSchema.default('OPEN_CLAIM'),
   allowMultipleClaimants: z.boolean().default(false),
   dueOffsetHours: z.number().int().min(1).max(8760).nullable().optional(),
+  orderFormSchemaId: uuidSchema.nullable().optional(),
+  realizationFormSchemaId: uuidSchema.nullable().optional(),
+  /** Alias: zadana ORDER forma. */
   formSchemaId: uuidSchema.nullable().optional(),
   sortOrder: z.number().int().min(-10000).max(10000).default(100),
 };
@@ -2798,6 +2841,8 @@ export const updateTaskTypeSchema = z
     defaultAssignMode: taskAssignModeSchema.optional(),
     allowMultipleClaimants: z.boolean().optional(),
     dueOffsetHours: z.number().int().min(1).max(8760).nullable().optional(),
+    orderFormSchemaId: uuidSchema.nullable().optional(),
+    realizationFormSchemaId: uuidSchema.nullable().optional(),
     formSchemaId: uuidSchema.nullable().optional(),
     sortOrder: z.number().int().min(-10000).max(10000).optional(),
   })
@@ -2848,6 +2893,12 @@ export const taskTypeViewSchema = z
     defaultAssignMode: taskAssignModeSchema,
     allowMultipleClaimants: z.boolean(),
     dueOffsetHours: z.number().int().min(1).max(8760).nullable(),
+    orderFormSchemaId: uuidSchema.nullable(),
+    orderFormSchemaKey: z.string().nullable(),
+    orderFormSchemaName: z.string().nullable(),
+    realizationFormSchemaId: uuidSchema.nullable(),
+    realizationFormSchemaKey: z.string().nullable(),
+    realizationFormSchemaName: z.string().nullable(),
     formSchemaId: uuidSchema.nullable(),
     formSchemaKey: z.string().nullable(),
     formSchemaName: z.string().nullable(),
@@ -2973,9 +3024,14 @@ export const createTaskSchema = z
     invitedUserIds: z.array(uuidSchema).max(100).default([]),
     assigneeUserId: uuidSchema.nullable().optional(),
     observerUserIds: z.array(uuidSchema).max(100).default([]),
-    formData: z.record(z.string(), z.unknown()).default({}),
+    orderFormData: z.record(z.string(), z.unknown()).optional(),
+    formData: z.record(z.string(), z.unknown()).optional(),
   })
   .strict()
+  .transform((value) => ({
+    ...value,
+    orderFormData: value.orderFormData ?? value.formData ?? {},
+  }))
   .superRefine((value, ctx) => {
     for (const index of duplicatedIndexes(value.invitedUserIds)) {
       ctx.addIssue({
@@ -3046,6 +3102,13 @@ export const createTaskSchema = z
         code: 'custom',
         path: ['invitedUserIds'],
         message: 'Broadcast zadatak nema listu pozvanih korisnika.',
+      });
+    }
+    if (value.assignMode === 'OPEN_CLAIM' && value.invitedUserIds.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['invitedUserIds'],
+        message: 'Pozvanima treba lista korisnika; za sve vozače koristite Svima (ko prvi preuzme).',
       });
     }
   });
@@ -3136,7 +3199,7 @@ export type AssignTaskInput = z.output<typeof assignTaskSchema>;
  */
 export const claimTaskSchema = z
   .object({
-    formData: z.record(z.string(), z.unknown()).default({}),
+    formData: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();
 export type ClaimTaskInput = z.output<typeof claimTaskSchema>;
@@ -3154,7 +3217,8 @@ export type ClaimTaskInput = z.output<typeof claimTaskSchema>;
 export const completeTaskSchema = z
   .object({
     version: z.number().int().nonnegative(),
-    formData: z.record(z.string(), z.unknown()).default({}),
+    realizationFormData: z.record(z.string(), z.unknown()).optional(),
+    formData: z.record(z.string(), z.unknown()).optional(),
     attachmentIds: z
       .array(uuidSchema)
       .max(20)
@@ -3166,7 +3230,11 @@ export const completeTaskSchema = z
     odometerKm: z.number().int().min(0).max(2147483647).optional(),
     reason: z.string().trim().min(3).max(500).optional(),
   })
-  .strict();
+  .strict()
+  .transform((value) => ({
+    ...value,
+    realizationFormData: value.realizationFormData ?? value.formData ?? {},
+  }));
 export type CompleteTaskInput = z.output<typeof completeTaskSchema>;
 
 export const taskListQuerySchema = paginationQuerySchema
@@ -3331,6 +3399,11 @@ export const taskViewSchema = z
     formSchemaName: z.string(),
     formSchemaVersionId: uuidSchema,
     formSchemaVersion: z.number().int().positive(),
+    orderFormSchemaId: uuidSchema,
+    realizationFormSchemaId: uuidSchema.nullable(),
+    realizationFormSchemaVersionId: uuidSchema.nullable(),
+    linkedRecordType: z.enum(LINKED_RECORD_TYPES).nullable(),
+    linkedRecordId: uuidSchema.nullable(),
     version: z.number().int().nonnegative(),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
@@ -3341,6 +3414,8 @@ export type TaskView = z.output<typeof taskViewSchema>;
 export const taskDetailSchema = taskViewSchema
   .extend({
     formData: z.record(z.string(), z.unknown()),
+    orderFormData: z.record(z.string(), z.unknown()),
+    realizationFormData: z.record(z.string(), z.unknown()),
     assignments: z.array(taskAssignmentViewSchema),
     events: z.array(taskEventViewSchema),
     attachmentIds: z.array(uuidSchema),
@@ -3468,3 +3543,28 @@ export const notificationMarkAllReadSchema = z
   .object({ updatedCount: z.number().int().nonnegative() })
   .strict();
 export type NotificationMarkAllRead = z.output<typeof notificationMarkAllReadSchema>;
+
+export const SETTING_SCOPES = ['public', 'private'] as const;
+export const SETTING_VALUE_TYPES = ['boolean', 'number', 'string'] as const;
+
+export const appSettingViewSchema = z
+  .object({
+    key: z.string(),
+    value: z.union([z.boolean(), z.number(), z.string()]),
+    valueType: z.enum(SETTING_VALUE_TYPES),
+    scope: z.enum(SETTING_SCOPES),
+    description: z.string(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export type AppSettingView = z.output<typeof appSettingViewSchema>;
+
+export const appSettingListSchema = z.object({ items: z.array(appSettingViewSchema) }).strict();
+export type AppSettingList = z.output<typeof appSettingListSchema>;
+
+export const updateAppSettingSchema = z
+  .object({
+    value: z.union([z.boolean(), z.number(), z.string()]),
+  })
+  .strict();
+export type UpdateAppSettingInput = z.output<typeof updateAppSettingSchema>;

@@ -33,6 +33,7 @@ function useTaskForms(taskTypeId?: string) {
   });
   const forms = useMemo(() => availableTaskForms(query.data ?? [], taskTypeId), [query.data, taskTypeId]);
   return { query, forms };
+  return { query, forms };
 }
 
 function TaskTypeFields({
@@ -56,7 +57,12 @@ function TaskTypeFields({
   idPrefix: string;
   onChange: (key: keyof TaskTypeFormValues, value: string | boolean) => void;
 }) {
-  const currentFormInOptions = forms.some((form) => form.id === values.formSchemaId);
+  const orderForms = forms.filter((form) => form.role === 'ORDER' || form.role == null);
+  const realizationForms = forms.filter((form) => form.role === 'REALIZATION');
+  const currentFormInOptions = orderForms.some((form) => form.id === values.formSchemaId);
+  const currentRealizationInOptions = realizationForms.some(
+    (form) => form.id === values.realizationFormSchemaId,
+  );
   const knownTaskColor = TASK_TYPE_COLOR_OPTIONS.some(
     (option) => taskTypeColorHex(option.key) === values.colorHex.trim().toUpperCase(),
   );
@@ -105,7 +111,7 @@ function TaskTypeFields({
         </Field>
 
         <Field
-          label="Zadana objavljena TASK forma"
+          label="Forma naloga"
           htmlFor={`${idPrefix}-form`}
           hint={formSelectionHint}
           error={errors.formSchemaId ?? null}
@@ -118,16 +124,41 @@ function TaskTypeFields({
             aria-invalid={errors.formSchemaId ? true : undefined}
             onChange={(event) => onChange('formSchemaId', event.target.value)}
           >
-            <option value="">Bez zadane forme</option>
+            <option value="">Bez forme naloga</option>
             {detail?.formSchemaId && !currentFormInOptions ? (
               <option value={detail.formSchemaId}>
                 {detail.formSchemaName ?? detail.formSchemaKey ?? 'Trenutna forma'} (trenutna)
               </option>
             ) : null}
-            {forms.map((form) => (
+            {orderForms.map((form) => (
               <option key={form.id} value={form.id}>
                 {form.name} · {form.key}
                 {form.currentPublishedVersion ? ` · v${form.currentPublishedVersion}` : ''}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          label="Forma realizacije"
+          htmlFor={`${idPrefix}-realization-form`}
+          error={errors.realizationFormSchemaId ?? null}
+        >
+          <select
+            id={`${idPrefix}-realization-form`}
+            className={inputClassName}
+            disabled={disabled || !formSelectionAvailable}
+            value={values.realizationFormSchemaId}
+            onChange={(event) => onChange('realizationFormSchemaId', event.target.value)}
+          >
+            <option value="">Bez forme realizacije</option>
+            {detail?.realizationFormSchemaId && !currentRealizationInOptions ? (
+              <option value={detail.realizationFormSchemaId}>
+                {detail.realizationFormSchemaName ?? detail.realizationFormSchemaKey ?? 'Trenutna'} (trenutna)
+              </option>
+            ) : null}
+            {realizationForms.map((form) => (
+              <option key={form.id} value={form.id}>
+                {form.name} · {form.key}
               </option>
             ))}
           </select>

@@ -119,13 +119,23 @@ function freshVehicleDefinition(): Record<string, unknown> {
   return structuredClone(definition);
 }
 
-async function createWashForm(service: FormSchemasService) {
+const WASH_TYPE_ID = '018f0000-0000-7000-8000-0000000000d0';
+
+async function createWashForm(
+  service: FormSchemasService,
+  prisma: FakeFormPrisma,
+  patch: { key?: string; taskTypeId?: string; role?: 'ORDER' | 'REALIZATION' } = {},
+) {
+  const taskTypeId = patch.taskTypeId ?? WASH_TYPE_ID;
+  prisma.addTaskType({ id: taskTypeId });
   return (
     await service.create(
       {
-        key: 'pranje_vozila',
+        key: patch.key ?? 'pranje_vozila',
         name: 'Pranje vozila',
         subject: 'TASK',
+        taskTypeId,
+        role: patch.role ?? 'ORDER',
         definition: freshWashDefinition(),
       },
       ACTOR,
@@ -159,7 +169,7 @@ const VALID_VALUES = {
 
 describe('FormSchemasService — kreiranje', () => {
   it('odbija drugi identitet za isti subject, bez sprečavanja task-type formi', async () => {
-    const { service } = build();
+    const { prisma, service } = build();
     const first = await service.create({
       key: 'vozilo-prvo',
       name: 'Vozilo',
@@ -178,27 +188,24 @@ describe('FormSchemasService — kreiranje', () => {
     );
     expect(duplicate.code).toBe('VALIDATION_ERROR');
 
-    // TASK forme su višestruke ako nisu vezane za tip; za tip postoji tačno
-    // jedan identitet, a različiti tipovi ostaju nezavisni.
-    await service.create({
-      key: 'task-generic-a',
-      name: 'Task generički A',
-      subject: 'TASK',
-      definition: freshWashDefinition(),
-    });
-    await service.create({
-      key: 'task-generic-b',
-      name: 'Task generički B',
-      subject: 'TASK',
-      definition: freshWashDefinition(),
-    });
     const typeA = '018f0000-0000-7000-8000-0000000000d1';
     const typeB = '018f0000-0000-7000-8000-0000000000d2';
+    prisma.addTaskType({ id: typeA });
+    prisma.addTaskType({ id: typeB });
     await service.create({
-      key: 'task-a',
-      name: 'Task A',
+      key: 'task-a-order',
+      name: 'Task A nalog',
       subject: 'TASK',
       taskTypeId: typeA,
+      role: 'ORDER',
+      definition: freshWashDefinition(),
+    });
+    await service.create({
+      key: 'task-a-real',
+      name: 'Task A realizacija',
+      subject: 'TASK',
+      taskTypeId: typeA,
+      role: 'REALIZATION',
       definition: freshWashDefinition(),
     });
     await service.create({
@@ -206,6 +213,7 @@ describe('FormSchemasService — kreiranje', () => {
       name: 'Task B',
       subject: 'TASK',
       taskTypeId: typeB,
+      role: 'ORDER',
       definition: freshWashDefinition(),
     });
     const duplicateTaskType = await errorOf(() =>
@@ -214,6 +222,7 @@ describe('FormSchemasService — kreiranje', () => {
         name: 'Task A duplicate',
         subject: 'TASK',
         taskTypeId: typeA,
+        role: 'ORDER',
         definition: freshWashDefinition(),
       }),
     );
@@ -221,8 +230,8 @@ describe('FormSchemasService — kreiranje', () => {
   });
 
   it('kreira formu s prvom DRAFT verzijom i stabilnim contentHash', async () => {
-    const { service } = build();
-    const detail = await createWashForm(service);
+    const { prisma, service } = build();
+    const detail = await createWashForm(service, prisma);
 
     expect(detail.key).toBe('pranje_vozila');
     expect(detail.status).toBe('DRAFT');
@@ -234,8 +243,8 @@ describe('FormSchemasService — kreiranje', () => {
   });
 
   it('odbija duplikat ključa', async () => {
-    const { service } = build();
-    await createWashForm(service);
+    const { prisma, service } = build();
+    await createWashForm(service, prisma);
 
     const error = await errorOf(() =>
       service.create(
@@ -272,8 +281,8 @@ describe('FormSchemasService — kreiranje', () => {
 
 describe('FormSchemasService — verzije', () => {
   it('kopira postojeću verziju u novi DRAFT s inkrementiranim brojem', async () => {
-    const { service } = build();
-    const detail = await createWashForm(service);
+    const { prisma, service } = build();
+    const detail = await createWashForm(service, prisma);
     const firstVersionId = detail.versions[0]!.id;
 
     const created = await service.createVersion(detail.id, { copyFromVersionId: firstVersionId }, ACTOR);
@@ -284,8 +293,8 @@ describe('FormSchemasService — verzije', () => {
   });
 
   it('objavljena verzija se ne mijenja ni ne briše', async () => {
-    const { service } = build();
-    const detail = await createWashForm(service);
+    const { prisma, service } = build();
+    const detail = await createWashForm(service, prisma);
     const versionId = detail.versions[0]!.id;
     await service.publish(detail.id, versionId, { changeNote: 'Prva verzija' }, ACTOR);
 
@@ -300,8 +309,8 @@ describe('FormSchemasService — verzije', () => {
   });
 
   it('DRAFT se briše, a broj verzija se smanjuje', async () => {
-    const { service } = build();
-    const detail = await createWashForm(service);
+    const { prisma, service } = build();
+    const detail = await createWashForm(service, prisma);
     const draft = await service.createVersion(detail.id, { definition: freshWashDefinition() }, ACTOR);
 
     await service.deleteVersion(detail.id, draft.data.id);
@@ -312,8 +321,8 @@ describe('FormSchemasService — verzije', () => {
 
 describe('FormSchemasService — objava (P9/P10)', () => {
   it('objava bez ispravne bilješke ne prolazi', async () => {
-    const { service } = build();
-    const detail = await createWashForm(service);
+    const { prisma, service } = build();
+    const detail = await createWashForm(service, prisma);
     const versionId = detail.versions[0]!.id;
 
     const error = await errorOf(() => service.publish(detail.id, versionId, { changeNote: 'abc' }, ACTOR));
@@ -324,7 +333,7 @@ describe('FormSchemasService — objava (P9/P10)', () => {
 
   it('objava postavlja status, hash, bilješku i aktivnu verziju forme', async () => {
     const { prisma, service } = build();
-    const detail = await createWashForm(service);
+    const detail = await createWashForm(service, prisma);
     const versionId = detail.versions[0]!.id;
 
     const published = await service.publish(detail.id, versionId, { changeNote: 'Prva verzija' }, ACTOR);
@@ -347,8 +356,8 @@ describe('FormSchemasService — objava (P9/P10)', () => {
   });
 
   it('nova objava povlači prethodnu i postaje aktivna', async () => {
-    const { service } = build();
-    const detail = await createWashForm(service);
+    const { prisma, service } = build();
+    const detail = await createWashForm(service, prisma);
     const first = detail.versions[0]!.id;
     await service.publish(detail.id, first, { changeNote: 'Prva verzija' }, ACTOR);
 
@@ -367,7 +376,7 @@ describe('FormSchemasService — objava (P9/P10)', () => {
     expect(fresh.versions.find((version) => version.id === first)?.status).toBe('RETIRED');
     expect(fresh.versions.find((version) => version.id === first)?.retiredAt).not.toBeNull();
 
-    const active = await service.active({ subject: 'TASK' });
+    const active = await service.active({ subject: 'TASK', taskTypeId: WASH_TYPE_ID });
     expect(active.formSchemaVersionId).toBe(second.data.id);
     expect(active.version).toBe(2);
     expect(active.contentHash).toMatch(/^[0-9a-f]{64}$/u);
@@ -375,7 +384,7 @@ describe('FormSchemasService — objava (P9/P10)', () => {
 
   it('odbija objavu kad registar već ima isti fieldKey pod drugim tipom', async () => {
     const { prisma, service } = build();
-    const detail = await createWashForm(service);
+    const detail = await createWashForm(service, prisma);
     const versionId = detail.versions[0]!.id;
     await prisma.fieldKeyRegistry.create({
       data: {
@@ -399,8 +408,8 @@ describe('FormSchemasService — objava (P9/P10)', () => {
   });
 
   it('konkurentne objave ne ostavljaju više od jedne PUBLISHED verzije', async () => {
-    const { service } = build();
-    const detail = await createWashForm(service);
+    const { prisma, service } = build();
+    const detail = await createWashForm(service, prisma);
     const first = detail.versions[0]!.id;
     await service.publish(detail.id, first, { changeNote: 'Prva verzija' }, ACTOR);
 
@@ -421,8 +430,8 @@ describe('FormSchemasService — objava (P9/P10)', () => {
   });
 
   it('povlačenje aktivne verzije bez zamjene je odbijeno', async () => {
-    const { service } = build();
-    const detail = await createWashForm(service);
+    const { prisma, service } = build();
+    const detail = await createWashForm(service, prisma);
     const versionId = detail.versions[0]!.id;
     await service.publish(detail.id, versionId, { changeNote: 'Prva verzija' }, ACTOR);
 
@@ -468,10 +477,10 @@ describe('FormSchemasService — aktivna forma i keširanje', () => {
   });
 
   it('bez objavljene verzije nema aktivne forme', async () => {
-    const { service } = build();
-    await createWashForm(service);
+    const { prisma, service } = build();
+    await createWashForm(service, prisma);
 
-    const error = await errorOf(() => service.active({ subject: 'TASK' }));
+    const error = await errorOf(() => service.active({ subject: 'TASK', taskTypeId: WASH_TYPE_ID }));
     expect(error.code).toBe('NOT_FOUND');
     expect(error.httpStatus).toBe(404);
   });
@@ -481,7 +490,7 @@ describe('FormSchemasService — aktivna forma i keširanje', () => {
     const taskTypeId = '018f0000-0000-7000-8000-0000000000d1';
 
     // Generička forma (bez tipa zadatka).
-    const generic = await createWashForm(service);
+    const generic = await createWashForm(service, prisma);
     await service.publish(generic.id, generic.versions[0]!.id, { changeNote: 'Generička' }, ACTOR);
 
     // Specifična forma za tip zadatka.
@@ -492,6 +501,7 @@ describe('FormSchemasService — aktivna forma i keširanje', () => {
           name: 'Pranje (tip)',
           subject: 'TASK',
           taskTypeId,
+          role: 'ORDER',
           definition: freshWashDefinition(),
         },
         ACTOR,
@@ -504,7 +514,7 @@ describe('FormSchemasService — aktivna forma i keširanje', () => {
 
     // Eksplicitno zadana forma vrste ima prednost pred formom vezanom za vrstu.
     const explicitTypeId = '018f0000-0000-7000-8000-0000000000d2';
-    prisma.addTaskType({ id: explicitTypeId, formSchemaId: generic.id });
+    prisma.addTaskType({ id: explicitTypeId, orderFormSchemaId: generic.id, formSchemaId: generic.id });
     expect((await service.active({ subject: 'TASK', taskTypeId: explicitTypeId })).formSchemaId).toBe(
       generic.id,
     );
@@ -540,8 +550,8 @@ describe('FormSchemasService — aktivna forma i keširanje', () => {
 
 describe('FormSchemasService — validacija zapisa (P11)', () => {
   it('DRAFT verzija ne prima zapise', async () => {
-    const { service } = build();
-    const detail = await createWashForm(service);
+    const { prisma, service } = build();
+    const detail = await createWashForm(service, prisma);
 
     const result = await service.validateValues(detail.id, detail.versions[0]!.id, {
       values: VALID_VALUES,
@@ -590,8 +600,8 @@ describe('FormSchemasService — validacija zapisa (P11)', () => {
   });
 
   it('objavljena verzija vraća očišćene vrijednosti, izračunata polja i greške', async () => {
-    const { service } = build();
-    const detail = await createWashForm(service);
+    const { prisma, service } = build();
+    const detail = await createWashForm(service, prisma);
     const versionId = detail.versions[0]!.id;
     await service.publish(detail.id, versionId, { changeNote: 'Prva verzija' }, ACTOR);
 
@@ -616,8 +626,8 @@ describe('FormSchemasService — validacija zapisa (P11)', () => {
 
 describe('FormSchemasService — diff i lista', () => {
   it('diff prikazuje dodana i uklonjena polja između verzija', async () => {
-    const { service } = build();
-    const detail = await createWashForm(service);
+    const { prisma, service } = build();
+    const detail = await createWashForm(service, prisma);
     const firstId = detail.versions[0]!.id;
 
     const changed = JSON.parse(JSON.stringify(freshWashDefinition())) as Record<string, unknown>;
@@ -637,8 +647,8 @@ describe('FormSchemasService — diff i lista', () => {
   });
 
   it('lista filtrira po subjektu, statusu i tekstu', async () => {
-    const { service } = build();
-    const detail = await createWashForm(service);
+    const { prisma, service } = build();
+    const detail = await createWashForm(service, prisma);
     await service.create(
       { key: 'druga_forma', name: 'Druga forma', subject: 'VEHICLE', definition: freshWashDefinition() },
       ACTOR,

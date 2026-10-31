@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from 'react-router';
 import { router } from './app/router.js';
 import { SessionProvider } from './features/auth/session.js';
+import { RealtimeProvider } from './features/realtime/realtime-provider.js';
 import './styles/globals.css';
 
 const queryClient = new QueryClient({
@@ -37,7 +38,9 @@ createRoot(container).render(
     <QueryClientProvider client={queryClient}>
       {/* Sesija mora biti iznad rutera: guard-ovi i shell čitaju `useSession()`. */}
       <SessionProvider>
-        <RouterProvider router={router} />
+        <RealtimeProvider>
+          <RouterProvider router={router} />
+        </RealtimeProvider>
       </SessionProvider>
     </QueryClientProvider>
   </StrictMode>,

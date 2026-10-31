@@ -63,6 +63,14 @@ export const FORM_SUBJECTS = [
 ] as const;
 export type FormSubject = (typeof FORM_SUBJECTS)[number];
 
+/** Uloga TASK forme: nalog (create) ili realizacija (complete). */
+export const TASK_FORM_ROLES = ['ORDER', 'REALIZATION'] as const;
+export type TaskFormRole = (typeof TASK_FORM_ROLES)[number];
+
+/** Evidencija koju complete može kreirati uz zadatak. */
+export const LINKED_RECORD_TYPES = ['SERVICE', 'REGISTRATION', 'TIRE_INSTALLATION'] as const;
+export type LinkedRecordType = (typeof LINKED_RECORD_TYPES)[number];
+
 /**
  * Statusi s kojima je **prijava dozvoljena**.
  *
@@ -248,6 +256,7 @@ export const TASK_TYPE_CODES = [
   'TIRE_CHANGE',
   'TECHNICAL_INSPECTION',
   'REGISTRATION',
+  'HANDOVER',
   'CUSTOM',
 ] as const;
 export type TaskTypeCode = (typeof TASK_TYPE_CODES)[number];

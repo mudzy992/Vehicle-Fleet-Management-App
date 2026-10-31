@@ -41,9 +41,15 @@ const TYPE = {
   requiresOdometer: false,
   requiresPhotos: true,
   defaultPriority: 'NORMAL',
-  defaultAssignMode: 'OPEN_CLAIM',
+  defaultAssignMode: 'BROADCAST',
   allowMultipleClaimants: false,
   dueOffsetHours: null,
+  orderFormSchemaId: FORM_ID,
+  orderFormSchemaKey: 'wash',
+  orderFormSchemaName: 'Fotografije zadatka',
+  realizationFormSchemaId: FORM_ID,
+  realizationFormSchemaKey: 'wash',
+  realizationFormSchemaName: 'Fotografije zadatka',
   formSchemaId: FORM_ID,
   formSchemaKey: 'wash',
   formSchemaName: 'Fotografije zadatka',
@@ -72,8 +78,8 @@ describe('TaskCreatePage', () => {
       if (url.includes('/task-types?')) return response({ items: [TYPE], page: 1, pageSize: 100, total: 1, totalPages: 1 });
       if (url.includes('/vehicles?')) return response({ items: [], page: 1, pageSize: 100, total: 0, totalPages: 0 });
       if (url.includes('/users?')) return response({ items: [], page: 1, pageSize: 100, total: 0, totalPages: 0 });
-      if (url.endsWith('/form-schemas?subject=TASK&status=PUBLISHED')) {
-        return response([{ id: FORM_ID, key: 'wash', name: 'Fotografije zadatka', subject: 'TASK', taskTypeId: null, description: null, ownerModule: null, status: 'PUBLISHED', currentPublishedVersionId: VERSION_ID, currentPublishedVersion: 1, versionCount: 1, updatedAt: '2026-10-22T08:00:00.000Z', createdAt: '2026-10-22T08:00:00.000Z' }]);
+      if (url.includes('/form-schemas?subject=TASK&status=PUBLISHED')) {
+        return response([{ id: FORM_ID, key: 'wash', name: 'Fotografije zadatka', subject: 'TASK', taskTypeId: TYPE_ID, role: 'ORDER', description: null, ownerModule: null, status: 'PUBLISHED', currentPublishedVersionId: VERSION_ID, currentPublishedVersion: 1, versionCount: 1, updatedAt: '2026-10-22T08:00:00.000Z', createdAt: '2026-10-22T08:00:00.000Z' }]);
       }
       if (url.endsWith(`/form-schemas/${FORM_ID}/versions/${VERSION_ID}`)) {
         return response({ id: VERSION_ID, formSchemaId: FORM_ID, version: 1, status: 'PUBLISHED', definition: DEFINITION });
@@ -112,6 +118,6 @@ describe('TaskCreatePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Kreiraj zadatak' }));
 
     expect(await screen.findByTestId('task-created')).toBeTruthy();
-    await waitFor(() => expect(createPayload?.['formData']).toEqual({ photosAfter: [FILE_ID] }));
+    await waitFor(() => expect(createPayload?.['orderFormData']).toEqual({ photosAfter: [FILE_ID] }));
   });
 });

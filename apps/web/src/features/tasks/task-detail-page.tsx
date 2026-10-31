@@ -17,6 +17,7 @@ import {
 import { ApiError, api } from '../../lib/api.js';
 import { useSession } from '../auth/session.js';
 import { TaskCompletionForm } from './task-completion-form.js';
+import { TaskOrderBlock } from './task-order-block.js';
 import { TaskStatusActions } from './task-status-actions.js';
 
 const COMMENTS_PAGE_SIZE = 20;
@@ -28,13 +29,6 @@ function dateTime(value: string | null): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
-}
-
-function valueText(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'boolean') return value ? 'Da' : 'Ne';
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
 }
 
 export function TaskDetailPage() {
@@ -212,21 +206,7 @@ export function TaskDetailPage() {
         </CardContent>
       </Card>
 
-      {Object.keys(task.formData).length > 0 && (
-        <Card>
-          <CardHeader title="Podaci forme" description={`Snapshot forme v${task.formSchemaVersion}`} />
-          <CardContent>
-            <dl className="grid gap-3 sm:grid-cols-2">
-              {Object.entries(task.formData).map(([key, value]) => (
-                <div key={key} className="min-w-0">
-                  <dt className="text-xs text-fg-muted">{key}</dt>
-                  <dd className="mt-1 break-words text-sm">{valueText(value)}</dd>
-                </div>
-              ))}
-            </dl>
-          </CardContent>
-        </Card>
-      )}
+      <TaskOrderBlock task={task} />
 
       <Card>
         <CardHeader title="Učesnici" description="Aktivne i ranije dodjele" />

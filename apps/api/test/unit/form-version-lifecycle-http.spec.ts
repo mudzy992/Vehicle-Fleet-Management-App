@@ -13,6 +13,7 @@ import {
   apiJson,
   payloadData,
   startFormVersionHttpApp,
+  taskFormPayload,
   type FormVersionHttpApp,
 } from '../helpers/form-version-http-harness.js';
 
@@ -51,12 +52,11 @@ describe('HTTP form-schemas — kompletan workflow verzija', () => {
     const { baseUrl } = harness;
     const created = payloadData<FormSchemaDetail>(
       (
-        await apiJson(baseUrl, 'POST', '/form-schemas', {
+        await apiJson(baseUrl, 'POST', '/form-schemas', taskFormPayload(harness.prisma, {
           key: `pregled_${randomUUID().slice(0, 8)}`,
           name: 'Pregled HTTP',
-          subject: 'TASK',
           definition: inspectionDefinition(),
-        })
+        }))
       ).payload,
     );
     const firstId = created.versions[0]!.id;
@@ -101,7 +101,7 @@ describe('HTTP form-schemas — kompletan workflow verzija', () => {
       ).payload,
     );
     const active = payloadData<{ formSchemaVersionId: string; definition: Record<string, unknown> }>(
-      (await apiJson(baseUrl, 'GET', '/form-schemas/active?subject=TASK')).payload,
+      (await apiJson(baseUrl, 'GET', `/form-schemas/active?subject=TASK&taskTypeId=${created.taskTypeId}&role=ORDER`)).payload,
     );
     const previous = payloadData<FormVersionDetail>(
       (await apiJson(baseUrl, 'GET', `/form-schemas/${created.id}/versions/${firstId}`)).payload,
@@ -118,12 +118,11 @@ describe('HTTP form-schemas — kompletan workflow verzija', () => {
     const { baseUrl } = harness;
     const created = payloadData<FormSchemaDetail>(
       (
-        await apiJson(baseUrl, 'POST', '/form-schemas', {
+        await apiJson(baseUrl, 'POST', '/form-schemas', taskFormPayload(harness.prisma, {
           key: `immut_${randomUUID().slice(0, 8)}`,
           name: 'Immutable',
-          subject: 'TASK',
           definition: inspectionDefinition(),
-        })
+        }))
       ).payload,
     );
     const versionId = created.versions[0]!.id;

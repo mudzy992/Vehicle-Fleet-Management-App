@@ -21,7 +21,9 @@ export interface SeedTaskType {
   readonly defaultAssignMode: TaskAssignMode;
   readonly dueOffsetHours: number | null;
   readonly sortOrder: number;
-  /** Ključ seed forme koja je zadana za ovu vrstu, ako već postoji. */
+  readonly orderFormKey?: string;
+  readonly realizationFormKey?: string;
+  /** @deprecated alias nalog forme */
   readonly formKey?: string;
 }
 
@@ -36,10 +38,12 @@ export const SEED_TASK_TYPES: readonly SeedTaskType[] = [
     requiresOdometer: false,
     requiresPhotos: true,
     defaultPriority: 'NORMAL',
-    defaultAssignMode: 'OPEN_CLAIM',
+    defaultAssignMode: 'BROADCAST',
     dueOffsetHours: 24,
     sortOrder: 10,
-    formKey: 'pranje_vozila',
+    orderFormKey: 'pranje_vozila_nalog',
+    realizationFormKey: 'pranje_vozila',
+    formKey: 'pranje_vozila_nalog',
   },
   {
     code: 'INTERIOR_CLEANING',
@@ -51,9 +55,11 @@ export const SEED_TASK_TYPES: readonly SeedTaskType[] = [
     requiresOdometer: false,
     requiresPhotos: true,
     defaultPriority: 'NORMAL',
-    defaultAssignMode: 'OPEN_CLAIM',
+    defaultAssignMode: 'BROADCAST',
     dueOffsetHours: 24,
     sortOrder: 20,
+    orderFormKey: 'ciscenje_nalog',
+    realizationFormKey: 'ciscenje_realizacija',
   },
   {
     code: 'FUEL_REFILL',
@@ -68,6 +74,8 @@ export const SEED_TASK_TYPES: readonly SeedTaskType[] = [
     defaultAssignMode: 'OPEN_CLAIM',
     dueOffsetHours: 8,
     sortOrder: 30,
+    orderFormKey: 'gorivo_nalog',
+    realizationFormKey: 'gorivo_realizacija',
   },
   {
     code: 'SERVICE_VISIT',
@@ -82,6 +90,8 @@ export const SEED_TASK_TYPES: readonly SeedTaskType[] = [
     defaultAssignMode: 'ASSIGN_DIRECT',
     dueOffsetHours: 48,
     sortOrder: 40,
+    orderFormKey: 'servis_nalog',
+    realizationFormKey: 'servis_realizacija',
   },
   {
     code: 'TIRE_CHANGE',
@@ -96,6 +106,8 @@ export const SEED_TASK_TYPES: readonly SeedTaskType[] = [
     defaultAssignMode: 'OPEN_CLAIM',
     dueOffsetHours: 48,
     sortOrder: 50,
+    orderFormKey: 'gume_nalog',
+    realizationFormKey: 'gume_realizacija',
   },
   {
     code: 'TECHNICAL_INSPECTION',
@@ -110,6 +122,8 @@ export const SEED_TASK_TYPES: readonly SeedTaskType[] = [
     defaultAssignMode: 'ASSIGN_DIRECT',
     dueOffsetHours: 72,
     sortOrder: 60,
+    orderFormKey: 'tehnicki_nalog',
+    realizationFormKey: 'tehnicki_realizacija',
   },
   {
     code: 'REGISTRATION',
@@ -124,6 +138,8 @@ export const SEED_TASK_TYPES: readonly SeedTaskType[] = [
     defaultAssignMode: 'ASSIGN_DIRECT',
     dueOffsetHours: 72,
     sortOrder: 70,
+    orderFormKey: 'registracija_nalog',
+    realizationFormKey: 'registracija_zadatak_realizacija',
   },
   {
     code: 'CUSTOM',
@@ -135,8 +151,26 @@ export const SEED_TASK_TYPES: readonly SeedTaskType[] = [
     requiresOdometer: false,
     requiresPhotos: false,
     defaultPriority: 'NORMAL',
-    defaultAssignMode: 'OPEN_CLAIM',
+    defaultAssignMode: 'BROADCAST',
     dueOffsetHours: null,
     sortOrder: 100,
+    orderFormKey: 'prilagodeni_nalog',
+    realizationFormKey: 'prilagodeni_realizacija',
+  },
+  {
+    code: 'HANDOVER',
+    name: 'Predaja vozila',
+    description: 'Predaja i povrat vozila uz evidentirano stanje.',
+    iconName: 'handshake',
+    colorHex: '#0F766E',
+    requiresVehicle: true,
+    requiresOdometer: true,
+    requiresPhotos: true,
+    defaultPriority: 'HIGH',
+    defaultAssignMode: 'ASSIGN_DIRECT',
+    dueOffsetHours: 24,
+    sortOrder: 80,
+    orderFormKey: 'predaja_nalog',
+    realizationFormKey: 'predaja_realizacija',
   },
 ] as const;

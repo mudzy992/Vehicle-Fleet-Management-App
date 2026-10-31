@@ -62,6 +62,19 @@ describe('FormsDesigner', () => {
     expect(onChange.mock.lastCall?.[0].sections[0]?.fields[1]?.label).toBe('Broj šasije');
   });
 
+  it('sakriva identitetska polja vozila u dizajneru', () => {
+    const definition = fixture();
+    definition.sections[0]!.fields.push({
+      ...definition.sections[0]!.fields[0]!,
+      key: 'internalNo',
+      label: 'Interni broj',
+      order: 2,
+    });
+    render(<FormsDesigner definition={definition} subject="VEHICLE" readOnly={false} onChange={vi.fn()} />);
+    expect(screen.queryByText('Interni broj')).toBeNull();
+    expect(screen.getByText('Napomena')).toBeTruthy();
+  });
+
   it('uklanja polje iz definicije', () => {
     const onChange = vi.fn();
     const withTwo = structuredClone(fixture());

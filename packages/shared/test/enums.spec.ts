@@ -193,7 +193,7 @@ describe('enumi usklađeni s docs/03 §2', () => {
     expect(TASK_ASSIGNMENT_ROLES).toEqual(['INVITED', 'ASSIGNEE', 'OBSERVER']);
   });
 
-  it('8 vrsta zadataka koje se seeduju', () => {
+  it('vrste zadataka koje se seeduju', () => {
     expect(TASK_TYPE_CODES).toEqual([
       'WASH',
       'INTERIOR_CLEANING',
@@ -202,6 +202,7 @@ describe('enumi usklađeni s docs/03 §2', () => {
       'TIRE_CHANGE',
       'TECHNICAL_INSPECTION',
       'REGISTRATION',
+      'HANDOVER',
       'CUSTOM',
     ]);
   });

@@ -55,6 +55,7 @@ class FakeTaskTypesPrisma {
       name: 'Pranje vozila',
       subject: 'TASK',
       taskTypeId: null,
+      role: 'ORDER',
       currentPublishedVersionId: genericVersionId,
       deletedAt: null,
     });
@@ -135,6 +136,8 @@ class FakeTaskTypesPrisma {
       allowMultipleClaimants: false,
       dueOffsetHours: null,
       formSchemaId: null,
+      orderFormSchemaId: null,
+      realizationFormSchemaId: null,
       active: true,
       sortOrder: 100,
       createdById: null,
@@ -142,6 +145,9 @@ class FakeTaskTypesPrisma {
       updatedAt: new Date('2026-10-01T08:00:00Z'),
       deletedAt: null,
       ...patch,
+      orderFormSchemaId: patch.orderFormSchemaId ?? patch.formSchemaId ?? null,
+      realizationFormSchemaId: patch.realizationFormSchemaId ?? null,
+      formSchemaId: patch.orderFormSchemaId ?? patch.formSchemaId ?? null,
     };
   }
 
@@ -151,6 +157,7 @@ class FakeTaskTypesPrisma {
       name: 'Dodatna forma',
       subject: 'TASK',
       taskTypeId: null,
+      role: 'ORDER',
       currentPublishedVersionId: null,
       deletedAt: null,
       ...form,
@@ -174,19 +181,32 @@ class FakeTaskTypesPrisma {
   }
 
   private enrich(row: Row, detail = false): Row {
-    const form = row.formSchemaId ? this.forms.get(String(row.formSchemaId)) : null;
+    const orderId =
+      row.orderFormSchemaId !== undefined ? row.orderFormSchemaId : row.formSchemaId;
+    const form = orderId ? this.forms.get(String(orderId)) : null;
     const version = form?.currentPublishedVersionId
       ? this.versions.get(String(form.currentPublishedVersionId))
       : null;
+    const realization = row.realizationFormSchemaId
+      ? this.forms.get(String(row.realizationFormSchemaId))
+      : null;
+    const formRel = form
+      ? {
+          key: form.key,
+          name: form.name,
+          currentPublishedVersion: version ? { version: version.version } : null,
+        }
+      : null;
     return {
       ...clone(row),
-      formSchema: form
-        ? {
-            key: form.key,
-            name: form.name,
-            currentPublishedVersion: version ? { version: version.version } : null,
-          }
+      orderFormSchemaId: (orderId as string | null) ?? null,
+      realizationFormSchemaId: row.realizationFormSchemaId ?? null,
+      formSchemaId: orderId ?? null,
+      orderFormSchema: formRel,
+      realizationFormSchema: realization
+        ? { key: realization.key, name: realization.name, currentPublishedVersion: null }
         : null,
+      formSchema: formRel,
       _count: { completionRequirements: this.sortedRequirements(String(row.id)).length },
       ...(detail ? { completionRequirements: this.sortedRequirements(String(row.id)) } : {}),
     };
@@ -443,6 +463,7 @@ describe('Vrste zadataka', () => {
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
 
     other.taskTypeId = null;
+    other.role = 'ORDER';
     other.currentPublishedVersionId = null;
     await expect(
       service.create(

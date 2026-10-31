@@ -3,6 +3,7 @@ import { Redirect, Stack } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '@/features/auth/auth-provider';
 import { UnreadProvider } from '@/features/notifications/unread-store';
+import { RealtimeProvider } from '@/features/realtime/realtime-provider';
 import { listenForNotificationTaps } from '@/features/notifications/push-registration';
 import { colors } from '@/lib/theme';
 
@@ -20,7 +21,8 @@ export default function AppLayout() {
   if (user.mustChangePassword) return <Redirect href="/(auth)/change-password" />;
   return (
     <UnreadProvider>
-      <Stack
+      <RealtimeProvider>
+      <Stack>
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.background },
@@ -34,6 +36,7 @@ export default function AppLayout() {
         <Stack.Screen name="task/[id]" options={{ headerShown: true, title: 'Zadatak', headerBackTitle: 'Nazad' }} />
         <Stack.Screen name="vehicle/[id]" options={{ headerShown: true, title: 'Vozilo', headerBackTitle: 'Nazad' }} />
       </Stack>
+      </RealtimeProvider>
     </UnreadProvider>
   );
 }

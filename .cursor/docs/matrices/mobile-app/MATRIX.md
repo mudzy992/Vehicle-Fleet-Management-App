@@ -1,7 +1,7 @@
 # Matrica — mobilna aplikacija
 
 **Slug:** `mobile-app`
-**Ažurirano:** 30.10.2026.
+**Ažurirano:** 30.10.2026. 22:20
 **Izvor:** `audit/11-mobile-audit.md` + impl `mobile-audit-impl`
 
 ## Klijentski ugovor

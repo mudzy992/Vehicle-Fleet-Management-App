@@ -13,6 +13,8 @@
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ALL_PERMISSIONS, TASK_TYPE_CODES, defaultGrantsForRole } from '@vfm/shared';
+import { SEED_FORMS } from '../../src/tools/seed-forms.js';
+import { SEED_TASK_FORMS } from '../../src/tools/seed-task-forms.js';
 import { PasswordService } from '../../src/modules/auth/services/password.service.js';
 import { bootstrapSuperAdmin, SuperAdminBootstrapError } from '../../src/tools/bootstrap-super-admin.js';
 import { runSeed } from '../../src/tools/seed.js';
@@ -54,37 +56,26 @@ describe('seed', () => {
     expect(new Set(fake.rolePermissions.map((grant) => grant.scope))).toEqual(new Set(['ALL', 'OWN']));
 
     expect(summary.formSchemaCreated).toBe(true);
-    // Početne forme iz `SEED_FORMS`, svaka s objavljenom verzijom 1.
-    expect(summary.forms.created).toEqual([
-      'servis_vozila',
-      'vehicle',
-      'vozac',
-      'pranje_vozila',
-      'osiguranje_vozila',
-      'registracija_vozila',
-      'komplet_guma',
-      'montaza_guma',
-    ]);
-    expect(fake.formSchemas.size).toBe(8);
-    expect(fake.formSchemaVersions).toHaveLength(8);
+    const expectedFormKeys = [...SEED_FORMS, ...SEED_TASK_FORMS].map((form) => form.key);
+    expect(summary.forms.created).toEqual(expectedFormKeys);
+    expect(fake.formSchemas.size).toBe(expectedFormKeys.length);
+    expect(fake.formSchemaVersions).toHaveLength(expectedFormKeys.length);
     expect(fake.formSchemaVersions.every((version) => version.status === 'PUBLISHED')).toBe(true);
     expect(
       fake.formSchemaVersions.every((version) => /^[0-9a-f]{64}$/u.test(version.contentHash ?? '')),
     ).toBe(true);
-    // Registar ključeva je popunjen (U-16) — npr. `washCost` je MONEY.
     expect(fake.fieldKeys.get('washCost')?.dataType).toBe('MONEY');
     expect(fake.fieldKeys.get('odometerKm')?.dataType).toBe('INTEGER');
+    expect(fake.fieldKeys.get('napomena')?.dataType).toBe('TEXTAREA');
 
-    // Faza 5: 8 početnih vrsta zadataka; samo WASH već ima seedovanu formu.
-    expect(summary.taskTypesCreated).toBe(8);
-    expect(fake.taskTypes.size).toBe(8);
+    expect(summary.taskTypesCreated).toBe(TASK_TYPE_CODES.length);
+    expect(fake.taskTypes.size).toBe(TASK_TYPE_CODES.length);
     expect([...fake.taskTypes.values()].map((row) => row.code).sort()).toEqual([...TASK_TYPE_CODES].sort());
-    const washForm = [...fake.formSchemas.values()].find((form) => form.key === 'pranje_vozila');
+    const washOrder = [...fake.formSchemas.values()].find((form) => form.key === 'pranje_vozila_nalog');
+    const washRealization = [...fake.formSchemas.values()].find((form) => form.key === 'pranje_vozila');
     const washType = [...fake.taskTypes.values()].find((row) => row.code === 'WASH');
-    expect(washType?.formSchemaId).toBe(washForm?.id);
-    expect(
-      [...fake.taskTypes.values()].filter((row) => row.code !== 'WASH' && row.formSchemaId !== null),
-    ).toEqual([]);
+    expect(washType?.orderFormSchemaId).toBe(washOrder?.id);
+    expect(washType?.realizationFormSchemaId).toBe(washRealization?.id);
 
     expect(summary.vehiclesCreated).toBe(10);
     expect(fake.vehicles.size).toBe(10);
@@ -171,7 +162,7 @@ describe('seed', () => {
     expect(fake.vehicles.size).toBe(10);
     expect(fake.drivers.size).toBe(5);
     expect(fake.registrations).toHaveLength(2);
-    expect(fake.taskTypes.size).toBe(8);
+    expect(fake.taskTypes.size).toBe(TASK_TYPE_CODES.length);
     expect(fake.users.size).toBe(2);
     // Nema duplih dodjela rola.
     expect(fake.userRoles).toHaveLength(2);
@@ -206,8 +197,8 @@ describe('seed', () => {
     // Politike podsjetnika se seeduju i u produkciji (nisu demo podaci).
     expect(summary.reminderPoliciesCreated).toBe(8);
     // Vrste zadataka su konfiguracija, pa se seeduju i u produkciji.
-    expect(summary.taskTypesCreated).toBe(8);
-    expect(fake.taskTypes.size).toBe(8);
+    expect(summary.taskTypesCreated).toBe(TASK_TYPE_CODES.length);
+    expect(fake.taskTypes.size).toBe(TASK_TYPE_CODES.length);
     expect(fake.users.size).toBe(0);
     expect(fake.vehicles.size).toBe(0);
 

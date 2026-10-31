@@ -7,6 +7,7 @@ import {
   apiJson,
   payloadData,
   startFormVersionHttpApp,
+  taskFormPayload,
   type FormVersionHttpApp,
 } from '../helpers/form-version-http-harness.js';
 
@@ -24,12 +25,11 @@ describe('HTTP form-schemas — matrica odbijanja', () => {
   async function publishedForm(): Promise<{ id: string; versionId: string }> {
     const created = payloadData<FormSchemaDetail>(
       (
-        await apiJson(harness.baseUrl, 'POST', '/form-schemas', {
+        await apiJson(harness.baseUrl, 'POST', '/form-schemas', taskFormPayload(harness.prisma, {
           key: `guard_${randomUUID().slice(0, 8)}`,
           name: 'Guard forma',
-          subject: 'TASK',
           definition: inspectionDefinition(),
-        })
+        }))
       ).payload,
     );
     const versionId = created.versions[0]!.id;
@@ -42,12 +42,11 @@ describe('HTTP form-schemas — matrica odbijanja', () => {
   it('publish bez ispravne bilješke je 400', async () => {
     const created = payloadData<FormSchemaDetail>(
       (
-        await apiJson(harness.baseUrl, 'POST', '/form-schemas', {
+        await apiJson(harness.baseUrl, 'POST', '/form-schemas', taskFormPayload(harness.prisma, {
           key: `note_${randomUUID().slice(0, 8)}`,
           name: 'Bez bilješke',
-          subject: 'TASK',
           definition: inspectionDefinition(),
-        })
+        }))
       ).payload,
     );
     const result = await apiJson(

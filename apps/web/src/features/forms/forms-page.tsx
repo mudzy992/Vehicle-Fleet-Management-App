@@ -18,8 +18,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseDefinition } from '@vfm/form-engine/definition';
-import { FORM_SUBJECTS } from '@vfm/shared';
-import type { FormSubject } from '@vfm/shared';
+import { FORM_SUBJECTS, TASK_FORM_ROLES, statusLabel } from '@vfm/shared';
+import type { FormSubject, TaskFormRole } from '@vfm/shared';
+import type { TaskTypeListResponse } from '@vfm/shared/schemas';
 import type {
   CreateFormSchemaInput,
   FormSchemaDetail,
@@ -93,6 +94,8 @@ export function FormsPage() {
   const [createKey, setCreateKey] = useState('');
   const [createDescription, setCreateDescription] = useState('');
   const [createSubject, setCreateSubject] = useState<FormSubject>('OTHER');
+  const [createTaskTypeId, setCreateTaskTypeId] = useState('');
+  const [createRole, setCreateRole] = useState<TaskFormRole>('ORDER');
   const [confirmNormalizedRemoval, setConfirmNormalizedRemoval] = useState(false);
   const [blockedByNormalizedRemoval, setBlockedByNormalizedRemoval] = useState(false);
   const loadedVersionId = useRef<string | null>(null);
@@ -105,6 +108,12 @@ export function FormsPage() {
     canRetire: hasPermission('form:retire_version'),
   };
 
+  const taskTypesQuery = useQuery({
+    queryKey: ['task-types', 'form-create'],
+    queryFn: () => api.get<TaskTypeListResponse>('/task-types?page=1&pageSize=100&activeOnly=true'),
+    enabled: createOpen && createSubject === 'TASK',
+    retry: false,
+  });
   const formsQuery = useQuery({
     queryKey: ['form-schemas'],
     queryFn: () => api.get<FormSchemaSummary[]>('/form-schemas'),
@@ -429,7 +438,9 @@ export function FormsPage() {
               >
                 <span className="block font-medium">{form.name}</span>
                 <span className="block text-xs text-fg-muted">
-                  {SUBJECT_LABELS[form.subject]} · {FORM_STATUS_LABELS[form.status]} · {form.versionCount}{' '}
+                  {SUBJECT_LABELS[form.subject]}
+                  {form.role ? ` · ${statusLabel(form.role, 'taskFormRole')}` : ''} ·{' '}
+                  {FORM_STATUS_LABELS[form.status]} · {form.versionCount}{' '}
                   {form.versionCount === 1 ? 'verzija' : 'verzije'}
                 </span>
               </Button>
@@ -603,6 +614,7 @@ export function FormsPage() {
                   definitionResult.ok ? (
                     <FormsDesigner
                       definition={definitionResult.definition}
+                      subject={detail.subject}
                       readOnly={!actions.includes('edit')}
                       onChange={(definition) => setEditor(JSON.stringify(definition, null, 2))}
                     />
@@ -737,7 +749,8 @@ export function FormsPage() {
               key: createKey.trim(),
               name: createName.trim(),
               subject: createSubject,
-              taskTypeId: null,
+              taskTypeId: createSubject === 'TASK' ? createTaskTypeId || null : null,
+              role: createSubject === 'TASK' ? createRole : null,
               description: createDescription.trim() || null,
               ownerModule: null,
               definition: {
@@ -823,6 +836,41 @@ export function FormsPage() {
               ))}
             </select>
           </Field>
+          {createSubject === 'TASK' ? (
+            <>
+              <Field label="Vrsta zadatka" htmlFor="create-form-task-type">
+                <select
+                  id="create-form-task-type"
+                  className={inputClassName}
+                  required
+                  value={createTaskTypeId}
+                  onChange={(event) => setCreateTaskTypeId(event.target.value)}
+                >
+                  <option value="">Odaberite vrstu…</option>
+                  {(taskTypesQuery.data?.items ?? []).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} ({item.code})
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Uloga forme" htmlFor="create-form-role">
+                <select
+                  id="create-form-role"
+                  className={inputClassName}
+                  required
+                  value={createRole}
+                  onChange={(event) => setCreateRole(event.target.value as TaskFormRole)}
+                >
+                  {TASK_FORM_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {statusLabel(role, 'taskFormRole')}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </>
+          ) : null}
           <Field label="Opis" htmlFor="create-form-description">
             <input
               id="create-form-description"

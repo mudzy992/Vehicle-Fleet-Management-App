@@ -117,6 +117,7 @@ describe('listMigrationNames', () => {
       '3_password_reset_tokens',
       '4_super_admin_guard_lock',
       '5_notification_delivery_retry',
+      '6_task_order_realization',
     ]);
   });
 

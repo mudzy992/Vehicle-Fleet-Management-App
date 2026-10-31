@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
@@ -108,4 +109,13 @@ export function payloadData<T>(payload: unknown): T {
     return (payload as { data: T }).data;
   }
   return payload as T;
+}
+
+export function taskFormPayload(
+  prisma: FakeFormPrisma,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const taskTypeId = typeof patch.taskTypeId === 'string' ? patch.taskTypeId : randomUUID();
+  prisma.addTaskType({ id: taskTypeId });
+  return { subject: 'TASK', taskTypeId, role: 'ORDER', ...patch };
 }

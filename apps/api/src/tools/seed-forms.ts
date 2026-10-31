@@ -12,7 +12,7 @@
  * `vehicle` (FK za vozila iz seed-a), `pranje_vozila` (generička forma zadatka —
  * jedna po `(subject, taskTypeId)`), `registracija_vozila`.
  */
-import type { FormSubject } from '@vfm/shared';
+import type { FormSubject, TaskFormRole, TaskTypeCode } from '@vfm/shared';
 
 export interface SeedForm {
   readonly key: string;
@@ -21,6 +21,8 @@ export interface SeedForm {
   readonly description: string;
   readonly ownerModule: string;
   readonly definition: Record<string, unknown>;
+  readonly role?: TaskFormRole;
+  readonly taskTypeCode?: TaskTypeCode;
 }
 
 const OPCIJE_GORIVA = [
@@ -524,7 +526,9 @@ export const SEED_FORMS: readonly SeedForm[] = [
     key: 'pranje_vozila',
     name: 'Pranje vozila',
     subject: 'TASK',
-    description: 'Generička forma zadatka pranja (default za TASK).',
+    role: 'REALIZATION',
+    taskTypeCode: 'WASH',
+    description: 'Legacy realizacija pranja (P10). Nova realizacija je bez cijene.',
     ownerModule: 'tasks',
     definition: washForm(),
   },

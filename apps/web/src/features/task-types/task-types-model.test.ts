@@ -38,6 +38,12 @@ const detail: TaskTypeDetail = {
   defaultAssignMode: 'OPEN_CLAIM',
   allowMultipleClaimants: false,
   dueOffsetHours: 24,
+  orderFormSchemaId: genericFormId,
+  orderFormSchemaKey: 'pranje_vozila',
+  orderFormSchemaName: 'Pranje vozila',
+  realizationFormSchemaId: null,
+  realizationFormSchemaKey: null,
+  realizationFormSchemaName: null,
   formSchemaId: genericFormId,
   formSchemaKey: 'pranje_vozila',
   formSchemaName: 'Pranje vozila',
@@ -66,6 +72,7 @@ function formSummary(patch: Partial<FormSchemaSummary> = {}): FormSchemaSummary 
     name: 'Pranje vozila',
     subject: 'TASK',
     taskTypeId: null,
+    role: 'ORDER',
     description: null,
     ownerModule: null,
     status: 'PUBLISHED',
@@ -175,7 +182,7 @@ describe('Model vrsta zadataka', () => {
       name: 'Detaljno pranje vozila',
       description: null,
       dueOffsetHours: null,
-      formSchemaId: null,
+      orderFormSchemaId: null,
     });
     expect(payload).not.toHaveProperty('code');
   });

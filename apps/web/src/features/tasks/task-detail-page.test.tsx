@@ -69,10 +69,17 @@ const TASK = {
   formSchemaName: 'Pranje',
   formSchemaVersionId: '018f0000-0000-7000-8000-000000000302',
   formSchemaVersion: 1,
+  orderFormSchemaId: '018f0000-0000-7000-8000-000000000301',
+  realizationFormSchemaId: null,
+  realizationFormSchemaVersionId: null,
+  linkedRecordType: null,
+  linkedRecordId: null,
   version: 0,
   createdAt: '2026-10-22T08:00:00.000Z',
   updatedAt: '2026-10-22T08:00:00.000Z',
   formData: { washType: 'FULL' },
+  orderFormData: { washType: 'FULL' },
+  realizationFormData: {},
   assignments: [],
   events: [
     {

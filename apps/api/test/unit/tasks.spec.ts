@@ -240,6 +240,7 @@ class FakeTasksPrisma {
       name: 'Pranje vozila',
       subject: 'TASK',
       taskTypeId: null,
+      role: 'ORDER',
       currentPublishedVersionId: genericVersionId,
       deletedAt: null,
       updatedAt: new Date('2026-10-01T10:00:00Z'),
@@ -257,6 +258,7 @@ class FakeTasksPrisma {
       name: 'Prilagođeni zadatak',
       subject: 'TASK',
       taskTypeId: customTypeId,
+      role: 'ORDER',
       currentPublishedVersionId: boundVersionId,
       deletedAt: null,
       updatedAt: new Date('2026-10-02T10:00:00Z'),
@@ -281,6 +283,7 @@ class FakeTasksPrisma {
       name: 'Prilagođeni zadatak',
       requiresVehicle: false,
       dueOffsetHours: null,
+      formSchemaId: boundFormId,
     });
     this.addTaskType({
       id: noFormTypeId,
@@ -355,6 +358,8 @@ class FakeTasksPrisma {
       active: true,
       deletedAt: null,
       ...patch,
+      orderFormSchemaId: patch.orderFormSchemaId ?? patch.formSchemaId ?? null,
+      realizationFormSchemaId: patch.realizationFormSchemaId ?? patch.formSchemaId ?? null,
     });
   }
 
@@ -388,11 +393,25 @@ class FakeTasksPrisma {
       formSchemaId: genericFormId,
       formSchemaVersionId: genericVersionId,
       formData: {},
+      orderFormSchemaId: genericFormId,
+      orderFormSchemaVersionId: genericVersionId,
+      orderFormData: {},
+      realizationFormSchemaId: genericFormId,
+      realizationFormSchemaVersionId: genericVersionId,
+      realizationFormData: {},
+      linkedRecordType: null,
+      linkedRecordId: null,
       version: 0,
       createdAt: new Date('2026-10-20T08:00:00Z'),
       updatedAt: new Date('2026-10-20T08:00:00Z'),
       deletedAt: null,
       ...patch,
+      orderFormSchemaId: patch.orderFormSchemaId ?? patch.formSchemaId ?? genericFormId,
+      orderFormSchemaVersionId: patch.orderFormSchemaVersionId ?? patch.formSchemaVersionId ?? genericVersionId,
+      orderFormData: patch.orderFormData ?? patch.formData ?? {},
+      realizationFormSchemaId: patch.realizationFormSchemaId ?? patch.formSchemaId ?? genericFormId,
+      realizationFormSchemaVersionId:
+        patch.realizationFormSchemaVersionId ?? patch.formSchemaVersionId ?? genericVersionId,
     };
     this.tasks.set(String(row.id), row);
     return row;
@@ -497,10 +516,20 @@ class FakeTasksPrisma {
   private enrichTask(row: Row, detail = false): Row {
     const vehicle = row.vehicleId ? this.vehicles.get(String(row.vehicleId)) : null;
     const taskType = this.taskTypes.get(String(row.taskTypeId))!;
-    const form = this.forms.get(String(row.formSchemaId))!;
-    const version = this.versions.get(String(row.formSchemaVersionId))!;
+    const formId = String(row.orderFormSchemaId ?? row.formSchemaId);
+    const versionId = String(row.orderFormSchemaVersionId ?? row.formSchemaVersionId);
+    const form = this.forms.get(formId)!;
+    const version = this.versions.get(versionId)!;
+    const realizationForm = this.forms.get(String(row.realizationFormSchemaId ?? formId));
+    const realizationVersion = this.versions.get(String(row.realizationFormSchemaVersionId ?? versionId));
     const base: Row = {
       ...clone(row),
+      orderFormSchema: { key: form.key, name: form.name },
+      orderFormSchemaVersion: { version: version.version },
+      realizationFormSchema: realizationForm
+        ? { key: realizationForm.key, name: realizationForm.name }
+        : null,
+      realizationFormSchemaVersion: realizationVersion ? { version: realizationVersion.version } : null,
       vehicle: vehicle
         ? {
             internalNo: vehicle.internalNo,
@@ -660,6 +689,8 @@ class FakeTasksPrisma {
         updatedAt: now,
         deletedAt: null,
         ...clone(args.data),
+        linkedRecordType: args.data.linkedRecordType ?? null,
+        linkedRecordId: args.data.linkedRecordId ?? null,
       };
       this.tasks.set(String(row.id), row);
       return clone(row);
@@ -764,7 +795,10 @@ async function errorOf(action: () => Promise<unknown>): Promise<VfmException> {
 }
 
 function parseCreate(input: Row) {
-  return createTaskSchema.parse(input);
+  const invited = (input.invitedUserIds as string[] | undefined) ?? [];
+  const assignMode =
+    (input.assignMode as string | undefined) ?? (invited.length > 0 ? 'OPEN_CLAIM' : undefined);
+  return createTaskSchema.parse(assignMode ? { ...input, assignMode } : input);
 }
 
 describe('TasksService — kreiranje i snapshot forme', () => {
@@ -778,7 +812,7 @@ describe('TasksService — kreiranje i snapshot forme', () => {
         invitedUserIds: [invitedId, invited2Id],
         observerUserIds: [observerId],
         dueAt: '2026-10-21T22:30:00.000Z',
-        formData: { washType: 'FULL' },
+        formData: { washType: 'INTERNAL' },
       }),
       actor(adminId),
     );
@@ -796,7 +830,7 @@ describe('TasksService — kreiranje i snapshot forme', () => {
       formSchemaVersionId: genericVersionId,
       formSchemaVersion: 3,
       dueDate: '2026-10-22',
-      formData: { washType: 'FULL' },
+      formData: { washType: 'INTERNAL' },
     });
     expect(taskDetailSchema.parse(result.data)).toEqual(result.data);
     expect(result.data.assignments.map((item) => [item.userId, item.role])).toEqual(
@@ -814,7 +848,9 @@ describe('TasksService — kreiranje i snapshot forme', () => {
       eventType: 'TASK_CREATED',
       idempotencyKey: `task:${result.data.id}:TASK_CREATED:v0`,
     });
-    expect((fake.outbox[0]!.payload as Row).recipientUserIds).toEqual([invitedId, invited2Id]);
+    expect((fake.outbox[0]!.payload as Row).recipientUserIds).toEqual(
+      expect.arrayContaining([invitedId, invited2Id, adminId]),
+    );
     expect(Date.parse(result.data.createdAt)).toBeGreaterThanOrEqual(before - 1000);
   });
 
@@ -939,7 +975,12 @@ describe('TasksService — kreiranje i snapshot forme', () => {
     expect(missingAssignee.details?.[0]?.path).toEqual(['assigneeUserId']);
 
     const created = await service.create(
-      parseCreate({ taskTypeId: directTypeId, vehicleId, assigneeUserId: assigneeId }),
+      parseCreate({
+        taskTypeId: directTypeId,
+        vehicleId,
+        assigneeUserId: assigneeId,
+        formData: { washType: 'INTERNAL' },
+      }),
       actor(adminId),
     );
     expect(created.data).toMatchObject({
@@ -980,7 +1021,8 @@ describe('TasksService — kreiranje i snapshot forme', () => {
     );
 
     expect(created.data.assignMode).toBe('BROADCAST');
-    expect(fake.outbox[0]!.payload).toMatchObject({ broadcast: true, recipientUserIds: [] });
+    expect(fake.outbox[0]!.payload).toMatchObject({ broadcast: true });
+    expect(((fake.outbox[0]!.payload as Row).recipientUserIds as string[]).length).toBeGreaterThan(0);
     const detail = await service.get(created.data.id, actor(outsiderId));
     expect(detail.id).toBe(created.data.id);
   });
@@ -1125,7 +1167,7 @@ describe('TasksService — PATCH i CAS', () => {
         version: 2,
         title: 'Izmijenjen naslov',
         dueAt: '2026-10-21T22:30:00.000Z',
-        formData: { washType: 'EXTERNAL' },
+        formData: { washType: 'INTERNAL' },
       }),
       actor(invitedId),
     );
@@ -1134,7 +1176,7 @@ describe('TasksService — PATCH i CAS', () => {
       title: 'Izmijenjen naslov',
       dueDate: '2026-10-22',
       version: 3,
-      formData: { washType: 'EXTERNAL' },
+      formData: { washType: 'INTERNAL' },
     });
     expect(fake.events.at(-1)).toMatchObject({
       action: 'UPDATED',
@@ -1951,7 +1993,7 @@ describe('TasksService — slobodni zadaci i atomski claim', () => {
     await service.claim(allowedId, claimInput(), actor(vehicleClaimId));
   });
 
-  it('claim spaja poslani nacrt s postojećim i provjerava ON_CLAIM zahtjev prije prelaza', async () => {
+  it('claim ne prima formu i ne mijenja nalog', async () => {
     const { fake, service } = setup();
     const taskId = seedOpenClaim(fake, {
       id: 'ffffffff-ffff-4fff-8fff-fffffffff113',
@@ -1968,19 +2010,13 @@ describe('TasksService — slobodni zadaci i atomski claim', () => {
     });
     fake.addAssignment(taskId, invitedId, 'INVITED');
 
-    const missing = await errorOf(() => service.claim(taskId, claimInput(), actor(invitedId)));
-    expect(missing.code).toBe('FORM_VALIDATION_FAILED');
-    expect(missing.details?.some((item) => item.path.join('.') === 'formData.washDurationMin')).toBe(true);
-    expect(fake.tasks.get(taskId)).toMatchObject({ status: 'OPEN', version: 2 });
-    expect(fake.events.filter((row) => row.action === 'CLAIMED')).toHaveLength(0);
-
-    const result = await service.claim(taskId, claimInput({ washDurationMin: 45 }), actor(invitedId));
+    const result = await service.claim(taskId, claimInput(), actor(invitedId));
+    expect(result.data.status).toBe('IN_PROGRESS');
     expect(result.data.formData).toMatchObject({
       washType: 'FULL',
       photosAfter: [photoId],
-      washDurationMin: 45,
     });
-    expect(result.data.status).toBe('IN_PROGRESS');
+    expect(result.data.formData['washDurationMin']).toBeUndefined();
   });
 
   it('već preuzet zadatak daje podatke o izvršiocu kandidatu, a terminalna stanja invalidnu tranziciju', async () => {
@@ -2091,6 +2127,7 @@ describe('TasksService — završetak i override', () => {
       taskId,
       completeInput({
         formData: {
+          ...validCompletionForm(),
           washDurationMin: 45,
           washCost: { amount: 9000, currency: 'BAM' },
           photosAfter: [photoId],
@@ -2114,8 +2151,8 @@ describe('TasksService — završetak i override', () => {
     expect(result.data.completedAt).not.toBeNull();
     expect(result.data.durationMinutes).toBeGreaterThanOrEqual(65);
     expect(result.data.durationMinutes).toBeLessThanOrEqual(66);
-    expect(result.data.formData).toMatchObject({
-      washType: 'FULL',
+    expect(result.data.formData).toMatchObject({ washType: 'FULL' });
+    expect(result.data.realizationFormData).toMatchObject({
       washDurationMin: 45,
       photosAfter: [photoId],
     });
@@ -2541,7 +2578,7 @@ describe('TasksController — metadata', () => {
       false,
     );
     expect(completeTaskSchema.parse({ version: 0 })).toMatchObject({
-      formData: {},
+      realizationFormData: {},
       attachmentIds: [],
     });
     expect(taskAvailableQuerySchema.safeParse({ status: 'OPEN' }).success).toBe(false);

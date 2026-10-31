@@ -35,7 +35,7 @@ export function CreateTaskScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('NORMAL');
-  const [assignMode, setAssignMode] = useState<AssignMode>('OPEN_CLAIM');
+  const [assignMode, setAssignMode] = useState<AssignMode>('BROADCAST');
   const [dueDate, setDueDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -67,7 +67,7 @@ export function CreateTaskScreen() {
     if (item.id === taskTypeId) return;
     setTaskTypeId(item.id);
     setPriority(item.defaultPriority);
-    setAssignMode(item.defaultAssignMode === 'BROADCAST' ? 'BROADCAST' : item.defaultAssignMode === 'ASSIGN_DIRECT' && assignOk ? 'ASSIGN_DIRECT' : 'OPEN_CLAIM');
+    setAssignMode(item.defaultAssignMode === 'ASSIGN_DIRECT' && assignOk ? 'ASSIGN_DIRECT' : item.defaultAssignMode === 'OPEN_CLAIM' ? 'OPEN_CLAIM' : 'BROADCAST');
     setAssigneeUserId('');
     setInvitedUserIds([]);
     setObserverUserIds([]);
@@ -81,7 +81,7 @@ export function CreateTaskScreen() {
     let active = true;
     setFormLoading(true);
     setError(null);
-    mobileApi.activeTaskForm(taskTypeId).then((form) => { if (active) setActiveForm(form); })
+    mobileApi.activeTaskForm(taskTypeId, 'ORDER').then((form) => { if (active) setActiveForm(form); })
       .catch((cause: unknown) => { if (active) setError(toUserMessage(cause, 'Aktivna forma zadatka se nije mogla učitati.')); })
       .finally(() => { if (active) setFormLoading(false); });
     return () => { active = false; };
@@ -110,6 +110,7 @@ export function CreateTaskScreen() {
   const submit = async () => {
     if (!selectedType || !model || submitting) return;
     if (assignMode === 'ASSIGN_DIRECT' && (!assigneeUserId || !canAssignDirect)) { setError('Za direktnu dodjelu odaberite izvršioca.'); return; }
+    if (assignMode === 'OPEN_CLAIM' && invitedUserIds.length === 0) { setError('Pozvanima treba lista korisnika. Za sve vozače odaberite Svima.'); return; }
     const dueAt = dueAtFromDate(dueDate);
     if (dueAt === null) { setError('Unesite rok kao dd.MM.yyyy, na primjer 22.10.2026.'); return; }
     setSubmitting(true);
@@ -127,7 +128,7 @@ export function CreateTaskScreen() {
         ...(assignMode === 'OPEN_CLAIM' ? { invitedUserIds } : {}),
         observerUserIds,
         ...(dueAt ? { dueAt } : {}),
-        formData: collectSubmitValues(model),
+        orderFormData: collectSubmitValues(model),
       });
       router.replace({ pathname: '/task/[id]', params: { id: created.id } });
     } catch (cause) {

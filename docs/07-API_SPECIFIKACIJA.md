@@ -309,7 +309,7 @@ Detalji engine-a: `04-FORM_ENGINE.md` §8–§12. Sve rute traže `form:*` permi
 | Metoda | Put | P | Napomena |
 |---|---|---|---|
 | GET | `/form-schemas?subject=&status=&q=` | `form:view` | lista; `status` filtrira po stanju **verzije** |
-| GET | `/form-schemas/active?subject=&taskTypeId=` | `form:view` | aktivna objavljena verzija; `ETag` = `"<contentHash>"` |
+| GET | `/form-schemas/active?subject=&taskTypeId=&role=` | `form:view` | aktivna objavljena verzija; `role=ORDER\|REALIZATION` obavezan za TASK; `ETag` = `"<contentHash>"` |
 | GET | `/form-schemas/options?listCode=` | `form:view` | aktivne stavke šifarnika u sortiranom redoslijedu za `LIST` polja |
 | POST | `/form-schemas` | `form:create` | kreira formu + **prvu `DRAFT`** verziju; audit `CREATE` |
 | GET | `/form-schemas/:id` | `form:view` | detalji + sve verzije (`recordCount` po verziji) |
@@ -1058,18 +1058,13 @@ Svi primaoci moraju postojati i biti `ACTIVE`. Pozvani i direktni izvršilac
 moraju imati `task:claim`, a posmatrač `task:view` ili `task:view_all`;
 duplikati i preklapanje uloga istog korisnika su `400 VALIDATION_ERROR`.
 
-Efektivna forma pri kreiranju je kanonički: `TaskType.formSchemaId`, zatim
-objavljena TASK forma čiji je `taskTypeId` odabrana vrsta. Isti prioritet
-koristi i `GET /form-schemas/active?subject=TASK&taskTypeId=…`. Generička TASK
-forma nije fallback. Od seedovanih vrsta zato je trenutno odmah upotrebljiv
-samo `WASH`; ostale vraćaju `409 FORM_VERSION_NOT_PUBLISHED` dok im se ne
-poveže i ne objavi odgovarajuća TASK forma. Transakcija zaključava vrstu i
-formu te u `Task.formSchemaId/formSchemaVersionId` sprema tačan snapshot.
-Početni `formData` je nacrt: nepoznata polja i pogrešni tipovi/vrijednosti
-poslanih polja su `422 FORM_VALIDATION_FAILED`, dok se obavezna polja forme
-još ne traže u cijelosti. Obavezni `ON_CREATE` zahtjevi vrste primjenjuju se
-odmah, uključujući `minPhotos`. Puna validacija i normalizacija pripadaju
-završetku iz §7.9.
+Efektivne forme: `TaskType.orderFormSchemaId` (nalog) i
+`TaskType.realizationFormSchemaId` (realizacija). `GET /form-schemas/active`
+za TASK zahtijeva `role`. Obje moraju biti objavljene za novi zadatak, inače
+`409 FORM_VERSION_NOT_PUBLISHED`. Snapshot: `orderFormSchema*` + `orderFormData`
+pri create (puna required validacija naloga). Complete piše `realizationForm*`
+i ne mijenja nalog. Claim je bez `formData`. Matrica:
+`.cursor/docs/matrices/task-order-realization/MATRIX.md`.
 
 U istoj DB transakciji nastaju zadatak, `TaskAssignment` redovi,
 immutabilni `TaskEvent` (`CREATED` te po potrebi `INVITED` ili `ASSIGNED`) i

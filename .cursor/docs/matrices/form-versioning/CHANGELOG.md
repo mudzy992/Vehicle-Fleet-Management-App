@@ -2,6 +2,10 @@
 
 ## 2026-10-30
 
+- TASK unique `(taskTypeId, role)` — ORDER i REALIZATION po vrsti.
+
+## 2026-10-30
+
 - Builder: checkbox „Potvrđujem uklanjanje mapiranih polja“ i `confirmNormalizedRemoval` na objavi (FV-NORM).
 - Razlog: objava v7 pranja (samo fotografija, bez `washCost` → `totalCost`) padala je na `NORMALIZED_FIELD_REMOVED` jer UI nije slao potvrdu.
 - E2E scenariji FV-P9, FV-COPY, FV-IMMUTABLE, FV-DELETE, FV-NOTE, FV-COMPARE, FV-XOR mapirani na Playwright specove.

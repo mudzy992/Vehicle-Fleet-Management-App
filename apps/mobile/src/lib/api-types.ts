@@ -49,11 +49,15 @@ export interface TaskSummary {
   formSchemaName: string;
   formSchemaVersionId: string;
   formSchemaVersion: number;
+  realizationFormSchemaId?: string | null;
+  realizationFormSchemaVersionId?: string | null;
 }
 
 export interface TaskDetail extends TaskSummary {
   version: number;
   formData: Record<string, unknown>;
+  orderFormData?: Record<string, unknown>;
+  realizationFormData?: Record<string, unknown>;
   assignments: Array<{ id: string; userId: string; userName: string; role: string }>;
   attachmentIds: string[];
 }

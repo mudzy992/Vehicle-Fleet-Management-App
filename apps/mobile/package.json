@@ -33,6 +33,7 @@
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.10.1",
     "safe-regex2": "5.1.2",
+    "socket.io-client": "4.8.4",
     "zod": "4.6.7"
   },
   "devDependencies": {

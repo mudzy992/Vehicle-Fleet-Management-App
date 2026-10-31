@@ -277,6 +277,10 @@ Dokaz iz `else` grane ili izvan `if`-a ne važi. Greške pri objavi: `DIVISION_B
 ]
 ```
 
+Za `subject=TASK` forma ima `role` `ORDER` (nalog) ili `REALIZATION` (realizacija). Unique je
+`(taskTypeId, role)`. Wizard popunjava samo ORDER; izvršilac samo REALIZATION. Matrica:
+`.cursor/docs/matrices/task-order-realization/MATRIX.md`.
+
 Pravilo: **identitet zapisa nije forma.** `internalNo`, `make`, `model` i `fuelType` vozila su strukturirani
 dio API-ja, a `normalizedName` popunjava samo kolone iz whitelist-a ispod. API ih spaja u `formData` prije
 validacije (P11), pa zapis i dalje nosi pun snapshot forme (implementirano u `VehiclesService`, Faza 3).

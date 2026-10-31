@@ -37,6 +37,7 @@ const detail: FormSchemaDetail = {
   name: 'Pregled',
   subject: 'TASK',
   taskTypeId: null,
+  role: 'ORDER',
   description: null,
   ownerModule: null,
   status: 'PUBLISHED',

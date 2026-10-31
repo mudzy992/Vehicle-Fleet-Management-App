@@ -64,6 +64,8 @@ erDiagram
 | `PermissionScope` | `ALL`, `OWN`, `VEHICLE_IDS`, `DRIVER_IDS` |
 | `FormSchemaStatus` | `DRAFT`, `PUBLISHED`, `RETIRED` |
 | `FormSubject` | `VEHICLE`, `DRIVER`, `REGISTRATION`, `INSURANCE`, `SERVICE`, `TIRE_SET`, `TIRE_INSTALLATION`, `TASK`, `VEHICLE_HANDOVER`, `OTHER` |
+| `TaskFormRole` | `ORDER`, `REALIZATION` |
+| `LinkedRecordType` | `SERVICE`, `REGISTRATION`, `TIRE_INSTALLATION` |
 | `FieldType` | `TEXT`, `TEXTAREA`, `INTEGER`, `DECIMAL`, `DATE`, `DATETIME`, `BOOLEAN`, `SINGLE_CHOICE`, `MULTI_CHOICE`, `DROPDOWN`, `MONEY`, `CURRENCY`, `PHOTO`, `FILE`, `REFERENCE_VEHICLE`, `REFERENCE_DRIVER`, `REFERENCE_RECORD`, `SECTION`, `COMPUTED` |
 | `TaskStatus` | `OPEN`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED` |
 | `TaskPriority` | `LOW`, `NORMAL`, `HIGH`, `URGENT` |
@@ -329,8 +331,8 @@ nove (mount) + `OdometerReading` + outbox + audit.
 ### 3.5 Forme
 
 #### `FormSchema`
-| id, key text NOT NULL **UQ** (npr. `task.WASH`, `vehicle.core`), name text NOT NULL, subject FormSubject NOT NULL, taskTypeId uuid FK (obavezno kad `subject=TASK`), description text, status text default `ACTIVE`, currentPublishedVersionId uuid, ownerModule text, createdAt, updatedAt, deletedAt, createdById |
-**UQ:** `(subject, taskTypeId)` partial `WHERE "subject"='TASK' AND "deletedAt" IS NULL`
+| id, key text NOT NULL **UQ** (npr. `task.WASH`, `vehicle.core`), name text NOT NULL, subject FormSubject NOT NULL, taskTypeId uuid FK (obavezno kad `subject=TASK`), role TaskFormRole (obavezno kad `subject=TASK`: `ORDER` nalog / `REALIZATION` realizacija), description text, status text default `ACTIVE`, currentPublishedVersionId uuid, ownerModule text, createdAt, updatedAt, deletedAt, createdById |
+**UQ:** `(subject, taskTypeId, role)` partial `WHERE "subject"='TASK' AND "deletedAt" IS NULL`
 
 #### `FormSchemaVersion`
 | id, formSchemaId FK, version int NOT NULL, status FormSchemaStatus NOT NULL, definition jsonb NOT NULL, contentHash text, changeNote text, publishedAt timestamptz, publishedById uuid, retiredAt timestamptz, retiredById uuid, createdAt, createdById, normalizedName jsonb (`[{fieldKey, column, transform}]`), compatibility jsonb, mobileCompatible bool default true |
@@ -354,10 +356,11 @@ processedAt. **UQ:** `(jobId, entityId)`.
 ### 3.6 Zadaci
 
 #### `TaskType`
-| id, code text NOT NULL **UQ**, name text NOT NULL, description text, iconName text, colorHex text, requiresVehicle bool default true, requiresOdometer bool default false, requiresPhotos bool default false, defaultPriority TaskPriority default `NORMAL`, defaultAssignMode TaskAssignMode default `OPEN_CLAIM`, allowMultipleClaimants bool default false, dueOffsetHours int, formSchemaId uuid FK, active bool default true, sortOrder int, createdAt, updatedAt, deletedAt, createdById |
+| id, code text NOT NULL **UQ**, name text NOT NULL, description text, iconName text, colorHex text, requiresVehicle bool default true, requiresOdometer bool default false, requiresPhotos bool default false, defaultPriority TaskPriority default `NORMAL`, defaultAssignMode TaskAssignMode default `BROADCAST` (WASH/INTERIOR/CUSTOM/HANDOVER) ili `ASSIGN_DIRECT` (servis/tehnički/registracija), allowMultipleClaimants bool default false, dueOffsetHours int, orderFormSchemaId uuid FK, realizationFormSchemaId uuid FK, active bool default true, sortOrder int, createdAt, updatedAt, deletedAt, createdById |
 
 Seed: `WASH`, `INTERIOR_CLEANING`, `FUEL_REFILL`, `SERVICE_VISIT`, `TIRE_CHANGE`,
-`TECHNICAL_INSPECTION`, `REGISTRATION`, `CUSTOM`.
+`TECHNICAL_INSPECTION`, `REGISTRATION`, `HANDOVER`, `CUSTOM`.
+Svaka vrsta ima dvije TASK forme (`ORDER` + `REALIZATION`). Matrica: `.cursor/docs/matrices/task-order-realization/MATRIX.md`.
 
 #### `Task`
 | Polje | Tip | Ograničenja |
@@ -385,8 +388,11 @@ Seed: `WASH`, `INTERIOR_CLEANING`, `FUEL_REFILL`, `SERVICE_VISIT`, `TIRE_CHANGE`
 | odometerKm | int | CHECK ≥ 0 |
 | totalCost | int | feninzi |
 | fuelLiters / fuelAmount / fuelConsumptionL100 | numeric/int | **N-01** (za `FUEL_REFILL`) |
-| formSchemaId / formSchemaVersionId | uuid | NOT NULL |
-| formData | jsonb | NOT NULL default `{}` |
+| orderFormSchemaId / orderFormSchemaVersionId | uuid | NOT NULL (nalog snapshot) |
+| orderFormData | jsonb | NOT NULL default `{}` |
+| realizationFormSchemaId / realizationFormSchemaVersionId | uuid | nullable do complete; legacy NULL = complete na ORDER shemi |
+| realizationFormData | jsonb | NOT NULL default `{}` |
+| linkedRecordType / linkedRecordId | text / uuid | evidencija kreirana pri complete |
 | version | int | NOT NULL default 0 |
 | idempotencyKey | text | **UQ partial** |
 | createdAt/updatedAt/deletedAt | timestamptz | |

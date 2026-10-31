@@ -139,6 +139,8 @@ export class FormSchemasService {
       where: {
         deletedAt: null,
         ...(query.subject ? { subject: query.subject } : {}),
+        ...(query.taskTypeId ? { taskTypeId: query.taskTypeId } : {}),
+        ...(query.role ? { role: query.role } : {}),
         ...(query.q
           ? {
               OR: [
@@ -198,25 +200,24 @@ export class FormSchemasService {
     let row: Awaited<ReturnType<PrismaService['formSchema']['findFirst']>> = null;
     let validDefinition: FormDefinition | undefined;
     if (query.subject === 'TASK' && query.taskTypeId) {
-      // Kanonički prioritet za zadatak je isti kao u vrstama zadataka i pri
-      // kreiranju zadatka: eksplicitna zadana forma vrste, zatim objavljena
-      // forma vezana za vrstu. Generička TASK forma se namjerno ne koristi
-      // kao fallback jer može nositi polja druge vrste zadatka.
+      const role = query.role ?? 'ORDER';
       const taskType = await this.prisma.taskType.findFirst({
         where: { id: query.taskTypeId, deletedAt: null },
-        select: { formSchemaId: true },
+        select: { orderFormSchemaId: true, realizationFormSchemaId: true },
       });
+      const boundId = role === 'REALIZATION' ? taskType?.realizationFormSchemaId : taskType?.orderFormSchemaId;
 
-      if (taskType?.formSchemaId) {
+      if (boundId) {
         const explicit = await this.prisma.formSchema.findFirst({
-          where: { ...base, id: taskType.formSchemaId },
+          where: { ...base, id: boundId, role },
         });
-        if (explicit && (explicit.taskTypeId === null || explicit.taskTypeId === query.taskTypeId)) {
+        if (explicit) {
           row = explicit;
         }
-      } else if (taskType) {
+      }
+      if (!row && taskType) {
         row = await this.prisma.formSchema.findFirst({
-          where: { ...base, taskTypeId: query.taskTypeId },
+          where: { ...base, taskTypeId: query.taskTypeId, role },
           orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
         });
       }
@@ -275,6 +276,7 @@ export class FormSchemasService {
       key: row.key,
       name: row.name,
       subject: row.subject,
+      role: row.role,
       formSchemaVersionId: version.id,
       version: version.version,
       contentHash: version.contentHash ?? definitionETag(definition),
@@ -333,6 +335,7 @@ export class FormSchemasService {
             where: {
               subject: input.subject,
               taskTypeId: input.taskTypeId ?? null,
+              ...(input.subject === 'TASK' ? { role: input.role ?? null } : {}),
               deletedAt: null,
             },
           });
@@ -340,7 +343,7 @@ export class FormSchemasService {
       throw VfmErrors.validationError([
         detail(
           'subject',
-          `Za subjekt ${input.subject}${input.taskTypeId ? ' i odabrani tip zadatka' : ''} forma već postoji. Dodajte novu verziju postojećoj formi umjesto nove forme.`,
+          `Za subjekt ${input.subject}${input.taskTypeId ? ' i odabrani tip zadatka' : ''}${input.role ? ` (${input.role})` : ''} forma već postoji. Dodajte novu verziju postojećoj formi umjesto nove forme.`,
         ),
       ]);
     }
@@ -357,6 +360,7 @@ export class FormSchemasService {
           name: input.name,
           subject: input.subject,
           taskTypeId: input.taskTypeId ?? null,
+          role: input.subject === 'TASK' ? (input.role ?? null) : null,
           description: input.description ?? null,
           ownerModule: input.ownerModule ?? null,
           createdById: actorId ?? null,
@@ -765,6 +769,7 @@ export class FormSchemasService {
     name: string;
     subject: FormSchemaSummary['subject'];
     taskTypeId: string | null;
+    role: FormSchemaSummary['role'];
     description: string | null;
     ownerModule: string | null;
     status: string;
@@ -784,6 +789,7 @@ export class FormSchemasService {
       name: row.name,
       subject: row.subject,
       taskTypeId: row.taskTypeId,
+      role: row.role,
       description: row.description,
       ownerModule: row.ownerModule,
       status,
@@ -817,20 +823,25 @@ export class FormSchemasService {
     if (versionIds.length === 0) return counts;
 
     for (const model of RECORD_MODELS) {
+      const versionFields =
+        model === 'task'
+          ? (['orderFormSchemaVersionId', 'realizationFormSchemaVersionId'] as const)
+          : (['formSchemaVersionId'] as const);
       const delegate = this.prisma[model] as unknown as {
         groupBy: (args: unknown) => Promise<Record<string, unknown>[]>;
       };
-      const rows = await delegate.groupBy({
-        by: ['formSchemaVersionId'],
-        where: { formSchemaVersionId: { in: [...versionIds] } },
-        _count: { _all: true },
-      });
-
-      for (const row of rows) {
-        const versionId = row['formSchemaVersionId'];
-        if (typeof versionId !== 'string') continue;
-        const aggregate = row['_count'] as { _all?: number } | undefined;
-        counts.set(versionId, (counts.get(versionId) ?? 0) + (aggregate?._all ?? 0));
+      for (const field of versionFields) {
+        const rows = await delegate.groupBy({
+          by: [field],
+          where: { [field]: { in: [...versionIds] } },
+          _count: { _all: true },
+        });
+        for (const row of rows) {
+          const versionId = row[field];
+          if (typeof versionId !== 'string') continue;
+          const aggregate = row['_count'] as { _all?: number } | undefined;
+          counts.set(versionId, (counts.get(versionId) ?? 0) + (aggregate?._all ?? 0));
+        }
       }
     }
     return counts;

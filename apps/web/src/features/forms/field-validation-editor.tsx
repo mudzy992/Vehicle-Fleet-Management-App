@@ -68,6 +68,7 @@ export function FieldValidationEditor({
       <h3 className="font-semibold">Validacija i ograničenja</h3>
       <div className="grid gap-3 md:grid-cols-2">
         {keys.map((key) => {
+          if (key === 'requireStage') return null;
           const value = field.validation?.[key];
           const label = LABELS[key] ?? key;
           const id = `validation-${field.key}-${key}`;

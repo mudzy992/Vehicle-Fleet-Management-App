@@ -1,6 +1,6 @@
 import { ActivityIndicator, Text, View } from 'react-native';
 import type { RenderField, RenderModel } from '@vfm/form-renderer/render-model';
-import { formatDate } from '@vfm/shared';
+import { formatDate, statusLabel } from '@vfm/shared';
 import { ChoiceRow } from '@/features/tasks/choice-row';
 import { FieldControl } from '@/features/tasks/field-control';
 import type { ActiveTaskForm, MobileTaskType, UserSummary, VehicleSummary } from '@/lib/api';
@@ -115,12 +115,12 @@ export function CreateTaskStepTwo({
       <AppTextField value={dueDate} onChangeText={onDueDate} placeholder={formatDate(new Date())} keyboardType="numbers-and-punctuation" />
       <Text style={styles.label}>Način dodjele</Text>
       <View style={styles.choices}>
-        <ChoiceRow active={assignMode === 'OPEN_CLAIM'} label="Preuzimanje" detail="Zadatak ostaje slobodan za preuzimanje." onPress={() => onAssignMode('OPEN_CLAIM')} />
-        {canAssignDirect ? <ChoiceRow active={assignMode === 'ASSIGN_DIRECT'} label="Direktna dodjela" detail="Odaberite jednog izvršioca." onPress={() => onAssignMode('ASSIGN_DIRECT')} /> : null}
-        <ChoiceRow active={assignMode === 'BROADCAST'} label="Objava svima" detail="Vidljiv je korisnicima s dozvolom za preuzimanje." onPress={() => onAssignMode('BROADCAST')} />
+        {canAssignDirect ? <ChoiceRow active={assignMode === 'ASSIGN_DIRECT'} label={statusLabel('ASSIGN_DIRECT', 'taskAssignMode')} detail="Jedan izvršilac odmah." onPress={() => onAssignMode('ASSIGN_DIRECT')} /> : null}
+        <ChoiceRow active={assignMode === 'BROADCAST'} label={statusLabel('BROADCAST', 'taskAssignMode')} detail="Svi s dozvolom za preuzimanje." onPress={() => onAssignMode('BROADCAST')} />
+        {canViewUsers ? <ChoiceRow active={assignMode === 'OPEN_CLAIM'} label={statusLabel('OPEN_CLAIM', 'taskAssignMode')} detail="Samo odabrani korisnici." onPress={() => onAssignMode('OPEN_CLAIM')} /> : null}
       </View>
       {assignMode === 'ASSIGN_DIRECT' ? <><Text style={styles.label}>Izvršilac *</Text>{users.length ? <View style={styles.choices}>{users.map((item) => <ChoiceRow key={item.id} active={assigneeUserId === item.id} label={item.displayName ?? `${item.firstName} ${item.lastName}`} onPress={() => onAssignee(item.id)} />)}</View> : <Text style={styles.error}>Nema aktivnih korisnika za izbor.</Text>}</> : null}
-      {assignMode === 'OPEN_CLAIM' && canViewUsers ? <><Text style={styles.label}>Pozvani korisnici (opciono)</Text><View style={styles.choices}>{users.map((item) => <ChoiceRow key={item.id} active={invitedUserIds.includes(item.id)} selectionRole="checkbox" label={item.displayName ?? `${item.firstName} ${item.lastName}`} onPress={() => onToggleInvited(item.id)} />)}</View></> : null}
+      {assignMode === 'OPEN_CLAIM' && canViewUsers ? <><Text style={styles.label}>Pozvani korisnici *</Text><View style={styles.choices}>{users.map((item) => <ChoiceRow key={item.id} active={invitedUserIds.includes(item.id)} selectionRole="checkbox" label={item.displayName ?? `${item.firstName} ${item.lastName}`} onPress={() => onToggleInvited(item.id)} />)}</View></> : null}
       {canViewUsers ? <><Text style={styles.label}>Posmatrači (opciono)</Text><View style={styles.choices}>{users.filter((item) => item.id !== assigneeUserId && !invitedUserIds.includes(item.id)).map((item) => <ChoiceRow key={item.id} active={observerUserIds.includes(item.id)} selectionRole="checkbox" label={item.displayName ?? `${item.firstName} ${item.lastName}`} onPress={() => onToggleObserver(item.id)} />)}</View></> : null}
     </View>
   );

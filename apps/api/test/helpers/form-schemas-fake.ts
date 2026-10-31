@@ -18,6 +18,7 @@ export interface FakeSchemaRow {
   name: string;
   subject: string;
   taskTypeId: string | null;
+  role: string | null;
   description: string | null;
   ownerModule: string | null;
   status: string;
@@ -60,6 +61,8 @@ export interface FakeFieldKeyRow {
 export interface FakeTaskTypeRow {
   id: string;
   formSchemaId: string | null;
+  orderFormSchemaId: string | null;
+  realizationFormSchemaId: string | null;
   deletedAt: Date | null;
 }
 
@@ -67,7 +70,7 @@ export interface FakeTaskTypeRow {
 interface RecordDelegate {
   groupBy: (args: {
     by: readonly string[];
-    where: { formSchemaVersionId: { in: readonly string[] } };
+    where: Record<string, { in?: readonly string[] }>;
   }) => Promise<Record<string, unknown>[]>;
   findMany: (args: {
     where: Record<string, unknown>;
@@ -187,6 +190,7 @@ export class FakeFormPrisma {
     if (typeof where['id'] === 'string' && row.id !== where['id']) return false;
     if (typeof where['subject'] === 'string' && row.subject !== where['subject']) return false;
     if ('taskTypeId' in where && row.taskTypeId !== where['taskTypeId']) return false;
+    if ('role' in where && row.role !== where['role']) return false;
     if (where['currentPublishedVersionId'] && row.currentPublishedVersionId === null) return false;
 
     const or = where['OR'] as Array<Record<string, { contains?: string }>> | undefined;
@@ -233,6 +237,7 @@ export class FakeFormPrisma {
         name: String(args.data['name']),
         subject: String(args.data['subject']),
         taskTypeId: (args.data['taskTypeId'] as string | null) ?? null,
+        role: (args.data['role'] as string | null) ?? null,
         description: (args.data['description'] as string | null) ?? null,
         ownerModule: (args.data['ownerModule'] as string | null) ?? null,
         status: 'ACTIVE',
@@ -349,7 +354,13 @@ export class FakeFormPrisma {
   };
 
   addTaskType(row: Partial<FakeTaskTypeRow> & { id: string }): void {
-    this.taskTypes.set(row.id, { formSchemaId: null, deletedAt: null, ...row });
+    this.taskTypes.set(row.id, {
+      deletedAt: null,
+      ...row,
+      formSchemaId: row.formSchemaId ?? row.orderFormSchemaId ?? null,
+      orderFormSchemaId: row.orderFormSchemaId ?? row.formSchemaId ?? null,
+      realizationFormSchemaId: row.realizationFormSchemaId ?? row.formSchemaId ?? null,
+    });
   }
 
   readonly fieldKeyRegistry = {
@@ -387,11 +398,13 @@ export class FakeFormPrisma {
   private recordDelegateFor(model: string): RecordDelegate {
     return {
       groupBy: async (args) => {
+        const field = args.by[0] ?? 'formSchemaVersionId';
+        const ids = args.where[field]?.in ?? args.where['formSchemaVersionId']?.in ?? [];
         const rows: Record<string, unknown>[] = [];
-        for (const versionId of args.where.formSchemaVersionId.in) {
+        for (const versionId of ids) {
           const count = this.recordCounts.get(versionId);
           if (!count) continue;
-          rows.push({ formSchemaVersionId: versionId, _count: { _all: Math.round(count) } });
+          rows.push({ [field]: versionId, _count: { _all: Math.round(count) } });
         }
         return rows;
       },

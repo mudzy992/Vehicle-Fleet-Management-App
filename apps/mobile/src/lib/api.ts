@@ -78,7 +78,8 @@ export const mobileApi = {
   tasks: () => request<{ items: TaskSummary[]; total: number }>('/tasks/available?page=1&pageSize=50'),
   myTasks: () => request<{ items: TaskSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/tasks?mine=true&page=1&pageSize=50&sortBy=updatedAt&sortOrder=desc'),
   taskTypes: () => request<{ items: MobileTaskType[]; page: number; pageSize: number; total: number; totalPages: number }>('/task-types?activeOnly=true&page=1&pageSize=100'),
-  activeTaskForm: (taskTypeId: string) => request<ActiveTaskForm>(`/form-schemas/active?subject=TASK&taskTypeId=${encodeURIComponent(taskTypeId)}`),
+  activeTaskForm: (taskTypeId: string, role: 'ORDER' | 'REALIZATION' = 'ORDER') =>
+    request<ActiveTaskForm>(`/form-schemas/active?subject=TASK&taskTypeId=${encodeURIComponent(taskTypeId)}&role=${role}`),
   formOptions: (listCode: string) => request<Array<{ value: string; label: string }>>(`/form-schemas/options?listCode=${encodeURIComponent(listCode)}`),
   tireSets: () => request<{ items: Array<{ id: string; code: string; brand: string | null; model: string | null; size: string | null; mountedVehicleId: string | null }> }>('/tire-sets?page=1&pageSize=100'),
   recordOptions: async (entityType: string) => {
@@ -111,8 +112,8 @@ export const mobileApi = {
     });
   },
   users: () => request<{ items: UserSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/users?status=ACTIVE&page=1&pageSize=100'),
-  createTask: (input: { taskTypeId: string; vehicleId: string | null; title?: string; description?: string | null; priority?: string; assignMode: 'OPEN_CLAIM' | 'ASSIGN_DIRECT' | 'BROADCAST'; assigneeUserId?: string; invitedUserIds?: string[]; observerUserIds?: string[]; dueAt?: string | null; formData: Record<string, unknown> }) =>
-    request<TaskDetail>('/tasks', { method: 'POST', body: JSON.stringify(input) }),
+  createTask: (input: { taskTypeId: string; vehicleId: string | null; title?: string; description?: string | null; priority?: string; assignMode: 'OPEN_CLAIM' | 'ASSIGN_DIRECT' | 'BROADCAST'; assigneeUserId?: string; invitedUserIds?: string[]; observerUserIds?: string[]; dueAt?: string | null; formData?: Record<string, unknown>; orderFormData?: Record<string, unknown> }) =>
+    request<TaskDetail>('/tasks', { method: 'POST', body: JSON.stringify({ ...input, orderFormData: input.orderFormData ?? input.formData ?? {} }) }),
   task: (id: string) => request<TaskDetail>(`/tasks/${encodeURIComponent(id)}`),
   notifications: () => request<{ items: NotificationSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/notifications?page=1&pageSize=50&sortOrder=desc'),
   unreadNotificationCount: () => request<{ count: number }>('/notifications/unread-count'),
@@ -129,10 +130,10 @@ export const mobileApi = {
   vehicle: (id: string) => request<VehicleDetail>(`/vehicles/${encodeURIComponent(id)}`),
   formVersion: (task: Pick<TaskSummary, 'formSchemaId' | 'formSchemaVersionId'>) =>
     request<FormVersionSnapshot>(`/form-schemas/${encodeURIComponent(task.formSchemaId)}/versions/${encodeURIComponent(task.formSchemaVersionId)}`),
-  claimTask: (id: string, formData: Record<string, unknown>) =>
-    request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/claim`, { method: 'POST', body: JSON.stringify({ formData }) }),
+  claimTask: (id: string) =>
+    request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/claim`, { method: 'POST', body: JSON.stringify({}) }),
   completeTask: (id: string, version: number, formData: Record<string, unknown>, extra: { comment?: string; odometerKm?: number } = {}) =>
-    request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/complete`, { method: 'POST', body: JSON.stringify({ version, formData, ...extra }) }),
+    request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/complete`, { method: 'POST', body: JSON.stringify({ version, realizationFormData: formData, ...extra }) }),
   uploadAttachment: async (uri: string, fileName: string, mimeType: string) => {
     const form = new FormData();
     await appendAttachmentFile(form, uri, fileName, mimeType);

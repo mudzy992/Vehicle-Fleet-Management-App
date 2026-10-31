@@ -99,8 +99,14 @@ const TRANSFORMS = [
   'FENINZI_TO_MONEY',
 ] as const;
 
+const RESERVED_IDENTITY_KEYS: Readonly<Record<string, readonly string[]>> = {
+  VEHICLE: ['internalNo', 'make', 'model', 'fuelType'],
+  DRIVER: ['firstName', 'lastName', 'phone', 'licenseNumber', 'email'],
+};
+
 type Props = {
   definition: FormDefinition;
+  subject?: string;
   readOnly: boolean;
   onChange: (definition: FormDefinition) => void;
 };
@@ -136,7 +142,8 @@ function makeField(type: string, order: number, label = 'Novo polje'): FieldDefi
   return field;
 }
 
-export function FormsDesigner({ definition, readOnly, onChange }: Props) {
+export function FormsDesigner({ definition, subject, readOnly, onChange }: Props) {
+  const reservedKeys = new Set(RESERVED_IDENTITY_KEYS[subject ?? ''] ?? []);
   const [editing, setEditing] = useState<{ sectionIndex: number; fieldIndex: number | null } | null>(null);
   const allFields = useMemo(
     () => definition.sections.flatMap((section) => section.fields),
@@ -402,7 +409,9 @@ export function FormsDesigner({ definition, readOnly, onChange }: Props) {
               </Field>
             </div>
             <div className="space-y-2">
-              {section.fields.map((field, fieldIndex) => (
+              {section.fields.map((field, fieldIndex) => {
+                if (reservedKeys.has(field.key)) return null;
+                return (
                 <div
                   key={field.key}
                   className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-muted p-3"
@@ -454,7 +463,8 @@ export function FormsDesigner({ definition, readOnly, onChange }: Props) {
                     </Button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
             <Button
               size="sm"
@@ -479,6 +489,7 @@ export function FormsDesigner({ definition, readOnly, onChange }: Props) {
       {editing ? (
         <FieldEditorModal
           open
+          reservedKeys={reservedKeys}
           initial={
             editing.fieldIndex === null
               ? makeField(
@@ -507,12 +518,14 @@ function FieldEditorModal({
   open,
   initial,
   knownFields,
+  reservedKeys = new Set(),
   onClose,
   onSave,
 }: {
   open: boolean;
   initial: FieldDefinition;
   knownFields: readonly FieldDefinition[];
+  reservedKeys?: ReadonlySet<string>;
   onClose: () => void;
   onSave: (field: FieldDefinition) => void;
 }) {
@@ -564,6 +577,7 @@ function FieldEditorModal({
   };
   const save = () => {
     const key = field.key.trim();
+    if (reservedKeys.has(key)) return;
     const next: FieldDefinition = { ...field, key, label: field.label.trim(), order: initial.order };
     if (optionText) {
       if (sourceKind === 'STATIC') {
@@ -628,7 +642,10 @@ function FieldEditorModal({
           <Button variant="secondary" onClick={onClose}>
             Odustani
           </Button>
-          <Button onClick={save} disabled={!field.key.trim() || !field.label.trim()}>
+          <Button
+            onClick={save}
+            disabled={!field.key.trim() || !field.label.trim() || reservedKeys.has(field.key.trim())}
+          >
             Sačuvaj polje
           </Button>
         </>

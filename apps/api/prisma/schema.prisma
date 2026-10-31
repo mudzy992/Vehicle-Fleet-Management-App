@@ -87,6 +87,17 @@ enum FormSubject {
   OTHER
 }
 
+enum TaskFormRole {
+  ORDER
+  REALIZATION
+}
+
+enum LinkedRecordType {
+  SERVICE
+  REGISTRATION
+  TIRE_INSTALLATION
+}
+
 enum MigrationJobStatus {
   PENDING
   PREVIEW
@@ -944,6 +955,7 @@ model FormSchema {
   name                      String
   subject                   FormSubject
   taskTypeId                String?     @db.Uuid
+  role                      TaskFormRole?
   description               String?
   status                    String      @default("ACTIVE")
   currentPublishedVersionId String?     @db.Uuid
@@ -953,8 +965,9 @@ model FormSchema {
   updatedAt                 DateTime    @updatedAt @db.Timestamptz(6)
   deletedAt                 DateTime?   @db.Timestamptz(6)
 
-  taskType                TaskType?            @relation("TaskTypeFormSchemas", fields: [taskTypeId], references: [id])
-  defaultForTaskTypes     TaskType[]           @relation("TaskTypeDefaultFormSchema")
+  taskType                  TaskType?            @relation("TaskTypeFormSchemas", fields: [taskTypeId], references: [id])
+  orderForTaskTypes         TaskType[]           @relation("TaskTypeOrderForm")
+  realizationForTaskTypes   TaskType[]           @relation("TaskTypeRealizationForm")
   versions                FormSchemaVersion[]
   currentPublishedVersion FormSchemaVersion?   @relation("CurrentPublishedVersion", fields: [currentPublishedVersionId], references: [id])
   migrationJobs           FormMigrationJob[]
@@ -965,8 +978,9 @@ model FormSchema {
   drivers                 Driver[]
   tireSets                TireSet[]
   tireInstallations       TireInstallation[]
-  tasks                   Task[]
-  // SQL: partial unique (subject, taskTypeId) WHERE subject='TASK' AND deletedAt IS NULL.
+  orderTasks              Task[]               @relation("TaskOrderForm")
+  realizationTasks        Task[]               @relation("TaskRealizationForm")
+  // SQL: partial unique (subject, taskTypeId, role) WHERE subject='TASK' AND deletedAt IS NULL.
 
   @@index([subject])
   @@map("FormSchema")
@@ -1003,8 +1017,9 @@ model FormSchemaVersion {
   serviceRecords      ServiceRecord[]
   drivers             Driver[]
   tireSets            TireSet[]
-  tireInstallations   TireInstallation[]
-  tasks               Task[]
+  tireInstallations     TireInstallation[]
+  orderTasks            Task[]               @relation("TaskOrderFormVersion")
+  realizationTasks      Task[]               @relation("TaskRealizationFormVersion")
   // IMMUTABILNOST (P-10): DB trigger odbija UPDATE (definition/version/status→DRAFT)
   //   i DELETE kada je status='PUBLISHED'. Dozvoljen samo prelaz PUBLISHED→RETIRED.
   // SQL: CHECK (version > 0).
@@ -1089,7 +1104,8 @@ model TaskType {
   defaultAssignMode      TaskAssignMode @default(OPEN_CLAIM)
   allowMultipleClaimants Boolean        @default(false)
   dueOffsetHours         Int?
-  formSchemaId           String?        @db.Uuid
+  orderFormSchemaId      String?        @map("formSchemaId") @db.Uuid
+  realizationFormSchemaId String?       @db.Uuid
   active                 Boolean        @default(true)
   sortOrder              Int            @default(100)
   createdById            String?        @db.Uuid
@@ -1097,15 +1113,12 @@ model TaskType {
   updatedAt              DateTime       @updatedAt @db.Timestamptz(6)
   deletedAt              DateTime?      @db.Timestamptz(6)
 
-  // Dvije NEZAVISNE relacije između TaskType i FormSchema (Prisma traži imena):
-  //  - formSchema  = zadana/aktivna forma za ovaj tip zadatka (FK na TaskType strani)
-  //  - formSchemas = sve forme čiji je `taskTypeId` ovaj tip (FK na FormSchema strani)
-  formSchema             FormSchema?                 @relation("TaskTypeDefaultFormSchema", fields: [formSchemaId], references: [id])
+  orderFormSchema        FormSchema?                 @relation("TaskTypeOrderForm", fields: [orderFormSchemaId], references: [id])
+  realizationFormSchema  FormSchema?                 @relation("TaskTypeRealizationForm", fields: [realizationFormSchemaId], references: [id])
   formSchemas            FormSchema[]                @relation("TaskTypeFormSchemas")
   tasks                  Task[]
   completionRequirements TaskCompletionRequirement[]
-  // Seed: WASH, INTERIOR_CLEANING, FUEL_REFILL, SERVICE_VISIT, TIRE_CHANGE,
-  //       TECHNICAL_INSPECTION, REGISTRATION, CUSTOM.
+  // Seed: WASH … HANDOVER, CUSTOM — svaka vrsta ORDER + REALIZATION formu.
 
   @@map("TaskType")
 }
@@ -1137,9 +1150,14 @@ model Task {
   fuelLiters          Decimal?       @db.Decimal(10, 2)
   fuelAmount          Int?
   fuelConsumptionL100 Decimal?       @db.Decimal(6, 2)
-  formSchemaId        String         @db.Uuid
-  formSchemaVersionId String         @db.Uuid
-  formData            Json           @default("{}")
+  orderFormSchemaId        String         @map("formSchemaId") @db.Uuid
+  orderFormSchemaVersionId String         @map("formSchemaVersionId") @db.Uuid
+  orderFormData            Json           @default("{}") @map("formData")
+  realizationFormSchemaId        String?  @db.Uuid
+  realizationFormSchemaVersionId String?  @db.Uuid
+  realizationFormData            Json     @default("{}")
+  linkedRecordType    LinkedRecordType?
+  linkedRecordId      String?        @db.Uuid
   version             Int            @default(0)
   idempotencyKey      String?
   createdAt           DateTime       @default(now()) @db.Timestamptz(6)
@@ -1150,8 +1168,10 @@ model Task {
   taskType          TaskType          @relation(fields: [taskTypeId], references: [id])
   createdBy         User              @relation("TaskCreatedBy", fields: [createdById], references: [id])
   assignee          User?             @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
-  formSchema        FormSchema        @relation(fields: [formSchemaId], references: [id])
-  formSchemaVersion FormSchemaVersion @relation(fields: [formSchemaVersionId], references: [id])
+  orderFormSchema        FormSchema        @relation("TaskOrderForm", fields: [orderFormSchemaId], references: [id])
+  orderFormSchemaVersion FormSchemaVersion @relation("TaskOrderFormVersion", fields: [orderFormSchemaVersionId], references: [id])
+  realizationFormSchema        FormSchema?        @relation("TaskRealizationForm", fields: [realizationFormSchemaId], references: [id])
+  realizationFormSchemaVersion FormSchemaVersion? @relation("TaskRealizationFormVersion", fields: [realizationFormSchemaVersionId], references: [id])
   assignments       TaskAssignment[]
   events            TaskEvent[]
   comments          TaskComment[]
@@ -1642,4 +1662,15 @@ model ExportJob {
   @@index([requestedById, createdAt(sort: Desc)])
   @@index([status])
   @@map("ExportJob")
+}
+
+model AppSetting {
+  key         String   @id
+  value       Json
+  valueType   String
+  scope       String
+  description String
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("AppSetting")
 }

@@ -71,6 +71,7 @@ export interface TaskTypeFormValues {
   readonly allowMultipleClaimants: boolean;
   readonly dueOffsetHours: string;
   readonly formSchemaId: string;
+  readonly realizationFormSchemaId: string;
   readonly sortOrder: string;
 }
 
@@ -88,6 +89,7 @@ export const DEFAULT_TASK_TYPE_FORM_VALUES: TaskTypeFormValues = {
   allowMultipleClaimants: false,
   dueOffsetHours: '',
   formSchemaId: '',
+  realizationFormSchemaId: '',
   sortOrder: '100',
 };
 
@@ -105,7 +107,8 @@ export function taskTypeFormValues(detail: TaskTypeView | TaskTypeDetail): TaskT
     defaultAssignMode: detail.defaultAssignMode,
     allowMultipleClaimants: detail.allowMultipleClaimants,
     dueOffsetHours: detail.dueOffsetHours === null ? '' : String(detail.dueOffsetHours),
-    formSchemaId: detail.formSchemaId ?? '',
+    formSchemaId: detail.orderFormSchemaId ?? detail.formSchemaId ?? '',
+    realizationFormSchemaId: detail.realizationFormSchemaId ?? '',
     sortOrder: String(detail.sortOrder),
   };
 }
@@ -118,13 +121,15 @@ export function taskTypeFormValues(detail: TaskTypeView | TaskTypeDetail): TaskT
 export function availableTaskForms(
   forms: readonly FormSchemaSummary[],
   taskTypeId?: string,
+  role?: 'ORDER' | 'REALIZATION',
 ): readonly FormSchemaSummary[] {
   return forms.filter(
     (form) =>
       form.subject === 'TASK' &&
       form.status === 'PUBLISHED' &&
       form.currentPublishedVersionId !== null &&
-      (form.taskTypeId === null || form.taskTypeId === taskTypeId),
+      (form.taskTypeId === null || form.taskTypeId === taskTypeId) &&
+      (role ? form.role === role : true),
   );
 }
 
@@ -227,7 +232,10 @@ function parseTaskTypeValues(
     defaultAssignMode: values.defaultAssignMode as TaskAssignMode,
     allowMultipleClaimants: values.allowMultipleClaimants,
     dueOffsetHours: parseDueOffsetHours(values.dueOffsetHours),
-    formSchemaId: formSelectionAvailable ? optionalText(values.formSchemaId) : currentFormSchemaId,
+    orderFormSchemaId: formSelectionAvailable ? optionalText(values.formSchemaId) : currentFormSchemaId,
+    realizationFormSchemaId: formSelectionAvailable
+      ? optionalText(values.realizationFormSchemaId)
+      : null,
     sortOrder: parseSortOrder(values.sortOrder),
   };
 }

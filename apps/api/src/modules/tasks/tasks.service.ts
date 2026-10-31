@@ -5,15 +5,13 @@
  * ponovno otvaranje, listu slobodnih zadataka, claim i završetak. Tek pri
  * završetku forma prolazi punu validaciju i normalizaciju u kolone zadatka.
  *
- * Pri kreiranju se snapshotuje tačna objavljena TASK forma: prvo eksplicitna
- * zadana forma vrste (`TaskType.formSchemaId`), zatim objavljena forma vezana
- * uz vrstu (`FormSchema.taskTypeId`). Generička TASK forma nije fallback —
- * vrsta bez efektivne forme ne može napraviti zadatak s tuđim poljima.
+ * Pri kreiranju se snapshotuje ORDER forma; complete koristi REALIZATION
+ * (legacy: ista ORDER shema ako realization verzija nije setovana).
  * Domenska promjena, `TaskEvent` i DB `OutboxEvent` nastaju u istoj
  * transakciji; Redis/BullMQ publish nije zamjena za transakcijski outbox.
  */
 import { randomUUID } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import {
   canTransitionTask,
   toLocalDateString,
@@ -54,11 +52,13 @@ import type {
 } from '@vfm/shared/schemas';
 import { toDatabaseDate } from '../../common/dates.js';
 import { VfmErrors, VfmException } from '../../common/errors/vfm-error.js';
+import { applyLinkedRecord } from './task-linked-records.js';
 import { detail, parseStoredDefinition } from '../../common/form-record-support.js';
 import { resolveFormOptionValues } from '../../common/form-option-values.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { PermissionsService } from '../auth/permissions/permissions.service.js';
+import { RealtimeGateway } from '../realtime/realtime.gateway.js';
 
 const TASK_SELECT = {
   id: true,
@@ -87,9 +87,14 @@ const TASK_SELECT = {
   fuelLiters: true,
   fuelAmount: true,
   fuelConsumptionL100: true,
-  formSchemaId: true,
-  formSchemaVersionId: true,
-  formData: true,
+  orderFormSchemaId: true,
+  orderFormSchemaVersionId: true,
+  orderFormData: true,
+  realizationFormSchemaId: true,
+  realizationFormSchemaVersionId: true,
+  realizationFormData: true,
+  linkedRecordType: true,
+  linkedRecordId: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -155,8 +160,10 @@ type TaskSelectWithRelations = typeof TASK_SELECT & {
   };
   createdBy: { select: typeof USER_NAME_FIELDS };
   assignee: { select: typeof USER_NAME_FIELDS };
-  formSchema: { select: { key: true; name: true } };
-  formSchemaVersion: { select: { version: true } };
+  orderFormSchema: { select: { key: true; name: true } };
+  orderFormSchemaVersion: { select: { version: true } };
+  realizationFormSchema: { select: { key: true; name: true } };
+  realizationFormSchemaVersion: { select: { version: true } };
 };
 
 type TaskDetailSelect = TaskSelectWithRelations & {
@@ -255,8 +262,10 @@ function taskSelect(): TaskSelectWithRelations {
     },
     createdBy: { select: USER_NAME_FIELDS },
     assignee: { select: USER_NAME_FIELDS },
-    formSchema: { select: { key: true, name: true } },
-    formSchemaVersion: { select: { version: true } },
+    orderFormSchema: { select: { key: true, name: true } },
+    orderFormSchemaVersion: { select: { version: true } },
+    realizationFormSchema: { select: { key: true, name: true } },
+    realizationFormSchemaVersion: { select: { version: true } },
   };
 }
 
@@ -362,6 +371,7 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissions: PermissionsService,
+    @Optional() private readonly realtime?: RealtimeGateway,
   ) {}
 
   async list(
@@ -699,7 +709,8 @@ export class TasksService {
             defaultPriority: true,
             defaultAssignMode: true,
             dueOffsetHours: true,
-            formSchemaId: true,
+            orderFormSchemaId: true,
+            realizationFormSchemaId: true,
             active: true,
             completionRequirements: {
               select: { fieldKey: true, required: true, stage: true, minPhotos: true },
@@ -720,20 +731,24 @@ export class TasksService {
         this.assertAssignModeShape(input, assignMode);
         await this.assertRecipients(tx, input, assignMode, actor.id);
 
-        const form = await this.resolvePublishedTaskForm(tx, taskType.id, taskType.formSchemaId);
+        const form = await this.resolvePublishedTaskForm(tx, taskType.id, taskType.orderFormSchemaId, 'ORDER');
+        const realizationForm = await this.resolvePublishedTaskForm(
+          tx,
+          taskType.id,
+          taskType.realizationFormSchemaId,
+          'REALIZATION',
+        );
         const taskId = randomUUID();
         const attachmentPlan = await this.prepareCompletionAttachments(tx, {
           taskId,
           actorId: actor.id,
           definition: form.definition,
-          values: input.formData,
+          values: input.orderFormData,
           attachmentIds: [],
         });
-        const formData = await this.validateDraftFormData({
+        const formData = await this.validateOrderFormData({
           form,
-          values: input.formData,
-          isNew: true,
-          requirements: taskType.completionRequirements,
+          values: input.orderFormData,
           attachments: attachmentPlan.facts,
         });
 
@@ -764,9 +779,12 @@ export class TasksService {
             assigneeUserId: assignMode === 'ASSIGN_DIRECT' ? input.assigneeUserId : null,
             dueAt,
             dueDate: dueAt ? toDatabaseDate(toLocalDateString(dueAt)) : null,
-            formSchemaId: form.formSchemaId,
-            formSchemaVersionId: form.formSchemaVersionId,
-            formData: formData as Prisma.InputJsonObject,
+            orderFormSchemaId: form.formSchemaId,
+            orderFormSchemaVersionId: form.formSchemaVersionId,
+            orderFormData: formData as Prisma.InputJsonObject,
+            realizationFormSchemaId: realizationForm.formSchemaId,
+            realizationFormSchemaVersionId: realizationForm.formSchemaVersionId,
+            realizationFormData: {} as Prisma.InputJsonObject,
             version: 0,
           },
           select: { id: true },
@@ -848,17 +866,19 @@ export class TasksService {
           status: 'OPEN',
           version: 0,
           actorId: actor.id,
-          recipientUserIds:
-            assignMode === 'BROADCAST'
-              ? []
-              : [
-                  ...input.invitedUserIds,
-                  ...(assignMode === 'ASSIGN_DIRECT' && input.assigneeUserId ? [input.assigneeUserId] : []),
-                ],
+          recipientUserIds: await this.taskCreatedRecipients(tx, {
+            assignMode,
+            actorId: actor.id,
+            invitedUserIds: input.invitedUserIds,
+            assigneeUserId: input.assigneeUserId,
+            vehicleId: vehicle?.id ?? null,
+          }),
           extra: {
             assignMode,
             broadcast: assignMode === 'BROADCAST',
             observerUserIds: [...input.observerUserIds],
+            taskTypeName: taskType.name,
+            vehicleInternalNo: vehicle?.internalNo ?? null,
           },
         });
 
@@ -923,16 +943,15 @@ export class TasksService {
         data.dueDate = dueAt ? toDatabaseDate(toLocalDateString(dueAt)) : null;
       }
       if (input.formData !== undefined) {
-        const form = await this.loadSnapshotForm(tx, current.formSchemaVersionId);
-        const requirements = await tx.taskCompletionRequirement.findMany({
-          where: { taskTypeId: current.taskTypeId, stage: 'ON_CREATE' },
-          select: { fieldKey: true, required: true, stage: true, minPhotos: true },
-        });
-        data.formData = (await this.validateDraftFormData({
+        if (current.status !== 'OPEN') {
+          throw VfmErrors.validationError([
+            detail('formData', 'Nalog se može mijenjati samo dok je zadatak slobodan.'),
+          ]);
+        }
+        const form = await this.loadSnapshotForm(tx, current.orderFormSchemaVersionId);
+        data.orderFormData = (await this.validateOrderFormData({
           form,
           values: input.formData,
-          isNew: false,
-          requirements,
         })) as Prisma.InputJsonObject;
       }
 
@@ -956,7 +975,7 @@ export class TasksService {
             previousVersion: current.version,
             version: current.version + 1,
           },
-          formSchemaVersionId: current.formSchemaVersionId,
+          formSchemaVersionId: current.orderFormSchemaVersionId,
         }),
       });
 
@@ -1023,7 +1042,7 @@ export class TasksService {
             previousVersion: current.version,
             version: current.version + 1,
           },
-          formSchemaVersionId: current.formSchemaVersionId,
+          formSchemaVersionId: current.orderFormSchemaVersionId,
         }),
       });
       await this.createOutbox(tx, {
@@ -1120,7 +1139,7 @@ export class TasksService {
             previousVersion: current.version,
             version: current.version + 1,
           },
-          formSchemaVersionId: current.formSchemaVersionId,
+          formSchemaVersionId: current.orderFormSchemaVersionId,
         }),
       });
       await this.createOutbox(tx, {
@@ -1279,7 +1298,7 @@ export class TasksService {
             previousVersion: current.version,
             version: current.version + 1,
           },
-          formSchemaVersionId: current.formSchemaVersionId,
+          formSchemaVersionId: current.orderFormSchemaVersionId,
         }),
       });
       await this.createOutbox(tx, {
@@ -1396,7 +1415,7 @@ export class TasksService {
             previousVersion: current.version,
             version: current.version + 1,
           },
-          formSchemaVersionId: current.formSchemaVersionId,
+          formSchemaVersionId: current.orderFormSchemaVersionId,
         }),
       });
       await this.createOutbox(tx, {
@@ -1447,29 +1466,13 @@ export class TasksService {
       latestVersion = current.version;
       const before = this.serializeDetail(current);
       this.assertClaimable(current, access);
-
-      const form = await this.loadSnapshotForm(this.prisma, current.formSchemaVersionId);
-      const requirements = await this.prisma.taskCompletionRequirement.findMany({
-        where: {
-          taskTypeId: current.taskTypeId,
-          stage: { in: ['ON_CREATE', 'ON_CLAIM'] },
-        },
-        select: { fieldKey: true, required: true, stage: true, minPhotos: true },
-      });
-      const formData = await this.validateDraftFormData({
-        form,
-        values: { ...plainRecord(current.formData), ...input.formData },
-        isNew: false,
-        requirements,
-        stages: ['ON_CREATE', 'ON_CLAIM'],
-      });
+      void input;
 
       const now = new Date();
       const data: Prisma.TaskUncheckedUpdateManyInput = {
         status: 'IN_PROGRESS',
         assigneeUserId: access.actor.id,
         claimedAt: now,
-        formData: formData as Prisma.InputJsonObject,
         version: { increment: 1 },
       };
       const result = await this.prisma.$transaction(async (tx) => {
@@ -1512,7 +1515,7 @@ export class TasksService {
               previousVersion: current.version,
               version: current.version + 1,
             },
-            formSchemaVersionId: current.formSchemaVersionId,
+            formSchemaVersionId: current.orderFormSchemaVersionId,
           }),
         });
         await this.createOutbox(tx, {
@@ -1620,14 +1623,16 @@ export class TasksService {
         ]);
       }
 
-      const form = await this.loadSnapshotForm(tx, current.formSchemaVersionId);
+      const realizationVersionId =
+        current.realizationFormSchemaVersionId ?? current.orderFormSchemaVersionId;
+      const form = await this.loadSnapshotForm(tx, realizationVersionId);
       const requirements = await tx.taskCompletionRequirement.findMany({
         where: { taskTypeId: current.taskTypeId },
         select: { fieldKey: true, required: true, stage: true, minPhotos: true },
       });
       const mergedFormData = this.dedupeAttachmentFieldValues(form.definition, {
-        ...plainRecord(current.formData),
-        ...input.formData,
+        ...plainRecord(current.realizationFormData),
+        ...input.realizationFormData,
       });
       const attachmentPlan = await this.prepareCompletionAttachments(tx, {
         taskId: id,
@@ -1667,7 +1672,7 @@ export class TasksService {
         completedAt: now,
         completedById: access.actor.id,
         durationMinutes,
-        formData: validated.values as Prisma.InputJsonObject,
+        realizationFormData: validated.values as Prisma.InputJsonObject,
         version: { increment: 1 },
       };
       if (validated.mappedColumns.has('odometerKm') || input.odometerKm !== undefined) {
@@ -1694,6 +1699,24 @@ export class TasksService {
         data,
       });
       if (changed.count !== 1) await this.throwCasFailure(tx, id, input.version);
+
+      const linked = await applyLinkedRecord({
+        tx,
+        taskTypeCode: current.taskType.code,
+        vehicleId: current.vehicleId,
+        actorId: access.actor.id,
+        values: validated.values,
+        odometerKm: effectiveOdometerKm,
+        totalCost: validated.mappedColumns.has('totalCost')
+          ? (validated.normalized.totalCost ?? null)
+          : current.totalCost,
+      });
+      if (linked) {
+        await tx.task.update({
+          where: { id },
+          data: { linkedRecordType: linked.type, linkedRecordId: linked.id },
+        });
+      }
 
       const boundAttachmentIds = await this.bindCompletionAttachments(
         tx,
@@ -1744,7 +1767,7 @@ export class TasksService {
             previousVersion: current.version,
             version: current.version + 1,
           },
-          formSchemaVersionId: current.formSchemaVersionId,
+          formSchemaVersionId: current.orderFormSchemaVersionId,
         }),
       });
       await this.createOutbox(tx, {
@@ -1832,11 +1855,16 @@ export class TasksService {
       fuelLiters: decimalNumber(row.fuelLiters),
       fuelAmount: row.fuelAmount,
       fuelConsumptionL100: decimalNumber(row.fuelConsumptionL100),
-      formSchemaId: row.formSchemaId,
-      formSchemaKey: row.formSchema.key,
-      formSchemaName: row.formSchema.name,
-      formSchemaVersionId: row.formSchemaVersionId,
-      formSchemaVersion: row.formSchemaVersion.version,
+      formSchemaId: row.orderFormSchemaId,
+      formSchemaKey: row.orderFormSchema.key,
+      formSchemaName: row.orderFormSchema.name,
+      formSchemaVersionId: row.orderFormSchemaVersionId,
+      formSchemaVersion: row.orderFormSchemaVersion.version,
+      orderFormSchemaId: row.orderFormSchemaId,
+      realizationFormSchemaId: row.realizationFormSchemaId,
+      realizationFormSchemaVersionId: row.realizationFormSchemaVersionId,
+      linkedRecordType: row.linkedRecordType ?? null,
+      linkedRecordId: row.linkedRecordId ?? null,
       version: row.version,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -1846,7 +1874,9 @@ export class TasksService {
   private serializeDetail(row: TaskDetailRow, now = new Date()): TaskDetail {
     return {
       ...this.serialize(row, now),
-      formData: plainRecord(row.formData),
+      formData: plainRecord(row.orderFormData),
+      orderFormData: plainRecord(row.orderFormData),
+      realizationFormData: plainRecord(row.realizationFormData),
       assignments: row.assignments.map(serializeAssignment),
       events: row.events.map(serializeEvent),
       attachmentIds: row.attachments.map((attachment) => attachment.id),
@@ -2353,6 +2383,7 @@ export class TasksService {
     tx: Tx,
     taskTypeId: string,
     formSchemaId: string | null,
+    role: 'ORDER' | 'REALIZATION',
   ): Promise<ResolvedTaskForm> {
     let candidateId = formSchemaId;
     if (!candidateId) {
@@ -2360,6 +2391,7 @@ export class TasksService {
         where: {
           subject: 'TASK',
           taskTypeId,
+          role,
           deletedAt: null,
           currentPublishedVersionId: { not: null },
         },
@@ -2370,10 +2402,11 @@ export class TasksService {
     }
 
     if (!candidateId) {
+      const label = role === 'ORDER' ? 'nalog' : 'realizaciju';
       throw new VfmException(
         'FORM_VERSION_NOT_PUBLISHED',
-        'Vrsta zadatka nema objavljenu TASK formu; zadatak se ne može kreirati.',
-        [detail('taskTypeId', 'Povežite objavljenu TASK formu s vrstom zadatka.')],
+        `Vrsta zadatka nema objavljenu formu za ${label}; zadatak se ne može kreirati.`,
+        [detail('taskTypeId', `Povežite objavljenu ${label} formu s vrstom zadatka.`)],
       );
     }
 
@@ -2629,6 +2662,69 @@ export class TasksService {
     }
 
     return boundIds;
+  }
+
+  private async validateOrderFormData(args: {
+    form: ResolvedTaskForm;
+    values: Record<string, unknown>;
+    attachments?: ReadonlyMap<string, AttachmentFacts>;
+  }): Promise<Record<string, unknown>> {
+    const result = validateRecord({
+      version: {
+        id: args.form.formSchemaVersionId,
+        version: args.form.version,
+        status: args.form.status,
+        definition: args.form.definition,
+      },
+      values: args.values,
+      isNew: true,
+      today: toLocalDateString(new Date()),
+      attachments: args.attachments,
+      optionValues: await resolveFormOptionValues(this.prisma, args.form.definition),
+    });
+    if (result.versionError) {
+      throw new VfmException('FORM_VERSION_NOT_PUBLISHED', undefined, undefined, {
+        versionError: result.versionError,
+      });
+    }
+    if (!result.ok) {
+      throw new VfmException(
+        'FORM_VALIDATION_FAILED',
+        `Podaci naloga nisu ispravni (${result.errors.length} greška/e).`,
+        result.errors.map((error) => detail(`formData.${error.key}`, `${error.code}: ${error.message}`)),
+        { errors: result.errors },
+      );
+    }
+    return { ...result.values } as Record<string, unknown>;
+  }
+
+  private async taskCreatedRecipients(
+    tx: Tx,
+    args: {
+      assignMode: TaskAssignMode;
+      actorId: string;
+      invitedUserIds: readonly string[];
+      assigneeUserId?: string | null;
+      vehicleId: string | null;
+    },
+  ): Promise<string[]> {
+    if (args.assignMode === 'ASSIGN_DIRECT') {
+      return args.assigneeUserId ? [args.assigneeUserId] : [];
+    }
+    if (args.assignMode === 'OPEN_CLAIM') {
+      return [...args.invitedUserIds, args.actorId];
+    }
+    const users = await tx.user.findMany({
+      where: { status: 'ACTIVE', deletedAt: null },
+      select: { id: true },
+    });
+    const recipients: string[] = [];
+    for (const user of users) {
+      if (await this.permissions.hasPermission(user.id, 'task:claim', 'OWN', 'WEB')) {
+        recipients.push(user.id);
+      }
+    }
+    return recipients;
   }
 
   private async validateDraftFormData(args: {
@@ -2937,6 +3033,8 @@ export class TasksService {
         } as Prisma.InputJsonObject,
       },
     });
+    this.realtime?.emitRefresh('tasks');
+    this.realtime?.emitRefresh('notifications');
   }
 
   private assertVersion(current: number, expected: number): void {
