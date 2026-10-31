@@ -12,6 +12,7 @@ import type {
   VehicleListResponse,
 } from '@vfm/shared/schemas';
 import { parseDefinition } from '@vfm/form-engine/definition';
+import { toast } from '../../lib/toast.js';
 import { AttachmentGallery } from './attachment-gallery.js';
 import type { RenderModel } from '@vfm/form-renderer';
 import { buildRenderModel } from '@vfm/form-renderer';
@@ -58,8 +59,6 @@ export function TaskCreatePage() {
   const [observerUserIds, setObserverUserIds] = useState<string[]>([]);
   const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const today = useMemo(() => sarajevoToday(), []);
 
@@ -134,15 +133,14 @@ export function TaskCreatePage() {
   const uploadFiles = async (fieldKey: string, files: FileList | null, maxFiles: number | undefined) => {
     if (!files?.length) return;
     if (!canUpload) {
-      setUploadError('Upload fotografija/priloga zahtijeva permisiju attachment:upload.');
+      toast.warning('Upload fotografija/priloga zahtijeva permisiju attachment:upload.');
       return;
     }
     const current = Array.isArray(formData[fieldKey]) ? (formData[fieldKey] as string[]) : [];
     if (maxFiles !== undefined && current.length + files.length > maxFiles) {
-      setUploadError(`Polje prima najviše ${maxFiles} fajlova.`);
+      toast.warning(`Polje prima najviše ${maxFiles} fajlova.`);
       return;
     }
-    setUploadError(null);
     setUploadingField(fieldKey);
     try {
       const uploadedIds = [...current];
@@ -154,7 +152,7 @@ export function TaskCreatePage() {
         setFormData((previous) => ({ ...previous, [fieldKey]: [...uploadedIds] }));
       }
     } catch (error) {
-      setUploadError(error instanceof ApiError ? error.message : 'Upload priloga nije uspio.');
+      if (!(error instanceof ApiError)) toast.danger('Upload priloga nije uspio.');
     } finally {
       setUploadingField(null);
     }
@@ -179,11 +177,11 @@ export function TaskCreatePage() {
       });
     },
     onSuccess: async (task) => {
+      toast.success('Zadatak je kreiran.');
       await queryClient.invalidateQueries({ queryKey: ['tasks'] });
       await navigate(`/zadaci/${task.id}`);
     },
     onError: (error) => {
-      setMessage(error instanceof ApiError ? error.message : 'Kreiranje zadatka nije uspjelo.');
       const next: Record<string, string> = {};
       if (error instanceof ApiError) {
         for (const detail of error.details ?? []) {
@@ -217,14 +215,13 @@ export function TaskCreatePage() {
   const vehicleItems = vehiclesQuery.data?.items ?? [];
   const users = usersQuery.data?.items ?? [];
   const nextStep = () => {
-    setMessage(null);
     if (step === 1) {
       if (!selectedType) {
-        setMessage('Odaberite vrstu zadatka.');
+        toast.warning('Odaberite vrstu zadatka.');
         return;
       }
       if (selectedType.requiresVehicle && !vehicleId) {
-        setMessage('Odabrana vrsta zahtijeva vozilo.');
+        toast.warning('Odabrana vrsta zahtijeva vozilo.');
         return;
       }
       setPriority(selectedType.defaultPriority);
@@ -233,15 +230,15 @@ export function TaskCreatePage() {
       setInvitedUserIds([]);
     }
     if (step === 2 && assignMode === 'ASSIGN_DIRECT' && !assigneeUserId) {
-      setMessage('Odaberite direktnog izvršioca ili promijenite način dodjele.');
+      toast.warning('Odaberite direktnog izvršioca ili promijenite način dodjele.');
       return;
     }
     if (step === 2 && assignMode === 'ASSIGN_DIRECT' && !canViewUsers) {
-      setMessage('Za odabir izvršioca potrebna je permisija user:view. Odaberite Svima ili Pozvanima.');
+      toast.warning('Za odabir izvršioca potrebna je permisija user:view. Odaberite Svima ili Pozvanima.');
       return;
     }
     if (step === 2 && assignMode === 'OPEN_CLAIM' && invitedUserIds.length === 0) {
-      setMessage('Pozvanima treba lista korisnika. Za sve vozače odaberite Svima (ko prvi preuzme).');
+      toast.warning('Pozvanima treba lista korisnika. Za sve vozače odaberite Svima (ko prvi preuzme).');
       return;
     }
     setStep((current) => Math.min(3, current + 1));
@@ -272,12 +269,6 @@ export function TaskCreatePage() {
           />
         ))}
       </div>
-      {message && (
-        <p role="alert" className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
-          {message}
-        </p>
-      )}
-
       {step === 1 && (
         <Card>
           <CardHeader
@@ -594,11 +585,6 @@ export function TaskCreatePage() {
                         </Field>
                       );
                     })}
-                    {uploadError && (
-                      <p role="alert" className="text-sm text-danger">
-                        {uploadError}
-                      </p>
-                    )}
                     <p className="text-xs text-fg-muted">
                       Fajlovi će se u istoj transakciji vezati uz zadatak tek nakon serverske validacije.
                     </p>
@@ -625,7 +611,6 @@ export function TaskCreatePage() {
           variant="ghost"
           disabled={step === 1 || create.isPending}
           onClick={() => {
-            setMessage(null);
             setStep((current) => current - 1);
           }}
         >
@@ -645,7 +630,6 @@ export function TaskCreatePage() {
               uploadingField !== null
             }
             onClick={() => {
-              setMessage(null);
               setErrors({});
               create.mutate();
             }}

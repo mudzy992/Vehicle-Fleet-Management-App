@@ -14,7 +14,7 @@
 | Offline | online-first; banner + write disabled; nema queue/keša |
 | Super Admin | server 403; UI spec copy §10 |
 | Forme | snapshot + `FieldControl`; PHOTO kamere/galerije nezavisno od canSubmit; HANDOVER/OTHER unsupported copy |
-| PHOTO | dozvola kamere + galerije; JPEG upload kroz FormData bez JSON Content-Type |
+| PHOTO | dozvola kamere + galerije; JPEG upload kroz FormData bez JSON Content-Type; prikaz preko `GET /attachments/:id/content` (sirovi bajtovi, ne JSON envelope); lokalni keš + fullscreen |
 | Push | klijent register/revoke; no-op bez google-services / dok je `FIREBASE_ENABLED=false` |
 
 ## Ekran × permisija × dokaz

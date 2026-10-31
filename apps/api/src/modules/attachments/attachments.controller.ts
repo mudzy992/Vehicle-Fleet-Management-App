@@ -194,9 +194,10 @@ export class AttachmentsController {
       .setResource('Attachment')
       .setAfter({ fileName: attachment.fileName, sizeBytes: attachment.sizeBytes });
 
+    const disposition = attachment.mimeType.startsWith('image/') ? 'inline' : 'attachment';
     return new StreamableFile(buffer, {
       type: attachment.mimeType,
-      disposition: `attachment; filename*=UTF-8''${encodeURIComponent(attachment.fileName)}`,
+      disposition: `${disposition}; filename*=UTF-8''${encodeURIComponent(attachment.fileName)}`,
       length: buffer.length,
     });
   }

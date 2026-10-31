@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { TaskDetail } from '@vfm/shared/schemas';
 import { Button, Card, CardContent, CardHeader, Field, inputClassName } from '../../components/ui/index.js';
-import { ApiError, api } from '../../lib/api.js';
+import { api } from '../../lib/api.js';
+import { toast } from '../../lib/toast.js';
 
 type Action = 'cancel' | 'release' | 'reopen';
 
@@ -20,7 +21,6 @@ export function TaskStatusActions({
   const queryClient = useQueryClient();
   const [action, setAction] = useState<Action | null>(null);
   const [reason, setReason] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
   const [succeeded, setSucceeded] = useState(false);
   const labels: Record<Action, string> = { cancel: 'Otkaži zadatak', release: 'Vrati među slobodne', reopen: 'Ponovo otvori' };
 
@@ -32,14 +32,13 @@ export function TaskStatusActions({
     },
     onSuccess: async () => {
       setSucceeded(true);
-      setMessage(action === 'cancel' ? 'Zadatak je otkazan.' : action === 'release' ? 'Zadatak je vraćen među slobodne.' : 'Zadatak je ponovo otvoren.');
+      toast.success(action === 'cancel' ? 'Zadatak je otkazan.' : action === 'release' ? 'Zadatak je vraćen među slobodne.' : 'Zadatak je ponovo otvoren.');
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['task', task.id] }),
         queryClient.invalidateQueries({ queryKey: ['tasks'] }),
       ]);
     },
-    onError: async (error) => {
-      setMessage(error instanceof ApiError ? error.message : 'Promjena statusa nije uspjela. Osvježite zadatak.');
+    onError: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['task', task.id] }),
         queryClient.invalidateQueries({ queryKey: ['tasks'] }),
@@ -53,7 +52,7 @@ export function TaskStatusActions({
   if (canReopen && ['COMPLETED', 'CANCELLED'].includes(task.status)) allowed.push('reopen');
   // Keep the live success announcement mounted after a transition removes the
   // available actions (for example, releasing IN_PROGRESS back to OPEN).
-  if (allowed.length === 0 && !message) return null;
+  if (allowed.length === 0) return null;
 
   return (
     <Card>
@@ -61,7 +60,7 @@ export function TaskStatusActions({
       <CardContent>
         <div className="flex flex-wrap gap-2">
           {allowed.map((item) => (
-            <Button key={item} variant={item === 'cancel' ? 'danger' : 'secondary'} onClick={() => { setAction(item); setReason(''); setMessage(null); setSucceeded(false); }}>
+            <Button key={item} variant={item === 'cancel' ? 'danger' : 'secondary'} onClick={() => { setAction(item); setReason(''); setSucceeded(false); }}>
               {labels[item]}
             </Button>
           ))}
@@ -77,7 +76,6 @@ export function TaskStatusActions({
             </div>
           </form>
         )}
-        {message && <p role={mutation.isError ? 'alert' : 'status'} className="mt-3 text-sm">{message}</p>}
       </CardContent>
     </Card>
   );

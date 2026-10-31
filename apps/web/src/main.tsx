@@ -13,6 +13,7 @@ import { RouterProvider } from 'react-router';
 import { router } from './app/router.js';
 import { SessionProvider } from './features/auth/session.js';
 import { RealtimeProvider } from './features/realtime/realtime-provider.js';
+import { Toaster } from './components/ui/toaster.js';
 import './styles/globals.css';
 
 const queryClient = new QueryClient({
@@ -40,6 +41,7 @@ createRoot(container).render(
       <SessionProvider>
         <RealtimeProvider>
           <RouterProvider router={router} />
+          <Toaster />
         </RealtimeProvider>
       </SessionProvider>
     </QueryClientProvider>

@@ -20,3 +20,4 @@ export { Modal, ConfirmModal } from './modal.js';
 export type { ModalProps, ConfirmModalProps } from './modal.js';
 export { Stat } from './stat.js';
 export { Table, TBody, TD, TH, THead, TR } from './table.js';
+export { Toaster } from './toaster.js';

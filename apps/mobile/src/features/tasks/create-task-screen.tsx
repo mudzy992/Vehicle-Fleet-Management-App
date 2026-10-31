@@ -9,6 +9,7 @@ import { CreateTaskStepOne, CreateTaskStepThree, CreateTaskStepTwo } from '@/fea
 import { pickDocument, pickPhoto, uploadFiles } from '@/features/tasks/upload-picked';
 import { ApiError, mobileApi, toUserMessage, type ActiveTaskForm, type MobileTaskType, type UserSummary, type VehicleSummary } from '@/lib/api';
 import { dueAtFromDate } from '@/lib/format';
+import { toast } from '@/lib/toast';
 import { createTaskStyles as styles } from '@/features/tasks/create-task-styles';
 import { AppButton } from '@/ui/button';
 import { colors } from '@/lib/theme';
@@ -119,10 +120,10 @@ export function CreateTaskScreen() {
 
   const submit = async () => {
     if (!selectedType || !model || submitting) return;
-    if (assignMode === 'ASSIGN_DIRECT' && (!assigneeUserId || !canAssignDirect)) { setError('Za direktnu dodjelu odaberite izvršioca.'); return; }
-    if (assignMode === 'OPEN_CLAIM' && invitedUserIds.length === 0) { setError('Pozvanima treba lista korisnika. Za sve vozače odaberite Svima.'); return; }
+    if (assignMode === 'ASSIGN_DIRECT' && (!assigneeUserId || !canAssignDirect)) { toast.warning('Za direktnu dodjelu odaberite izvršioca.'); return; }
+    if (assignMode === 'OPEN_CLAIM' && invitedUserIds.length === 0) { toast.warning('Pozvanima treba lista korisnika. Za sve vozače odaberite Svima.'); return; }
     const dueAt = dueAtFromDate(dueDate);
-    if (dueAt === null) { setError('Unesite rok kao dd.MM.yyyy, na primjer 22.10.2026.'); return; }
+    if (dueAt === null) { toast.warning('Unesite rok kao dd.MM.yyyy, na primjer 22.10.2026.'); return; }
     setSubmitting(true);
     setError(null);
     setFieldErrors([]);
@@ -140,6 +141,7 @@ export function CreateTaskScreen() {
         ...(dueAt ? { dueAt } : {}),
         orderFormData: collectSubmitValues(model),
       });
+      toast.success('Zadatak je kreiran.');
       router.replace({ pathname: '/task/[id]', params: { id: created.id } });
     } catch (cause) {
       if (cause instanceof ApiError) {

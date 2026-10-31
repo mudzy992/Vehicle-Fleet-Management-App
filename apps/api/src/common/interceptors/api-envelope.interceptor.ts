@@ -8,14 +8,14 @@
  * Izuzeci (NE omataju se):
  * - health endpointi (`/health/*`) — Docker/Coolify probe očekuju sirovi odgovor
  *   i status 200/503 bez omotača;
- * - binarni odgovori (PDF/Excel export) i stream-ovi;
+ * - binarni odgovori (PDF/Excel export, StreamableFile prilozi) i stream-ovi;
  * - odgovori koji već imaju `data` ili `error` ključ (idempotentnost omotača).
  */
-import type {
-  CallHandler,
-  ExecutionContext} from '@nestjs/common';
 import {
   Injectable,
+  StreamableFile,
+  type CallHandler,
+  type ExecutionContext,
   type NestInterceptor,
 } from '@nestjs/common';
 import type { Observable } from 'rxjs';
@@ -70,11 +70,16 @@ export class ApiEnvelopeInterceptor implements NestInterceptor {
 
 function shouldSkipEnvelope(request: RequestWithId | undefined): boolean {
   const path = request?.path ?? request?.url ?? '';
-  return UNWRAPPED_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+  if (UNWRAPPED_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))) return true;
+  // Potpisani i sesijski sadržaj priloga mora ostati sirovi bajtovi; `instanceof
+  // StreamableFile` padne kad postoje dvije kopije `@nestjs/common`.
+  return /\/attachments\/[^/?]+\/content(?:\/|$|\?)/u.test(path);
 }
 
 function isBinaryPayload(payload: unknown): boolean {
   return (
+    payload instanceof StreamableFile ||
+    (typeof payload === 'object' && payload !== null && payload.constructor?.name === 'StreamableFile') ||
     Buffer.isBuffer(payload) ||
     payload instanceof Uint8Array ||
     isStreamLike(payload) ||

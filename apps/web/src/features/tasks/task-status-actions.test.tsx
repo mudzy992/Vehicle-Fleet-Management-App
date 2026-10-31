@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { TaskDetail } from '@vfm/shared/schemas';
+import { Toaster } from '../../components/ui/toaster.js';
+import { clearToasts } from '../../lib/toast.js';
 import { TaskStatusActions } from './task-status-actions.js';
 
 const TASK_ID = '018f0000-0000-7000-8000-000000000101';
@@ -16,11 +18,13 @@ function renderActions(status: string, props: { canCancel?: boolean; canRelease?
   return render(
     <QueryClientProvider client={client}>
       <TaskStatusActions task={task(status)} canCancel={props.canCancel ?? false} canRelease={props.canRelease ?? false} canReopen={props.canReopen ?? false} />
+      <Toaster />
     </QueryClientProvider>,
   );
 }
 
 afterEach(() => {
+  clearToasts();
   vi.unstubAllGlobals();
 });
 
@@ -56,6 +60,7 @@ describe('TaskStatusActions', () => {
     const renderAction = (status: string, version: number) => (
       <QueryClientProvider client={client}>
         <TaskStatusActions task={{ ...task(status), version } as TaskDetail} canCancel={false} canRelease={true} canReopen={false} />
+        <Toaster />
       </QueryClientProvider>
     );
     const { rerender } = render(renderAction('IN_PROGRESS', 7));

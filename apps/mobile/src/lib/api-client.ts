@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { ApiError, type Envelope } from '@/lib/api-error';
+import { toastHttpError } from '@/lib/toast';
 import { isFormDataBody } from '@/lib/api-form-data';
 
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? 'https://api.vehicle.ba101.top/api/v1').replace(/\/$/u, '');
@@ -117,7 +118,9 @@ export async function request<T>(path: string, init: RequestInit = {}, mayRefres
       },
     });
   } catch {
-    throw new ApiError('Nema mrežne veze. Provjerite internet i pokušajte ponovo.', 0, 'NETWORK_ERROR');
+    const error = new ApiError('Nema mrežne veze. Provjerite internet i pokušajte ponovo.', 0, 'NETWORK_ERROR');
+    toastHttpError({ method: init.method, path, status: 0, message: error.message });
+    throw error;
   }
   const authRouteDoesNotUseBearer = ['/auth/login', '/auth/refresh', '/auth/logout'].includes(path);
   if (response.status === 401 && !authRouteDoesNotUseBearer) {
@@ -130,11 +133,17 @@ export async function request<T>(path: string, init: RequestInit = {}, mayRefres
   try {
     body = (await response.json()) as Envelope<T>;
   } catch {
-    if (!response.ok) throw new ApiError(`Zahtjev nije uspio (HTTP ${response.status}).`, response.status, 'HTTP_ERROR');
+    if (!response.ok) {
+      const message = `Zahtjev nije uspio (HTTP ${response.status}).`;
+      toastHttpError({ method: init.method, path, status: response.status, message });
+      throw new ApiError(message, response.status, 'HTTP_ERROR');
+    }
   }
   if (!response.ok) {
     const error = body && 'error' in body ? body.error : {};
-    throw new ApiError(error.message ?? `Zahtjev nije uspio (HTTP ${response.status}).`, response.status, error.code ?? 'HTTP_ERROR', error.requestId, error.details);
+    const message = error.message ?? `Zahtjev nije uspio (HTTP ${response.status}).`;
+    toastHttpError({ method: init.method, path, status: response.status, message });
+    throw new ApiError(message, response.status, error.code ?? 'HTTP_ERROR', error.requestId, error.details);
   }
   return body && 'data' in body ? body.data : (body as T);
 }

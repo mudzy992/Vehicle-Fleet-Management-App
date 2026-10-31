@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '@/features/auth/auth-provider';
 import { colors } from '@/lib/theme';
+import { Toaster } from '@/ui/toaster';
 
 export default function RootLayout() {
   return (
@@ -20,6 +21,7 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(app)" />
       </Stack>
+      <Toaster />
     </AuthProvider>
   );
 }

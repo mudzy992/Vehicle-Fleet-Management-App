@@ -15,6 +15,7 @@
  *   `isApiFailure()` iz `@vfm/shared`.
  */
 import { isApiFailure } from '@vfm/shared';
+import { toastHttpError } from './toast.js';
 import type { ApiErrorBody, ApiSuccess, ErrorCode } from '@vfm/shared';
 
 export const API_BASE = '/api/v1';
@@ -131,11 +132,14 @@ async function request<T>(path: string, init?: RequestInit, allowRetry = true): 
 
   if (payload && isApiFailure(payload as never)) {
     const error = (payload as { error: ApiErrorBody }).error;
+    toastHttpError({ method: init?.method, path, status: response.status, message: error.message });
     throw new ApiError(error.code, error.message, response.status, error.details, error.requestId);
   }
 
   if (!response.ok) {
-    throw new ApiError('INTERNAL_ERROR', `Zahtjev nije uspio (HTTP ${response.status}).`, response.status);
+    const message = `Zahtjev nije uspio (HTTP ${response.status}).`;
+    toastHttpError({ method: init?.method, path, status: response.status, message });
+    throw new ApiError('INTERNAL_ERROR', message, response.status);
   }
 
   const success = payload as ApiSuccess<T> | null;
@@ -208,7 +212,9 @@ async function requestBlob(path: string, allowRetry = true): Promise<Blob> {
     );
   }
 
-  return response.blob();
+  const blob = await response.blob();
+  if (!(blob.type || '').includes('json')) return blob;
+  throw new ApiError('INTERNAL_ERROR', 'Odgovor nije datoteka.', response.status);
 }
 
 async function downloadUrl(url: string): Promise<Blob> {

@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { AuthUser, TaskListResponse, TaskView } from '@vfm/shared/schemas';
 import { setAccessToken, setSessionExpiredHandler } from '../../lib/api.js';
+import { Toaster } from '../../components/ui/toaster.js';
+import { clearToasts } from '../../lib/toast.js';
 import { SessionProvider } from '../auth/session.js';
 import { TasksPage } from './tasks-page.js';
 
@@ -84,6 +86,7 @@ function jsonResponse(data: unknown, status = 200): Response {
 }
 
 afterEach(() => {
+  clearToasts();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   setAccessToken(null);
@@ -119,6 +122,7 @@ describe('TasksPage', () => {
         <QueryClientProvider client={client}>
           <SessionProvider>
             <TasksPage />
+            <Toaster />
           </SessionProvider>
         </QueryClientProvider>
       </MemoryRouter>,

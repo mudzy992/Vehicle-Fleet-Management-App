@@ -4,6 +4,7 @@ import { buildRenderModel, collectSubmitValues, type RenderField, type RenderMod
 import { parseDefinition } from '@vfm/form-engine/definition';
 import { toLocalDateString } from '@vfm/shared';
 import { ApiError, mobileApi, toUserMessage, type TaskDetail } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { FieldControl } from '@/features/tasks/field-control';
 import { dynamicTaskFormStyles as styles } from '@/features/tasks/dynamic-task-form-styles';
 import { TaskOrderReadonly } from '@/features/tasks/task-order-readonly';
@@ -94,7 +95,9 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
     setBusy(true);
     setError(null);
     try {
-      onTaskUpdated(await mobileApi.claimTask(task.id));
+      const updated = await mobileApi.claimTask(task.id);
+      toast.success('Zadatak je preuzet.');
+      onTaskUpdated(updated);
     } catch (cause) {
       if (cause instanceof ApiError && cause.code === 'TASK_ALREADY_CLAIMED') {
         Alert.alert('Zadatak je preuzet', cause.message, [
@@ -120,6 +123,7 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
         ...(odometer.trim() ? { odometerKm: Number(odometer) } : {}),
       });
       setValues(updated.realizationFormData ?? {});
+      toast.success('Zadatak je završen.');
       onTaskUpdated(updated);
     } catch (cause) {
       if (cause instanceof ApiError) {

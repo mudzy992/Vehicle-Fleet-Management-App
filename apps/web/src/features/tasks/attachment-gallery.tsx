@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import type { AttachmentSignedUrl } from '@vfm/shared/schemas';
 import { api } from '../../lib/api.js';
 
 export function AttachmentGallery({
@@ -18,8 +17,11 @@ export function AttachmentGallery({
     void Promise.all(ids.map(async (id) => {
       if (sources[id]) return;
       try {
-        const signed = await api.get<AttachmentSignedUrl>(`/attachments/${id}/url`);
-        const blob = await api.downloadUrl(signed.url);
+        if (kind !== 'PHOTO') {
+          if (active) setSources((current) => ({ ...current, [id]: '' }));
+          return;
+        }
+        const blob = await api.downloadUrl(`/api/v1/attachments/${id}/content`);
         const objectUrl = URL.createObjectURL(blob);
         created.push(objectUrl);
         if (active) setSources((current) => ({ ...current, [id]: objectUrl }));
@@ -31,7 +33,7 @@ export function AttachmentGallery({
       active = false;
       created.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [ids.join('|')]);
+  }, [ids.join('|'), kind]);
   if (ids.length === 0) return null;
   return (
     <div className="mt-2 flex flex-wrap gap-2">
@@ -43,7 +45,7 @@ export function AttachmentGallery({
             </a>
           ) : (
             <div className="flex h-24 w-24 items-center justify-center rounded-md border border-border bg-surface-muted text-center text-xs text-fg-muted">
-              {kind === 'FILE' ? 'Datoteka' : 'Slika'}
+              {kind === 'FILE' ? 'Datoteka' : sources[id] === undefined ? 'Učitavanje…' : 'Slika'}
             </div>
           )}
           {onRemove ? (

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { mobileApi } from '@/lib/api';
+import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { cacheSignedPhoto } from '@/lib/api-upload';
 import { colors, radius, space, type } from '@/lib/theme';
 
@@ -27,8 +26,7 @@ export function AttachmentThumbs({
           if (active) setRemote((current) => ({ ...current, [id]: '' }));
           return;
         }
-        const signed = await mobileApi.attachmentUrl(id);
-        const uri = await cacheSignedPhoto(id, signed.url);
+        const uri = await cacheSignedPhoto(id);
         if (active) setRemote((current) => ({ ...current, [id]: uri }));
       } catch {
         if (active) setRemote((current) => ({ ...current, [id]: '' }));
@@ -45,10 +43,25 @@ export function AttachmentThumbs({
           <View key={id} style={styles.item}>
             {kind === 'PHOTO' && uri ? (
               <Pressable accessibilityRole="button" accessibilityLabel="Otvori fotografiju" onPress={() => setPreview(uri)}>
-                <Image accessibilityLabel="Priložena fotografija" source={{ uri }} style={styles.image} resizeMode="cover" />
+                <Image
+                  accessibilityLabel="Priložena fotografija"
+                  source={{ uri }}
+                  style={styles.image}
+                  resizeMode="cover"
+                  onError={() => {
+                    if (localUris[id]) return;
+                    setRemote((current) => ({ ...current, [id]: '' }));
+                  }}
+                />
               </Pressable>
             ) : (
-              <View style={styles.file}><Text style={styles.fileText} numberOfLines={2}>{kind === 'FILE' ? 'Datoteka' : 'Slika se nije učitala'}</Text></View>
+              <View style={styles.file}>
+                {kind === 'PHOTO' && uri === undefined ? (
+                  <ActivityIndicator color={colors.primary} />
+                ) : (
+                  <Text style={styles.fileText} numberOfLines={2}>{kind === 'FILE' ? 'Datoteka' : 'Slika se nije učitala'}</Text>
+                )}
+              </View>
             )}
             {onRemove ? (
               <Pressable accessibilityRole="button" accessibilityLabel="Ukloni prilog" onPress={() => onRemove(id)} style={styles.remove}>

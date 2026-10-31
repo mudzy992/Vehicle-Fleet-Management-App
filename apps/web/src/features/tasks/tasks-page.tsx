@@ -13,6 +13,7 @@ import {
   StatusBadge,
 } from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
+import { toast } from '../../lib/toast.js';
 import { useSession } from '../auth/session.js';
 import { taskCountLabel, taskDateTime, taskListPath, type TaskListTab } from './tasks-model.js';
 
@@ -79,7 +80,6 @@ export function TasksPage() {
     if (status === 'authenticated' && !canClaim && tab === 'available') setTab('mine');
   }, [status, canClaim, tab]);
   const [page, setPage] = useState(1);
-  const [message, setMessage] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const tasksQuery = useQuery({
@@ -90,15 +90,10 @@ export function TasksPage() {
   const claim = useMutation({
     mutationFn: (task: TaskView) => api.post<TaskView>(`/tasks/${task.id}/claim`),
     onSuccess: async (task) => {
-      setMessage(`Preuzeli ste zadatak ${task.code}.`);
+      toast.success(`Preuzeli ste zadatak ${task.code}.`);
       await queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
-    onError: async (cause) => {
-      setMessage(
-        cause instanceof ApiError
-          ? cause.message
-          : 'Zadatak nije preuzet. Osvježite listu i pokušajte ponovo.',
-      );
+    onError: async () => {
       await queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
   });
@@ -134,19 +129,12 @@ export function TasksPage() {
             onClick={() => {
               setTab(value);
               setPage(1);
-              setMessage(null);
             }}
           >
             {TAB_LABELS[value]}
           </Button>
         ))}
       </div>
-
-      {message && (
-        <p role="status" className="rounded-md bg-surface px-3 py-2 text-sm">
-          {message}
-        </p>
-      )}
 
       {tasksQuery.error && (
         <Card>
@@ -186,7 +174,6 @@ export function TasksPage() {
               canClaim={tab === 'available' && canClaim}
               claiming={claim.isPending && claim.variables?.id === task.id}
               onClaim={(selected) => {
-                setMessage(null);
                 claim.mutate(selected);
               }}
             />

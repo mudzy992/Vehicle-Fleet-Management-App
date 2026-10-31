@@ -85,6 +85,18 @@ describe('ApiEnvelopeInterceptor — izuzeci', () => {
     expect(await run('/api/v1/reports/2/download', streamLike)).toBe(streamLike);
   });
 
+  it('StreamableFile (prilozi) se ne omata u JSON envelope', async () => {
+    const { StreamableFile } = await import('@nestjs/common');
+    const file = new StreamableFile(Buffer.from([0xff, 0xd8, 0xff]));
+    expect(await run('/api/v1/attachments/1/content/token', file)).toBe(file);
+  });
+
+  it('sadržaj priloga se ne omata ni kad payload nije instanceof StreamableFile', async () => {
+    const fake = { constructor: { name: 'StreamableFile' } };
+    expect(await run('/api/v1/attachments/1/content/abc.sig', fake)).toBe(fake);
+    expect(await run('/api/v1/attachments/1/content', fake)).toBe(fake);
+  });
+
   it('string odgovor se ne omata (npr. CSV tekst)', async () => {
     expect(await run('/api/v1/reports/3/download', 'a,b,c')).toBe('a,b,c');
   });

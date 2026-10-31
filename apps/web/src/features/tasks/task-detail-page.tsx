@@ -15,6 +15,7 @@ import {
   inputClassName,
 } from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
+import { toast } from '../../lib/toast.js';
 import { useSession } from '../auth/session.js';
 import { TaskCompletionForm } from './task-completion-form.js';
 import { TaskOrderBlock } from './task-order-block.js';
@@ -36,8 +37,6 @@ export function TaskDetailPage() {
   const { hasPermission, status } = useSession();
   const queryClient = useQueryClient();
   const [comment, setComment] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
-  const [claimError, setClaimError] = useState<string | null>(null);
 
   const taskQuery = useQuery({
     queryKey: ['task', taskId],
@@ -54,15 +53,13 @@ export function TaskDetailPage() {
   const claimMutation = useMutation({
     mutationFn: () => api.post<TaskDetail>(`/tasks/${taskId}/claim`),
     onSuccess: async (task) => {
-      setClaimError(null);
-      setMessage(`Preuzeli ste zadatak ${task.code}.`);
+      toast.success(`Preuzeli ste zadatak ${task.code}.`);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['task', taskId] }),
         queryClient.invalidateQueries({ queryKey: ['tasks'] }),
       ]);
     },
-    onError: async (error) => {
-      setClaimError(error instanceof ApiError ? error.message : 'Zadatak nije preuzet. Osvježite stranicu.');
+    onError: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['task', taskId] }),
         queryClient.invalidateQueries({ queryKey: ['tasks'] }),
@@ -73,14 +70,12 @@ export function TaskDetailPage() {
     mutationFn: (body: string) => api.post(`/tasks/${taskId}/comments`, { body }),
     onSuccess: async () => {
       setComment('');
-      setMessage('Komentar je dodan.');
+      toast.success('Komentar je dodan.');
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['task-comments', taskId] }),
         queryClient.invalidateQueries({ queryKey: ['task', taskId] }),
       ]);
     },
-    onError: (error) =>
-      setMessage(error instanceof ApiError ? error.message : 'Komentar nije dodan. Pokušajte ponovo.'),
   });
 
   if (!taskId) {
@@ -139,22 +134,10 @@ export function TaskDetailPage() {
         </div>
       </header>
 
-      {message && (
-        <p role="status" className="rounded-md bg-surface px-3 py-2 text-sm">
-          {message}
-        </p>
-      )}
-      {claimError && (
-        <p role="alert" className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
-          {claimError}
-        </p>
-      )}
-
       {mayComplete && (
         <TaskCompletionForm
           key={`${task.id}-${task.version}`}
           task={task}
-          onCompleted={() => setMessage('Zadatak je završen.')}
         />
       )}
       <TaskStatusActions

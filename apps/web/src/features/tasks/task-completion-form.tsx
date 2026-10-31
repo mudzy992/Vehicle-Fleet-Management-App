@@ -6,6 +6,7 @@ import type { RenderModel } from '@vfm/form-renderer';
 import { buildRenderModel } from '@vfm/form-renderer';
 import { Button, Card, CardContent, CardHeader, Field, inputClassName } from '../../components/ui/index.js';
 import { ApiError, api } from '../../lib/api.js';
+import { toast } from '../../lib/toast.js';
 import { FormFields } from '../forms/form-fields.js';
 import { AttachmentGallery } from './attachment-gallery.js';
 import { useSession } from '../auth/session.js';
@@ -21,9 +22,7 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
   const [comment, setComment] = useState('');
   const [odometerKm, setOdometerKm] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState<string | null>(null);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const today = useMemo(() => sarajevoToday(), []);
   const versionQuery = useQuery({
     queryKey: ['form-version', realizationSchemaId, realizationVersionId],
@@ -56,15 +55,14 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
   const uploadFiles = async (fieldKey: string, files: FileList | null, maxFiles: number | undefined) => {
     if (!files?.length) return;
     if (!canUpload) {
-      setUploadError('Fotografije i prilozi traže permisiju attachment:upload.');
+      toast.warning('Fotografije i prilozi traže permisiju attachment:upload.');
       return;
     }
     const current = Array.isArray(values[fieldKey]) ? (values[fieldKey] as string[]) : [];
     if (maxFiles !== undefined && current.length + files.length > maxFiles) {
-      setUploadError(`Polje prima najviše ${maxFiles} fajlova.`);
+      toast.warning(`Polje prima najviše ${maxFiles} fajlova.`);
       return;
     }
-    setUploadError(null);
     setUploadingField(fieldKey);
     try {
       const uploadedIds = [...current];
@@ -76,7 +74,7 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
         setValues((existing) => ({ ...existing, [fieldKey]: [...uploadedIds] }));
       }
     } catch (error) {
-      setUploadError(error instanceof ApiError ? error.message : 'Upload priloga nije uspio.');
+      if (!(error instanceof ApiError)) toast.danger('Upload priloga nije uspio.');
     } finally {
       setUploadingField(null);
     }
@@ -91,7 +89,7 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
       ...(odometerKm.trim() ? { odometerKm: Number(odometerKm) } : {}),
     }),
     onSuccess: async () => {
-      setMessage('Zadatak je završen.');
+      toast.success('Zadatak je završen.');
       onCompleted?.();
       setErrors({});
       await Promise.all([
@@ -100,9 +98,6 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
       ]);
     },
     onError: (error) => {
-      setMessage(
-        error instanceof ApiError ? error.message : 'Završetak zadatka nije uspio. Pokušajte ponovo.',
-      );
       const next: Record<string, string> = {};
       if (error instanceof ApiError) {
         for (const detail of error.details ?? []) {
@@ -136,7 +131,6 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
-            setMessage(null);
             complete.mutate();
           }}
         >
@@ -194,11 +188,6 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
                   </Field>
                 );
               })}
-              {uploadError && (
-                <p role="alert" className="text-sm text-danger">
-                  {uploadError}
-                </p>
-              )}
             </section>
           )}
           <Field label="Kilometraža (km), ako je primjenjivo" htmlFor="task-complete-odometer">
@@ -219,11 +208,6 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
               onChange={(event) => setComment(event.target.value)}
             />
           </Field>
-          {message && (
-            <p role={complete.isError ? 'alert' : 'status'} className="text-sm">
-              {message}
-            </p>
-          )}
           <Button type="submit" loading={complete.isPending}>
             Završi zadatak
           </Button>

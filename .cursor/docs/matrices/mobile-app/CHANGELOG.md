@@ -1,5 +1,11 @@
 # Changelog — matrica mobilne aplikacije
 
+## 2026-10-31 (PHOTO content + toast)
+
+- Prikaz fotografije nakon restarta: `GET /attachments/:id/content` sa Bearer, magic-byte provjera, keš JPEG-a. Envelope interceptor ne smije omotati StreamableFile.
+- Toast: success/danger/warning/info na web i mobile; mutacije auto-toast na HTTP grešku.
+- Zašto: nakon Expo Go restarta thumbnail je bio „Slika se nije učitala“ jer je API vraćao JSON umjesto bajtova slike.
+
 ## 2026-10-30 (re-audit)
 
 - Re-audit koda nakon AA kontrasta i PHOTO fikseva. P1/P2 impl ostaju zatvoreni u kodu. Otvoreno: M-08 UAT, M-11/13/16/19, FCM host.

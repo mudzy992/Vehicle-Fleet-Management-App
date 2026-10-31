@@ -2,28 +2,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { currentAccessToken, refreshSession, request, requestBinary } from '@/lib/api-client';
 import { appendAttachmentFile } from '@/lib/api-form-data';
 import { ApiError, type Envelope } from '@/lib/api-error';
+import { toastHttpError } from '@/lib/toast';
 
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? 'https://api.vehicle.ba101.top/api/v1').replace(/\/$/u, '');
-
-export function absoluteApiUrl(path: string): string {
-  if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  const origin = API_BASE.replace(/\/api\/v1\/?$/u, '');
-  return `${origin}${path.startsWith('/') ? path : `/${path}`}`;
-}
-
-export function signedApiPath(signedUrl: string): string {
-  const absolute = absoluteApiUrl(signedUrl);
-  if (absolute.startsWith(API_BASE)) return absolute.slice(API_BASE.length) || '/';
-  return signedUrl.startsWith('/api/v1') ? signedUrl.slice('/api/v1'.length) : signedUrl;
-}
-
-function isImageBytes(bytes: Uint8Array): boolean {
-  if (bytes.length < 12) return false;
-  if (bytes[0] === 0xff && bytes[1] === 0xd8) return true;
-  if (bytes[0] === 0x89 && bytes[1] === 0x50) return true;
-  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) return true;
-  return bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
-}
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -34,19 +15,45 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-export async function cacheSignedPhoto(id: string, signedUrl: string): Promise<string> {
-  const buffer = await requestBinary(signedApiPath(signedUrl));
-  const bytes = new Uint8Array(buffer);
-  if (!isImageBytes(bytes)) throw new ApiError('Odgovor nije valjana fotografija.', 400, 'HTTP_ERROR');
+function isImageBytes(bytes: Uint8Array): boolean {
+  if (bytes.length < 12) return false;
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return true;
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return true;
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) return true;
+  return bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
+}
+
+function findBufferData(value: unknown): number[] | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as { type?: string; data?: unknown; stream?: unknown };
+  if (record.type === 'Buffer' && Array.isArray(record.data)) return record.data as number[];
+  return findBufferData(record.data) ?? findBufferData(record.stream);
+}
+
+function bytesFromPayload(bytes: Uint8Array): Uint8Array {
+  if (isImageBytes(bytes)) return bytes;
+  if (bytes[0] !== 0x7b) throw new ApiError('Odgovor nije fotografija.', 400, 'HTTP_ERROR');
+  try {
+    const raw = findBufferData(JSON.parse(new TextDecoder().decode(bytes)) as unknown);
+    const recovered = raw ? Uint8Array.from(raw) : null;
+    if (recovered && isImageBytes(recovered)) return recovered;
+  } catch {
+    // JSON envelope bez JPEG bafera — ista greška kao neispravan sadržaj.
+  }
+  throw new ApiError('Odgovor nije fotografija.', 400, 'HTTP_ERROR');
+}
+
+export async function cacheSignedPhoto(id: string): Promise<string> {
+  const bytes = bytesFromPayload(new Uint8Array(await requestBinary(`/attachments/${encodeURIComponent(id)}/content`)));
   const base64 = bytesToBase64(bytes);
-  const cache = FileSystem.cacheDirectory;
-  if (!cache) return `data:image/jpeg;base64,${base64}`;
-  const dest = `${cache}att-${id}.jpg`;
+  const directory = FileSystem.cacheDirectory;
+  if (!directory) return `data:image/jpeg;base64,${base64}`;
+  const dest = `${directory}att-${id}.jpg`;
   await FileSystem.writeAsStringAsync(dest, base64, { encoding: FileSystem.EncodingType.Base64 });
   return dest;
 }
 
-function parseEnvelope<T>(raw: string, status: number): T {
+function parseEnvelope<T>(raw: string, status: number, path: string): T {
   let body: Envelope<T> | null = null;
   try {
     body = JSON.parse(raw) as Envelope<T>;
@@ -55,7 +62,9 @@ function parseEnvelope<T>(raw: string, status: number): T {
   }
   if (status >= 400) {
     const error = body && 'error' in body ? body.error : {};
-    throw new ApiError(error.message ?? `Zahtjev nije uspio (HTTP ${status}).`, status, error.code ?? 'HTTP_ERROR', error.requestId, error.details);
+    const message = error.message ?? `Zahtjev nije uspio (HTTP ${status}).`;
+    toastHttpError({ method: 'POST', path, status, message });
+    throw new ApiError(message, status, error.code ?? 'HTTP_ERROR', error.requestId, error.details);
   }
   if (body && 'data' in body) return body.data;
   throw new ApiError('Odgovor servera nije valjan.', status, 'HTTP_ERROR');
@@ -74,7 +83,7 @@ async function nativeUpload<T>(path: string, file: { uri: string; name: string; 
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
-  return parseEnvelope<T>(result.body, result.status);
+  return parseEnvelope<T>(result.body, result.status, path);
 }
 
 export async function uploadMultipart<T>(path: string, file: { uri: string; name: string; mimeType: string }): Promise<T> {
