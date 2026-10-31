@@ -1,5 +1,13 @@
 appId: ba.ba101.voznipark
 ---
+# Tok kreira zadatak kroz mobilni wizard i provjerava da se pojavi u listi.
+#
+# Vrsta je `FUEL_REFILL`: seedovana ORDER forma (`gorivo_nalog`) nema obaveznih
+# polja ni obaveznih priloga, pa je kreiranje deterministički izvodljivo na
+# emulatoru bez system photo pickera. WASH/HANDOVER/CUSTOM forme traže
+# `photosBefore`/`opis`, što bi u wizardu zahtijevalo interakciju s Android
+# galerijom (flaky u CI-ju). Foto-put je pokriven API pripremom u
+# `prepare-claim-task.mjs` i claim tokom `task-claim-complete-lite.yaml`.
 - launchApp:
     clearState: true
 - runFlow:
@@ -27,8 +35,13 @@ appId: ba.ba101.voznipark
 - tapOn:
     id: "task-create-open"
 - assertVisible: "Novi zadatak"
+- scrollUntilVisible:
+    element:
+      id: "task-create-type-fuel_refill"
+    direction: DOWN
+    timeout: 30000
 - tapOn:
-    id: "task-create-type-wash"
+    id: "task-create-type-fuel_refill"
 - scrollUntilVisible:
     element:
       id: "task-create-vehicle-vfm-001"
@@ -62,6 +75,13 @@ appId: ba.ba101.voznipark
     timeout: 30000
 - assertVisible:
     id: "task-create-next-step-2"
+# Vrsta se po defaultu dodjeljuje kao `OPEN_CLAIM` (traži pozvane korisnike), a
+# tok ne bira korisnike — prebacujemo na javno preuzimanje.
+- scrollUntilVisible:
+    element: "Svima (ko prvi preuzme)"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Svima (ko prvi preuzme)"
 - scrollUntilVisible:
     element:
       id: "task-create-title"
@@ -75,12 +95,11 @@ appId: ba.ba101.voznipark
 - assertVisible: "3. Obrazac"
 - scrollUntilVisible:
     element:
-      id: "task-form-field-washType"
+      id: "task-form-field-napomena"
     direction: UP
     timeout: 30000
 - assertVisible:
-    id: "task-form-field-washType"
-- tapOn: "Unutrašnje"
+    id: "task-form-field-napomena"
 - scrollUntilVisible:
     element:
       id: "task-create-submit"

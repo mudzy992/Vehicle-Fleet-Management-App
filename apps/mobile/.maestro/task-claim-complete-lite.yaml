@@ -1,5 +1,11 @@
 appId: ba.ba101.voznipark
 ---
+# Claim + complete tok nad OPEN WASH zadatkom koji priprema
+# `apps/mobile/scripts/prepare-claim-task.mjs`.
+#
+# Napomena: read-only blok naloga (sa fotografijama) je visok, pa se status i
+# dugmad provjeravaju `scrollUntilVisible`-om do stabilnih testID-eva, a ne
+# `visible` provjerom teksta koji može biti izvan ekrana.
 - launchApp:
     clearState: true
 - runFlow:
@@ -27,14 +33,6 @@ appId: ba.ba101.voznipark
     visible: ${CLAIM_TASK_TITLE}
     timeout: 30000
 - tapOn: ${CLAIM_TASK_TITLE}
-- extendedWaitUntil:
-    visible: "Preuzmi zadatak"
-    timeout: 30000
-- scrollUntilVisible:
-    element: "Unutrašnje"
-    direction: DOWN
-    timeout: 30000
-- tapOn: "Unutrašnje"
 - scrollUntilVisible:
     element:
       id: "task-claim-submit"
@@ -42,9 +40,21 @@ appId: ba.ba101.voznipark
     timeout: 30000
 - tapOn:
     id: "task-claim-submit"
+# Nestanak dugmeta znači da je zadatak preuzet (forma realizacije se tek tada
+# renderuje); greška u preuzimanju ostavlja dugme na ekranu i tok pada ovdje.
 - extendedWaitUntil:
-    visible: "U radu"
+    notVisible:
+      id: "task-claim-submit"
     timeout: 30000
+# `washType` je obavezan u formi realizacije (SINGLE_CHOICE) — bira se po
+# testID-u jer se tekst „Unutrašnje" pojavljuje i u read-only nalogu iznad.
+- scrollUntilVisible:
+    element:
+      id: "task-form-option-washType-INTERNAL"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: "task-form-option-washType-INTERNAL"
 - scrollUntilVisible:
     element:
       id: "task-complete-submit"
@@ -53,5 +63,11 @@ appId: ba.ba101.voznipark
 - tapOn:
     id: "task-complete-submit"
 - extendedWaitUntil:
-    visible: "Završen"
+    notVisible:
+      id: "task-complete-submit"
     timeout: 30000
+- scrollUntilVisible:
+    element: "Završen"
+    direction: UP
+    timeout: 30000
+- assertVisible: "Završen"
