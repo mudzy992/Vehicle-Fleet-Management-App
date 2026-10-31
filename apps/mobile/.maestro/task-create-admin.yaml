@@ -42,6 +42,12 @@ appId: ba.ba101.voznipark
     timeout: 30000
 - tapOn:
     id: "task-create-type-fuel_refill"
+# Promjena vrste resetuje odabir vozila i ponovo renderuje listu; na
+# opterećenom emulatoru tapovi u tom trenutku umeju biti izgubljeni, a dugme
+# "Nastavi" ostane onemogućeno (`requiresVehicle && !vehicleId`). Zato se svaki
+# odabir ponavlja (nije toggle) i čeka se da se animacije smire.
+- waitForAnimationToEnd:
+    timeout: 5000
 - scrollUntilVisible:
     element:
       id: "task-create-vehicle-vfm-001"
@@ -50,7 +56,11 @@ appId: ba.ba101.voznipark
 - tapOn:
     id: "task-create-vehicle-vfm-001"
 - waitForAnimationToEnd:
-    timeout: 5000
+    timeout: 3000
+- tapOn:
+    id: "task-create-vehicle-vfm-001"
+- waitForAnimationToEnd:
+    timeout: 3000
 - scrollUntilVisible:
     element:
       id: "task-create-next-step-1"
@@ -58,21 +68,15 @@ appId: ba.ba101.voznipark
     timeout: 30000
 - tapOn:
     id: "task-create-next-step-1"
-# Na opterećenom emulatoru tap na "Nastavi" zna biti izgubljen dok se lista
-# ponovo renderuje nakon odabira vrste/vozila; ako smo i dalje na koraku 1,
-# ponovi tap umjesto da tok padne na nedostajućem `task-create-active-form`.
-- runFlow:
-    when:
-      visible: "Korak 1 od 3"
-    commands:
-      - tapOn:
-          id: "task-create-next-step-1"
-- runFlow:
-    when:
-      visible: "Korak 1 od 3"
-    commands:
-      - tapOn:
-          id: "task-create-next-step-1"
+# Kad smo već na koraku 2 dugme ne postoji, pa `optional` preskače ponovni tap.
+- tapOn:
+    id: "task-create-next-step-1"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    id: "task-create-next-step-1"
+    optional: true
 - waitForAnimationToEnd:
     timeout: 5000
 - scrollUntilVisible:
