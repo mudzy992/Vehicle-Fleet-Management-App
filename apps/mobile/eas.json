@@ -4,6 +4,16 @@
     "appVersionSource": "local"
   },
   "build": {
+    "developer": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.vehicle.ba101.top/api/v1"
+      }
+    },
     "preview": {
       "distribution": "internal",
       "android": {
@@ -14,8 +24,9 @@
       }
     },
     "production": {
+      "distribution": "internal",
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "apk"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.vehicle.ba101.top/api/v1"

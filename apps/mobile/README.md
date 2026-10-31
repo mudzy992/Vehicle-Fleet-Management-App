@@ -47,7 +47,7 @@ Refresh token je u `expo-secure-store`, access token samo u memoriji. Nema offli
 
 ## Firebase / FCM
 
-Android package: **`ba.ba101.voznipark`**. `google-services.json` ide lokalno u `apps/mobile/`; Git ga ignoriše. `app.config.ts` veže fajl samo ako postoji.
+Android package: **`ba.ba101.voznipark`**. `google-services.json` je u `apps/mobile/` (klijentski Firebase config). `app.config.ts` veže fajl samo ako postoji.
 
 Push radi tek kad su ispunjena sva tri:
 
@@ -73,4 +73,13 @@ Privatni service-account JSON ne ide u `apps/mobile`. Host upute: `docs/08-DOCKE
 
 ## EAS Android build
 
-`eas.json` profili `preview` (APK) i `production` (AAB) koriste HTTPS API. Ne čuvati signing credentials u Git-u.
+Lokalni APK (`--local`). Profili: `developer` (dev client), `preview`, `production`. Nema AAB.
+
+```bash
+cd apps/mobile
+corepack pnpm build:developer
+corepack pnpm build:preview
+corepack pnpm build:production
+```
+
+Ne čuvati signing credentials u Git-u.

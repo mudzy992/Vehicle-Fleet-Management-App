@@ -5,12 +5,30 @@
     "scheme": "vfm",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0F0C"
+    },
     "plugins": [
       "expo-router",
       "expo-secure-store",
       "expo-notifications",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B0F0C",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "dark": {
+            "backgroundColor": "#0B0F0C",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ],
       [
         "expo-image-picker",
         {
@@ -23,6 +41,10 @@
     "android": {
       "package": "ba.ba101.voznipark",
       "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B0F0C"
+      },
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.INTERNET",
