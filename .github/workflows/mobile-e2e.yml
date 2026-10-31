@@ -147,6 +147,12 @@ jobs:
           API_HOST: 0.0.0.0
           API_PORT: "3000"
           LOG_LEVEL: warn
+          # Zadani storage je kontejnerska putanja `/data/vfm/*`, koju runner ne
+          # može pisati — bez ovoga `POST /attachments` pada na upisu i priprema
+          # claim zadatka (photosBefore) nema prilog.
+          VFM_STORAGE_PATH: ${{ runner.temp }}/vfm-attachments
+          VFM_STORAGE_CONTAINER_PATH: ${{ runner.temp }}/vfm-attachments
+          ATTACHMENT_TEMP_PATH: ${{ runner.temp }}/vfm-tmp
         run: |
           set -euo pipefail
           nohup pnpm --filter @vfm/api start >"$RUNNER_TEMP/mobile-e2e-api.log" 2>&1 </dev/null &
@@ -180,7 +186,17 @@ jobs:
       - name: Pripremi OPEN WASH zadatak za claim/complete Maestro
         env:
           P4_E2E_API_URL: http://127.0.0.1:3000/api/v1
-        run: node apps/mobile/scripts/prepare-claim-task.mjs
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/prepare-claim.log"
+          if ! node apps/mobile/scripts/prepare-claim-task.mjs >"$log" 2>&1; then
+            # Anotacije su vidljive i kad se artefakti/logovi ne mogu preuzeti.
+            tail -n 20 "$log" | while IFS= read -r line; do
+              echo "::error title=Priprema claim zadatka::$line"
+            done
+            exit 1
+          fi
+          cat "$log"
       - name: Instaliraj Android NDK uz retry na oštećen download
         shell: bash
         run: |
