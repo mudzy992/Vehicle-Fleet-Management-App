@@ -1,7 +1,7 @@
 # Matrica — nalog vs realizacija
 
 **Slug:** `task-order-realization`
-**Ažurirano:** 30.10.2026.
+**Ažurirano:** 31.10.2026.
 **Izvor:** audit zadataka; `docs/03` §3.5–3.6; `docs/07` §7.7–7.9
 
 ## Dvije forme po vrsti

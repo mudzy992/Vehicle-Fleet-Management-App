@@ -21,13 +21,21 @@ function linkedPath(task: TaskDetail): string | null {
   return `/gume`;
 }
 
-export function TaskOrderBlock({ task }: { task: TaskDetail }) {
-  const values = task.orderFormData ?? task.formData;
+export function TaskOrderBlock({
+  task,
+  role = 'ORDER',
+}: {
+  task: TaskDetail;
+  role?: 'ORDER' | 'REALIZATION';
+}) {
+  const isOrder = role === 'ORDER';
+  const schemaId = isOrder ? task.formSchemaId : (task.realizationFormSchemaId ?? task.formSchemaId);
+  const versionId = isOrder ? task.formSchemaVersionId : (task.realizationFormSchemaVersionId ?? task.formSchemaVersionId);
+  const values = isOrder ? (task.orderFormData ?? task.formData) : (task.realizationFormData ?? {});
   const today = useMemo(() => sarajevoToday(), []);
   const versionQuery = useQuery({
-    queryKey: ['form-version', task.formSchemaId, task.formSchemaVersionId],
-    queryFn: () =>
-      api.get<FormVersionDetail>(`/form-schemas/${task.formSchemaId}/versions/${task.formSchemaVersionId}`),
+    queryKey: ['form-version', schemaId, versionId],
+    queryFn: () => api.get<FormVersionDetail>(`/form-schemas/${schemaId}/versions/${versionId}`),
     retry: false,
   });
   const parsed = useMemo(
@@ -41,14 +49,17 @@ export function TaskOrderBlock({ task }: { task: TaskDetail }) {
       values,
       today,
       version: versionQuery.data.version,
-      formSchemaVersionId: task.formSchemaVersionId,
+      formSchemaVersionId: versionId,
     });
-  }, [parsed, versionQuery.data, values, today, task.formSchemaVersionId]);
-  const linkedHref = linkedPath(task);
+  }, [parsed, versionQuery.data, values, today, versionId]);
+  const linkedHref = isOrder ? linkedPath(task) : null;
 
   return (
     <Card>
-      <CardHeader title="Nalog" description={`${task.formSchemaName} v${task.formSchemaVersion}`} />
+      <CardHeader
+        title={isOrder ? 'Nalog' : 'Realizacija'}
+        description={isOrder ? `${task.formSchemaName} v${task.formSchemaVersion}` : `Unos izvršioca · v${versionQuery.data?.version ?? '—'}`}
+      />
       <CardContent>
         {model ? (
           <dl className="grid gap-3 sm:grid-cols-2">
@@ -69,7 +80,9 @@ export function TaskOrderBlock({ task }: { task: TaskDetail }) {
           </dl>
         ) : (
           <p className="text-sm text-fg-muted">
-            {Object.keys(values).length === 0 ? 'Nalog nema unesenih polja.' : 'Učitavanje labele nalog polja…'}
+            {Object.keys(values).length === 0
+              ? `${isOrder ? 'Nalog' : 'Realizacija'} nema unesenih polja.`
+              : `Učitavanje labele ${isOrder ? 'nalog' : 'realizacija'} polja…`}
           </p>
         )}
         {task.linkedRecordId && linkedHref ? (

@@ -77,6 +77,9 @@ const RECORD_MODELS = [
   'tireInstallation',
 ] as const;
 
+/** Jednom po verziji po procesu — hash mismatch nije hard fail, ali spamuje log. */
+const warnedContentHashIds = new Set<string>();
+
 type VersionRow = {
   id: string;
   formSchemaId: string;
@@ -742,9 +745,10 @@ export class FormSchemasService {
 
     const expected = version.contentHash;
     const actual = contentHash(parsed.definition);
-    if (expected && expected !== actual) {
+    if (expected && expected !== actual && !warnedContentHashIds.has(version.id)) {
+      warnedContentHashIds.add(version.id);
       this.logger.warn(
-        `contentHash verzije ${version.id} ne odgovara definiciji (${expected} ≠ ${actual}) — provjeri ručne izmjene u bazi.`,
+        `contentHash verzije ${version.id} ne odgovara kanonskoj definiciji (${expected} ≠ ${actual}). Često nakon izmjene meta-sheme (npr. uklonjen mimeTypes) ili ručnog UPDATE-a definition u bazi; forma i dalje radi.`,
       );
     }
     return parsed.definition;

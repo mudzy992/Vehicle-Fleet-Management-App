@@ -11,22 +11,31 @@ function stringIds(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
-export function TaskOrderReadonly({ task }: { task: TaskDetail }) {
+export function TaskOrderReadonly({
+  task,
+  role = 'ORDER',
+}: {
+  task: TaskDetail;
+  role?: 'ORDER' | 'REALIZATION';
+}) {
+  const isOrder = role === 'ORDER';
+  const schemaId = isOrder ? task.formSchemaId : (task.realizationFormSchemaId ?? task.formSchemaId);
+  const versionId = isOrder ? task.formSchemaVersionId : (task.realizationFormSchemaVersionId ?? task.formSchemaVersionId);
   const [snapshot, setSnapshot] = useState<{ definition: unknown; version: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const values = task.orderFormData ?? task.formData ?? {};
+  const values = isOrder ? (task.orderFormData ?? task.formData ?? {}) : (task.realizationFormData ?? {});
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     mobileApi
-      .formVersion(task)
+      .formVersion({ formSchemaId: schemaId, formSchemaVersionId: versionId })
       .then((result) => {
         if (active) setSnapshot({ definition: result.definition, version: result.version });
       })
       .catch((cause: unknown) => {
-        if (active) setError(toUserMessage(cause, 'Nalog se nije mogao učitati.'));
+        if (active) setError(toUserMessage(cause, `${isOrder ? 'Nalog' : 'Realizacija'} se nije mogla učitati.`));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -34,7 +43,7 @@ export function TaskOrderReadonly({ task }: { task: TaskDetail }) {
     return () => {
       active = false;
     };
-  }, [task.formSchemaId, task.formSchemaVersionId]);
+  }, [schemaId, versionId, isOrder]);
 
   const parsed = useMemo(() => (snapshot ? parseDefinition(snapshot.definition) : null), [snapshot]);
   const model = useMemo<RenderModel | null>(() => {
@@ -45,24 +54,24 @@ export function TaskOrderReadonly({ task }: { task: TaskDetail }) {
       errors: [],
       today: toLocalDateString(new Date()),
       version: snapshot.version,
-      formSchemaVersionId: task.formSchemaVersionId,
+      formSchemaVersionId: versionId,
     });
-  }, [parsed, snapshot, values, task.formSchemaVersionId]);
+  }, [parsed, snapshot, values, versionId]);
 
   if (loading) {
     return (
       <View style={styles.state}>
         <ActivityIndicator color={colors.primary} />
-        <Text style={styles.muted}>Učitavanje naloga…</Text>
+        <Text style={styles.muted}>Učitavanje {isOrder ? 'naloga' : 'realizacije'}…</Text>
       </View>
     );
   }
   if (error) return <Text accessibilityRole="alert" style={styles.error}>{error}</Text>;
-  if (!model) return <Text style={styles.muted}>Nalog nema polja za prikaz.</Text>;
+  if (!model) return <Text style={styles.muted}>{isOrder ? 'Nalog' : 'Realizacija'} nema polja za prikaz.</Text>;
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.title}>Nalog</Text>
+      <Text style={styles.title}>{isOrder ? 'Nalog' : 'Realizacija'}</Text>
       <Text style={styles.muted}>Snapshot obrasca v{snapshot?.version} · samo pregled</Text>
       {model.sections.map((section) =>
         section.visible ? (

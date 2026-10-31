@@ -143,6 +143,9 @@ export function DynamicTaskForm({ task, canClaim, canComplete, canUpload, onTask
   return (
     <View style={styles.wrap}>
       <TaskOrderReadonly task={task} />
+      {!isInProgress && (task.status === 'COMPLETED' || Object.keys(task.realizationFormData ?? {}).length > 0) ? (
+        <TaskOrderReadonly task={task} role="REALIZATION" />
+      ) : null}
       {isOpen && canClaim ? (
         <Pressable testID="task-claim-submit" accessibilityRole="button" onPress={() => void handleClaim()} disabled={busy} style={({ pressed }) => [styles.submit, pressed && styles.pressed, busy && styles.disabled]}>
           <Text style={[styles.submitText, busy && styles.submitMuted]}>{busy ? 'Preuzimam…' : 'Preuzmi zadatak'}</Text>

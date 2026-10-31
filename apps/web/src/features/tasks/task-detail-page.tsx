@@ -190,6 +190,9 @@ export function TaskDetailPage() {
       </Card>
 
       <TaskOrderBlock task={task} />
+      {task.status !== 'IN_PROGRESS' && (task.status === 'COMPLETED' || Object.keys(task.realizationFormData ?? {}).length > 0) ? (
+        <TaskOrderBlock task={task} role="REALIZATION" />
+      ) : null}
 
       <Card>
         <CardHeader title="Učesnici" description="Aktivne i ranije dodjele" />
