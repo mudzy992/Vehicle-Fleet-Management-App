@@ -135,12 +135,28 @@ run_stage() {
   done
   if (( status != 0 )); then
     set +e
+    echo "::error title=Mobile E2E::$stage failed with exit $status"
+    if [[ "$stage" == maestro-* ]]; then
+      # GitHub prikazuje samo ~10 anotacija po koraku, a logovi runa nisu
+      # preuzimljivi u ovom okruženju — zato UI hijerarhija ide prva.
+      for attempt in 1 2 3; do
+        if timeout 12s adb shell uiautomator dump --compressed /sdcard/p4-window.xml >/dev/null 2>&1; then
+          break
+        fi
+        sleep 2
+      done
+      timeout 8s adb shell cat /sdcard/p4-window.xml 2>/dev/null \
+        | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local|superadmin@vfm[.]local/[MASKED EMAIL]/g' \
+            -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_SUPER_ADMIN_PASSWORD:-}/[MASKED]/g" \
+        | grep -oE 'resource-id="[^"]*"|text="[^"]+"' \
+        | head -n 8 \
+        | while IFS= read -r line; do echo "::error title=Android UI::$line"; done || true
+    fi
     echo '::error title=Android diagnostics::Failure handler reached before emulator teardown.'
     adb_state="$(timeout 8s adb devices -l 2>&1)"
     echo "::error title=ADB state before teardown::${adb_state:-adb returned no output}"
     host_state="$(ps -eo pid,stat,%cpu,%mem,rss,comm 2>/dev/null | grep -E 'emulator|qemu|adb' | head -n 12)"
     echo "::error title=Android host processes::${host_state:-no emulator or adb process matched}"
-    echo "::error title=Mobile E2E::$stage failed with exit $status"
     if [[ "$stage" == maestro-* ]]; then
       maestro_tail="$(tail -n 24 "$log_file" | tr '\n' '|' | cut -c1-3500)"
       echo "::error title=Maestro final output::$maestro_tail"
