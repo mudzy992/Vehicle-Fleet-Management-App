@@ -14,6 +14,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { APP_NAME } from '@vfm/shared';
 import { Button, Card } from '../../components/ui/index.js';
+import { LoginApkCta } from '../app-releases/login-apk-cta.js';
 import { ApiError } from '../../lib/api.js';
 import { useSession } from './session.js';
 
@@ -170,6 +171,7 @@ export function LoginPage() {
               </Button>
             </form>
           </Card>
+          <LoginApkCta />
           <p className="vfm-login-help">
             Zaboravljena lozinka? Obratite se administratoru za jednokratni token za reset.
           </p>

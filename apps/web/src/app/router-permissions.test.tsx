@@ -6,8 +6,7 @@ import { appRoutes } from './router.js';
 
 function expectRoutePermission(path: string, permission: string): void {
   const root = appRoutes.find((route) => route.path === '/');
-  const shell = root?.children?.find((child) => Array.isArray(child.children) && !child.path);
-  const route = shell?.children?.find((child) => child.path === path);
+  const route = root?.children?.find((child) => child.path === path);
   const element = route?.element as ReactElement<{ permission: string }> | undefined;
 
   expect(element?.type, `${path} mora biti obavijen RequirePermission`).toBe(RequirePermission);

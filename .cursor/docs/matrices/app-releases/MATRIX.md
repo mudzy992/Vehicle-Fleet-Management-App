@@ -1,4 +1,4 @@
-# App releases — katalog APK, naslovna i obavezan update
+# App releases — katalog APK, prijava i obavezan update
 
 Izvor istine za objavu Android APK-a, javni download i blokirajući update u mobilnoj aplikaciji.
 
@@ -26,7 +26,7 @@ Izvor istine za objavu Android APK-a, javni download i blokirajući update u mob
 
 - `GET /api/v1/app-releases/latest` — metapodaci ili 404.
 - `GET /api/v1/app-releases/latest/file` — sirovi APK (`application/vnd.android.package-archive`), envelope skip.
-- Naslovna `/` za gosta: CTA **Preuzmi** samo kad latest postoji. Prijavljeni sa `/` idu na `/nadzorna-tabla`.
+- Prijava `/prijava`: CTA **Preuzmi APK** samo kad latest postoji. Gost na `/` ide na prijavu; prijavljeni na `/nadzorna-tabla`.
 
 ## Force UX (mobile)
 

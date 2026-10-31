@@ -1,17 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../../lib/api.js';
-import { PublicLandingPage } from './public-landing-page.js';
+import { LoginApkCta } from './login-apk-cta.js';
 
-function renderLanding() {
+function renderCta() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
-        <PublicLandingPage />
-      </MemoryRouter>
+      <LoginApkCta />
     </QueryClientProvider>,
   );
 }
@@ -20,7 +17,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('PublicLandingPage', () => {
+describe('LoginApkCta', () => {
   it('prikazuje Preuzmi APK kad postoji latest', async () => {
     vi.spyOn(api, 'get').mockResolvedValue({
       versionCode: 4,
@@ -30,18 +27,16 @@ describe('PublicLandingPage', () => {
       sizeBytes: 2_000_000,
       downloadUrl: '/api/v1/app-releases/latest/file',
     });
-    renderLanding();
+    renderCta();
     const download = await screen.findByRole('link', { name: 'Preuzmi APK' });
     expect(download.getAttribute('href')).toBe('/api/v1/app-releases/latest/file');
-    expect(screen.getByRole('link', { name: 'Prijava' })).toBeTruthy();
   });
 
   it('sakriva CTA kad nema objavljenog APK-a', async () => {
     vi.spyOn(api, 'get').mockRejectedValue(new ApiError('NOT_FOUND', 'nema', 404));
-    renderLanding();
+    renderCta();
     await waitFor(() => {
       expect(screen.queryByRole('link', { name: 'Preuzmi APK' })).toBeNull();
     });
-    expect(screen.getByRole('link', { name: 'Prijava' })).toBeTruthy();
   });
 });

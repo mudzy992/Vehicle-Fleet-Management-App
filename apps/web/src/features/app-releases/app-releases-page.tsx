@@ -49,7 +49,7 @@ export function AppReleasesPage() {
             onActivate={(id) => activate.mutate(id)}
           />
         ) : (
-          <EmptyState title="Nema izdanja" description="Objavite prvi APK da bi naslovna i mobilna aplikacija dobile zadnju verziju." />
+          <EmptyState title="Nema izdanja" description="Objavite prvi APK da bi prijava i mobilna aplikacija dobile zadnju verziju." />
         )}
       </Card>
       <Modal

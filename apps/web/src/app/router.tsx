@@ -9,7 +9,7 @@
  * autoritet — UI samo sakriva akcije radi iskustva).
  */
 import { lazy, Suspense, type ComponentType } from 'react';
-import { createBrowserRouter } from 'react-router';
+import { createBrowserRouter, Navigate } from 'react-router';
 import type { RouteObject } from 'react-router';
 import { AnonymousOnly, RequireAuth, RequirePermission } from './guards.js';
 import { AppShell } from './shell.js';
@@ -151,10 +151,6 @@ const TaskCreatePage = lazyPage(() =>
   import('../features/tasks/task-create-page.js').then((module) => ({ default: module.TaskCreatePage })),
 );
 
-const HomeIndex = lazyPage(() =>
-  import('../features/app-releases/home-index.js').then((module) => ({ default: module.HomeIndex })),
-);
-
 const AppReleasesPage = lazyPage(() =>
   import('../features/app-releases/app-releases-page.js').then((module) => ({
     default: module.AppReleasesPage,
@@ -174,24 +170,22 @@ const InsuranceRecordsPage = lazyPage(() =>
 
 export const appRoutes = [
   {
+    path: '/prijava',
+    element: (
+      <AnonymousOnly>
+        <LoginPage />
+      </AnonymousOnly>
+    ),
+  },
+  {
     path: '/',
+    element: (
+      <RequireAuth>
+        <AppShell />
+      </RequireAuth>
+    ),
     children: [
-      { index: true, element: <HomeIndex /> },
-      {
-        path: 'prijava',
-        element: (
-          <AnonymousOnly>
-            <LoginPage />
-          </AnonymousOnly>
-        ),
-      },
-      {
-        element: (
-          <RequireAuth>
-            <AppShell />
-          </RequireAuth>
-        ),
-        children: [
+      { index: true, element: <Navigate to="/nadzorna-tabla" replace /> },
       {
         // Nadzorna tabla — brojevi se uzimaju kao `total` sa servera, rokovi iz
         // zapisa unutar 30 dana (docs/06 §9.1, ekran „Nadzorna ploča").
@@ -429,8 +423,6 @@ export const appRoutes = [
         ),
       },
       { path: '*', element: <PlaceholderPage title="Nepostojeća stranica" code="404" phase="—" /> },
-        ],
-      },
     ],
   },
 ] satisfies RouteObject[];
