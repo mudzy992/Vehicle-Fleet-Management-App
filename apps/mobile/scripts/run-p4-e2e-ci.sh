@@ -39,7 +39,12 @@ sanitize_maestro_debug() {
       echo '::group::Android state captured before emulator teardown'
       timeout 8s adb devices -l \
         | while IFS= read -r line; do echo "::error title=Android device (in-script)::$line"; done || true
-      timeout 8s adb shell uiautomator dump /sdcard/p4-window.xml >/dev/null 2>&1 || true
+      for attempt in 1 2 3; do
+        if timeout 12s adb shell uiautomator dump --compressed /sdcard/p4-window.xml >/dev/null 2>&1; then
+          break
+        fi
+        sleep 2
+      done
       timeout 8s adb shell cat /sdcard/p4-window.xml 2>/dev/null \
         | sed -E -e 's/admin@vfm[.]local|vozac@vfm[.]local|superadmin@vfm[.]local/[MASKED EMAIL]/g' \
             -e "s/${TEST_ADMIN_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_USER_PASSWORD:-}/[MASKED]/g" -e "s/${TEST_SUPER_ADMIN_PASSWORD:-}/[MASKED]/g" \
