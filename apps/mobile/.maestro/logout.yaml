@@ -23,9 +23,14 @@ appId: ba.ba101.voznipark
     visible: "Profil"
     timeout: 30000
 - tapOn: "Profil"
-- extendedWaitUntil:
-    visible:
+# "Odjavi se" je na dnu ScrollView-a profila, pa na malom ekranu nije vidljivo
+# bez skrolanja — `extendedWaitUntil visible` bi tu uvijek pao.
+- scrollUntilVisible:
+    element:
       id: "profile-logout"
+    direction: DOWN
+    centerElement: true
+    waitToSettleTimeoutMs: 800
     timeout: 30000
 - tapOn:
     id: "profile-logout"
