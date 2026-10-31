@@ -60,7 +60,7 @@ const login = await readJson(await fetch(`${apiRoot}/auth/login`, {
 }), 'Prijava admina');
 const auth = { ...headers, authorization: `Bearer ${login.accessToken}` };
 
-/** 1×1 PNG — prolazi magic-byte provjeru i `mimeTypes` pravilo PHOTO polja. */
+/** 1×1 PNG — prolazi magic-byte provjeru PHOTO polja. */
 const PHOTO_BYTES = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64',

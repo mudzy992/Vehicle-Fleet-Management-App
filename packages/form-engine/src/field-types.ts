@@ -71,8 +71,8 @@ export const ALLOWED_VALIDATION_KEYS: Readonly<Record<FieldType, readonly string
   DROPDOWN: ['minLength', 'maxLength'],
   MONEY: ['min', 'max', 'currency'],
   CURRENCY: ['allowedCurrencies'],
-  PHOTO: ['minFiles', 'maxFiles', 'maxSizeMb', 'mimeTypes', 'requireStage'],
-  FILE: ['minFiles', 'maxFiles', 'maxSizeMb', 'mimeTypes', 'requireStage', 'allowedExtensions'],
+  PHOTO: ['minFiles', 'maxFiles', 'maxSizeMb', 'requireStage'],
+  FILE: ['minFiles', 'maxFiles', 'maxSizeMb', 'requireStage'],
   REFERENCE_VEHICLE: ['filterStatus'],
   REFERENCE_DRIVER: ['filterActive', 'piiScope'],
   REFERENCE_RECORD: ['entityType'],
@@ -114,8 +114,17 @@ export function allowedValidationKeysFor(type: FieldType): readonly string[] {
 export const FORM_CURRENCIES = ['BAM', 'EUR'] as const;
 export type FormCurrency = (typeof FORM_CURRENCIES)[number];
 
-/** Dozvoljene MIME tipove za upload drži definicija; ovo je siguran minimum. */
-export const DEFAULT_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+/** Stari ključevi se skidaju pri parse-u da legacy nacrti ostanu validni. */
+export const RETIRED_VALIDATION_KEYS = ['mimeTypes', 'allowedExtensions'] as const;
+
+export function omitRetiredValidation(
+  validation: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!validation) return undefined;
+  const next = { ...validation };
+  for (const key of RETIRED_VALIDATION_KEYS) delete next[key];
+  return Object.keys(next).length > 0 ? next : undefined;
+}
 
 /** Faza u kojoj je attachment obavezan (za `requireStage`). */
 export { ATTACHMENT_STAGES };

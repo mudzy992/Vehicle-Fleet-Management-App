@@ -1,5 +1,10 @@
 # Changelog — form-versioning
 
+## 2026-10-31
+
+- MIME više nije polje na formi. PHOTO = JPEG/PNG/WebP/AVIF, FILE = PDF/DOCX/XLS/XLSX.
+- Razlog: mobilni upload padao je na form-level `mimeTypes` (npr. GIF) i HEIC/AVIF s telefona, a API allowlista je bila drugačija.
+
 ## 2026-10-30
 
 - TASK unique `(taskTypeId, role)` — ORDER i REALIZATION po vrsti.

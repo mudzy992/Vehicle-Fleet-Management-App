@@ -17,6 +17,7 @@ import {
   COMPUTED_RESULT_TYPES,
   FIELD_TYPES_WITH_OPTIONS,
   FORM_CURRENCIES,
+  omitRetiredValidation,
   REFERENCE_ENTITY_TYPES,
 } from './field-types.js';
 import { checkFieldKey, FIELD_KEY_PATTERN } from './reserved-keys.js';
@@ -351,8 +352,18 @@ const fieldKeySchema = z
 
 const sectionKeySchema = fieldKeySchema;
 
-export const fieldDefinitionSchema = z
-  .object({
+function stripRetiredFieldKeys(input: unknown): unknown {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+  const field = { ...(input as Record<string, unknown>) };
+  if (field.validation && typeof field.validation === 'object' && !Array.isArray(field.validation)) {
+    field.validation = omitRetiredValidation(field.validation as Record<string, unknown>);
+  }
+  return field;
+}
+
+export const fieldDefinitionSchema = z.preprocess(
+  stripRetiredFieldKeys,
+  z.object({
     key: fieldKeySchema,
     type: z.enum(FIELD_TYPES),
     label: z.string().min(1).max(120),
@@ -523,9 +534,10 @@ export const fieldDefinitionSchema = z
     if (typeof min === 'number' && typeof max === 'number' && min > max) {
       ctx.addIssue({ code: 'custom', path: ['validation', 'max'], message: 'max mora biti ≥ min.' });
     }
-  });
+  }),
+);
 
-export type FieldDefinition = z.infer<typeof fieldDefinitionSchema>;
+export type FieldDefinition = z.output<typeof fieldDefinitionSchema>;
 
 export const sectionDefinitionSchema = z
   .object({

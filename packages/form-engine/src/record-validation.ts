@@ -17,6 +17,7 @@
  */
 import type { FieldDefinition, FormDefinition, SectionDefinition } from './definition.schema.js';
 import { computedFields, findField, inputFields } from './definition.schema.js';
+import { mimeTypesForField } from '@vfm/shared';
 import type { FieldType } from './field-types.js';
 import {
   FIELD_VALUE_KIND,
@@ -338,7 +339,8 @@ function checkAttachments(
     fail(ctx, key, 'MAX_FILES', `Najviše ${maxFiles} prilog(a).`);
 
   if (!attachments) return ids;
-  const mimeTypes = ruleStringArray(field, 'mimeTypes');
+  const allowedMime = field.type === 'FILE' ? mimeTypesForField('FILE') : mimeTypesForField('PHOTO');
+  const formatHint = field.type === 'FILE' ? 'PDF, DOCX, XLS, XLSX' : 'JPEG, PNG, WebP, AVIF';
   const maxSizeMb = ruleNumber(field, 'maxSizeMb');
   for (const id of ids) {
     const facts = attachments.get(id);
@@ -346,8 +348,8 @@ function checkAttachments(
       fail(ctx, key, 'ATTACHMENT_UNKNOWN', 'Prilog ne postoji ili ne pripada ovom zapisu.');
       continue;
     }
-    if (mimeTypes && mimeTypes.length > 0 && !mimeTypes.includes(facts.mimeType)) {
-      fail(ctx, key, 'ATTACHMENT_MIME', `Dozvoljeni formati: ${mimeTypes.join(', ')}.`);
+    if (!(allowedMime as readonly string[]).includes(facts.mimeType)) {
+      fail(ctx, key, 'ATTACHMENT_MIME', `Dozvoljeni formati: ${formatHint}.`);
     }
     if (maxSizeMb !== undefined && facts.sizeBytes > maxSizeMb * 1024 * 1024) {
       fail(ctx, key, 'ATTACHMENT_SIZE', `Najveća veličina priloga je ${maxSizeMb} MB.`);

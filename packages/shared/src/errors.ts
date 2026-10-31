@@ -310,7 +310,7 @@ export const ERROR_CODES = {
     messageBs: 'Fajl je veći od dozvoljene veličine.',
     retryable: false,
   },
-  /** Upload: tip nije na `ATTACHMENT_ALLOWED_MIME` ili se ne slaže s magic bytes. */
+  /** Upload: tip nije JPEG/PNG/WebP/AVIF ili PDF/DOCX/XLS/XLSX, ili magic bytes ne odgovaraju. */
   UNSUPPORTED_MEDIA_TYPE: {
     code: 'UNSUPPORTED_MEDIA_TYPE',
     httpStatus: 415,

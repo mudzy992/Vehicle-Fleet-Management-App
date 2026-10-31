@@ -1,7 +1,7 @@
 # Matrica — verzionisanje formi
 
 **Slug:** `form-versioning`
-**Ažurirano:** 30.10.2026.
+**Ažurirano:** 31.10.2026.
 **Izvor:** `docs/04-FORM_ENGINE.md` §8/§12, `FormSchemasService`, Form Builder UI
 
 ## Statusi verzije
@@ -55,6 +55,17 @@ Kopija bez koraka 2, pa objava, **jeste** klon — dozvoljeno. Korak 2 + 3 **ne 
 | `publish` | uklonjeno mapirano polje, bez potvrde | `422 NORMALIZED_FIELD_REMOVED` |
 | `publish` | isto, uz checkbox u builderu | UI šalje `confirmNormalizedRemoval: true`; objava prolazi |
 | `retire` aktivne bez zamjene | nema druge `PUBLISHED` | `422` |
+
+## Prilozi (MIME)
+
+Forma **ne** definiše `mimeTypes` / `allowedExtensions`. Lista je fiksna:
+
+| Tip polja | Formati |
+|-----------|---------|
+| `PHOTO` | JPEG, PNG, WebP, AVIF |
+| `FILE` | PDF, DOCX, XLS, XLSX |
+
+Upload (`POST /attachments`) prima uniju obje liste; validacija zapisa sužava po tipu polja. HEIC/GIF se odbijaju. Legacy ključevi se skidaju pri parse-u definicije.
 
 ## Permisije
 

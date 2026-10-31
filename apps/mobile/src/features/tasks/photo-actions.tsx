@@ -28,6 +28,7 @@ export function PhotoActions({
         {uploading ? 'Upload u toku…' : `Dodano fajlova: ${count}`}
         {required ? ' · obavezno' : ''}
       </Text>
+      <Text style={styles.help}>{widget === 'PHOTO' ? 'JPEG, PNG, WebP ili AVIF' : 'PDF, DOCX, XLS ili XLSX'}</Text>
       {widget === 'PHOTO' ? (
         <>
           <AppButton testID="task-form-camera" label="Otvori kameru" variant="secondary" disabled={blocked} onPress={onCamera} />

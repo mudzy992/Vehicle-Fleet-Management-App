@@ -49,8 +49,8 @@ describe('katalog tipova polja (docs/04 §3)', () => {
     expect(allowedValidationKeysFor('INTEGER')).toEqual(['min', 'max', 'step']);
     expect(allowedValidationKeysFor('DECIMAL')).toContain('precision');
     expect(allowedValidationKeysFor('PHOTO')).toContain('maxFiles');
-    expect(allowedValidationKeysFor('PHOTO')).toContain('mimeTypes');
-    expect(allowedValidationKeysFor('FILE')).toContain('allowedExtensions');
+    expect(allowedValidationKeysFor('PHOTO')).not.toContain('mimeTypes');
+    expect(allowedValidationKeysFor('FILE')).not.toContain('allowedExtensions');
     expect(allowedValidationKeysFor('SECTION')).toEqual([]);
     expect(allowedValidationKeysFor('COMPUTED')).toEqual([]);
   });

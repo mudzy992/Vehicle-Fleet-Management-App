@@ -16,59 +16,12 @@
  *    SHA-256 i UUID-a; originalno ime ostaje samo kao metapodatak.
  */
 import { createHash, randomUUID } from 'node:crypto';
+import { detectFileType, type DetectedFileType } from './detect-file-type.js';
 
-/** Prepoznati tipovi — usklađeno s `ATTACHMENT_ALLOWED_MIME`. */
-export interface DetectedFileType {
-  readonly mimeType: string;
-  readonly ext: string;
-}
+export { detectFileType };
+export type { DetectedFileType };
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-/** HEIF/HEIC brandovi koje telefoni stvarno šalju. */
-const HEIC_BRANDS = ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1'] as const;
-
-/**
- * Prepoznaje tip fajla iz magic bytes.
- *
- * Vraća `null` kad tip nije podržan — pozivalac tada baca
- * `UNSUPPORTED_MEDIA_TYPE` (415).
- */
-export function detectFileType(buffer: Buffer): DetectedFileType | null {
-  if (buffer.length < 12) return null;
-
-  // JPEG: FF D8 FF
-  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
-    return { mimeType: 'image/jpeg', ext: 'jpg' };
-  }
-
-  if (buffer.subarray(0, 8).equals(PNG_SIGNATURE)) {
-    return { mimeType: 'image/png', ext: 'png' };
-  }
-
-  // WEBP: "RIFF" <size> "WEBP"
-  if (
-    buffer.subarray(0, 4).toString('latin1') === 'RIFF' &&
-    buffer.subarray(8, 12).toString('latin1') === 'WEBP'
-  ) {
-    return { mimeType: 'image/webp', ext: 'webp' };
-  }
-
-  // PDF: "%PDF-"
-  if (buffer.subarray(0, 5).toString('latin1') === '%PDF-') {
-    return { mimeType: 'application/pdf', ext: 'pdf' };
-  }
-
-  // HEIC/HEIF: <size> "ftyp" <brand>
-  if (buffer.subarray(4, 8).toString('latin1') === 'ftyp') {
-    const brand = buffer.subarray(8, 12).toString('latin1');
-    if ((HEIC_BRANDS as readonly string[]).includes(brand)) {
-      return { mimeType: 'image/heic', ext: 'heic' };
-    }
-  }
-
-  return null;
-}
 
 /** SHA-256 (hex, malim slovima) — sadržaj, ne ime, je identitet fajla. */
 export function sha256Hex(buffer: Buffer): string {

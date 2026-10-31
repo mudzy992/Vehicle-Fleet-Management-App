@@ -52,8 +52,23 @@ describe('detectFileType', () => {
       ext: 'pdf',
     });
     expect(
-      detectFileType(Buffer.concat([Buffer.alloc(4), Buffer.from('ftypheic'), Buffer.alloc(8)])),
-    ).toEqual({ mimeType: 'image/heic', ext: 'heic' });
+      detectFileType(Buffer.concat([Buffer.from([0x00, 0x00, 0x00, 0x20]), Buffer.from('ftypavif'), Buffer.alloc(16)])),
+    ).toEqual({ mimeType: 'image/avif', ext: 'avif' });
+    const docx = Buffer.concat([Buffer.from('PK\x03\x04'), Buffer.from('word/document.xml')]);
+    expect(detectFileType(docx)).toEqual({
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ext: 'docx',
+    });
+    const xlsx = Buffer.concat([Buffer.from('PK\x03\x04'), Buffer.from('xl/workbook.xml')]);
+    expect(detectFileType(xlsx)).toEqual({
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ext: 'xlsx',
+    });
+  });
+
+  it('HEIC i GIF nisu dozvoljeni', () => {
+    expect(detectFileType(Buffer.concat([Buffer.alloc(4), Buffer.from('ftypheic'), Buffer.alloc(8)]))).toBeNull();
+    expect(detectFileType(Buffer.from('GIF89a............'))).toBeNull();
   });
 
   it('nepoznat sadržaj vraća `null` (→ 415 na servisu)', () => {

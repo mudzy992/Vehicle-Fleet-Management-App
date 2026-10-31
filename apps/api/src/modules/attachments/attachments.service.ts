@@ -4,8 +4,8 @@
  * Pravila koja servis čuva (i koja testovi provjeravaju):
  *
  * 1. **Tip se određuje iz sadržaja.** `Content-Type` klijenta se ne vjeruje;
- *    tip dolazi iz magic bytes (`detectFileType`), a dozvoljeni tipovi su
- *    `ATTACHMENT_ALLOWED_MIME`. Sve ostalo je `415 UNSUPPORTED_MEDIA_TYPE`.
+ *    tip dolazi iz magic bytes (`detectFileType`). Dozvoljeno: PHOTO
+ *    JPEG/PNG/WebP/AVIF i FILE PDF/DOCX/XLS/XLSX. Ostalo je `415`.
  * 2. **Veličina.** Preko `ATTACHMENT_MAX_SIZE_MB` → `413 PAYLOAD_TOO_LARGE`
  *    (prije nego fajl dodirne disk).
  * 3. **Metapodaci se skidaju prije spremanja** (`stripImageMetadata`) — GPS iz
@@ -26,7 +26,7 @@ import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promis
 import { dirname, join, resolve } from 'node:path';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { ApiErrorDetail } from '@vfm/shared';
-import { hasPermission } from '@vfm/shared';
+import { ALLOWED_MIME_TYPES, hasPermission } from '@vfm/shared';
 import { maxFileSizeBytes } from '@vfm/shared/env';
 import type {
   Attachment,
@@ -87,7 +87,7 @@ export function attachmentOptionsFromEnv(env = getEnv()): AttachmentStorageOptio
     rootPath: env.VFM_STORAGE_CONTAINER_PATH,
     tempPath: env.ATTACHMENT_TEMP_PATH,
     maxSizeBytes: maxFileSizeBytes(env),
-    allowedMime: env.ATTACHMENT_ALLOWED_MIME,
+    allowedMime: ALLOWED_MIME_TYPES,
     validateMagicBytes: env.ATTACHMENT_VALIDATE_MAGIC_BYTES,
     signingSecret: env.FILE_SIGNING_SECRET ?? 'dev-file-signing-secret',
     signedUrlTtlSeconds: env.FILE_SIGNED_URL_TTL_SECONDS,

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   ALLOWED_MIME_TYPES,
+  FILE_MIME_TYPES,
+  PHOTO_MIME_TYPES,
   API_PREFIX,
   API_VERSION,
   APP_PREFIX,
@@ -139,11 +141,15 @@ describe('pohrana i limiti', () => {
     expect(MAX_FILE_SIZE_BYTES).toBeLessThanOrEqual(MAX_REQUEST_BODY_BYTES);
   });
 
-  it('dozvoljeni MIME tipovi: slike i PDF, bez izvršnih datoteka', () => {
-    expect(ALLOWED_MIME_TYPES).toContain('image/jpeg');
-    expect(ALLOWED_MIME_TYPES).toContain('image/png');
-    expect(ALLOWED_MIME_TYPES).toContain('application/pdf');
-    expect(ALLOWED_MIME_TYPES).toContain('image/heic');
+  it('dozvoljeni MIME tipovi: PHOTO jpeg/png/webp/avif i FILE pdf/docx/xls/xlsx', () => {
+    expect([...PHOTO_MIME_TYPES]).toEqual(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
+    expect(FILE_MIME_TYPES).toContain('application/pdf');
+    expect(FILE_MIME_TYPES).toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    expect(FILE_MIME_TYPES).toContain('application/vnd.ms-excel');
+    expect(FILE_MIME_TYPES).toContain('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    expect(ALLOWED_MIME_TYPES).toEqual([...PHOTO_MIME_TYPES, ...FILE_MIME_TYPES]);
+    expect(ALLOWED_MIME_TYPES).not.toContain('image/heic');
+    expect(ALLOWED_MIME_TYPES).not.toContain('image/gif');
     for (const forbidden of [
       'application/x-msdownload',
       'application/x-sh',

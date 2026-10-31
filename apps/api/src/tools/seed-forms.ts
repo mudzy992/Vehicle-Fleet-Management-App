@@ -172,7 +172,6 @@ function washForm(): Record<string, unknown> {
               minFiles: 1,
               maxFiles: 4,
               maxSizeMb: 10,
-              mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
             },
           },
         ],

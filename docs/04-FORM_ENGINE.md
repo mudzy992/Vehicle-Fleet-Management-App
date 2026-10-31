@@ -96,8 +96,7 @@
           "validation": {
             "minFiles": 1,
             "maxFiles": 4,
-            "maxSizeMb": 10,
-            "mimeTypes": ["image/jpeg", "image/png", "image/webp"],
+            "maxSizeMb": 10
           },
         },
       ],
@@ -148,8 +147,8 @@ snimanju drafta validira ovom meta-shemom; bez prolaska nema ni snimanja, ni obj
 | `DROPDOWN`          | string                                      | `optionsSource`, `searchable`, `allowCustom`                     | Select (combobox)    | Bottom-sheet lista       |
 | `MONEY`             | `{ amount: int(feninzi), currency: "BAM" }` | `min`, `max`, `currency` (whitelist)                             | Money input          | Money input              |
 | `CURRENCY`          | string (ISO 4217)                           | whitelist (`BAM`, `EUR`)                                         | Select               | Select                   |
-| `PHOTO`             | `attachmentId[]`                            | `minFiles`, `maxFiles`, `maxSizeMb`, `mimeTypes`, `requireStage` | Dropzone + kamera    | `expo-camera` + galerija |
-| `FILE`              | `attachmentId[]`                            | isto + `allowedExtensions`                                       | Dropzone             | Dokument picker          |
+| `PHOTO`             | `attachmentId[]`                            | `minFiles`, `maxFiles`, `maxSizeMb`, `requireStage` (MIME fiksno: JPEG/PNG/WebP/AVIF) | Dropzone + kamera    | `expo-camera` + galerija |
+| `FILE`              | `attachmentId[]`                            | isto (MIME fiksno: PDF/DOCX/XLS/XLSX)                            | Dropzone             | Dokument picker          |
 | `REFERENCE_VEHICLE` | uuid                                        | `filterStatus`, `required`                                       | Combobox s pretragom | Pretraga + lista         |
 | `REFERENCE_DRIVER`  | uuid                                        | `filterActive`, `piiScope`                                       | Combobox             | Pretraga                 |
 | `REFERENCE_RECORD`  | `{ entityType, entityId }`                  | `entityType` whitelist                                           | Combobox             | Lista                    |
@@ -400,7 +399,7 @@ verziju forme na stari zapis.
 | Brojevi | `TYPE` bez konverzije, `MIN`/`MAX`/`STEP`, `PRECISION` po `validation.precision` |
 | `MONEY` | `{ amount (feninzi, cijeli broj), currency }`; `min`/`max` su u **KM**, `currency` se provjerava |
 | Datumi | `DATE` = `YYYY-MM-DD`; `DATETIME` = ISO 8601 sa zonom i normalizuje se u UTC; `minDate`/`maxDate`/`notInFuture`/`notInPast` |
-| Prilozi | `minFiles`/`maxFiles`/`mimeTypes`/`maxSizeMb`; uz mapu priloga i `ATTACHMENT_UNKNOWN` |
+| Prilozi | `minFiles`/`maxFiles`/`maxSizeMb`; MIME fiksno (PHOTO JPEG/PNG/WebP/AVIF, FILE PDF/DOCX/XLS/XLSX); uz mapu priloga i `ATTACHMENT_UNKNOWN` |
 | Izračunata polja | računaju se samo kad nema grešaka unosa; klijentska vrijednost se odbacuje uz `COMPUTED_MISMATCH` (WARN) |
 | Normalizacija | samo za uspješan zapis; nemoguća transformacija → izuzetak (API: `422 NORMALIZATION_MISMATCH`) |
 

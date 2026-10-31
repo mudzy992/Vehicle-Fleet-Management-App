@@ -8,7 +8,7 @@ function photo(key: string, label: string, required = false, order = 1): Record<
     label,
     required,
     order,
-    validation: { minFiles: required ? 1 : 0, maxFiles: 4, maxSizeMb: 10, mimeTypes: ['image/jpeg', 'image/png'] },
+    validation: { minFiles: required ? 1 : 0, maxFiles: 4, maxSizeMb: 10 },
   };
 }
 

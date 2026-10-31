@@ -273,13 +273,6 @@ export const baseEnvSchema = z.object({
   VFM_STORAGE_PATH: z.string().min(1).default(STORAGE_PATH_DEFAULT),
   VFM_STORAGE_CONTAINER_PATH: z.string().min(1).default(STORAGE_PATH_DEFAULT),
   ATTACHMENT_MAX_SIZE_MB: integer(10, (schema) => schema.min(1).max(1024)),
-  ATTACHMENT_ALLOWED_MIME: csv([
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'image/heic',
-    'application/pdf',
-  ]),
   ATTACHMENT_VALIDATE_MAGIC_BYTES: bool(true),
   ATTACHMENT_IMAGE_MAX_WIDTH: integer(1920, (schema) => schema.min(0)),
   ATTACHMENT_IMAGE_JPEG_QUALITY: integer(82, (schema) => schema.min(1).max(100)),

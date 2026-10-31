@@ -227,7 +227,7 @@ describe('AttachmentsService', () => {
     expect(fake.rows).toHaveLength(0);
   });
 
-  it('tip koji nije na `ATTACHMENT_ALLOWED_MIME` → `415`', async () => {
+  it('tip koji nije na fiksnoj MIME listi → `415`', async () => {
     const svcStrict = new AttachmentsService(fake as never, {
       ...options,
       allowedMime: ['application/pdf'],

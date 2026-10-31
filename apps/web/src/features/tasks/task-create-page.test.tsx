@@ -26,7 +26,7 @@ const DEFINITION = {
       label: 'Fotografije nakon rada',
       required: true,
       order: 1,
-      validation: { minFiles: 1, maxFiles: 2, maxSizeMb: 2, mimeTypes: ['image/jpeg'] },
+      validation: { minFiles: 1, maxFiles: 2, maxSizeMb: 2 },
     }],
   }],
 };

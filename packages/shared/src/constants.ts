@@ -209,14 +209,23 @@ export const REPORT_EXPORT_PATH_DEFAULT = '/data/vfm/attachments/exports' as con
 export const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 export const MAX_REQUEST_BODY_BYTES = 50 * 1024 * 1024;
 
-/** Dozvoljene MIME vrste priloga. */
-export const ALLOWED_MIME_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/heic',
+/** PHOTO polja — fiksno, ne definiše se na formi. */
+export const PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'] as const;
+
+/** FILE polja — fiksno, ne definiše se na formi. */
+export const FILE_MIME_TYPES = [
   'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ] as const;
+
+/** Unija za `POST /attachments` (upload ne zna PHOTO vs FILE). */
+export const ALLOWED_MIME_TYPES = [...PHOTO_MIME_TYPES, ...FILE_MIME_TYPES] as const;
+
+export function mimeTypesForField(type: 'PHOTO' | 'FILE'): readonly string[] {
+  return type === 'FILE' ? FILE_MIME_TYPES : PHOTO_MIME_TYPES;
+}
 
 /** Zadržavanje podataka (gdpr/audit) u danima. */
 export const AUDIT_RETENTION_DAYS = 1095 as const; // 3 godine

@@ -1,6 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
+import { FILE_MIME_TYPES } from '@vfm/shared';
 import type { RenderField } from '@vfm/form-renderer/render-model';
 import { mobileApi } from '@/lib/api';
 
@@ -8,18 +9,6 @@ export interface PickedFile { uri: string; name: string; mimeType: string }
 
 function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-}
-
-function jpegTarget(field: RenderField): { mimeType: string; format: ImageManipulator.SaveFormat; extension: string } {
-  const configured = field.validation['mimeTypes'];
-  const allowed = Array.isArray(configured) ? configured.filter((item): item is string => typeof item === 'string') : [];
-  if (allowed.length === 0 || allowed.includes('image/jpeg')) {
-    return { mimeType: 'image/jpeg', format: ImageManipulator.SaveFormat.JPEG, extension: 'jpg' };
-  }
-  if (allowed.includes('image/png')) {
-    return { mimeType: 'image/png', format: ImageManipulator.SaveFormat.PNG, extension: 'png' };
-  }
-  return { mimeType: 'image/jpeg', format: ImageManipulator.SaveFormat.JPEG, extension: 'jpg' };
 }
 
 async function ensurePhotoPermission(source: 'CAMERA' | 'GALLERY'): Promise<void> {
@@ -32,18 +21,17 @@ async function ensurePhotoPermission(source: 'CAMERA' | 'GALLERY'): Promise<void
   if (!permission.granted) throw new Error('Dozvolite pristup fotografijama da biste dodali prilog iz galerije.');
 }
 
-async function normalizePickedImage(asset: ImagePicker.ImagePickerAsset, field: RenderField, index: number): Promise<PickedFile> {
-  const target = jpegTarget(field);
-  const name = `prilog-${Date.now()}-${index + 1}.${target.extension}`;
+async function normalizePickedImage(asset: ImagePicker.ImagePickerAsset, index: number): Promise<PickedFile> {
+  const name = `prilog-${Date.now()}-${index + 1}.jpg`;
   try {
     const image = await ImageManipulator.manipulateAsync(
       asset.uri,
       asset.width > 1600 ? [{ resize: { width: 1600 } }] : [],
-      { compress: 0.78, format: target.format },
+      { compress: 0.78, format: ImageManipulator.SaveFormat.JPEG },
     );
-    return { uri: image.uri, name, mimeType: target.mimeType };
+    return { uri: image.uri, name, mimeType: 'image/jpeg' };
   } catch {
-    return { uri: asset.uri, name, mimeType: asset.mimeType ?? target.mimeType };
+    throw new Error('Fotografiju nije moguće pretvoriti u JPEG. Odaberite JPG, PNG, WebP ili AVIF.');
   }
 }
 
@@ -74,23 +62,26 @@ export async function uploadFiles(input: {
   }
 }
 
-export async function pickPhoto(field: RenderField, source: 'CAMERA' | 'GALLERY'): Promise<PickedFile[]> {
+export async function pickPhoto(_field: RenderField, source: 'CAMERA' | 'GALLERY'): Promise<PickedFile[]> {
   await ensurePhotoPermission(source);
   const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.82, allowsEditing: false, exif: false };
   const result = source === 'CAMERA'
     ? await ImagePicker.launchCameraAsync(options)
     : await ImagePicker.launchImageLibraryAsync({ ...options, allowsMultipleSelection: true });
   if (result.canceled) return [];
-  return Promise.all(result.assets.map((asset, index) => normalizePickedImage(asset, field, index)));
+  return Promise.all(result.assets.map((asset, index) => normalizePickedImage(asset, index)));
 }
 
-export async function pickDocument(field: RenderField): Promise<PickedFile[]> {
-  const configured = field.validation['mimeTypes'];
+export async function pickDocument(_field: RenderField): Promise<PickedFile[]> {
   const result = await DocumentPicker.getDocumentAsync({
-    type: Array.isArray(configured) && configured.every((item) => typeof item === 'string') ? configured as string[] : '*/*',
+    type: [...FILE_MIME_TYPES],
     multiple: true,
     copyToCacheDirectory: true,
   });
   if (result.canceled) return [];
-  return result.assets.map((asset) => ({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType ?? 'application/octet-stream' }));
+  return result.assets.map((asset) => ({
+    uri: asset.uri,
+    name: asset.name,
+    mimeType: asset.mimeType ?? 'application/octet-stream',
+  }));
 }

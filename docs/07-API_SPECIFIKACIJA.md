@@ -403,8 +403,8 @@ a task end-to-end HTTP tokovi P4–P8 još traže integracijski dokaz.
 
 Napomene (Faza 3):
 
-- **Tip se određuje iz sadržaja**, ne iz `Content-Type` headera: JPEG/PNG/WEBP/PDF/HEIC
-  (`ATTACHMENT_ALLOWED_MIME`). Nepoznat sadržaj → `415 UNSUPPORTED_MEDIA_TYPE`,
+- **Tip se određuje iz sadržaja**, ne iz `Content-Type` headera. Fiksna lista:
+  PHOTO JPEG/PNG/WebP/AVIF, FILE PDF/DOCX/XLS/XLSX. Nepoznat sadržaj → `415 UNSUPPORTED_MEDIA_TYPE`,
   prevelik fajl → `413 PAYLOAD_TOO_LARGE` (limit `ATTACHMENT_MAX_SIZE_MB`).
 - **Metapodaci se uklanjaju prije spremanja** — JPEG `APPn`/`COM` i PNG `eXIf`/`tEXt`
   (GPS lokacija, ime uređaja); `exifStripped` govori da li je obrada stvarno urađena.

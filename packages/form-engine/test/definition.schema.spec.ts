@@ -225,6 +225,21 @@ describe('meta-shema definicije (docs/04 §2–§5, §7)', () => {
     expect(findUnknownValidationKeys('PHOTO', { minFiles: 2 })).toEqual([]);
   });
 
+  it('skida legacy mimeTypes/allowedExtensions s PHOTO/FILE polja', () => {
+    const definition = minimalDefinition();
+    const field = (definition['sections'] as { fields: Record<string, unknown>[] }[])[0]!.fields[0]!;
+    field['type'] = 'PHOTO';
+    field['validation'] = {
+      minFiles: 1,
+      mimeTypes: ['image/gif'],
+      allowedExtensions: ['.gif'],
+    };
+    const result = parseDefinition(definition);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.definition.sections[0]?.fields[0]?.validation).toEqual({ minFiles: 1 });
+  });
+
   it('whitelista entityType za REFERENCE_RECORD i valute forme', () => {
     const reference = minimalDefinition();
     const referenceField = (reference['sections'] as { fields: Record<string, unknown>[] }[])[0]!.fields[0]!;

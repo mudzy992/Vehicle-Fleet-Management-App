@@ -2,7 +2,6 @@ import { ALLOWED_VALIDATION_KEYS, REFERENCE_ENTITY_TYPES } from '@vfm/form-engin
 import type { FieldDefinition } from '@vfm/form-engine/definition';
 import { Field, inputClassName } from '../../components/ui/index.js';
 import { CommaSeparatedInput } from './comma-separated-input.js';
-import { parseMimeTypes } from './comma-separated.js';
 
 const BOOLEAN_RULES = new Set([
   'trim',
@@ -13,7 +12,7 @@ const BOOLEAN_RULES = new Set([
   'filterStatus',
   'filterActive',
 ]);
-const ARRAY_RULES = new Set(['allowedCurrencies', 'mimeTypes', 'allowedExtensions']);
+const ARRAY_RULES = new Set(['allowedCurrencies']);
 const LABELS: Readonly<Record<string, string>> = {
   min: 'Minimalna vrijednost',
   max: 'Maksimalna vrijednost',
@@ -38,9 +37,7 @@ const LABELS: Readonly<Record<string, string>> = {
   minFiles: 'Minimalan broj fajlova',
   maxFiles: 'Maksimalan broj fajlova',
   maxSizeMb: 'Maksimalna veličina (MB)',
-  mimeTypes: 'Dozvoljeni MIME tipovi (zarezom)',
   requireStage: 'Faza obaveznog priloga',
-  allowedExtensions: 'Dozvoljene ekstenzije (zarezom)',
   filterStatus: 'Filtrirati aktivne zapise',
   filterActive: 'Samo aktivni vozači',
   piiScope: 'PII scope',
@@ -110,16 +107,11 @@ export function FieldValidationEditor({
                 key={key}
                 label={label}
                 htmlFor={id}
-                hint={
-                  key === 'mimeTypes'
-                    ? 'Npr. image/jpeg, image/png ili JPG, PNG, GIF.'
-                    : 'Vrijednosti odvojiti zarezom.'
-                }
+                hint="Vrijednosti odvojiti zarezom."
               >
                 <CommaSeparatedInput
                   id={id}
                   value={value}
-                  parse={key === 'mimeTypes' ? parseMimeTypes : undefined}
                   onChange={(items) => update(key, items.length > 0 ? items : undefined)}
                 />
               </Field>

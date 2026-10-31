@@ -23,7 +23,6 @@ export {
   ALLOWED_VALIDATION_KEYS,
   ATTACHMENT_STAGES,
   COMPUTED_RESULT_TYPES,
-  DEFAULT_IMAGE_MIME_TYPES,
   FIELD_TYPES,
   FIELD_TYPES_WITH_OPTIONS,
   FIELD_VALUE_KINDS,
@@ -33,9 +32,11 @@ export {
   KNOWN_COMPUTED_UNITS,
   MOBILE_COMPATIBLE_FIELD_TYPES,
   REFERENCE_ENTITY_TYPES,
+  RETIRED_VALIDATION_KEYS,
   allowedValidationKeysFor,
   isKnownFieldType,
   isMobileCompatible,
+  omitRetiredValidation,
 } from './field-types.js';
 export type {
   AllowedOptionQueryId,
