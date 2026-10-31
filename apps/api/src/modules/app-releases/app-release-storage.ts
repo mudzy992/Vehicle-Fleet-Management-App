@@ -41,12 +41,13 @@ export async function writeApkFile(
   await mkdir(dirname(target), { recursive: true });
   await mkdir(options.tempPath, { recursive: true });
   const tmp = join(options.tempPath, `${randomUUID()}.apk.part`);
+  await writeFile(tmp, buffer);
   try {
-    await writeFile(tmp, buffer);
     await rename(tmp, target);
   } catch (error) {
     await unlink(tmp).catch(() => undefined);
-    throw error;
+    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+    await writeFile(target, buffer);
   }
 }
 
