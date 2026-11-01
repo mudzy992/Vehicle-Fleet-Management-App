@@ -702,18 +702,22 @@ button:active:not(:disabled) {
 /* Sign-in experience: editorial split layout with compact small-screen form. */
 .vfm-login-shell {
   display: grid;
+  height: 100svh;
+  max-height: 100svh;
   min-height: 100svh;
-  grid-template-columns: minmax(0, 1.05fr) minmax(25rem, 0.95fr);
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
   background: var(--bg);
   color: var(--fg);
 }
 .vfm-login-story {
   position: relative;
   display: flex;
-  min-height: 100svh;
+  min-height: 0;
+  height: 100%;
   flex-direction: column;
   overflow: hidden;
-  padding: clamp(2rem, 5vw, 5rem);
+  padding: clamp(1.25rem, 3svh, 4rem) clamp(1.5rem, 4vw, 5rem);
   border-right: 1px solid var(--border);
   background:
     radial-gradient(ellipse at 70% 65%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 48%),
@@ -721,6 +725,7 @@ button:active:not(:disabled) {
 }
 .vfm-login-brand {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 0.8rem;
   font-size: 0.95rem;
@@ -730,12 +735,14 @@ button:active:not(:disabled) {
 .vfm-login-story-copy {
   position: relative;
   z-index: 1;
+  flex: 0 1 auto;
+  min-height: 0;
   max-width: 38rem;
-  margin: auto 0 1.5rem;
+  margin: auto 0 1rem;
 }
 .vfm-login-story-copy h2 {
-  margin: 1rem 0;
-  font-size: clamp(2.4rem, 4.6vw, 4.8rem);
+  margin: 0.75rem 0;
+  font-size: clamp(1.75rem, 4.5svh + 1vw, 4rem);
   font-weight: 720;
   line-height: 1.03;
   letter-spacing: -0.065em;
@@ -751,10 +758,12 @@ button:active:not(:disabled) {
 }
 .vfm-login-visual {
   position: relative;
-  height: clamp(10rem, 23vw, 20rem);
+  flex: 1 1 auto;
+  min-height: 6rem;
+  height: min(18rem, 22svh);
+  max-height: 18rem;
   max-width: 34rem;
-  margin: 0 auto 1rem;
-  aspect-ratio: 1.7;
+  margin: 0 auto 0.75rem;
   width: 100%;
 }
 .vfm-orbit {
@@ -812,15 +821,19 @@ button:active:not(:disabled) {
 .vfm-login-footnote {
   position: relative;
   z-index: 1;
+  flex-shrink: 0;
   margin: 0;
   color: var(--fg-muted);
   font-size: 0.7rem;
 }
 .vfm-login-panel {
   display: grid;
-  min-height: 100svh;
+  min-height: 0;
+  height: 100%;
   place-items: center;
-  padding: clamp(1.5rem, 5vw, 5rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: clamp(1.25rem, 3svh, 4rem) clamp(1.25rem, 4vw, 5rem);
 }
 .vfm-login-form-wrap {
   width: min(100%, 27rem);
@@ -830,7 +843,7 @@ button:active:not(:disabled) {
 }
 .vfm-login-title {
   margin: 0.45rem 0 0.35rem;
-  font-size: 2rem;
+  font-size: clamp(1.55rem, 2.4svh + 0.4vw, 2rem);
   font-weight: 700;
   letter-spacing: -0.05em;
 }
@@ -858,7 +871,7 @@ button:active:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  margin: 2rem 0 0;
+  margin: 1.25rem 0 0;
   color: var(--fg-muted);
   font-size: 0.68rem;
 }
@@ -866,15 +879,29 @@ button:active:not(:disabled) {
   color: var(--success);
   font-size: 0.55rem;
 }
-@media (max-width: 800px) {
+@media (max-height: 800px) and (min-width: 961px) {
+  .vfm-login-story-copy h2 {
+    font-size: clamp(1.6rem, 4.2svh, 2.4rem);
+  }
+  .vfm-login-visual {
+    height: min(12rem, 18svh);
+    max-height: 12rem;
+  }
+}
+@media (max-width: 960px) {
   .vfm-login-shell {
     display: block;
+    height: auto;
+    max-height: none;
+    overflow: visible;
   }
   .vfm-login-story {
     display: none;
   }
   .vfm-login-panel {
     min-height: 100svh;
+    height: auto;
+    overflow: visible;
     padding: 1.25rem;
   }
   .vfm-login-mobile-brand {
