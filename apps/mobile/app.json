@@ -3,7 +3,7 @@
     "name": "Vozni park",
     "slug": "vfm-mobile",
     "scheme": "vfm",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -40,7 +40,7 @@
     ],
     "android": {
       "package": "ba.ba101.voznipark",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B0F0C"
