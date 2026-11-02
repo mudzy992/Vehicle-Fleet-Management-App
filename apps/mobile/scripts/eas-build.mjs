@@ -11,6 +11,16 @@ if (!profiles.has(profile)) {
 }
 
 const cwd = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+if (profile === 'production') {
+  const bump = spawnSync(process.execPath, ['scripts/bump-release.mjs'], {
+    cwd,
+    stdio: 'inherit',
+    env: process.env,
+  });
+  if ((bump.status ?? 1) !== 0) process.exit(bump.status ?? 1);
+  delete process.env.ANDROID_VERSION_CODE;
+  delete process.env.ANDROID_VERSION_NAME;
+}
 const result = spawnSync(
   'npx',
   ['eas-cli', 'build', '-p', 'android', '--profile', profile, '--local'],

@@ -20,6 +20,7 @@ Izvor istine za objavu Android APK-a, javni download i blokirajući update u mob
 - `versionCode` i `versionName` dolaze **samo iz APK AndroidManifest.xml**. Admin ih ne kuca.
 - Poređenje update-a je **samo `versionCode`** (cijeli broj). `versionName` je prikaz.
 - Novi upload: `versionCode` mora biti **strogo veći** od trenutnog latest.
+- `npm run build:production` u `apps/mobile` prije EAS builda diže `versionCode` za +1 i patch `versionName` za +1, usklađuje `package.json`, committa samo ta dva fajla (`chore(mobile): release <versionName> (<versionCode>)`) i pusha trenutnu granu. Build kreće tek nakon pusha. Prljavo stablo prekida komandu bez bumpa. `build:developer` i `build:preview` ne diraju verziju. Za production se ignorišu `ANDROID_VERSION_CODE` i `ANDROID_VERSION_NAME`, da APK odgovara commitovanoj verziji.
 - Rollback: `POST /app-releases/:id/activate` prebacuje `isLatest` na postojeći red, bez re-uploada. Stariji `versionCode` smije ponovo biti latest.
 
 ## Javni download

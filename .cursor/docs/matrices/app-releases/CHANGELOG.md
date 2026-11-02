@@ -1,5 +1,10 @@
 # Changelog — app-releases
 
+## 2026-11-02
+
+- Production mobile build prije EAS-a diže `versionCode` i patch `versionName`, committa i pusha `app.json` + `package.json`.
+- Zašto: update i upload traže strogo veći `versionCode`; broj mora biti u APK-u i u gitu prije builda, inače sljedeći build ponovi istu verziju.
+
 ## 2026-11-01
 
 - Javni download CTA je na `/prijava`, ne na homepage `/`.
