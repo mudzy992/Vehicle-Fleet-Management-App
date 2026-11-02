@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { BareButton } from '../../components/ui/index.js';
 import { api } from '../../lib/api.js';
 
 export function AttachmentGallery({
@@ -49,9 +50,9 @@ export function AttachmentGallery({
             </div>
           )}
           {onRemove ? (
-            <button type="button" className="w-full text-xs text-danger" onClick={() => onRemove(id)}>
+            <BareButton className="w-full text-xs text-danger" onClick={() => onRemove(id)}>
               Ukloni
-            </button>
+            </BareButton>
           ) : null}
         </figure>
       ))}

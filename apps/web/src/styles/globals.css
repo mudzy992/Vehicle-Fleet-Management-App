@@ -564,6 +564,9 @@ textarea:focus-visible {
   background: var(--scrim-overlay);
   backdrop-filter: blur(2px);
 }
+.vfm-toaster {
+  width: min(calc(100% - 2rem), 22rem);
+}
 
 /* Shared surface and control polish, compatible with current utility classes. */
 [class*='rounded-lg'][class*='border-[var(--border)]'][class*='bg-[var(--surface)]'] {

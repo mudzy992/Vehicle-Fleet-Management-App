@@ -54,10 +54,12 @@ export const toast = {
   info: (message: string) => showToast('info', message),
 };
 
+const INLINE_HTTP_STATUSES = new Set([400, 401, 409, 422]);
+
 export function toastHttpError(input: { method?: string; path: string; status: number; message: string }): void {
   const verb = (input.method ?? 'GET').toUpperCase();
   if (verb === 'GET' || verb === 'HEAD') return;
   if (input.path === '/auth/login') return;
-  if (input.status === 401) return;
+  if (INLINE_HTTP_STATUSES.has(input.status)) return;
   toast.danger(input.message);
 }
