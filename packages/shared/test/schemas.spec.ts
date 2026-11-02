@@ -566,6 +566,11 @@ describe('zadaci (docs/07 §2.11)', () => {
         page: '2',
       }),
     ).toMatchObject({ status: 'OPEN', mine: true, overdueOnly: false, page: 2 });
+    expect(taskListQuerySchema.parse({ activeOnly: 'true', mine: 'true' })).toMatchObject({
+      activeOnly: true,
+      mine: true,
+    });
+    expect(taskListQuerySchema.safeParse({ activeOnly: 'true', status: 'OPEN' }).success).toBe(false);
     expect(
       taskListQuerySchema.safeParse({
         dueFrom: '2026-10-22T00:00:00Z',

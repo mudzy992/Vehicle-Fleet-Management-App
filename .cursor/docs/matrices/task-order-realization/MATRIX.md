@@ -1,7 +1,7 @@
 # Matrica — nalog vs realizacija
 
 **Slug:** `task-order-realization`
-**Ažurirano:** 31.10.2026.
+**Ažurirano:** 02.11.2026.
 **Izvor:** audit zadataka; `docs/03` §3.5–3.6; `docs/07` §7.7–7.9
 
 ## Dvije forme po vrsti
@@ -44,6 +44,8 @@ Novi zadatak zahtijeva obje objavljene forme. Inače `409 FORM_VERSION_NOT_PUBLI
 | `OPEN_CLAIM` | `invitedUserIds` (obavezna lista ≥ 1) | Pozvanima |
 
 Prazan `OPEN_CLAIM` se odbija (`400`). Default wizarda za WASH/INTERIOR/CUSTOM/HANDOVER: `BROADCAST`.
+
+Mobilni tab Moji: default `GET /tasks?mine=true&activeOnly=true` (`OPEN` + `IN_PROGRESS`). Chip Svi šalje isti `mine` bez `activeOnly`. `status` + `activeOnly` je `400`.
 
 ## Linked record pri complete
 

@@ -76,7 +76,19 @@ export const mobileApi = {
     }
   },
   tasks: () => request<{ items: TaskSummary[]; total: number }>('/tasks/available?page=1&pageSize=50'),
-  myTasks: () => request<{ items: TaskSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/tasks?mine=true&page=1&pageSize=50&sortBy=updatedAt&sortOrder=desc'),
+  myTasks: (activeOnly = true) => {
+    const query = new URLSearchParams({
+      mine: 'true',
+      page: '1',
+      pageSize: '50',
+      sortBy: 'updatedAt',
+      sortOrder: 'desc',
+    });
+    if (activeOnly) query.set('activeOnly', 'true');
+    return request<{ items: TaskSummary[]; page: number; pageSize: number; total: number; totalPages: number }>(
+      `/tasks?${query.toString()}`,
+    );
+  },
   taskTypes: () => request<{ items: MobileTaskType[]; page: number; pageSize: number; total: number; totalPages: number }>('/task-types?activeOnly=true&page=1&pageSize=100'),
   activeTaskForm: (taskTypeId: string, role: 'ORDER' | 'REALIZATION' = 'ORDER') =>
     request<ActiveTaskForm>(`/form-schemas/active?subject=TASK&taskTypeId=${encodeURIComponent(taskTypeId)}&role=${role}`),

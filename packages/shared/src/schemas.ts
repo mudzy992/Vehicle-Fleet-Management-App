@@ -3249,6 +3249,7 @@ export const taskListQuerySchema = paginationQuerySchema
     dueTo: z.iso.datetime().optional(),
     mine: queryBoolean.default(false),
     overdueOnly: queryBoolean.default(false),
+    activeOnly: queryBoolean.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -3257,6 +3258,13 @@ export const taskListQuerySchema = paginationQuerySchema
         code: 'custom',
         path: ['dueTo'],
         message: 'Kraj roka ne može biti prije početka roka.',
+      });
+    }
+    if (value.activeOnly && value.status) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['activeOnly'],
+        message: 'activeOnly se ne može kombinovati sa status filterom.',
       });
     }
   });

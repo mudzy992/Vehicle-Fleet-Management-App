@@ -1,5 +1,12 @@
 # Changelog — matrica mobilne aplikacije
 
+## 2026-11-02 (vozački inbox + safe area)
+
+- Tab bar/header/login koriste `useSafeAreaInsets` (gesture i 3-button).
+- Moji default: `activeOnly=true` (OPEN + IN_PROGRESS); chip Svi ide na API bez tog filtera.
+- Tab Vozila samo za `task:create`; vozač ne vidi tab.
+- Zašto: vozač treba inbox u radu, a sistemska navigacija ne smije prekriti tabove.
+
 ## 2026-10-31 (PHOTO content + toast)
 
 - Prikaz fotografije nakon restarta: `GET /attachments/:id/content` sa Bearer, magic-byte provjera, keš JPEG-a. Envelope interceptor ne smije omotati StreamableFile.

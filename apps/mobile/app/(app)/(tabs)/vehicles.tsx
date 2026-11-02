@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { Link, useFocusEffect } from 'expo-router';
+import { Link, Redirect, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/features/auth/auth-provider';
 import { isOfflineError, mobileApi, toUserMessage, type VehicleSummary } from '@/lib/api';
 import { displayOdometer } from '@/lib/format';
@@ -17,6 +17,7 @@ import { StatusBadge } from '@/ui/status-badge';
 export default function VehiclesScreen() {
   const { user } = useAuth();
   const canView = user?.permissions.includes('vehicle:view') === true;
+  const canCreateTasks = user?.permissions.includes('task:create') === true;
   const [items, setItems] = useState<VehicleSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -24,7 +25,7 @@ export default function VehiclesScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (pull = false) => {
-    if (!canView) return;
+    if (!canView || !canCreateTasks) return;
     setError(null);
     if (pull) setRefreshing(true);
     else setLoading(true);
@@ -38,10 +39,11 @@ export default function VehiclesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [canView]);
+  }, [canView, canCreateTasks]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
+  if (!canCreateTasks) return <Redirect href="/tasks" />;
   if (!canView) {
     return <Screen><ErrorBanner message={t('noPermission')} /></Screen>;
   }

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useUnreadCount } from '@/features/notifications/unread-store';
 import { colors } from '@/lib/theme';
@@ -8,6 +9,9 @@ import { colors } from '@/lib/theme';
 export default function TabsLayout() {
   const { user } = useAuth();
   const unread = useUnreadCount();
+  const insets = useSafeAreaInsets();
+  const tabBarBottom = Math.max(insets.bottom, 8);
+  const canCreateTasks = user?.permissions.includes('task:create') === true;
   const canViewVehicles = user?.permissions.includes('vehicle:view') === true;
   const canViewNotifications = user?.permissions.includes('notification:view') === true;
   useEffect(() => {
@@ -16,14 +20,16 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      safeAreaInsets={{ bottom: 0 }}
       screenOptions={{
         headerStyle: { backgroundColor: colors.surface },
         headerTitleStyle: { color: colors.ink, fontWeight: '700' },
         headerTintColor: colors.primary,
+        headerStatusBarHeight: insets.top,
         tabBarStyle: {
-          height: 64,
+          height: 56 + tabBarBottom,
           paddingTop: 6,
-          paddingBottom: 8,
+          paddingBottom: tabBarBottom,
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           borderTopWidth: 1,
@@ -36,7 +42,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="tasks"
         options={{
-          title: 'Moji zadaci',
+          title: canCreateTasks ? 'Zadaci' : 'Moji zadaci',
           tabBarLabel: 'Zadaci',
           tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="clipboard-list-outline" color={color} size={size} />,
         }}
@@ -44,7 +50,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="vehicles"
         options={{
-          href: canViewVehicles ? undefined : null,
+          href: canViewVehicles && canCreateTasks ? undefined : null,
           title: 'Vozila',
           tabBarLabel: 'Vozila',
           tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="car-multiple" color={color} size={size} />,

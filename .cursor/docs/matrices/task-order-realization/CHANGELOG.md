@@ -1,5 +1,10 @@
 # Changelog — task-order-realization
 
+## 2026-11-02
+
+- Mobilni Moji default je `activeOnly` (OPEN + IN_PROGRESS); filter Svi ide kroz API.
+- Zašto: vozač i mobilni admin trebaju inbox u radu, ne arhivu završenih.
+
 ## 2026-10-31
 
 - Detalj zadatka (web + mobile) prikazuje REALIZATION read-only nakon complete, uključujući PHOTO/FILE.

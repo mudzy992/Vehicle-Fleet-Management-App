@@ -1103,6 +1103,15 @@ describe('TasksService — lista, detalj i opseg', () => {
     const overdue = await service.list(taskListQuerySchema.parse({ overdueOnly: 'true' }), actor(adminId));
     expect(overdue.items.map((item) => item.id)).toEqual([openId]);
     expect(overdue.items[0]?.isOverdue).toBe(true);
+
+    const activeMine = await service.list(
+      taskListQuerySchema.parse({ mine: 'true', activeOnly: 'true' }),
+      actor(invitedId),
+    );
+    expect(activeMine.items.map((item) => item.id).sort()).toEqual([openId, progressId].sort());
+    expect(activeMine.items.map((item) => item.status).every((status) => status === 'OPEN' || status === 'IN_PROGRESS')).toBe(
+      true,
+    );
   });
 
   it('filteri i pretraga rade na serveru', async () => {

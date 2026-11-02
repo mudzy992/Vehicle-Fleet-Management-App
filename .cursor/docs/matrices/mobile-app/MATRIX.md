@@ -1,7 +1,7 @@
 # Matrica — mobilna aplikacija
 
 **Slug:** `mobile-app`
-**Ažurirano:** 30.10.2026. 22:20
+**Ažurirano:** 02.11.2026.
 **Izvor:** `audit/11-mobile-audit.md` + impl `mobile-audit-impl`
 
 ## Klijentski ugovor
@@ -22,12 +22,12 @@
 | Ekran | Prikaz | Mutacija | Automatski dokaz | Uređaj |
 |-------|--------|----------|------------------|--------|
 | M1 Prijava | javno | `POST /auth/login` | Maestro P1 + `verify-p4-auth` | UAT |
-| M2 Zadaci | `task:view` / `view_all`; slobodni uz `task:claim` | — | P4 + claim YAML | UAT |
+| M2 Zadaci | `task:view` / `view_all`; slobodni uz `task:claim`; Moji default `GET /tasks?mine=true&activeOnly=true` (OPEN+IN_PROGRESS); chip Svi bez `activeOnly` | — | P4 + claim YAML | UAT |
 | M3 Detalj | API `task:view` | — | claim/complete YAML | UAT |
 | M4 Claim | CTA `task:claim` | `POST /tasks/:id/claim` | claim YAML; 409 u kodu | UAT |
 | M5 Complete | CTA complete | `POST /tasks/:id/complete` | complete-lite (INTERNAL, bez kamere) | UAT+kamera |
 | M6 Create | FAB `task:create` | `POST /tasks` | Maestro P4 + API 403 | UAT |
-| M7 Vozila | tab `vehicle:view` | nema | href:null empty | UAT |
+| M7 Vozila | tab samo `vehicle:view` **i** `task:create` (admin); vozač `href: null` + redirect `/tasks` | nema | href:null empty | UAT |
 | M8 Vozilo RO | API `vehicle:view` | nema | kod | UAT |
 | M9 Obavijesti | `notification:view` | mark_read | badge kod | UAT |
 | M10 Profil | uvijek; sesije/prefs po permisiji | logout, password, revoke, prefs | logout YAML | UAT |

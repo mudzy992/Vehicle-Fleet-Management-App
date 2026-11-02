@@ -22,6 +22,7 @@ export default function TasksScreen() {
   const canClaim = user?.permissions.includes('task:claim') === true;
   const canCreate = user?.permissions.includes('task:create') === true;
   const [mode, setMode] = useState<TaskListMode>(canViewMine ? 'MINE' : 'AVAILABLE');
+  const [activeOnly, setActiveOnly] = useState(true);
   const [items, setItems] = useState<TaskSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -34,7 +35,7 @@ export default function TasksScreen() {
     if (pull) setRefreshing(true);
     else setLoading(true);
     try {
-      const result = mode === 'AVAILABLE' ? await mobileApi.tasks() : await mobileApi.myTasks();
+      const result = mode === 'AVAILABLE' ? await mobileApi.tasks() : await mobileApi.myTasks(activeOnly);
       setItems(result.items);
       setTotal(result.total);
       setOffline(false);
@@ -45,7 +46,7 @@ export default function TasksScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [mode]);
+  }, [mode, activeOnly]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
@@ -57,6 +58,12 @@ export default function TasksScreen() {
         <View style={styles.segmented}>
           <ModeButton active={mode === 'MINE'} label="Moji" onPress={() => setMode('MINE')} />
           <ModeButton active={mode === 'AVAILABLE'} label="Slobodni" onPress={() => setMode('AVAILABLE')} />
+        </View>
+      ) : null}
+      {mode === 'MINE' ? (
+        <View style={styles.segmented}>
+          <ModeButton active={activeOnly} label="Aktivni" onPress={() => setActiveOnly(true)} />
+          <ModeButton active={!activeOnly} label="Svi" onPress={() => setActiveOnly(false)} />
         </View>
       ) : null}
       {loading ? <SkeletonList /> : (

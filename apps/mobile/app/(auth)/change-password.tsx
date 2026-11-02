@@ -43,7 +43,7 @@ export default function ChangePasswordScreen() {
   };
 
   return (
-    <Screen edges={['top', 'left', 'right']} padded={false}>
+    <Screen edges={['top', 'left', 'right', 'bottom']} padded={false}>
       <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>

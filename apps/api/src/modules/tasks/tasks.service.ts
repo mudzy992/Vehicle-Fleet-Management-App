@@ -383,6 +383,7 @@ export class TasksService {
     const conditions: Prisma.TaskWhereInput[] = [{ deletedAt: null }];
 
     if (query.status) conditions.push({ status: query.status });
+    if (query.activeOnly) conditions.push({ status: { in: ['OPEN', 'IN_PROGRESS'] } });
     if (query.vehicleId) conditions.push({ vehicleId: query.vehicleId });
     if (query.taskTypeId) conditions.push({ taskTypeId: query.taskTypeId });
     if (query.assigneeUserId) conditions.push({ assigneeUserId: query.assigneeUserId });

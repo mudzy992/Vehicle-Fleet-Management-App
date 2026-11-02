@@ -33,7 +33,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen edges={['top', 'left', 'right']} padded={false}>
+    <Screen edges={['top', 'left', 'right', 'bottom']} padded={false}>
       <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.brand}><Text style={styles.mark}>VP</Text><View><Text style={styles.brandTitle}>Vozni park</Text><Text style={styles.brandSubtitle}>Mobilni portal</Text></View></View>
