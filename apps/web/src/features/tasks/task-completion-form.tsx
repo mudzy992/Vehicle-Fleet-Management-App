@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AttachmentUploadResult, FormVersionDetail, TaskDetail } from '@vfm/shared/schemas';
+import type { FormVersionDetail, TaskDetail } from '@vfm/shared/schemas';
 import { parseDefinition } from '@vfm/form-engine/definition';
 import type { RenderModel } from '@vfm/form-renderer';
 import { buildRenderModel } from '@vfm/form-renderer';
@@ -8,21 +8,17 @@ import { Button, Card, CardContent, CardHeader, Field, inputClassName } from '..
 import { ApiError, api } from '../../lib/api.js';
 import { toast } from '../../lib/toast.js';
 import { FormFields } from '../forms/form-fields.js';
-import { AttachmentGallery } from './attachment-gallery.js';
-import { useSession } from '../auth/session.js';
 import { sarajevoToday } from '../forms/forms-preview-values.js';
+import { TaskCompletionAttachments } from './task-completion-attachments.js';
 
 export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; onCompleted?: () => void }) {
   const queryClient = useQueryClient();
-  const { hasPermission } = useSession();
-  const canUpload = hasPermission('attachment:upload');
   const realizationSchemaId = task.realizationFormSchemaId ?? task.formSchemaId;
   const realizationVersionId = task.realizationFormSchemaVersionId ?? task.formSchemaVersionId;
   const [values, setValues] = useState<Record<string, unknown>>(task.realizationFormData ?? {});
   const [comment, setComment] = useState('');
   const [odometerKm, setOdometerKm] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [uploadingField, setUploadingField] = useState<string | null>(null);
   const today = useMemo(() => sarajevoToday(), []);
   const versionQuery = useQuery({
     queryKey: ['form-version', realizationSchemaId, realizationVersionId],
@@ -45,41 +41,11 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
       formSchemaVersionId: realizationVersionId,
     });
   }, [parsed, versionQuery.data, values, today, realizationVersionId]);
-
   const attachmentFields = parsed?.ok
     ? parsed.definition.sections.flatMap((section) =>
         section.fields.filter((field) => field.type === 'PHOTO' || field.type === 'FILE'),
       )
     : [];
-
-  const uploadFiles = async (fieldKey: string, files: FileList | null, maxFiles: number | undefined) => {
-    if (!files?.length) return;
-    if (!canUpload) {
-      toast.warning('Fotografije i prilozi traže permisiju attachment:upload.');
-      return;
-    }
-    const current = Array.isArray(values[fieldKey]) ? (values[fieldKey] as string[]) : [];
-    if (maxFiles !== undefined && current.length + files.length > maxFiles) {
-      toast.warning(`Polje prima najviše ${maxFiles} fajlova.`);
-      return;
-    }
-    setUploadingField(fieldKey);
-    try {
-      const uploadedIds = [...current];
-      for (const file of Array.from(files)) {
-        const body = new FormData();
-        body.append('file', file);
-        const uploaded = await api.upload<AttachmentUploadResult>('/attachments', body);
-        uploadedIds.push(uploaded.id);
-        setValues((existing) => ({ ...existing, [fieldKey]: [...uploadedIds] }));
-      }
-    } catch (error) {
-      if (!(error instanceof ApiError)) toast.danger('Upload priloga nije uspio.');
-    } finally {
-      setUploadingField(null);
-    }
-  };
-
   const complete = useMutation({
     mutationFn: () =>
       api.post<TaskDetail>(`/tasks/${task.id}/complete`, {
@@ -108,7 +74,6 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
       setErrors(next);
     },
   });
-
   if (versionQuery.isPending) return <p className="text-sm text-fg-muted">Učitavanje forme za završetak…</p>;
   if (versionQuery.error || !model) {
     return (
@@ -119,7 +84,12 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
       </p>
     );
   }
-
+  const formError =
+    complete.error && Object.keys(errors).length === 0
+      ? complete.error instanceof ApiError
+        ? complete.error.message
+        : 'Završetak nije uspio.'
+      : null;
   return (
     <Card>
       <CardHeader
@@ -141,55 +111,13 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
             idPrefix="task-complete"
             onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))}
           />
-          {attachmentFields.length > 0 && (
-            <section className="space-y-3 rounded-md border border-border p-3">
-              <h3 className="text-sm font-medium">Fotografije i prilozi</h3>
-              {!canUpload && (
-                <p className="text-xs text-warning">Za upload je potrebna permisija attachment:upload.</p>
-              )}
-              {attachmentFields.map((field) => {
-                const ids = Array.isArray(values[field.key]) ? (values[field.key] as string[]) : [];
-                const maxFiles =
-                  typeof field.validation?.maxFiles === 'number' ? field.validation.maxFiles : undefined;
-                return (
-                  <Field
-                    key={field.key}
-                    label={`${field.label}${field.required ? ' *' : ''}`}
-                    htmlFor={`task-complete-upload-${field.key}`}
-                    hint={field.helpText ?? undefined}
-                    error={errors[field.key] ?? null}
-                  >
-                    <input
-                      id={`task-complete-upload-${field.key}`}
-                      className={inputClassName}
-                      type="file"
-                      accept={field.type === 'PHOTO' ? 'image/*' : undefined}
-                      multiple
-                      disabled={!canUpload || uploadingField !== null || complete.isPending}
-                      onChange={(event) => {
-                        void uploadFiles(field.key, event.currentTarget.files, maxFiles);
-                        event.currentTarget.value = '';
-                      }}
-                    />
-                    <p className="mt-1 text-xs text-fg-muted">
-                      Dodano fajlova: {ids.length}
-                      {uploadingField === field.key ? ' · Upload u toku…' : ''}
-                    </p>
-                    <AttachmentGallery
-                      ids={ids}
-                      kind={field.type === 'FILE' ? 'FILE' : 'PHOTO'}
-                      onRemove={(id) =>
-                        setValues((current) => ({
-                          ...current,
-                          [field.key]: ids.filter((item) => item !== id),
-                        }))
-                      }
-                    />
-                  </Field>
-                );
-              })}
-            </section>
-          )}
+          <TaskCompletionAttachments
+            fields={attachmentFields}
+            values={values}
+            errors={errors}
+            disabled={complete.isPending}
+            onValuesChange={setValues}
+          />
           <Field label="Kilometraža (km), ako je primjenjivo" htmlFor="task-complete-odometer">
             <input
               id="task-complete-odometer"
@@ -208,6 +136,7 @@ export function TaskCompletionForm({ task, onCompleted }: { task: TaskDetail; on
               onChange={(event) => setComment(event.target.value)}
             />
           </Field>
+          {formError ? <p role="alert" className="text-sm text-danger">{formError}</p> : null}
           <Button type="submit" loading={complete.isPending}>
             Završi zadatak
           </Button>

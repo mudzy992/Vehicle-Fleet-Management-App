@@ -74,6 +74,19 @@ describe('TaskStatusActions', () => {
     expect(screen.queryByRole('button', { name: 'Vrati među slobodne' })).toBeNull();
   });
 
+  it('prikazuje 409 conflict kao alert na formi i zadržava razlog', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ error: { code: 'CONFLICT', message: 'Zadatak je izmijenjen u drugoj sesiji.' } }),
+      { status: 409, headers: { 'Content-Type': 'application/json' } },
+    )));
+    renderActions('IN_PROGRESS', { canCancel: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Otkaži zadatak' }));
+    fireEvent.change(screen.getByRole('textbox', { name: /Razlog otkazivanja/ }), { target: { value: 'Potreban je ponovni pregled.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Potvrdi: Otkaži zadatak' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Zadatak je izmijenjen u drugoj sesiji.');
+    expect(screen.getByRole('textbox', { name: /Razlog otkazivanja/ })).toHaveProperty('value', 'Potreban je ponovni pregled.');
+  });
+
   it('prikazuje samo statusno dozvoljene radnje za aktivni status i permisije', () => {
     const { rerender } = renderActions('OPEN', { canRelease: true, canReopen: true });
     expect(screen.queryByRole('button', { name: 'Vrati među slobodne' })).toBeNull();

@@ -34,3 +34,4 @@
 - Svaki modul: prazan/lista tok + primarna akcija + `Nemate pristup` gdje ruta ima `RequirePermission`.
 - Forme: detaljan lifecycle ostaje u `form-versioning` matrici.
 - HTTP 400/409/422 (i 401) ostaju na formi/`alert`/`status`; `toastHttpError` ih ne duplicira, da locator vidi jedan izvor poruke.
+- Task cancel/complete 409 CONFLICT se prikazuje kao `role="alert"` na formi (ne toast), uz sačuvan unos za retry.

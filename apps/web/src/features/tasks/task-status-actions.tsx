@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { TaskDetail } from '@vfm/shared/schemas';
 import { Button, Card, CardContent, CardHeader, Field, inputClassName } from '../../components/ui/index.js';
-import { api } from '../../lib/api.js';
+import { ApiError, api } from '../../lib/api.js';
 import { toast } from '../../lib/toast.js';
 
 type Action = 'cancel' | 'release' | 'reopen';
@@ -60,7 +60,7 @@ export function TaskStatusActions({
       <CardContent>
         <div className="flex flex-wrap gap-2">
           {allowed.map((item) => (
-            <Button key={item} variant={item === 'cancel' ? 'danger' : 'secondary'} onClick={() => { setAction(item); setReason(''); setSucceeded(false); }}>
+            <Button key={item} variant={item === 'cancel' ? 'danger' : 'secondary'} onClick={() => { setAction(item); setReason(''); setSucceeded(false); mutation.reset(); }}>
               {labels[item]}
             </Button>
           ))}
@@ -70,6 +70,11 @@ export function TaskStatusActions({
             <Field label={action === 'cancel' ? 'Razlog otkazivanja *' : 'Razlog (opciono)'} htmlFor="task-status-reason" hint={action === 'cancel' ? 'Unesite najmanje 3 znaka.' : undefined}>
               <textarea id="task-status-reason" className={`${inputClassName} min-h-20`} maxLength={500} required={action === 'cancel'} value={reason} onChange={(event) => setReason(event.target.value)} />
             </Field>
+            {mutation.error ? (
+              <p role="alert" className="text-sm text-danger">
+                {mutation.error instanceof ApiError ? mutation.error.message : 'Akcija nije uspjela.'}
+              </p>
+            ) : null}
             <div className="flex gap-2">
               <Button type="submit" variant={action === 'cancel' ? 'danger' : 'primary'} disabled={action === 'cancel' && reason.trim().length < 3} loading={mutation.isPending}>Potvrdi: {labels[action]}</Button>
               <Button variant="ghost" disabled={mutation.isPending} onClick={() => setAction(null)}>Odustani</Button>
