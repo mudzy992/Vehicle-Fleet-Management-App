@@ -135,7 +135,7 @@ describe('parsePendingMigrations', () => {
 });
 
 describe('listMigrationNames', () => {
-  it('navodi stvarne migracije u repo-u (0_extensions do 5_notification_delivery_retry)', () => {
+  it('navodi stvarne migracije u repo-u (0_extensions do 7_app_releases)', () => {
     // vitest se pokreće iz `apps/api` (turbo/pnpm postavljaju cwd paketa).
     const dir = resolve(process.cwd(), 'prisma', 'migrations');
     expect(listMigrationNames(dir)).toEqual([
@@ -146,6 +146,7 @@ describe('listMigrationNames', () => {
       '4_super_admin_guard_lock',
       '5_notification_delivery_retry',
       '6_task_order_realization',
+      '7_app_releases',
     ]);
   });
 

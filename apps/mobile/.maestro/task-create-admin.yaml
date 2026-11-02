@@ -139,5 +139,5 @@ appId: ba.ba101.voznipark
     id: "task-create-submit"
 - assertVisible: "P4-E2E-${TEST_RUN_ID}"
 - pressKey: Back
-- assertVisible: "Moji zadaci"
+- assertVisible: "Zadaci"
 - assertVisible: "P4-E2E-${TEST_RUN_ID}"

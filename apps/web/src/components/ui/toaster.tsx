@@ -13,11 +13,14 @@ export function Toaster() {
   useEffect(() => subscribeToasts(setItems), []);
   if (items.length === 0) return null;
   return (
-    <div className="pointer-events-none fixed top-4 right-4 z-50 flex w-[min(100%-2rem,22rem)] flex-col gap-2" aria-live="polite">
+    <div
+      className="pointer-events-none fixed top-4 right-4 z-50 flex w-[min(100%-2rem,22rem)] flex-col gap-2"
+      aria-live={items.some((item) => item.kind === 'danger' || item.kind === 'warning') ? 'assertive' : 'polite'}
+    >
       {items.map((item) => (
         <div
           key={item.id}
-          role={item.kind === 'danger' || item.kind === 'warning' ? 'alert' : 'status'}
+          role="status"
           className={`pointer-events-auto rounded-lg border px-3 py-2 text-sm shadow-md ${KIND_CLASS[item.kind]}`}
         >
           <button type="button" className="w-full text-left" onClick={() => dismissToast(item.id)}>

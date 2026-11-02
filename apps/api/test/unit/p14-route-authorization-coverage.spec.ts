@@ -30,6 +30,8 @@ const PUBLIC_ROUTES = new Set([
   'AuthController.login',
   'AuthController.refresh',
   'AuthController.resetPassword',
+  'AppReleasesController.latest',
+  'AppReleasesController.latestFile',
   'HealthController.liveness',
   'HealthController.readiness',
   'HealthController.startup',

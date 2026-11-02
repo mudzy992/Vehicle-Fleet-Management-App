@@ -91,6 +91,6 @@ const styles = StyleSheet.create({
   remove: { minHeight: 32, alignItems: 'center', justifyContent: 'center' },
   removeText: { color: colors.danger, fontSize: 12, fontWeight: '700' },
   openText: { color: colors.primary, fontSize: 12, fontWeight: '700', textAlign: 'center' },
-  preview: { flex: 1, backgroundColor: '#000000E6', alignItems: 'center', justifyContent: 'center', padding: space[4] },
+  preview: { flex: 1, backgroundColor: colors.shadow, alignItems: 'center', justifyContent: 'center', padding: space[4] },
   previewImage: { width: '100%', height: '100%' },
 });

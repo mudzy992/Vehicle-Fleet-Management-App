@@ -57,6 +57,7 @@ export const toast = {
 export function toastHttpError(input: { method?: string; path: string; status: number; message: string }): void {
   const verb = (input.method ?? 'GET').toUpperCase();
   if (verb === 'GET' || verb === 'HEAD') return;
-  if (input.status === 401 && input.path !== '/auth/login') return;
+  if (input.path === '/auth/login') return;
+  if (input.status === 401) return;
   toast.danger(input.message);
 }

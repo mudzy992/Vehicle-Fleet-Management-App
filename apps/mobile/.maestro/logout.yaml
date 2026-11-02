@@ -38,3 +38,4 @@ appId: ba.ba101.voznipark
     visible: "Prijava"
     timeout: 30000
 - assertNotVisible: "Moji zadaci"
+- assertNotVisible: "Zadaci"
